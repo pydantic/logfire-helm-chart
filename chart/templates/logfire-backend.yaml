@@ -1,0 +1,125 @@
+{{- $serviceName := "logfire-backend" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+    spec:
+      {{- with .Values.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end}}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      {{- with (index .Values $serviceName | default dict).initContainers }}
+      initContainers:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      containers:
+        - name: {{ $serviceName }}
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ .Values.image.tag }}'
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          command: ["python", "-m", "logfire_backend"]
+          ports:
+            - containerPort: 8000
+          env:
+            - name: APP_PORT
+              value: "8000"
+            - name: CRUD_PG_DSN
+              value: {{ .Values.postgresDsn }}
+            - name: INGEST_PG_DSN
+              value: {{ .Values.postgresIngestDsn }}
+            - name: REDIS_DSN
+              value: {{ .Values.redisDsn }}
+            - name: WORKER_REDIS_DSN
+              value: {{ .Values.redisDsn }}
+            - name: USAGE_REDIS_DSN
+              value: {{ .Values.redisDsn }}
+            - name: DEX_INTERNAL_URL
+              value: http://logfire-dex:5556
+            - name: DEX_CLIENT_ID
+              value: "logfire"
+            - name: DEX_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: logfire-dex-client-secret
+                  key: logfire-dex-client-secret
+            - name: FUSIONFIRE_HOST
+              value: http://logfire-ff-query-api
+            - name: BROWSER_TELEMETRY_COLLECTOR_OTLP_HTTP_HOST
+              value: http://logfire-otel-collector:4318
+            - name: COLLECTOR_OTLP_GRPC_HOST
+              value: http://logfire-otel-collector:4317
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision={{ .Chart.AppVersion | default "main" | quote }},logfire.code.work_dir=/app
+            - name: LOGFIRE_SERVICE_NAME
+              value: {{ $serviceName }}
+            - name: LOGFIRE_SERVICE_VERSION
+              value: {{ .Values.appVersion }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: logfire-jwt-secret
+                  key: logfire-jwt-secret
+            - name: FUSIONFIRE_PORT
+              value: "8011"
+            - name: MIN_DATE_USAGE_CHART  # TODO: make this optional?
+              value: "2025-01-01"
+            - name: DEFAULT_SUBSCRIPTION_PLAN
+              value: non_stripe
+            - name: LOGFIRE_REGION
+              value: {{ .Values.logfireRegion | default "us" }}
+            - name: FRONTEND_HOST
+              value: {{ include "logfire.frontend" . }}
+            - name: META_WRITE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: logfire-meta-write-token
+                  key: logfire-meta-write-token
+            - name: META_FRONTEND_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: logfire-meta-frontend-token
+                  key: logfire-meta-frontend-token
+            - name: BOOTSTRAPPED_ORGANIZATIONS
+              # This will make it possible to log-in sans-credentials by visiting a URL like:
+              # http://logfire.docker-desktop.local/logfire-meta/logfire-meta#token=U8TO1taNdD7YwgBMcfeQVU7RB6Hgtrwd
+              # You'll need to get the right host and get the secret from k8s
+              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)"}]}]'
+            {{- with (index .Values $serviceName | default dict).env }}
+              {{- . | toYaml | nindent 12 }}
+            {{- end}}
+{{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}

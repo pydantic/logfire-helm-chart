@@ -1,0 +1,59 @@
+{{- $serviceName := "logfire-redis" }}
+{{- if (index .Values $serviceName | default dict).enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  annotations:
+    "helm.sh/hook": pre-install,post-delete
+    "helm.sh/hook-weight": "0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+    spec:
+      containers:
+        - name: redis
+          image: redis:6.0.9
+          ports:
+            - containerPort: 6379
+          {{- if (index .Values $serviceName | default dict).resources }}
+          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          {{ else }}
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+          {{- end }}
+{{- end }}

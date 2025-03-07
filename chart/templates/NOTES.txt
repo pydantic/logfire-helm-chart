@@ -1,0 +1,41 @@
+Thank you for installing {{ .Chart.Name }}.
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }}
+  $ helm get all {{ .Release.Name }}
+
+{{- if .Values.ingress.enabled }}
+You can access Logfire at:
+  - Frontend: http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.frontendHostname }}
+  - API: http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.apiHostname }}
+{{- else }}
+Logfire is not exposed through an ingress. To access the application, you can:
+
+1. Port-forward the frontend service:
+   kubectl port-forward svc/logfire-frontend 3000:3000 -n {{ .Release.Namespace }}
+
+2. Port-forward the backend service:
+   kubectl port-forward svc/logfire-backend 8000:8000 -n {{ .Release.Namespace }}
+
+Then access:
+  - Frontend: http://localhost:3000
+  - API: http://localhost:8000
+{{- end }}
+
+Or set up your own Ingress / tunneling to these services.
+
+{{- if .Values.dev.deployPostgres }}
+A PostgreSQL database has been deployed as part of this installation.
+{{- else }}
+You are using an external PostgreSQL database.
+{{- end }}
+
+An admin account was created with access to Logfire's own internal observability.
+The email address used is {{ .Values.adminEmail }}.
+You'll need to reset the password to log in.
+This admin account has no special access over other accounts or new organizations / projects you might create.
+
+For more information and documentation, visit: https://docs.logfire.dev/

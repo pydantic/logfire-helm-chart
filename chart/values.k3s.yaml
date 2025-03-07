@@ -1,0 +1,93 @@
+adminEmail: peter@pydantic.dev
+
+# These values are for development testing using k3s
+# See https://github.com/cetra3/kubernetes-activitypub-testing for setup details
+image:
+  pullPolicy: Always
+  repository: registry:5000/
+
+ingress:
+  enabled: true
+  tls: true
+  apiHostname: logfire-api.k3s.local
+  frontendHostname: logfire.k3s.local
+  maildevHostname: maildev.k3s.local
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: k3s-ca-issuer
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://logfire.k3s.local"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-Logfire-Context"
+    nginx.ingress.kubernetes.io/proxy-body-size: 1024m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
+logfire-frontend:
+  env: 
+    - name: DEX_PUBLIC_URL
+      value: https://dex.k3s.local
+
+objectStore:
+  uri: file:///storage
+
+dev:
+  deployPostgres: true
+  hostObjectStore: true
+  deployMaildev: true
+
+postgresDsn: postgres://postgres:postgres@logfire-postgres:5432/crud
+postgresFFDsn: postgres://postgres:postgres@logfire-postgres:5432/ff
+postgresIngestDsn: postgres://postgres:postgres@logfire-postgres:5432/ingest
+
+dex:
+  image:
+    repository: registry:5000/dex
+    tag: latest
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: k3s-ca-issuer
+    hosts:
+      - host: dex.k3s.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - hosts:
+          - dex.k3s.local
+        secretName: dex-cert
+  config:
+    storage:
+      type: postgres
+      config:
+        host: logfire-postgres
+        port: 5432
+        user: postgres
+        database: dex
+        password: postgres
+        ssl:
+          mode: disable
+    issuer: https://dex.k3s.local/dex
+    staticClients:
+      - id: logfire-backend
+        name: Logfire Backend
+        redirectURIs:
+          - https://logfire.k3s.local/auth/code-callback
+          - https://logfire.k3s.local/auth/link-provider-code-callback
+        scopes:
+          - openid
+          - email
+          - profile
+        secret: $LOGFIRE_CLIENT_SECRET
+    frontend:
+      extra:
+        logfire_frontend_host: https://logfire.k3s.local
+    web:
+      http: 0.0.0.0:5556
+    grpc:
+      addr: 0.0.0.0:5557
+    oauth2:
+      skipApprovalScreen: true
+      passwordConnector: local
+    enablePasswordDB: true

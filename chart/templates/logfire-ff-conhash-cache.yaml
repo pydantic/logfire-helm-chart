@@ -1,0 +1,126 @@
+{{- $serviceName := "logfire-ff-conhash-cache" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+  - port: 9001
+    targetPort: 9001
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: conhash
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: conhash-role
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "watch", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: conhash-rolebinding
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: conhash-role
+subjects:
+  - kind: ServiceAccount
+    name: conhash
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+    spec:
+      serviceAccountName: conhash
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      {{- with (index .Values $serviceName | default dict).initContainers }}
+      initContainers:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      containers:
+        - name: {{ $serviceName }}
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ .Values.image.tag }}'
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          command:
+            - "conhash"
+            - "--port"
+            - "9001"
+          ports:
+            - containerPort: 9001
+          env:
+            - name: ORCHESTRATION
+              value: "kubernetes"
+            - name: DEPLOYMENT_SELECTOR
+              value: "app=logfire-ff-cache"
+            - name: DEPLOYMENT_PORT
+              value: "9001"
+            - name: FF_SEND_TO_LOGFIRE
+              value: "false"
+            - name: RUST_LOG
+              value: "info"
+            - name: RUST_BACKTRACE
+              value: "full"
+            {{- with (index .Values $serviceName | default dict).env }}
+              {{- . | toYaml | nindent 12 }}
+            {{- end}}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+{{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}

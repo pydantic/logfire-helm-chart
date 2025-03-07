@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logfire-ff-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-ff-config
+data:
+  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://logfire-otel-collector:4317"
+  FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
+  FF_USAGE_REDIS_DSN: {{ .Values.redisDsn }}
+  FF_CACHE_OBJECT_STORE_URI: "http://logfire-ff-conhash-cache:9001"
+  FF_CACHE_ARROW_IPC_CHANCE: "1.0"
+  FF_BACKEND_SERVICE_URL: "http://logfire-backend:8000"
+  PG_DSN: {{ .Values.postgresFFDsn }}
+  FF_INGEST_PG_DSNS: '["{{ .Values.postgresIngestDsn }}"]'
+  FF_AUTH_TOKEN_REDIS_DSN: {{ .Values.redisDsn }}
+  RUST_LOG: "info"
+  RUST_BACKTRACE: "full"
+  FF_SEND_TO_LOGFIRE: "true"
+  FF_CONSOLE_MODE: "force"
+  OTEL_RESOURCE_ATTRIBUTES: "vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app"

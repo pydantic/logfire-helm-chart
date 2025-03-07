@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: logfire-ff-migrations
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-ff-migrations
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: logfire-ff-migrations
+    spec:
+      {{- with .Values.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end}}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      restartPolicy: OnFailure
+      {{- with (index .Values "logfire-ff-migrations" | default dict).initContainers }}
+      initContainers:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      containers:
+        - name: logfire-ff-migrations
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ .Values.image.tag }}'
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          command:
+            - "fusionfire"
+            - "migrate"
+          env:
+            - name: PG_DSN
+              value: {{ .Values.postgresFFDsn | quote }}
+            - name: FF_INGEST_PG_DSNS
+              value: '["{{ .Values.postgresIngestDsn }}"]'
+            - name: FF_SEND_TO_LOGFIRE
+              value: "false"
+            - name: FF_CONSOLE_MODE
+              value: "force"

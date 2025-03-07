@@ -1,0 +1,84 @@
+{{- $serviceName := "logfire-scheduler" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+    spec:
+      {{- with .Values.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end}}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      {{- with (index .Values $serviceName | default dict).initContainers }}
+      initContainers:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      containers:
+        - name: {{ $serviceName }}
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.schedulerImage }}:{{ .Values.image.tag }}'
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          command: [ "python", "-m", "logfire_scheduler" ]
+          ports:
+            - containerPort: 8002
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8002
+          env:
+            - name: LOGFIRE_SERVICE_NAME
+              value: {{ $serviceName }}
+            - name: LOGFIRE_SERVICE_VERSION
+              value: {{ .Values.appVersion }}
+            - name: CRUD_PG_DSN
+              value: {{ .Values.postgresDsn }}
+            - name: REDIS_DSN
+              value: {{ .Values.redisDsn }}
+            - name: USAGE_REDIS_DSN
+              value: {{ .Values.redisDsn }}
+            - name: BACKEND_REDIS_DSN
+              value: {{ .Values.redisDsn }}
+            - name: SEND_USAGE_TO_STRIPE
+              value: "false"
+            - name: SEND_USAGE_WARNING_EMAILS
+              value: "false"
+            - name: MIN_DATE_USAGE_TO_SEND_TO_STRIPE
+              value: "2025-01-01"
+            - name: INTERVAL_QUERY_SECONDS
+              value: 00:00:05
+            - name: USAGE_EMAIL_CHECK_SLEEP
+              value: 00:05:00
+            - name: SAVE_TOKENS_USAGE_INTERVAL
+              value: 00:01:00
+            - name: PUBLISH_USAGE_TO_BUCKET
+              value: "true"
+            - name: COLLECTOR_OTLP_GRPC_HOST
+              value: http://logfire-otel-collector:4317
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app
+            {{- with (index .Values $serviceName | default dict).env }}
+              {{- . | toYaml | nindent 12 }}
+            {{- end}}
+{{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}

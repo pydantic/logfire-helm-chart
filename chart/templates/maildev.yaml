@@ -1,0 +1,86 @@
+{{ if (.Values.dev).deployMaildev }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-maildev
+  name: logfire-maildev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: logfire-maildev
+  strategy: {}
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: logfire-maildev
+    spec:
+      containers:
+        - image: maildev/maildev
+          name: logfire-maildev
+          ports:
+            - containerPort: 1080
+            - containerPort: 1025
+          env:
+            - name: MAILDEV_INCOMING_USER
+              value: maildev
+            - name: MAILDEV_INCOMING_PASS
+              value: maildev
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-maildev
+  name: logfire-maildev
+spec:
+  ports:
+    - name: "1080"
+      port: 1080
+      targetPort: 1080
+    - name: "1025"
+      port: 1025
+      targetPort: 1025
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-maildev
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    {{- with .Values.ingress.annotations }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+  name: logfire-maildev-ingress
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-maildev
+spec:
+  {{- with .Values.ingress.ingressClassName }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.maildevHostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: logfire-maildev
+                port:
+                  number: 1080
+  {{- if .Values.ingress.tls }}
+  tls:
+    - secretName: logfire-maildev-cert
+      hosts:
+        - {{ .Values.ingress.maildevHostname }}
+  {{- end }}
+{{ end }}

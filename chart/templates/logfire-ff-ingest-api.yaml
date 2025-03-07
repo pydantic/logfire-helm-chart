@@ -1,0 +1,116 @@
+{{- $serviceName := "logfire-ff-ingest-api" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+  - port: 8012
+    targetPort: 8012
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+      annotations:
+        checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
+        checksum/storage-config: {{ include (print $.Template.BasePath "/logfire-storage-config.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end}}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      {{- with (index .Values $serviceName | default dict).initContainers }}
+      initContainers:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      containers:
+        - name: {{ $serviceName }}
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ .Values.image.tag }}'
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          command:
+            - fusionfire
+            - ingest
+            - --host=0.0.0.0
+            - --port=8012
+          ports:
+            - containerPort: 8012
+          envFrom:
+            - configMapRef:
+                name: logfire-ff-config
+            - configMapRef:
+                name: logfire-storage-config
+          env:
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.05"
+            - name: OTEL_TRACES_SAMPLER
+              value: "parentbased_traceidratio"
+            - name: OTEL_SERVICE_NAME
+              value: {{ $serviceName }}
+            - name: FF_WRITE_TOKEN_MEMORY_CACHE_TTL
+              value: "500ms"
+            - name: FF_TAIL_PATH
+              value: "ff"
+            - name: FF_UNPACK_SPAN_EVENTS
+              value: "true"
+            - name: FF_INGEST_MAX_FUTURE_TIME_DRIFT
+              value: "3650000d"
+            - name: FF_INGEST_MAX_PAST_TIME_DRIFT
+              value: "3650000d"
+            {{- with (index .Values $serviceName | default dict).env }}
+              {{- . | toYaml | nindent 12 }}
+            {{- end}}
+          {{ if .Values.dev.hostObjectStore }}
+          volumeMounts:
+          - name: storage-data
+            mountPath: /storage
+          {{ end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8012
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8012
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+      {{ if .Values.dev.hostObjectStore }}
+      volumes:
+        - name: storage-data
+          hostPath:
+            path: /storage
+      {{ end }}
+
+{{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}

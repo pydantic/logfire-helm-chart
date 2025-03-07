@@ -1,0 +1,65 @@
+adminEmail: engineering@pydantic.dev
+
+image:
+  pullPolicy: Never
+  tag: latest
+  workerImage: logfire-python-prod
+  backendImage: logfire-python-prod
+  frontendImage: logfire-frontend-prod
+  schedulerImage: logfire-python-prod
+  fusionfireImage: fusionfire-dev
+
+objectStore:
+  uri: file:///storage
+
+dev:
+  deployPostgres: true
+  hostObjectStore: true
+  deployMaildev: true
+
+postgresDsn: postgres://postgres:postgres@logfire-postgres:5432/crud
+postgresFFDsn: postgres://postgres:postgres@logfire-postgres:5432/ff
+postgresIngestDsn: postgres://postgres:postgres@logfire-postgres:5432/ingest
+
+ingress:
+  enabled: true
+  apiHostname: logfire-api.docker-desktop.local
+  frontendHostname: logfire.docker-desktop.local
+  maildevHostname: maildev.docker-desktop.local
+  annotations: {}
+
+dex:
+  config:
+    issuer: http://dex.docker-desktop.local/dex
+    storage:
+      type: postgres
+      config:
+        host: logfire-postgres
+        port: 5432
+        user: postgres
+        database: dex
+        password: postgres
+        ssl:
+          mode: disable
+    web:
+      http: 0.0.0.0:5556
+    grpc:
+      addr: 0.0.0.0:5557
+    staticClients:
+      - id: logfire-backend
+        name: Logfire Backend
+        redirectURIs:
+          - http://logfire.docker-desktop.local/auth/code-callback
+          - http://logfire.docker-desktop.local/auth/link-provider-code-callback
+        scopes:
+          - openid
+          - email
+          - profile
+        secret: $LOGFIRE_CLIENT_SECRET
+    oauth2:
+      skipApprovalScreen: true
+      passwordConnector: local
+    enablePasswordDB: true
+    frontend:
+      extra:
+        logfire_frontend_host: http://logfire.docker-desktop.local

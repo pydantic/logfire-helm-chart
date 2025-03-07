@@ -1,0 +1,103 @@
+{{ if (.Values.dev).deployPostgres }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init-scripts
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-postgres
+  annotations:
+    "helm.sh/hook": pre-install,post-delete
+    "helm.sh/hook-weight": "-1"
+data:
+  create_databases.sql: |
+    CREATE DATABASE crud;
+    CREATE DATABASE ingest;
+    CREATE DATABASE dex;
+    CREATE DATABASE ff;
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logfire-postgres
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-postgres
+  annotations:
+    "helm.sh/hook": pre-install,post-delete
+    "helm.sh/hook-weight": "-1"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: logfire-postgres
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: logfire-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: postgres
+            - name: POSTGRES_DB
+              value: postgres
+          volumeMounts:
+            - name: init-db-scripts
+              mountPath: /docker-entrypoint-initdb.d
+            - name: logfire-postgres
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: init-db-scripts
+          configMap:
+            name: db-init-scripts
+        - name: logfire-postgres
+          persistentVolumeClaim:
+            claimName: logfire-postgres
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: logfire-postgres
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-postgres
+  annotations:
+    "helm.sh/hook": pre-install,post-delete
+    "helm.sh/hook-weight": "-1"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi  # Adjust size as needed
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logfire-postgres
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-postgres
+  annotations:
+    "helm.sh/hook": pre-install,post-delete
+    "helm.sh/hook-weight": "-1"
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+{{ end }}

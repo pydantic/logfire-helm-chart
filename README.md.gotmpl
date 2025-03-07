@@ -1,8 +1,9 @@
-# logfire
+{{ template "chart.header" . }}
+{{ template "chart.deprecationWarning" . }}
 
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![AppVersion: 0.0.0](https://img.shields.io/badge/AppVersion-0.0.0-informational?style=flat-square)
+{{ template "chart.badgesSection" . }}
 
-Helm chart for self-hosted Logfire
+{{ template "chart.description" . }}
 
 ## Prerequisites
 
@@ -39,7 +40,7 @@ There are a few hostnames that are required to be set:
 
 ```yaml
 logfire-frontend:
-  env:
+  env: 
     - name: DEX_PUBLIC_URL
       value: https://dex.example.com
 ```
@@ -91,7 +92,7 @@ Depending on what [connector you want to use](https://dexidp.io/docs/connectors/
 Here's an example using `github` as a connector:
 
 ```yaml
-dex:
+dex: 
   # other config as above
   ...
   config:
@@ -129,13 +130,13 @@ Variables extracted from environment:
  * `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` -> <https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html>
  * `AWS_ALLOW_HTTP` -> set to "true" to permit HTTP connections without TLS
 
-Example:
+Example: 
 
 ```yaml
 objectStore:
   uri: s3://<bucket_name>
   # Note: not needed if the service account specified by `serviceAccountName` itself has credentials
-  env:
+  env: 
     AWS_DEFAULT_REGION: <region>
     AWS_SECRET_ACCESS_KEY: <secret_key>
     AWS_ACCESS_KEY_ID: <access_key>
@@ -183,6 +184,7 @@ objectStore:
     AZURE_STORAGE_ACCOUNT_KEY: <storage_account_master_key>
 ```
 
+
 ### PostgreSQL
 
 Logfire nominally needs 4 separate PostgreSQL databases: `crud`, `ff`, `ingest` and `dex`.  Each will need a user with owner permissions to allow migrations to run.
@@ -219,7 +221,7 @@ Logfire uses SMTP to send emails.  You will need to configure email using the fo
 smtp:
   host: smtp.example.com
   port: 25
-  username: user
+  username: user 
   password: pass
   use_tls: false
 ```
@@ -243,44 +245,20 @@ Each service has both resources and autoscaling configured in the same way:
     minReplicas: 2
     maxReplicas: 4
     memAverage: 65
-    cpuAverage: 20
+    cpuAverage: 20 
 ```
 
 See [`values.yaml`](./values.yaml) for some production level values
 
-## Requirements
+{{ template "chart.homepageLine" . }}
 
-| Repository | Name | Version |
-|------------|------|---------|
-| https://charts.dexidp.io | dex | 0.20.0 |
+{{ template "chart.maintainersSection" . }}
 
-## Values
+{{ template "chart.sourcesSection" . }}
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
-| image.tag | string | `"latest"` | The tag/version of the docker images to use |
-| imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
-| ingress.annotations | object | `{}` | Any annotations required. |
-| ingress.apiHostname | string | `nil` | The hostname used for the API endpoint |
-| ingress.enabled | bool | `false` | Enable Ingress Resource |
-| ingress.frontendHostname | string | `nil` | The hostname used for the frontend endpoint |
-| ingress.ingressClassName | string | `"nginx"` | The kind of ingress controller to use i.e, `nginx` |
-| ingress.tls | string | `nil` | Enable TLS Certificates |
-| logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |
-| objectStore | object | `{"env":{},"uri":null}` | Object storage details |
-| objectStore.env | object | `{}` | additional env vars for the object store connection |
-| objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
-| postgresDsn | string | `nil` | Postgres DSN used for `crud` database |
-| postgresFFDsn | string | `nil` | Postgres DSN used for `ff` database |
-| postgresIngestDsn | string | `nil` | Postgres DSN used for `ingest` database |
-| redisDsn | string | `"redis://logfire-redis:6379"` | The DSN for redis.  Change from default if you have an external redis instance |
-| serviceAccountName | string | `"default"` | the Kubernetes Service Account that is used by the pods |
-| smtp.host | string | `nil` | Hostname of the SMTP server |
-| smtp.password | string | `nil` | SMTP password |
-| smtp.port | int | `25` | Port of the SMTP server |
-| smtp.use_tls | bool | `false` | Whether to use TLS |
-| smtp.username | string | `nil` | SMTP username |
+{{ template "chart.requirementsSection" . }}
+
+{{ template "chart.valuesSection" . }}
 
 ## Development
 

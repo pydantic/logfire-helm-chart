@@ -1,0 +1,88 @@
+{{- if .Values.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    {{- with .Values.ingress.annotations }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+  name: logfire-api-ingress
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.ingress.ingressClassName }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.apiHostname }}
+      http:
+        paths:
+        # Route for /v1/traces, /v1/metrics, and /v1/logs
+          - path: /v1/traces
+            pathType: Exact
+            backend:
+              service:
+                name: logfire-ff-ingest-api
+                port:
+                  number: 8012
+          - path: /v1/metrics
+            pathType: Exact
+            backend:
+              service:
+                name: logfire-ff-ingest-api
+                port:
+                  number: 8012
+          - path: /v1/logs
+            pathType: Exact
+            backend:
+              service:
+                name: logfire-ff-ingest-api
+                port:
+                  number: 8012
+          # Default route for all other traffic
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: logfire-backend
+                port:
+                  number: 8000
+  {{- if .Values.ingress.tls }}
+  tls:
+    - secretName: logfire-api-cert
+      hosts:
+        - {{ .Values.ingress.apiHostname }}
+  {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    {{- with .Values.ingress.annotations }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+  name: logfire-frontend-ingress
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.ingress.ingressClassName }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.frontendHostname }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: logfire-frontend
+                port:
+                  number: 3000
+  {{- if .Values.ingress.tls }}
+  tls:
+    - secretName: logfire-frontend-cert
+      hosts:
+        - {{ .Values.ingress.frontendHostname }}
+  {{- end }}
+{{- end }}

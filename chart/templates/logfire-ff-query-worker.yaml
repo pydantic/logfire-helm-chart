@@ -1,0 +1,87 @@
+{{- $serviceName := "logfire-ff-query-worker" }}
+{{- if (index .Values $serviceName | default dict).enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+      annotations:
+        checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
+        checksum/storage-config: {{ include (print $.Template.BasePath "/logfire-storage-config.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end}}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      {{- with (index .Values $serviceName | default dict).initContainers }}
+      initContainers:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      containers:
+        - name: {{ $serviceName }}
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ .Values.image.tag }}'
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          command:
+            - fusionfire
+            - query-worker
+            - --host=0.0.0.0
+            - --port=8011
+          ports:
+            - containerPort: 8011
+          envFrom:
+            - configMapRef:
+                name: logfire-ff-config
+            - configMapRef:
+                name: logfire-storage-config
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: {{ $serviceName }}
+            {{- with (index .Values $serviceName | default dict).env }}
+              {{- . | toYaml | nindent 12 }}
+            {{- end}}
+          {{ if .Values.dev.hostObjectStore }}
+          volumeMounts:
+            - name: storage-data
+              mountPath: /storage
+          {{ end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8011
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8011
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+      {{ if .Values.dev.hostObjectStore }}
+      volumes:
+      - name: storage-data
+        hostPath:
+          path: /storage
+      {{ end }}
+{{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
+{{- end }}

@@ -1,0 +1,103 @@
+{{- $serviceName := "logfire-worker" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+    spec:
+      {{- with .Values.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end}}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      {{- with (index .Values $serviceName | default dict).initContainers }}
+      initContainers:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      containers:
+        - name: worker
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.workerImage }}:{{ .Values.image.tag }}'
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          command: [ "python", "-m", "logfire_worker" ]
+          ports:
+            - containerPort: 8003
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8003
+          env:
+            - name: LOGFIRE_SERVICE_NAME
+              value: {{ $serviceName }}
+            - name: LOGFIRE_SERVICE_VERSION
+              value: .Values.appVersion
+            - name: CRUD_PG_DSN
+              value: {{ .Values.postgresDsn }}
+            - name: REDIS_DSN
+              value: {{ .Values.redisDsn }}
+            - name: USAGE_REDIS_DSN
+              value: {{ .Values.usageRedisDsn }}
+            - name: OTEL_TRACES_SAMPLER
+              value: parentbased_traceidratio
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.05"
+            - name: FUSIONFIRE_HOST
+              value: logfire-fusionfire
+            - name: FUSIONFIRE_PORT
+              value: "8011"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app
+            - name: COLLECTOR_OTLP_GRPC_HOST
+              value: http://logfire-otel-collector:4317
+            - name: FRONTEND_HOST
+              value: {{ include "logfire.frontend" . }}
+            - name: USAGE_TO_BUCKET_BUCKET_NAME
+              value: {{ .Values.usageObjectStoreUri }}/usage
+            {{ if .Values.dev.deployMaildev }}
+            - name: SMTP_SERVER
+              value: logfire-maildev
+            - name: SMTP_PORT
+              value: "1025"
+            - name: SMTP_USERNAME
+              value: maildev
+            - name: SMTP_PASSWORD
+              value: maildev
+            - name: SMTP_USE_TLS
+              value: "false"
+            {{ else }}
+            - name: SMTP_SERVER
+              value: {{ .Values.smtp.host }}
+            - name: SMTP_PORT
+              value: {{ .Values.smtp.port | quote }}
+            - name: SMTP_USERNAME
+              value: {{ .Values.smtp.username }}
+            - name: SMTP_PASSWORD
+              value: {{ .Values.smtp.password }}
+            - name: SMTP_USE_TLS
+              value: {{ .Values.smtp.use_tls | quote }}
+            {{ end }}
+            {{- with (index .Values $serviceName | default dict).env }}
+              {{- . | toYaml | nindent 12 }}
+            {{- end}}
+{{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}

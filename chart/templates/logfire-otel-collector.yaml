@@ -1,0 +1,136 @@
+{{- $serviceName := "logfire-otel-collector" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  selector:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+    - protocol: TCP
+      port: 4317
+      targetPort: 4317
+      name: otlp-grpc
+    - protocol: TCP
+      port: 4318
+      targetPort: 4318
+      name: otlp-http
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  selector:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: "0.0.0.0:4317"
+          http:
+            endpoint: "0.0.0.0:4318"
+
+    exporters:
+      debug:
+      otlphttp:
+        endpoint: http://logfire-ff-ingest-api:8012
+        tls:
+          insecure: true
+        headers:
+          Authorization: "Bearer ${LOGFIRE_META_WRITE_TOKEN}"
+
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 512
+        spike_limit_mib: 128
+      batch:
+        timeout: 1s
+        send_batch_size: 2048
+
+    extensions:
+      health_check:
+        endpoint: "0.0.0.0:13133"
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug, otlphttp]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug, otlphttp]
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlphttp]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+    spec:
+      {{- with .Values.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end}}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      {{- with (index .Values $serviceName | default dict).initContainers }}
+      initContainers:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      containers:
+        - name: otel-collector
+          image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.120.0
+          command:
+          - /otelcol-contrib
+          - --config=/etc/otel-collector/otel-collector-config.yaml
+          ports:
+            - containerPort: 4317
+            - containerPort: 4318
+          volumeMounts:
+            - name: otel-collector-config
+              mountPath: /etc/otel-collector
+          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          env:
+            - name: LOGFIRE_META_WRITE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: logfire-meta-write-token
+                  key: logfire-meta-write-token
+            {{- with (index .Values $serviceName | default dict).env }}
+              {{- . | toYaml | nindent 12 }}
+            {{- end}}
+      volumes:
+        - name: otel-collector-config
+          configMap:
+            name: otel-collector-config
+{{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}

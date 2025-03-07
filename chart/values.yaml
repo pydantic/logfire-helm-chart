@@ -1,0 +1,206 @@
+# -- The secret used to pull down container images for pods
+imagePullSecrets: []
+
+ingress:
+  # -- Enable Ingress Resource
+  enabled: false
+  # -- Enable TLS Certificates
+  tls: 
+  # -- The hostname used for the API endpoint
+  apiHostname: 
+  # -- The hostname used for the frontend endpoint
+  frontendHostname: 
+  # -- The kind of ingress controller to use i.e, `nginx`
+  ingressClassName: nginx
+  # -- Any annotations required.
+  annotations: {}
+
+# NOTE: pleas ensure the dex hostname is set as follows:
+# logfire-frontend:
+#   env:
+#     - name: DEX_PUBLIC_URL
+#       value: https://dex.example.com
+
+# -- Postgres DSN used for `crud` database
+postgresDsn: 
+
+# -- Postgres DSN used for `ff` database
+postgresFFDsn:
+
+# -- Postgres DSN used for `ingest` database
+postgresIngestDsn:
+
+smtp:
+  # -- Hostname of the SMTP server
+  host: 
+  # -- Port of the SMTP server
+  port: 25
+  # -- SMTP username
+  username: 
+  # -- SMTP password
+  password:
+  # -- Whether to use TLS
+  use_tls: false
+
+
+# # -- Autoscaling & resources for the `logfire-backend` pod
+# logfire-backend:
+#   # -- Number of pod replicas
+#   replicas: 2
+#   # -- Resource limits and allocations
+#   resources:
+#     cpu: "2"
+#     memory: "2Gi"
+#   # -- Autoscaler settings
+#   autoscaling:
+#     minReplicas: 2
+#     maxReplicas: 4
+#     memAverage: 65
+#     cpuAverage: 20
+# 
+# # -- Autoscaling & resources for the query api pods
+# logfire-ff-query-api:
+#   replicas: 2
+#   resources:
+#     cpu: "2"
+#     memory: "2Gi"
+#   autoscaling:
+#     minReplicas: 2
+#     maxReplicas: 8
+#     memAverage: 65
+#     cpuAverage: 20
+# 
+# # -- Autoscaling & resources for the cache pods
+# logfire-ff-cache:
+#   replicas: 2
+#   # -- How much disk storage is used for caching
+#   cacheStorage: "10Gi"
+#   resources:
+#     cpu: "4"
+#     memory: "8Gi"
+#
+# logfire-ff-conhash-cache:
+#   replicas: 2
+#   resources:
+#     cpu: "1"
+#     memory: "1Gi"
+#
+# logfire-ff-ingest-api:
+#   resources:
+#     cpu: "1"
+#     memory: "1Gi"
+#
+# logfire-ff-ingest-worker:
+#   replicas: 6
+#   resources:
+#     cpu: "1"
+#     memory: "2Gi"
+#   autoscaling:
+#     minReplicas: 6
+#     maxReplicas: 24
+#     memAverage: 25
+#     cpuAverage: 15
+#
+# logfire-ff-maintenance-worker:
+#   replicas: 2
+#   resources:
+#     cpu: "4"
+#     memory: "8Gi"
+#   autoscaling:
+#     minReplicas: 2
+#     maxReplicas: 4
+#     memAverage: 50
+#     cpuAverage: 50
+#
+## Optional query worker deployment
+# logfire-ff-query-worker:
+#   enabled: true
+#   replicas: 8
+#   resources:
+#     cpu: "2"
+#     memory: "2Gi"
+#   autoscaling:
+#     minReplicas: 8
+#     maxReplicas: 128
+#     memAverage: 20
+#     cpuAverage: 50
+
+# -- Object storage details
+objectStore:
+  # -- Uri for object storage i.e, `s3://bucket`
+  uri:
+  # -- additional env vars for the object store connection
+  env: {}
+
+# Azure
+# objectStore:
+#   uri: az://<container_name>
+#   env:
+#     AZURE_STORAGE_ACCOUNT_NAME: <storage_account_name>
+#     AZURE_STORAGE_ACCOUNT_KEY: <storage_account_master_key>
+# objectStoreEnv:
+# AWS
+# objectStore:
+#   uri: s3://<bucket_name>
+#   env: 
+#     AWS_DEFAULT_REGION: <region>
+#     AWS_SECRET_ACCESS_KEY: <secret_key>
+#     AWS_ACCESS_KEY_ID: <access_key>
+
+# -- the Kubernetes Service Account that is used by the pods
+serviceAccountName: default
+
+image:
+  # -- The pull policy for docker images
+  pullPolicy: IfNotPresent
+  # @ignored
+  repository: us-docker.pkg.dev/pydantic-public-registries/docker
+  # -- The tag/version of the docker images to use
+  tag: latest
+  # @ignored
+  workerImage: logfire-python-prod
+  # @ignored
+  backendImage: logfire-python-prod
+  # @ignored
+  frontendImage: logfire-frontend-prod
+  # @ignored
+  schedulerImage: logfire-python-prod
+  # @ignored
+  fusionfireImage: fusionfire
+
+logfire-redis:
+  # -- Enable redis as part of this helm chart
+  enabled: true
+
+# -- The DSN for redis.  Change from default if you have an external redis instance
+redisDsn: redis://logfire-redis:6379
+
+# @ignored
+dex:
+  enabled: true
+  image:
+    repository: us-docker.pkg.dev/pydantic-public-registries/docker/dex
+    tag: latest
+  grpc:
+    enabled: true
+  configSecret:
+    create: true
+  autoscaling:
+    enabled: true
+  envVars:
+    - name: "DEX_API_CONNECTORS_CRUD"
+      value: "true"
+    - name: LOGFIRE_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: logfire-dex-client-secret
+          key: logfire-dex-client-secret
+  config:
+    web:
+      http: 0.0.0.0:5556
+    grpc:
+      addr: 0.0.0.0:5557
+    oauth2:
+      skipApprovalScreen: true
+      passwordConnector: local
+    enablePasswordDB: true

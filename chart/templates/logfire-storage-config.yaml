@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logfire-storage-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-storage-config
+data:
+  FF_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}
+  {{- with .Values.objectStore.env }}
+  {{ . | toYaml | nindent 2 }}
+  {{- end}}
