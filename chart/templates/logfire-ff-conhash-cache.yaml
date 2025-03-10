@@ -74,8 +74,10 @@ spec:
       serviceAccountName: conhash
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
-        {{- . | toYaml | nindent 8 }}
-      {{- end}}
+      {{- range . }}
+        - name: {{ . | quote }}
+      {{- end }}
+      {{- end }}
       {{- with (index .Values $serviceName | default dict).initContainers }}
       initContainers:
         {{- . | toYaml | nindent 8 }}
