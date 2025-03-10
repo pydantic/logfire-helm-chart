@@ -158,13 +158,13 @@ image:
   # -- The tag/version of the docker images to use
   tag: latest
   # @ignored
-  workerImage: logfire-python-prod
+  workerImage: python-prod
   # @ignored
-  backendImage: logfire-python-prod
+  backendImage: python-prod
   # @ignored
-  frontendImage: logfire-frontend-prod
+  frontendImage: frontend
   # @ignored
-  schedulerImage: logfire-python-prod
+  schedulerImage: python-prod
   # @ignored
   fusionfireImage: fusionfire
 

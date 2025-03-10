@@ -3,10 +3,15 @@ adminEmail: engineering@pydantic.dev
 image:
   pullPolicy: Never
   tag: latest
+  # @ignored
   workerImage: logfire-python-prod
+  # @ignored
   backendImage: logfire-python-prod
+  # @ignored
   frontendImage: logfire-frontend-prod
+  # @ignored
   schedulerImage: logfire-python-prod
+  # @ignored
   fusionfireImage: fusionfire-dev
 
 objectStore:
