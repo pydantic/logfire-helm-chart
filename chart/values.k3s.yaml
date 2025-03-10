@@ -5,6 +5,18 @@ adminEmail: peter@pydantic.dev
 image:
   pullPolicy: Always
   repository: registry:5000/
+  # -- The tag/version of the docker images to use
+  tag: latest
+  # @ignored
+  workerImage: logfire-python-prod
+  # @ignored
+  backendImage: logfire-python-prod
+  # @ignored
+  frontendImage: logfire-frontend-prod
+  # @ignored
+  schedulerImage: logfire-python-prod
+  # @ignored
+  fusionfireImage: fusionfire-dev
 
 ingress:
   enabled: true

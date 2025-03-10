@@ -53,6 +53,8 @@ spec:
           env:
             - name: OTEL_SERVICE_NAME
               value: $serviceName
+            - name: FF_CACHE_LOCAL_DIR
+              value: /scratch
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}

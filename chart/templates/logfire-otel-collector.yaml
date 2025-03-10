@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/component: {{ $serviceName }}
 spec:
   selector:
-    {{- include "logfire.labels" . | nindent 4 }}
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
     - protocol: TCP
