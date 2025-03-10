@@ -25,14 +25,14 @@ metadata:
 spec:
   replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
   selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  template:
     metadata:
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
-  template:
-    metadata:
-      labels:
-        app: {{ $serviceName }}
       annotations:
         checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
         checksum/storage-config: {{ include (print $.Template.BasePath "/logfire-storage-config.yaml") . | sha256sum }}
@@ -42,8 +42,10 @@ spec:
       {{- end}}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
-        {{- . | toYaml | nindent 8 }}
-      {{- end}}
+      {{- range . }}
+        - name: {{ . | quote }}
+      {{- end }}
+      {{- end }}
       {{- with (index .Values $serviceName | default dict).initContainers }}
       initContainers:
         {{- . | toYaml | nindent 8 }}
