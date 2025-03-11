@@ -97,7 +97,7 @@ spec:
             - name: ORCHESTRATION
               value: "kubernetes"
             - name: DEPLOYMENT_SELECTOR
-              value: "app=logfire-ff-cache"
+              value: "app.kubernetes.io/component=logfire-ff-cache"
             - name: DEPLOYMENT_PORT
               value: "9001"
             - name: FF_SEND_TO_LOGFIRE
