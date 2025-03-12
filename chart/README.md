@@ -124,6 +124,17 @@ dex:
           getUserInfo: true
 ```
 
+#### Image pull secrets
+
+Remember to add the image pull secrets to dex's service account `logfire-dex` or add the pull secrets directly to the dex config:
+
+```yaml
+dex:
+  imagePullSecrets: 
+    - name: logfire-image-key
+  config:
+```
+
 We recommend you set secrets as Kubernetes secrets and reference them in the `values.yaml` file instead of hardcoding secrets which is more likely to be exposed and harder to rotate.
 
 ### Object Storage
