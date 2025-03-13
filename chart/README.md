@@ -84,6 +84,9 @@ dex:
         logfire_frontend_host: https://logfire.example.com
 ```
 
+Note that the `staicClients.id` MUST match the `LOGFIRE_CLIENT_ID` in the backend configuration.
+We recommend you use `logfire-backend` and do not change this value for simplicity.
+
 #### Authentication Configuration
 
 Depending on what [connector you want to use](https://dexidp.io/docs/connectors/), you can configure dex connectors accordingly.
