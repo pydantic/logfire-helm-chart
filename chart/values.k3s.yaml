@@ -27,12 +27,7 @@ ingress:
   ingressClassName: nginx
   annotations:
     cert-manager.io/cluster-issuer: k3s-ca-issuer
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://logfire.k3s.local"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-Logfire-Context"
-    nginx.ingress.kubernetes.io/proxy-body-size: 1024m
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
 
 logfire-frontend:
   env: 

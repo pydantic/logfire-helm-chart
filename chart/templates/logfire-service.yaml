@@ -1,0 +1,185 @@
+{{- $serviceName := "logfire-service" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+data:
+  nginx.conf: |
+    events {}
+    
+    http {
+        server {
+            server_name {{ .Values.ingress.apiHostname }};
+            listen 80;
+
+            # Proxy /v1/traces and /v1/metrics to fusionfire-ingest-api
+            location ~ ^/v1/(traces|metrics|logs)$ {
+
+                if ($request_method = 'OPTIONS') {
+                    add_header 'Access-Control-Allow-Origin' '{{ include "logfire.frontend" . }}' always;
+                    add_header 'Access-Control-Allow-Credentials' 'true' always;
+                    add_header 'Access-Control-Allow-Methods' '*' always;
+                    add_header 'Access-Control-Allow-Headers' '*' always;
+                    add_header 'Access-Control-Max-Age' '1728000' always;
+
+                    add_header 'Content-Type'  'text/plain charset=UTF-8' always;
+                    add_header 'Content-Length' '0' always;
+                    return 204;
+                }
+
+                proxy_pass http://logfire-ff-ingest-api:8012;
+            }
+
+            # Proxy all other requests to logfire-backend
+            location / {
+
+                if ($request_method = 'OPTIONS') {
+                    add_header 'Access-Control-Allow-Origin' '{{ include "logfire.frontend" . }}' always;
+                    add_header 'Access-Control-Allow-Credentials' 'true' always;
+                    add_header 'Access-Control-Allow-Methods' '*' always;
+                    add_header 'Access-Control-Allow-Headers' '*' always;
+                    add_header 'Access-Control-Max-Age' '1728000' always;
+
+                    add_header 'Content-Type'  'text/plain charset=UTF-8' always;
+                    add_header 'Content-Length' '0' always;
+                    return 204;
+                }
+
+                proxy_pass http://logfire-backend:8000;
+            }
+
+            # WebSocket headers
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+    
+            # Optional for WebSocket stability
+            proxy_set_header Host $host;
+            proxy_http_version 1.1;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+    
+            # Timeout settings
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+
+            client_max_body_size 1024m;
+        }
+
+        server {
+            server_name {{ .Values.ingress.frontendHostname }};
+            listen 80;
+
+            # Proxy all other requests to logfire-backend
+            location / {
+                proxy_pass http://logfire-frontend:3000;
+            }
+
+            # WebSocket headers
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+    
+            # Optional for WebSocket stability
+            proxy_set_header Host $host;
+            proxy_http_version 1.1;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+    
+            # Timeout settings
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+        }
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+    spec:
+      {{- with .Values.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end}}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range . }}
+        - name: {{ . | quote }}
+      {{- end }}
+      {{- end }}
+      {{- with (index .Values $serviceName | default dict).initContainers }}
+      initContainers:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $serviceName }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: nginx:1.27.4
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx
+          ports:
+            - containerPort: 80
+          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          env:
+            - name: PUBLIC_API_HOST
+              value: {{ .Values.ingress.apiHostname }}
+            - name: STRIPE_PUBLISHABLE_KEY
+              value: ""
+            - name: IMAGE_TAG
+              value: local
+            - name: POSTHOG_API_KEY
+              value: ""
+            - name: POSTHOG_API_HOST
+              value: ""
+            - name: OTEL_SERVICE_NAME
+              value: {{ $serviceName }}
+            {{ if eq (.Values.ingress.tls | default false) false }}
+            - name: E2E
+              value: "true"
+            {{ end }}
+            {{- with (index .Values $serviceName | default dict).env }}
+              {{- . | toYaml | nindent 12 }}
+            {{- end}}
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-config
+{{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
