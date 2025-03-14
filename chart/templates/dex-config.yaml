@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "logfire.dexSecretName" . }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+type: Opaque
+data:
+  config.yaml: {{ include "logfire.dexConfig" . }}
