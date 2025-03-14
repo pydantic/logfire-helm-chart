@@ -33,8 +33,12 @@ spec:
       initContainers:
         {{- . | toYaml | nindent 8 }}
       {{- end}}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-        - name: worker
+        - name: {{ $serviceName }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.workerImage }}:{{ .Values.image.tag }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
@@ -73,7 +77,7 @@ spec:
             - name: COLLECTOR_OTLP_GRPC_HOST
               value: http://logfire-otel-collector:4317
             - name: FRONTEND_HOST
-              value: {{ include "logfire.frontend" . }}
+              value: {{ include "logfire.frontend" . | quote }}
             - name: USAGE_TO_BUCKET_BUCKET_NAME
               value: {{ .Values.usageObjectStoreUri }}/usage
             {{ if .Values.dev.deployMaildev }}
