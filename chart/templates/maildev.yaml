@@ -8,6 +8,7 @@ metadata:
   name: logfire-maildev
 spec:
   replicas: 1
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "logfire.selectorLabels" . | nindent 6 }}
@@ -19,9 +20,14 @@ spec:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: logfire-maildev
     spec:
+      priorityClassName: {{ .Values.priorityClassName }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - image: maildev/maildev
           name: logfire-maildev
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           ports:
             - containerPort: 1080
             - containerPort: 1025

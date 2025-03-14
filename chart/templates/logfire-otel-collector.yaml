@@ -86,6 +86,7 @@ spec:
   {{- if not (hasKey (index .Values $serviceName | default dict) "autoscaling") }}
   replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
   {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "logfire.selectorLabels" . | nindent 6 }}
@@ -98,6 +99,7 @@ spec:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
     spec:
+      priorityClassName: {{ .Values.priorityClassName }}
       {{- with .Values.serviceAccountName }}
       serviceAccountName: {{ . }}
       {{- end}}
@@ -122,6 +124,8 @@ spec:
           ports:
             - containerPort: 4317
             - containerPort: 4318
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           volumeMounts:
             - name: otel-collector-config
               mountPath: /etc/otel-collector
