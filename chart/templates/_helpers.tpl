@@ -52,7 +52,7 @@ resources:
 {{- end}}
 
 {{- define "logfire.frontend" -}}
-"{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ .Values.ingress.frontendHostname }}"
+{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ .Values.ingress.frontendHostname }}
 {{- end -}}
 
 {{/*

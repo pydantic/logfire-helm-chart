@@ -105,7 +105,7 @@ spec:
             - name: LOGFIRE_REGION
               value: {{ .Values.logfireRegion | default "us" }}
             - name: FRONTEND_HOST
-              value: {{ include "logfire.frontend" . }}
+              value: {{ include "logfire.frontend" . | quote }}
             - name: META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:

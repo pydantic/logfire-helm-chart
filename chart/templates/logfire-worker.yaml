@@ -73,7 +73,7 @@ spec:
             - name: COLLECTOR_OTLP_GRPC_HOST
               value: http://logfire-otel-collector:4317
             - name: FRONTEND_HOST
-              value: {{ include "logfire.frontend" . }}
+              value: {{ include "logfire.frontend" . | quote }}
             - name: USAGE_TO_BUCKET_BUCKET_NAME
               value: {{ .Values.usageObjectStoreUri }}/usage
             {{ if .Values.dev.deployMaildev }}
