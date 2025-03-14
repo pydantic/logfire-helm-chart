@@ -100,27 +100,17 @@ dex:
       - hosts:
           - dex.example.com
         secretName: dex-cert
+  envVars:
+    - name: "DEX_API_CONNECTORS_CRUD"
+      value: "true"
+    - name: LOGFIRE_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: logfire-dex-client-secret
+          key: logfire-dex-client-secret
   config:
     issuer: https://dex.example.com/dex
-    staticClients:
-      - id: logfire-backend
-        name: Logfire Backend
-        redirectURIs:
-          # Use the frontend hostname here
-          - https://logfire.example.com/auth/code-callback
-          - https://logfire.example.com/auth/link-provider-code-callback
-        scopes:
-          - openid
-          - email
-          - profile
-        secret: $LOGFIRE_CLIENT_SECRET
-    frontend:
-      extra:
-        logfire_frontend_host: https://logfire.example.com
 ```
-
-Note that the `staticClients.id` MUST match the `LOGFIRE_CLIENT_ID` in the backend configuration.
-We recommend you use `logfire-backend` and do not change this value for simplicity.
 
 #### Authentication Configuration
 
@@ -133,7 +123,7 @@ dex:
   # other config as above
   ...
   config:
-    connectors:
+    connectors:   
       - type: "github",
         id: "github",
         name: "GitHub",

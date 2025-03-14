@@ -200,7 +200,8 @@ dex:
   grpc:
     enabled: true
   configSecret:
-    create: true
+    create: false
+    name: logfire-dex-config
   autoscaling:
     enabled: true
   envVars:

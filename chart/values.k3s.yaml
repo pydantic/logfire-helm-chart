@@ -50,6 +50,9 @@ dex:
   image:
     repository: registry:5000/dex
     tag: latest
+  configSecret:
+    create: false
+    name: logfire-dex-config
   ingress:
     enabled: true
     className: nginx
@@ -76,20 +79,7 @@ dex:
         ssl:
           mode: disable
     issuer: https://dex.k3s.local/dex
-    staticClients:
-      - id: logfire-backend
-        name: Logfire Backend
-        redirectURIs:
-          - https://logfire.k3s.local/auth/code-callback
-          - https://logfire.k3s.local/auth/link-provider-code-callback
-        scopes:
-          - openid
-          - email
-          - profile
-        secret: $LOGFIRE_CLIENT_SECRET
-    frontend:
-      extra:
-        logfire_frontend_host: https://logfire.k3s.local
+    staticClients: []
     web:
       http: 0.0.0.0:5556
     grpc:

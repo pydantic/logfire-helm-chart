@@ -105,3 +105,51 @@ Selector labels
 app.kubernetes.io/name: {{ include "logfire.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+
+{{/*
+Create dex config secret name
+*/}}
+{{- define "logfire.dexSecretName" -}}
+{{- printf "%s" .Values.dex.configSecret.name }}
+{{- end -}}
+
+{{/*
+Create dex config secret name
+*/}}
+{{- define "logfire.dexClientId" -}}
+{{- printf "logfire-backend" }}
+{{- end -}}
+
+{{/*
+Create dex configuration secret, merging backend static clients with user provided storage and oauth connectors.
+*/}}
+{{- define "logfire.dexConfig" -}}
+{{- $dexConfig := .Values.dex.config -}}
+{{- $staticClients := list -}}
+{{- $logfireFrontend := (include "logfire.frontend" .) -}}
+
+{{- $frontend := dict -}}
+{{- $extraVars := dict "logfire_frontend_host" (printf "%s" $logfireFrontend) -}}
+{{- $_ := set $frontend "extra" $extraVars -}}
+
+{{- $client := dict -}}
+{{- $_ := set $client "id" (include "logfire.dexClientId" .) -}}
+{{- $_ := set $client "name" "Logfire Backend" -}}
+{{- $_ := set $client "secret" "$LOGFIRE_CLIENT_SECRET" -}}
+{{- $_ := set $client "redirectURIs" (list (printf "%s/auth/code-callback" $logfireFrontend) (printf "%s/auth/link-provider-code-callback" $logfireFrontend)) -}}
+{{- $_ := set $client "public" false -}}
+{{- $_ := set $client "scopes"  (list "openid" "email" "profile") -}}
+{{- $staticClients = append $staticClients $client -}}
+
+{{- if and (hasKey $dexConfig "staticClients") $dexConfig.staticClients -}}
+  {{- range $client := $dexConfig.staticClients -}}
+    {{- $staticClients = append $staticClients $client -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $_ := set $dexConfig "staticClients" $staticClients -}}
+{{- $_ := set $dexConfig "frontend" $frontend -}}
+
+{{ toYaml $dexConfig | b64enc | quote }}
+{{- end -}}
