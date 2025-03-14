@@ -45,6 +45,44 @@ logfire-frontend:
       value: https://dex.example.com
 ```
 
+### Ingress
+
+We have an ingress configuration that will allow you to set up ingress:
+
+```yaml
+ingress:
+  enabled: true
+  tls: true
+  apiHostname: logfire-api.example.com
+  frontendHostname: logfire.example.com
+  ingressClassName: nginx
+```
+
+#### Using the direct service
+
+We expose a service called `logfire-service` which will route traffic appropriately.
+
+If you don't want to use the ingress controller, you will still need to define hostnames and whether you are externally using TLS:
+
+I.e, this config will turn off the ingress resource, but still set appropriate cors headers for the `logfire-service`:
+
+```yaml
+ingress:
+  # this turns off the ingress resource
+  enabled: false
+  # used to ensure appropriate CORS headers are set.  If your browser is accessing it on https, then needs to be enabled here
+  tls: true
+  # used to ensure appropriate CORS headers are set. 
+  apiHostname: logfire-api.k3s.local
+  # used to ensure appropriate CORS headers are set.
+  frontendHostname: logfire.k3s.local
+```
+
+If you are *not* using kubernetes ingress, you must still set the hostnames under the `ingress` configuration.
+
+
+
+
 ### Dex
 
 Dex is used as the identity service for logfire & can be configured for many different types of connectors.  The full list of connectors can be found here: [https://dexidp.io/docs/connectors/](https://dexidp.io/docs/connectors/)
@@ -85,6 +123,9 @@ dex:
         logfire_frontend_host: https://logfire.example.com
 ```
 
+Note that the `staticClients.id` MUST match the `LOGFIRE_CLIENT_ID` in the backend configuration.
+We recommend you use `logfire-backend` and do not change this value for simplicity.
+
 #### Authentication Configuration
 
 Depending on what [connector you want to use](https://dexidp.io/docs/connectors/), you can configure dex connectors accordingly.
@@ -123,6 +164,16 @@ dex:
           redirectURI: `https://dex.example.com/dex/callback`
           useLoginAsID: false
           getUserInfo: true
+```
+#### Image pull secrets
+
+Remember to add the image pull secrets to dex's service account `logfire-dex` or add the pull secrets directly to the dex config:
+
+```yaml
+dex:
+  imagePullSecrets:
+    - name: logfire-image-key
+  config:
 ```
 
 We recommend you set secrets as Kubernetes secrets and reference them in the `values.yaml` file instead of hardcoding secrets which is more likely to be exposed and harder to rotate.
@@ -278,6 +329,20 @@ See [`values.yaml`](./values.yaml) for some production level values
 {{ template "chart.requirementsSection" . }}
 
 {{ template "chart.valuesSection" . }}
+
+## Configuring Logfire
+
+Since this is self-hosted you will need to update your logfire configuration to include a different URL to send data to.  You can do this by specifying the `base_url` in advanced config:
+
+```python
+import logfire
+
+logfire.configure(
+    token='<your_logfire_token>',
+    advanced=logfire.AdvancedOptions(base_url="https://logfire-api.example.com")
+)
+logfire.info('Hello, {place}!', place='World')
+```
 
 ## Development
 

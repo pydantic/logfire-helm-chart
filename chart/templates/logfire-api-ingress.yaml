@@ -17,36 +17,13 @@ spec:
     - host: {{ .Values.ingress.apiHostname }}
       http:
         paths:
-        # Route for /v1/traces, /v1/metrics, and /v1/logs
-          - path: /v1/traces
-            pathType: Exact
-            backend:
-              service:
-                name: logfire-ff-ingest-api
-                port:
-                  number: 8012
-          - path: /v1/metrics
-            pathType: Exact
-            backend:
-              service:
-                name: logfire-ff-ingest-api
-                port:
-                  number: 8012
-          - path: /v1/logs
-            pathType: Exact
-            backend:
-              service:
-                name: logfire-ff-ingest-api
-                port:
-                  number: 8012
-          # Default route for all other traffic
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: logfire-backend
+                name: logfire-service
                 port:
-                  number: 8000
+                  number: 80
   {{- if .Values.ingress.tls }}
   tls:
     - secretName: logfire-api-cert
@@ -76,9 +53,9 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: logfire-frontend
+                name: logfire-service
                 port:
-                  number: 3000
+                  number: 80
   {{- if .Values.ingress.tls }}
   tls:
     - secretName: logfire-frontend-cert

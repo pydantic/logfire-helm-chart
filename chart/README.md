@@ -44,6 +44,41 @@ logfire-frontend:
       value: https://dex.example.com
 ```
 
+### Ingress
+
+We have an ingress configuration that will allow you to set up ingress:
+
+```yaml
+ingress:
+  enabled: true
+  tls: true
+  apiHostname: logfire-api.example.com
+  frontendHostname: logfire.example.com
+  ingressClassName: nginx
+```
+
+#### Using the direct service
+
+We expose a service called `logfire-service` which will route traffic appropriately.
+
+If you don't want to use the ingress controller, you will still need to define hostnames and whether you are externally using TLS:
+
+I.e, this config will turn off the ingress resource, but still set appropriate cors headers for the `logfire-service`:
+
+```yaml
+ingress:
+  # this turns off the ingress resource
+  enabled: false
+  # used to ensure appropriate CORS headers are set.  If your browser is accessing it on https, then needs to be enabled here
+  tls: true
+  # used to ensure appropriate CORS headers are set.
+  apiHostname: logfire-api.k3s.local
+  # used to ensure appropriate CORS headers are set.
+  frontendHostname: logfire.k3s.local
+```
+
+If you are *not* using kubernetes ingress, you must still set the hostnames under the `ingress` configuration.
+
 ### Dex
 
 Dex is used as the identity service for logfire & can be configured for many different types of connectors.  The full list of connectors can be found here: [https://dexidp.io/docs/connectors/](https://dexidp.io/docs/connectors/)
@@ -84,7 +119,7 @@ dex:
         logfire_frontend_host: https://logfire.example.com
 ```
 
-Note that the `staicClients.id` MUST match the `LOGFIRE_CLIENT_ID` in the backend configuration.
+Note that the `staticClients.id` MUST match the `LOGFIRE_CLIENT_ID` in the backend configuration.
 We recommend you use `logfire-backend` and do not change this value for simplicity.
 
 #### Authentication Configuration
@@ -126,14 +161,13 @@ dex:
           useLoginAsID: false
           getUserInfo: true
 ```
-
 #### Image pull secrets
 
 Remember to add the image pull secrets to dex's service account `logfire-dex` or add the pull secrets directly to the dex config:
 
 ```yaml
 dex:
-  imagePullSecrets: 
+  imagePullSecrets:
     - name: logfire-image-key
   config:
 ```
@@ -295,25 +329,41 @@ See [`values.yaml`](./values.yaml) for some production level values
 | image.tag | string | `"latest"` | The tag/version of the docker images to use |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
-| ingress.apiHostname | string | `nil` | The hostname used for the API endpoint |
-| ingress.enabled | bool | `false` | Enable Ingress Resource |
-| ingress.frontendHostname | string | `nil` | The hostname used for the frontend endpoint |
+| ingress.apiHostname | string | `nil` | The hostname used for the API endpoint.  Required for CORS headers |
+| ingress.enabled | bool | `false` | Enable Ingress Resource.   If you're not using an ingress resource, for CORS you still need to configure `tls`, `apiHostname` & `frontendHostname` |
+| ingress.frontendHostname | string | `nil` | The hostname used for the frontend endpoint. Required for CORS headers |
 | ingress.ingressClassName | string | `"nginx"` | The kind of ingress controller to use i.e, `nginx` |
-| ingress.tls | string | `nil` | Enable TLS Certificates |
+| ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
 | logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
 | objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
+| podSecurityContext | object | `{}` | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details. |
 | postgresDsn | string | `nil` | Postgres DSN used for `crud` database |
 | postgresFFDsn | string | `nil` | Postgres DSN used for `ff` database |
 | postgresIngestDsn | string | `nil` | Postgres DSN used for `ingest` database |
 | redisDsn | string | `"redis://logfire-redis:6379"` | The DSN for redis.  Change from default if you have an external redis instance |
+| securityContext | object | `{}` | Container [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1) for details. |
 | serviceAccountName | string | `"default"` | the Kubernetes Service Account that is used by the pods |
 | smtp.host | string | `nil` | Hostname of the SMTP server |
 | smtp.password | string | `nil` | SMTP password |
 | smtp.port | int | `25` | Port of the SMTP server |
 | smtp.use_tls | bool | `false` | Whether to use TLS |
 | smtp.username | string | `nil` | SMTP username |
+
+## Configuring Logfire
+
+Since this is self-hosted you will need to update your logfire configuration to include a different URL to send data to.  You can do this by specifying the `base_url` in advanced config:
+
+```python
+import logfire
+
+logfire.configure(
+    token='<your_logfire_token>',
+    advanced=logfire.AdvancedOptions(base_url="https://logfire-api.example.com")
+)
+logfire.info('Hello, {place}!', place='World')
+```
 
 ## Development
 
@@ -376,45 +426,4 @@ objectStore:
 dev:
   ...
   hostObjectStore: true
-```# logfire
-
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![AppVersion: 0.0.0](https://img.shields.io/badge/AppVersion-0.0.0-informational?style=flat-square)
-
-Helm chart for self-hosted Logfire
-
-## Requirements
-
-| Repository | Name | Version |
-|------------|------|---------|
-| https://charts.dexidp.io | dex | 0.20.0 |
-
-## Values
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
-| image.tag | string | `"latest"` | The tag/version of the docker images to use |
-| imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
-| ingress.annotations | object | `{}` | Any annotations required. |
-| ingress.apiHostname | string | `nil` | The hostname used for the API endpoint |
-| ingress.enabled | bool | `false` | Enable Ingress Resource |
-| ingress.frontendHostname | string | `nil` | The hostname used for the frontend endpoint |
-| ingress.ingressClassName | string | `"nginx"` | The kind of ingress controller to use i.e, `nginx` |
-| ingress.tls | string | `nil` | Enable TLS Certificates |
-| logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |
-| objectStore | object | `{"env":{},"uri":null}` | Object storage details |
-| objectStore.env | object | `{}` | additional env vars for the object store connection |
-| objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
-| postgresDsn | string | `nil` | Postgres DSN used for `crud` database |
-| postgresFFDsn | string | `nil` | Postgres DSN used for `ff` database |
-| postgresIngestDsn | string | `nil` | Postgres DSN used for `ingest` database |
-| redisDsn | string | `"redis://logfire-redis:6379"` | The DSN for redis.  Change from default if you have an external redis instance |
-| serviceAccountName | string | `"default"` | the Kubernetes Service Account that is used by the pods |
-| smtp.host | string | `nil` | Hostname of the SMTP server |
-| smtp.password | string | `nil` | SMTP password |
-| smtp.port | int | `25` | Port of the SMTP server |
-| smtp.use_tls | bool | `false` | Whether to use TLS |
-| smtp.username | string | `nil` | SMTP username |
-
-----------------------------------------------
-Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)
+```
