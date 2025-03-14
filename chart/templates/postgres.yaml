@@ -62,7 +62,8 @@ spec:
             - name: init-db-scripts
               mountPath: /docker-entrypoint-initdb.d
             - name: logfire-postgres
-              mountPath: /var/lib/postgresql/data
+              mountPath: /var/lib/postgresql
+              subPath: data
       volumes:
         - name: init-db-scripts
           configMap:

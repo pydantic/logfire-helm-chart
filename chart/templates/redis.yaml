@@ -62,4 +62,10 @@ spec:
               memory: "128Mi"
               cpu: "200m"
           {{- end }}
+          volumeMounts:
+            - mountPath: /data
+              name: data
+      volumes:
+        - name: data
+          emptyDir: {}
 {{- end }}
