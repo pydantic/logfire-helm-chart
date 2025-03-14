@@ -63,6 +63,10 @@ spec:
           env:
             - name: OTEL_SERVICE_NAME
               value: {{ $serviceName }}
+            - name: FF_ENABLE_SPILL_TO_DISK
+              value: "true"
+            - name: FF_TEMP_DIR
+              value: /storage/fusionfire
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}

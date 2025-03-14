@@ -62,6 +62,10 @@ spec:
           env:
             - name: FF_CACHE_OBJECT_STORE_HTTP_HEADERS
               value: x-ff-no-warm-cache=1
+            - name: FF_ENABLE_SPILL_TO_DISK
+              value: "true"
+            - name: FF_TEMP_DIR
+              value: /storage/fusionfire
             - name: OTEL_SERVICE_NAME
               value: {{ $serviceName }}
             {{- with (index .Values $serviceName | default dict).env }}

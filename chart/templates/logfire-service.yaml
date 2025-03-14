@@ -177,7 +177,12 @@ spec:
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}
+          volumeMounts:
+            - mountPath: /var/cache/nginx/
+              name: cache
       volumes:
+        - name: cache
+          emptyDir: {}
         - name: nginx-config
           configMap:
             name: nginx-config

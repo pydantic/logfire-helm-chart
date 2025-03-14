@@ -35,10 +35,10 @@ ingress:
   maildevHostname: maildev.docker-desktop.local
   annotations: {}
 
-securityContext: {}
-  # runAsNonRoot: true
-  # runAsUser: 1000
-  # readOnlyRootFilesystem: true
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
 
 dex:
   image:
