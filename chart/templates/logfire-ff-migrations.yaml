@@ -52,3 +52,5 @@ spec:
               value: "false"
             - name: FF_CONSOLE_MODE
               value: "force"
+            - name: FF_OBJECT_STORE_URI
+              value: {{ .Values.objectStore.uri }}
