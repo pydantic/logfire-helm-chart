@@ -28,6 +28,7 @@ metadata:
     "helm.sh/hook-weight": "-1"
 spec:
   replicas: 1
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "logfire.selectorLabels" . | nindent 6 }}
@@ -40,11 +41,16 @@ spec:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: logfire-postgres
     spec:
+      priorityClassName: {{ .Values.priorityClassName }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: postgres
           image: postgres:16
           ports:
             - containerPort: 5432
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           env:
             - name: POSTGRES_USER
               value: postgres

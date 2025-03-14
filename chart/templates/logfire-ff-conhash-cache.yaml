@@ -62,6 +62,7 @@ spec:
   {{- if not (hasKey (index .Values $serviceName | default dict) "autoscaling") }}
   replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
   {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "logfire.selectorLabels" . | nindent 6 }}
@@ -72,6 +73,7 @@ spec:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
     spec:
+      priorityClassName: {{ .Values.priorityClassName }}
       serviceAccountName: conhash
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -87,10 +89,10 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ $serviceName }}
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ .Values.image.tag }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
             - "conhash"
