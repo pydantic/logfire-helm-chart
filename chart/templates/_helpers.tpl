@@ -56,7 +56,7 @@ resources:
 {{- end -}}
 
 {{- define "logfire.api" -}}
-{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ .Values.ingress.api }}
+{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ .Values.ingress.apiHostname }}
 {{- end -}}
 
 {{/*
