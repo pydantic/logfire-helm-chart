@@ -150,10 +150,12 @@ spec:
         - name: {{ $serviceName }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: nginx:1.27.4
+          image: nginxinc/nginx-unprivileged:1.27.4
           volumeMounts:
             - name: nginx-config
               mountPath: /etc/nginx
+            - name: tmp
+              mountPath: /tmp/
           ports:
             - containerPort: 80
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
@@ -180,8 +182,10 @@ spec:
           volumeMounts:
             - mountPath: /var/cache/nginx/
               name: cache
+            - mountPath: /tmp/
+              name: tmp
       volumes:
-        - name: cache
+        - name: tmp
           emptyDir: {}
         - name: nginx-config
           configMap:

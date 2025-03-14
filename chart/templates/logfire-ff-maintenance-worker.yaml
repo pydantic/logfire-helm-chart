@@ -65,17 +65,19 @@ spec:
             - name: FF_ENABLE_SPILL_TO_DISK
               value: "true"
             - name: FF_TEMP_DIR
-              value: /storage/fusionfire
+              value: /scratch/fusionfire
             - name: OTEL_SERVICE_NAME
               value: {{ $serviceName }}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}
-          {{ if .Values.dev.hostObjectStore }}
           volumeMounts:
+            {{ if .Values.dev.hostObjectStore }}
             - name: storage-data
               mountPath: /storage
-          {{ end }}
+            {{ end }}
+            - name: scratch-data
+              mountPath: /scratch
           livenessProbe:
             httpGet:
               path: /health
@@ -92,10 +94,12 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
-      {{ if .Values.dev.hostObjectStore }}
       volumes:
+      {{ if .Values.dev.hostObjectStore }}
       - name: storage-data
         hostPath:
           path: /storage
       {{ end }}
+      - name: scratch-data
+        emptyDir: {}
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
