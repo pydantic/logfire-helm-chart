@@ -23,7 +23,9 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
 spec:
+  {{- if not (hasKey (index .Values $serviceName | default dict) "autoscaling") }}
   replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "logfire.selectorLabels" . | nindent 6 }}
