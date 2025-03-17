@@ -111,7 +111,9 @@ spec:
             - name: DEFAULT_SUBSCRIPTION_PLAN
               value: non_stripe
             - name: LOGFIRE_REGION
-              value: {{ .Values.logfireRegion | default "us" }}
+              value: {{ .Values.logfireRegion | default "local" }}
+            - name: LOGFIRE_KNOWN_REGIONS
+              value: '[{"name": "local", "frontend_host": "{{ include "logfire.frontend" . }}", "api_host": "{{ include "logfire.api" . }}", "auth_host": "{{ include "logfire.api" . }}"}]'
             - name: FRONTEND_HOST
               value: {{ include "logfire.frontend" . | quote }}
             - name: META_WRITE_TOKEN

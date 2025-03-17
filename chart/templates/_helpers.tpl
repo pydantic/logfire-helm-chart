@@ -55,6 +55,10 @@ resources:
 {{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ .Values.ingress.frontendHostname }}
 {{- end -}}
 
+{{- define "logfire.api" -}}
+{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ .Values.ingress.api }}
+{{- end -}}
+
 {{/*
 Create chart name and version as used by the chart label.
 */}}
