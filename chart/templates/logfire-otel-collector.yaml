@@ -117,7 +117,7 @@ spec:
       {{- end}}
       containers:
         - name: otel-collector
-          image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.120.0
+          image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.121.0
           command:
           - /otelcol-contrib
           - --config=/etc/otel-collector/otel-collector-config.yaml

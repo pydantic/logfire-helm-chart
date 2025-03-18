@@ -72,6 +72,8 @@ spec:
               value: {{ .Values.postgresDsn }}
             - name: INGEST_PG_DSN
               value: {{ .Values.postgresIngestDsn }}
+            - name: SHARED_REDIS_DSN
+              value: {{ .Values.redisDsn }}
             - name: REDIS_DSN
               value: {{ .Values.redisDsn }}
             - name: WORKER_REDIS_DSN

@@ -66,6 +66,8 @@ spec:
               value: {{ .Values.postgresDsn }}
             - name: REDIS_DSN
               value: {{ .Values.redisDsn }}
+            - name: SHARED_REDIS_DSN
+              value: {{ .Values.redisDsn }}
             - name: USAGE_REDIS_DSN
               value: {{ .Values.redisDsn }}
             - name: BACKEND_REDIS_DSN

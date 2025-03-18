@@ -92,6 +92,8 @@ spec:
               value: "3650000d"
             - name: FF_INGEST_MAX_PAST_TIME_DRIFT
               value: "3650000d"
+            - name: FF_ENABLE_SPILL_TO_DISK
+              value: "false"
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}

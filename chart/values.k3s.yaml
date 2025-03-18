@@ -16,7 +16,7 @@ image:
   # @ignored
   schedulerImage: logfire-python-prod
   # @ignored
-  fusionfireImage: fusionfire-dev
+  fusionfireImage: fusionfire
 
 ingress:
   enabled: true
@@ -24,6 +24,7 @@ ingress:
   apiHostname: logfire-api.k3s.local
   frontendHostname: logfire.k3s.local
   maildevHostname: maildev.k3s.local
+  dexHostname: dex.k3s.local
   ingressClassName: nginx
   annotations:
     cert-manager.io/cluster-issuer: k3s-ca-issuer
@@ -61,13 +62,10 @@ revisionHistoryLimit: 2
 
 # -- Container [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container).
 # See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1) for details.
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+securityContext:
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
 
 dex:
   image:

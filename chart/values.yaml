@@ -11,6 +11,8 @@ ingress:
   apiHostname: 
   # -- The hostname used for the frontend endpoint. Required for CORS headers
   frontendHostname: 
+  # -- The hostname used for the dex endpoint.
+  dexHostname:
   # -- The kind of ingress controller to use i.e, `nginx`
   ingressClassName: nginx
   # -- Any annotations required.
@@ -169,9 +171,9 @@ securityContext: {}
   # capabilities:
   #   drop:
   #   - ALL
-  # readOnlyRootFilesystem: true
   # runAsNonRoot: true
   # runAsUser: 1000
+  # readOnlyRootFilesystem: true
 
 image:
   # -- The pull policy for docker images
@@ -202,6 +204,10 @@ redisDsn: redis://logfire-redis:6379
 dev:
   # -- Deploy maildev for testing emails
   deployMaildev: false
+  # -- Deploy internal postgres
+  deployPostgres: false
+  # -- Use host based object store
+  hostObjectStore: false
 
 # @ignored
 dex:

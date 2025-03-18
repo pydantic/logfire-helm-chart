@@ -11,106 +11,9 @@ spec:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
-  - port: 80
-    targetPort: 80
+  - port: 8080
+    targetPort: 8080
   type: ClusterIP
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: nginx-config
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-data:
-  nginx.conf: |
-    events {}
-    
-    http {
-        server {
-            server_name {{ .Values.ingress.apiHostname }};
-            listen 80;
-
-            # Proxy /v1/traces and /v1/metrics to fusionfire-ingest-api
-            location ~ ^/v1/(traces|metrics|logs)$ {
-
-                if ($request_method = 'OPTIONS') {
-                    add_header 'Access-Control-Allow-Origin' '{{ include "logfire.frontend" . }}' always;
-                    add_header 'Access-Control-Allow-Credentials' 'true' always;
-                    add_header 'Access-Control-Allow-Methods' '*' always;
-                    add_header 'Access-Control-Allow-Headers' '*' always;
-                    add_header 'Access-Control-Max-Age' '1728000' always;
-
-                    add_header 'Content-Type'  'text/plain charset=UTF-8' always;
-                    add_header 'Content-Length' '0' always;
-                    return 204;
-                }
-
-                proxy_pass http://logfire-ff-ingest-api:8012;
-            }
-
-            # Proxy all other requests to logfire-backend
-            location / {
-
-                if ($request_method = 'OPTIONS') {
-                    add_header 'Access-Control-Allow-Origin' '{{ include "logfire.frontend" . }}' always;
-                    add_header 'Access-Control-Allow-Credentials' 'true' always;
-                    add_header 'Access-Control-Allow-Methods' '*' always;
-                    add_header 'Access-Control-Allow-Headers' '*' always;
-                    add_header 'Access-Control-Max-Age' '1728000' always;
-
-                    add_header 'Content-Type'  'text/plain charset=UTF-8' always;
-                    add_header 'Content-Length' '0' always;
-                    return 204;
-                }
-
-                proxy_pass http://logfire-backend:8000;
-            }
-
-            # WebSocket headers
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-    
-            # Optional for WebSocket stability
-            proxy_set_header Host $host;
-            proxy_http_version 1.1;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-    
-            # Timeout settings
-            proxy_read_timeout 3600s;
-            proxy_send_timeout 3600s;
-
-            client_max_body_size 1024m;
-        }
-
-        server {
-            server_name {{ .Values.ingress.frontendHostname }};
-            listen 80;
-
-            # Proxy all other requests to logfire-backend
-            location / {
-                proxy_pass http://logfire-frontend:3000;
-            }
-
-            # WebSocket headers
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-    
-            # Optional for WebSocket stability
-            proxy_set_header Host $host;
-            proxy_http_version 1.1;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-    
-            # Timeout settings
-            proxy_read_timeout 3600s;
-            proxy_send_timeout 3600s;
-        }
-    }
-
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -130,6 +33,8 @@ spec:
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
+      annotations:
+        checksum/service-config: {{ include (print $.Template.BasePath "/logfire-service-config.yaml") . | sha256sum }}
     spec:
       {{- with .Values.serviceAccountName }}
       serviceAccountName: {{ . }}
@@ -150,13 +55,18 @@ spec:
         - name: {{ $serviceName }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: nginx:1.27.4
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.frontendImage }}:{{ .Values.image.tag }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          command: ["nginx", "-c", "/usr/local/nginx/nginx.conf"]
           volumeMounts:
-            - name: nginx-config
-              mountPath: /etc/nginx
+            - name: logfire-nginx-config
+              mountPath: /usr/local/nginx
+            - name: logfire-service-config
+              mountPath: /opt/nginx
+            - name: tmp
+              mountPath: /tmp
           ports:
-            - containerPort: 80
+            - containerPort: 8080
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           env:
             - name: PUBLIC_API_HOST
@@ -179,7 +89,12 @@ spec:
               {{- . | toYaml | nindent 12 }}
             {{- end}}
       volumes:
-        - name: nginx-config
+        - name: logfire-nginx-config
           configMap:
-            name: nginx-config
+            name: logfire-nginx-config
+        - name: logfire-service-config
+          configMap:
+            name: logfire-service-config
+        - name: tmp
+          emptyDir: {}
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}

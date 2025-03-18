@@ -64,6 +64,8 @@ spec:
               value: .Values.appVersion
             - name: CRUD_PG_DSN
               value: {{ .Values.postgresDsn }}
+            - name: SHARED_REDIS_DSN
+              value: {{ .Values.redisDsn }}
             - name: REDIS_DSN
               value: {{ .Values.redisDsn }}
             - name: USAGE_REDIS_DSN

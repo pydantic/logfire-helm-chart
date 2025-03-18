@@ -315,13 +315,16 @@ See [`values.yaml`](./values.yaml) for some production level values
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| dev | object | `{"deployMaildev":false}` | Development mode settings |
+| dev | object | `{"deployMaildev":false,"deployPostgres":false,"hostObjectStore":false}` | Development mode settings |
 | dev.deployMaildev | bool | `false` | Deploy maildev for testing emails |
+| dev.deployPostgres | bool | `false` | Deploy internal postgres |
+| dev.hostObjectStore | bool | `false` | Use host based object store |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
 | image.tag | string | `"latest"` | The tag/version of the docker images to use |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
 | ingress.apiHostname | string | `nil` | The hostname used for the API endpoint.  Required for CORS headers |
+| ingress.dexHostname | string | `nil` | The hostname used for the dex endpoint. |
 | ingress.enabled | bool | `false` | Enable Ingress Resource.   If you're not using an ingress resource, for CORS you still need to configure `tls`, `apiHostname` & `frontendHostname` |
 | ingress.frontendHostname | string | `nil` | The hostname used for the frontend endpoint. Required for CORS headers |
 | ingress.ingressClassName | string | `"nginx"` | The kind of ingress controller to use i.e, `nginx` |
@@ -420,51 +423,4 @@ objectStore:
 dev:
   ...
   hostObjectStore: true
-```# logfire
-
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![AppVersion: 0.0.0](https://img.shields.io/badge/AppVersion-0.0.0-informational?style=flat-square)
-
-Helm chart for self-hosted Logfire
-
-## Requirements
-
-| Repository | Name | Version |
-|------------|------|---------|
-| https://charts.dexidp.io | dex | 0.20.0 |
-
-## Values
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| dev | object | `{"deployMaildev":false}` | Development mode settings |
-| dev.deployMaildev | bool | `false` | Deploy maildev for testing emails |
-| image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
-| image.tag | string | `"latest"` | The tag/version of the docker images to use |
-| imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
-| ingress.annotations | object | `{}` | Any annotations required. |
-| ingress.apiHostname | string | `nil` | The hostname used for the API endpoint.  Required for CORS headers |
-| ingress.enabled | bool | `false` | Enable Ingress Resource.   If you're not using an ingress resource, for CORS you still need to configure `tls`, `apiHostname` & `frontendHostname` |
-| ingress.frontendHostname | string | `nil` | The hostname used for the frontend endpoint. Required for CORS headers |
-| ingress.ingressClassName | string | `"nginx"` | The kind of ingress controller to use i.e, `nginx` |
-| ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
-| logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |
-| objectStore | object | `{"env":{},"uri":null}` | Object storage details |
-| objectStore.env | object | `{}` | additional env vars for the object store connection |
-| objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
-| podSecurityContext | object | `{}` | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details. |
-| postgresDsn | string | `nil` | Postgres DSN used for `crud` database |
-| postgresFFDsn | string | `nil` | Postgres DSN used for `ff` database |
-| postgresIngestDsn | string | `nil` | Postgres DSN used for `ingest` database |
-| priorityClassName | string | `""` | Specify a priority class name to set [pod priority](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
-| redisDsn | string | `"redis://logfire-redis:6379"` | The DSN for redis.  Change from default if you have an external redis instance |
-| revisionHistoryLimit | int | `2` | Define the [count of deployment revisions](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) to be kept. May be set to 0 in case of GitOps deployment approach. |
-| securityContext | object | `{}` | Container [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1) for details. |
-| serviceAccountName | string | `"default"` | the Kubernetes Service Account that is used by the pods |
-| smtp.host | string | `nil` | Hostname of the SMTP server |
-| smtp.password | string | `nil` | SMTP password |
-| smtp.port | int | `25` | Port of the SMTP server |
-| smtp.use_tls | bool | `false` | Whether to use TLS |
-| smtp.username | string | `nil` | SMTP username |
-
-----------------------------------------------
-Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)
+```
