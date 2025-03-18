@@ -114,7 +114,7 @@ spec:
               value: non_stripe
             - name: LOGFIRE_REGION
               value: {{ .Values.logfireRegion | default "local" }}
-            - name: LOGFIRE_KNOWN_REGIONS
+            - name: KNOWN_LOGFIRE_REGIONS
               value: '[{"name": "local", "frontend_host": "{{ include "logfire.frontend" . }}", "api_host": "{{ include "logfire.api" . }}", "auth_host": "{{ include "logfire.api" . }}"}]'
             - name: FRONTEND_HOST
               value: {{ include "logfire.frontend" . | quote }}
