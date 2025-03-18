@@ -36,16 +36,7 @@ There are a few hostnames that are required to be set:
 
 * Frontend Hostname: I.e, `logfire.example.com`. Set via the `ingress.frontendHostname` value.
 * API Hostname: I.e, `logfire-api.example.com`. Set via the `ingress.apiHostname` value.
-* DEX Hostname: I.e, `dex.example.com`. Set via the dex ingress configuration (see below) but also *must* be set via the frontend env var:
-
-```yaml
-logfire-frontend:
-  env: 
-    - name: DEX_PUBLIC_URL
-      value: https://dex.example.com
-```
-
-### Ingress
+* DEX Hostname: I.e, `dex.example.com`.  Set via the `ingress.dexHostname` value.
 
 We have an ingress configuration that will allow you to set up ingress:
 
@@ -56,6 +47,7 @@ ingress:
   apiHostname: logfire-api.example.com
   frontendHostname: logfire.example.com
   ingressClassName: nginx
+  dexHostname: dex.example.com
 ```
 
 #### Using the direct service
@@ -73,14 +65,14 @@ ingress:
   # used to ensure appropriate CORS headers are set.  If your browser is accessing it on https, then needs to be enabled here
   tls: true
   # used to ensure appropriate CORS headers are set. 
-  apiHostname: logfire-api.k3s.local
+  apiHostname: logfire-api.example.com
   # used to ensure appropriate CORS headers are set.
-  frontendHostname: logfire.k3s.local
+  frontendHostname: logfire.example.com
+  # same value as dex configuration
+  dexHostname: dex.example.com
 ```
 
 If you are *not* using kubernetes ingress, you must still set the hostnames under the `ingress` configuration.
-
-
 
 
 ### Dex

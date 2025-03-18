@@ -11,7 +11,7 @@ data:
       apiHost: '{{ .Values.ingress.apiHostname}}',
       region: '{{ .Values.logfireRegion | default "local" }}',
       regions: [{"name": "local", "frontend_host": "{{ include "logfire.frontend" . }}", "api_host": "{{ include "logfire.api" . }}", "auth_host": "{{ include "logfire.api" . }}"}],
-      dexPublicUrl: '{{ .Values.ingress.dexHostname | default "http://localhost:5556" }}',
+      dexPublicUrl: '{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ .Values.ingress.dexHostname }}',
       dexDynamicRedirect: {{ .Values.dexDynamicRedirect | default false }}
     }
 ---
