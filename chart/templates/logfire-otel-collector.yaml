@@ -108,13 +108,13 @@ spec:
       {{- range . }}
         - name: {{ . | quote }}
       {{- end }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- end }}
       {{- with (index .Values $serviceName | default dict).initContainers }}
       initContainers:
         {{- . | toYaml | nindent 8 }}
       {{- end}}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: otel-collector
           image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.121.0
