@@ -167,7 +167,7 @@ podSecurityContext: {}
 
 # -- Container [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container).
 # See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1) for details.
-securityContext:
+securityContext: {}
   # capabilities:
   #   drop:
   #   - ALL
@@ -204,6 +204,10 @@ redisDsn: redis://logfire-redis:6379
 dev:
   # -- Deploy maildev for testing emails
   deployMaildev: false
+  # -- Deploy internal postgres
+  deployPostgres: false
+  # -- Use host based object store
+  hostObjectStore: false
 
 # @ignored
 dex:

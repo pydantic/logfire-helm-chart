@@ -26,6 +26,9 @@ data:
   nginx.conf: |
     worker_processes auto;
     error_log stderr notice;
+
+
+    # from nginx unprivileged: https://github.com/nginxinc/docker-nginx-unprivileged/blob/3dd602719a37ff9b6095c44d4fd7f35b3c07b012/Dockerfile-debian.template#L129-L132
     pid /tmp/nginx.pid;
     daemon off;
     
@@ -36,6 +39,13 @@ data:
     }
     
     http {
+        # from nginx unprivileged: https://github.com/nginxinc/docker-nginx-unprivileged/blob/3dd602719a37ff9b6095c44d4fd7f35b3c07b012/Dockerfile-debian.template#L129-L132
+        proxy_temp_path /tmp/proxy_temp;
+        client_body_temp_path /tmp/client_temp;
+        fastcgi_temp_path /tmp/fastcgi_temp;
+        uwsgi_temp_path /tmp/uwsgi_temp;
+        scgi_temp_path /tmp/scgi_temp;
+
         aio                   threads;
         aio_write             on;
         tcp_nopush            on;

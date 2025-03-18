@@ -63,6 +63,8 @@ spec:
               mountPath: /usr/local/nginx
             - name: logfire-service-config
               mountPath: /opt/nginx
+            - name: tmp
+              mountPath: /tmp
           ports:
             - containerPort: 8080
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
@@ -86,11 +88,6 @@ spec:
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}
-          volumeMounts:
-            - mountPath: /var/cache/nginx/
-              name: cache
-            - mountPath: /tmp/
-              name: tmp
       volumes:
         - name: logfire-nginx-config
           configMap:
@@ -98,4 +95,6 @@ spec:
         - name: logfire-service-config
           configMap:
             name: logfire-service-config
+        - name: tmp
+          emptyDir: {}
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
