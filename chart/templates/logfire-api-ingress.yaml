@@ -23,7 +23,7 @@ spec:
               service:
                 name: logfire-service
                 port:
-                  number: 80
+                  number: 8080
   {{- if .Values.ingress.tls }}
   tls:
     - secretName: logfire-api-cert
@@ -55,7 +55,7 @@ spec:
               service:
                 name: logfire-service
                 port:
-                  number: 80
+                  number: 8080
   {{- if .Values.ingress.tls }}
   tls:
     - secretName: logfire-frontend-cert

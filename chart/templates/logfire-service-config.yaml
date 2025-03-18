@@ -1,0 +1,158 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logfire-service-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-service-config
+data:
+  config.1.js: |
+    window.appConfig = {
+      apiHost: '{{ .Values.ingress.apiHostname}}',
+      region: '{{ .Values.logfireRegion | default "local" }}',
+      regions: [{"name": "local", "frontend_host": "{{ include "logfire.frontend" . }}", "api_host": "{{ include "logfire.api" . }}", "auth_host": "{{ include "logfire.api" . }}"}],
+      dexPublicUrl: '{{ .Values.ingress.dexHostname | default "http://localhost:5556" }}',
+      dexDynamicRedirect: {{ .Values.dexDynamicRedirect | default false }}
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logfire-nginx-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-nginx-config
+data:
+  nginx.conf: |
+    worker_processes auto;
+    error_log stderr notice;
+    pid /tmp/nginx.pid;
+    daemon off;
+    
+    events {
+        multi_accept        on;
+        worker_connections  1024;
+        use                 epoll;
+    }
+    
+    http {
+        aio                   threads;
+        aio_write             on;
+        tcp_nopush            on;
+        tcp_nodelay           on;
+        client_max_body_size  0;
+
+        include /etc/nginx/mime.types;
+
+        server {
+            server_name {{ .Values.ingress.apiHostname }};
+            listen 8080 reuseport backlog=4096;
+            http2 on;
+            access_log /dev/stdout;
+
+            # Proxy /v1/traces and /v1/metrics to fusionfire-ingest-api
+            location ~ ^/v1/(traces|metrics|logs)$ {
+
+                if ($request_method = 'OPTIONS') {
+                    add_header 'Access-Control-Allow-Origin' '{{ include "logfire.frontend" . }}' always;
+                    add_header 'Access-Control-Allow-Credentials' 'true' always;
+                    add_header 'Access-Control-Allow-Methods' '*' always;
+                    add_header 'Access-Control-Allow-Headers' 'Authorization,Content-type,X-Logfire-Context' always;
+                    add_header 'Access-Control-Max-Age' '1728000' always;
+
+                    add_header 'Content-Type'  'text/plain charset=UTF-8' always;
+                    add_header 'Content-Length' '0' always;
+                    return 204;
+                }
+
+                proxy_pass http://logfire-ff-ingest-api:8012;
+            }
+
+            # Proxy all other requests to logfire-backend
+            location / {
+
+                if ($request_method = 'OPTIONS') {
+                    add_header 'Access-Control-Allow-Origin' '{{ include "logfire.frontend" . }}' always;
+                    add_header 'Access-Control-Allow-Credentials' 'true' always;
+                    add_header 'Access-Control-Allow-Methods' '*' always;
+                    add_header 'Access-Control-Allow-Headers' 'Authorization,Content-type,X-Logfire-Context' always;
+                    add_header 'Access-Control-Max-Age' '1728000' always;
+
+                    add_header 'Content-Type'  'text/plain charset=UTF-8' always;
+                    add_header 'Content-Length' '0' always;
+                    return 204;
+                }
+
+                proxy_pass http://logfire-backend:8000;
+            }
+
+            # WebSocket headers
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+    
+            # Optional for WebSocket stability
+            proxy_set_header Host $host;
+            proxy_http_version 1.1;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+    
+            # Timeout settings
+            proxy_read_timeout 3600s;
+            proxy_send_timeout 3600s;
+
+        }
+
+        server {
+            server_name {{ .Values.ingress.frontendHostname }};
+            listen 8080;
+            http2 on;
+            access_log /dev/stdout;
+
+            root /usr/share/nginx/html; # Root directory for the static files
+
+            gzip on;
+            gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+            # Location block for static assets (JS, CSS, images)
+            # These can be cached for longer as they have hashed names
+            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+                expires 30d;
+                add_header Cache-Control "public, max-age=2592000";
+                add_header Access-Control-Allow-Origin "{{ include "logfire.api" . }}";
+            }
+        
+            # custom panels iframe
+            location /custom-components-iframe.html {
+                try_files /custom-components-iframe.html =404;
+        
+                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+            }
+
+            # Serve the generated config file from the ephemeral directory:
+            location = /config.1.js {
+                alias /opt/nginx/config.1.js;
+                default_type "application/javascript";
+            }
+
+            # Main location block for the app
+            location / {
+                index index.html index.htm;
+                try_files $uri $uri/ @index;
+            }
+
+            # Fallback location for SPA routing
+            location @index {
+                add_header "Cache-Control" "no-cache"; # No cache for index.html
+                try_files /index.html =404;
+
+                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.api" . }} {{ .Values.ingress.tls | default false | ternary "wss" "ws" }}://{{ .Values.ingress.apiHostname }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https https://github.com https://avatars.githubusercontent.com data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
+            }
+
+            # Security Headers
+            add_header X-Content-Type-Options "nosniff";
+
+        }
+    }

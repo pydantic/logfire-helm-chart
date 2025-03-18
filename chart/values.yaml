@@ -11,6 +11,8 @@ ingress:
   apiHostname: 
   # -- The hostname used for the frontend endpoint. Required for CORS headers
   frontendHostname: 
+  # -- The hostname used for the dex endpoint.
+  dexHostname:
   # -- The kind of ingress controller to use i.e, `nginx`
   ingressClassName: nginx
   # -- Any annotations required.

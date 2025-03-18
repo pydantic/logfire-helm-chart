@@ -24,6 +24,7 @@ ingress:
   apiHostname: logfire-api.k3s.local
   frontendHostname: logfire.k3s.local
   maildevHostname: maildev.k3s.local
+  dexHostname: dex.k3s.local
   ingressClassName: nginx
   annotations:
     cert-manager.io/cluster-issuer: k3s-ca-issuer
