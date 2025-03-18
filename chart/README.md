@@ -315,6 +315,8 @@ See [`values.yaml`](./values.yaml) for some production level values
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| dev | object | `{"deployMaildev":false}` | Development mode settings |
+| dev.deployMaildev | bool | `false` | Deploy maildev for testing emails |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
 | image.tag | string | `"latest"` | The tag/version of the docker images to use |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
@@ -434,6 +436,8 @@ Helm chart for self-hosted Logfire
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| dev | object | `{"deployMaildev":false}` | Development mode settings |
+| dev.deployMaildev | bool | `false` | Deploy maildev for testing emails |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
 | image.tag | string | `"latest"` | The tag/version of the docker images to use |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
