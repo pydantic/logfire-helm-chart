@@ -54,7 +54,7 @@ data:
 
         include /etc/nginx/mime.types;
 
-        server_names_hash_bucket_size  128;
+        server_names_hash_bucket_size 128;
 
         server {
             server_name {{ .Values.ingress.apiHostname }};
