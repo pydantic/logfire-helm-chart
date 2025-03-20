@@ -32,11 +32,7 @@ imagePullSecrets:
 
 ### Hostnames
 
-There are a few hostnames that are required to be set:
-
-* Frontend Hostname: I.e, `logfire.example.com`. Set via the `ingress.frontendHostname` value.
-* API Hostname: I.e, `logfire-api.example.com`. Set via the `ingress.apiHostname` value.
-* DEX Hostname: I.e, `dex.example.com`.  Set via the `ingress.dexHostname` value.
+There is a hostname that is required to be set: I.e, `logfire.example.com`. Set via the `ingress.hostname` value.
 
 We have an ingress configuration that will allow you to set up ingress:
 
@@ -44,10 +40,8 @@ We have an ingress configuration that will allow you to set up ingress:
 ingress:
   enabled: true
   tls: true
-  apiHostname: logfire-api.example.com
-  frontendHostname: logfire.example.com
+  hostname: logfire.example.com
   ingressClassName: nginx
-  dexHostname: dex.example.com
 ```
 
 #### Using the direct service
@@ -64,12 +58,8 @@ ingress:
   enabled: false
   # used to ensure appropriate CORS headers are set.  If your browser is accessing it on https, then needs to be enabled here
   tls: true
-  # used to ensure appropriate CORS headers are set. 
-  apiHostname: logfire-api.example.com
   # used to ensure appropriate CORS headers are set.
-  frontendHostname: logfire.example.com
-  # same value as dex configuration
-  dexHostname: dex.example.com
+  hostname: logfire.example.com
 ```
 
 If you are *not* using kubernetes ingress, you must still set the hostnames under the `ingress` configuration.
@@ -105,7 +95,7 @@ dex:
           name: logfire-dex-client-secret
           key: logfire-dex-client-secret
   config:
-    issuer: https://dex.example.com/dex
+    connectors: []
 ```
 
 
@@ -127,7 +117,7 @@ dex:
         config:
           clientID: client_id
           clientSecret: client_secret
-          redirectURI: `https://dex.example.com/dex/callback`
+          redirectURI: `https://logfire.example.com/auth-api/callback`
           useLoginAsID: false
           getUserInfo: true
 ```
@@ -144,7 +134,7 @@ dex:
         config:
           clientID: $GITHUB_CLIENT_ID
           clientSecret: $GITHUB_CLIENT_SECRET
-          redirectURI: `https://dex.example.com/dex/callback`
+          redirectURI: `https://logfire.example.com/auth-api/callback`
           useLoginAsID: false
           getUserInfo: true
 ```
@@ -322,7 +312,7 @@ import logfire
 
 logfire.configure(
     token='<your_logfire_token>',
-    advanced=logfire.AdvancedOptions(base_url="https://logfire-api.example.com")
+    advanced=logfire.AdvancedOptions(base_url="https://logfire.example.com")
 )
 logfire.info('Hello, {place}!', place='World')
 ```

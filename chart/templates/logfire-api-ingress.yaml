@@ -6,7 +6,7 @@ metadata:
     {{- with .Values.ingress.annotations }}
       {{- toYaml . | nindent 4 }}
     {{- end }}
-  name: logfire-api-ingress
+  name: logfire-ingress
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
 spec:
@@ -14,39 +14,7 @@ spec:
   ingressClassName: {{ . }}
   {{- end }}
   rules:
-    - host: {{ .Values.ingress.apiHostname }}
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: logfire-service
-                port:
-                  number: 8080
-  {{- if .Values.ingress.tls }}
-  tls:
-    - secretName: logfire-api-cert
-      hosts:
-        - {{ .Values.ingress.apiHostname }}
-  {{- end }}
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  annotations:
-    {{- with .Values.ingress.annotations }}
-      {{- toYaml . | nindent 4 }}
-    {{- end }}
-  name: logfire-frontend-ingress
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-spec:
-  {{- with .Values.ingress.ingressClassName }}
-  ingressClassName: {{ . }}
-  {{- end }}
-  rules:
-    - host: {{ .Values.ingress.frontendHostname }}
+    - host: {{ .Values.ingress.hostname }}
       http:
         paths:
           - path: /
@@ -60,6 +28,6 @@ spec:
   tls:
     - secretName: logfire-frontend-cert
       hosts:
-        - {{ .Values.ingress.frontendHostname }}
+        - {{ .Values.ingress.hostname }}
   {{- end }}
 {{- end }}

@@ -51,12 +51,8 @@ resources:
 {{- end}}
 {{- end}}
 
-{{- define "logfire.frontend" -}}
-{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ .Values.ingress.frontendHostname }}
-{{- end -}}
-
-{{- define "logfire.api" -}}
-{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ .Values.ingress.apiHostname }}
+{{- define "logfire.url" -}}
+{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ .Values.ingress.hostname }}
 {{- end -}}
 
 {{/*
@@ -131,7 +127,7 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- define "logfire.dexConfig" -}}
 {{- $dexConfig := .Values.dex.config -}}
 {{- $staticClients := list -}}
-{{- $logfireFrontend := (include "logfire.frontend" .) -}}
+{{- $logfireFrontend := (include "logfire.url" .) -}}
 
 {{- $frontend := dict -}}
 {{- $extraVars := dict "logfire_frontend_host" (printf "%s" $logfireFrontend) -}}
@@ -152,6 +148,7 @@ Create dex configuration secret, merging backend static clients with user provid
   {{- end -}}
 {{- end -}}
 
+{{- $_ := set $dexConfig "issuer" (printf "%s/auth-api" $logfireFrontend) -}}
 {{- $_ := set $dexConfig "staticClients" $staticClients -}}
 {{- $_ := set $dexConfig "frontend" $frontend -}}
 

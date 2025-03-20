@@ -30,8 +30,7 @@ postgresIngestDsn: postgres://postgres:postgres@logfire-postgres:5432/ingest
 ingress:
   enabled: true
   tls: false
-  apiHostname: logfire-api.docker-desktop.local
-  frontendHostname: logfire.docker-desktop.local
+  hostname: logfire.docker-desktop.local
   maildevHostname: maildev.docker-desktop.local
   annotations: {}
 
@@ -45,7 +44,6 @@ dex:
     repository: "dex-dev"
     tag: latest
   config:
-    issuer: http://dex.docker-desktop.local/dex
     storage:
       type: postgres
       config:

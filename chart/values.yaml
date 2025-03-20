@@ -3,26 +3,15 @@ imagePullSecrets: []
 
 ingress:
   # -- Enable Ingress Resource.  
-  # If you're not using an ingress resource, for CORS you still need to configure `tls`, `apiHostname` & `frontendHostname`
+  # If you're not using an ingress resource, you still need to configure `tls`, `hostname`
   enabled: false
   # -- Enable TLS/HTTPS connections.  Required for CORS headers
   tls: false
-  # -- The hostname used for the API endpoint.  Required for CORS headers
-  apiHostname: 
-  # -- The hostname used for the frontend endpoint. Required for CORS headers
-  frontendHostname: 
-  # -- The hostname used for the dex endpoint.
-  dexHostname:
-  # -- The kind of ingress controller to use i.e, `nginx`
+  # -- The hostname used for Logfire
+  hostname:
   ingressClassName: nginx
   # -- Any annotations required.
   annotations: {}
-
-# NOTE: pleas ensure the dex hostname is set as follows:
-# logfire-frontend:
-#   env:
-#     - name: DEX_PUBLIC_URL
-#       value: https://dex.example.com
 
 # -- Postgres DSN used for `crud` database
 postgresDsn: 

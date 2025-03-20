@@ -21,19 +21,12 @@ image:
 ingress:
   enabled: true
   tls: true
-  apiHostname: logfire-api.k3s.local
-  frontendHostname: logfire.k3s.local
+  hostname: logfire.k3s.local
   maildevHostname: maildev.k3s.local
-  dexHostname: dex.k3s.local
   ingressClassName: nginx
   annotations:
     cert-manager.io/cluster-issuer: k3s-ca-issuer
 
-
-logfire-frontend:
-  env: 
-    - name: DEX_PUBLIC_URL
-      value: https://dex.k3s.local
 
 objectStore:
   uri: file:///storage
@@ -99,7 +92,6 @@ dex:
         password: postgres
         ssl:
           mode: disable
-    issuer: https://dex.k3s.local/dex
     staticClients: []
     web:
       http: 0.0.0.0:5556
