@@ -8,10 +8,10 @@ metadata:
 data:
   config.1.js: |
     window.appConfig = {
-      apiHost: '{{ .Values.ingress.apiHostname}}',
+      apiHost: '{{ .Values.ingress.hostname}}',
       region: '{{ .Values.logfireRegion | default "local" }}',
-      regions: [{"name": "local", "frontend_host": "{{ include "logfire.frontend" . }}", "api_host": "{{ include "logfire.api" . }}", "auth_host": "{{ include "logfire.api" . }}"}],
-      dexPublicUrl: '{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ .Values.ingress.dexHostname }}',
+      regions: [{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}],
+      dexPublicUrl: '{{ include "logfire.url" . }}',
       dexDynamicRedirect: {{ .Values.dexDynamicRedirect | default false }}
     }
 ---
@@ -57,16 +57,18 @@ data:
         server_names_hash_bucket_size 128;
 
         server {
-            server_name {{ .Values.ingress.apiHostname }};
+            server_name {{ .Values.ingress.hostname }};
             listen 8080 reuseport backlog=4096;
             http2 on;
             access_log /dev/stdout;
 
+            root /usr/share/nginx/html; # Root directory for the static files
+
+
             # Proxy /v1/traces and /v1/metrics to fusionfire-ingest-api
             location ~ ^/v1/(traces|metrics|logs)$ {
-
                 if ($request_method = 'OPTIONS') {
-                    add_header 'Access-Control-Allow-Origin' '{{ include "logfire.frontend" . }}' always;
+                    add_header 'Access-Control-Allow-Origin' '{{ include "logfire.url" . }}' always;
                     add_header 'Access-Control-Allow-Credentials' 'true' always;
                     add_header 'Access-Control-Allow-Methods' '*' always;
                     add_header 'Access-Control-Allow-Headers' 'Authorization,Content-type,X-Logfire-Context' always;
@@ -78,13 +80,45 @@ data:
                 }
 
                 proxy_pass http://logfire-ff-ingest-api:8012;
+                # WebSocket headers
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+
+                # Optional for WebSocket stability
+                proxy_set_header Host $host;
+                proxy_http_version 1.1;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+
+                # Timeout settings
+                proxy_read_timeout 3600s;
+                proxy_send_timeout 3600s;
             }
 
-            # Proxy all other requests to logfire-backend
-            location / {
+            # Proxy requests to /auth-api to dex
+            location ~ ^/auth-api {
+                proxy_pass http://{{ .Release.Name }}-dex:5556;
+                # WebSocket headers
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+
+                # Optional for WebSocket stability
+                proxy_set_header Host $host;
+                proxy_http_version 1.1;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+
+                # Timeout settings
+                proxy_read_timeout 3600s;
+            }
+
+            # Proxy all other /v1/ or /api/ requests to logfire-backend
+            location ~ ^/(api|v1)/ {
 
                 if ($request_method = 'OPTIONS') {
-                    add_header 'Access-Control-Allow-Origin' '{{ include "logfire.frontend" . }}' always;
+                    add_header 'Access-Control-Allow-Origin' '{{ include "logfire.url" . }}' always;
                     add_header 'Access-Control-Allow-Credentials' 'true' always;
                     add_header 'Access-Control-Allow-Methods' '*' always;
                     add_header 'Access-Control-Allow-Headers' 'Authorization,Content-type,X-Logfire-Context' always;
@@ -96,32 +130,21 @@ data:
                 }
 
                 proxy_pass http://logfire-backend:8000;
+                # WebSocket headers
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+
+                # Optional for WebSocket stability
+                proxy_set_header Host $host;
+                proxy_http_version 1.1;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+
+                # Timeout settings
+                proxy_read_timeout 3600s;
+                proxy_send_timeout 3600s;
             }
-
-            # WebSocket headers
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-    
-            # Optional for WebSocket stability
-            proxy_set_header Host $host;
-            proxy_http_version 1.1;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-    
-            # Timeout settings
-            proxy_read_timeout 3600s;
-            proxy_send_timeout 3600s;
-
-        }
-
-        server {
-            server_name {{ .Values.ingress.frontendHostname }};
-            listen 8080;
-            http2 on;
-            access_log /dev/stdout;
-
-            root /usr/share/nginx/html; # Root directory for the static files
 
             gzip on;
             gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
@@ -131,7 +154,7 @@ data:
             location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
                 expires 30d;
                 add_header Cache-Control "public, max-age=2592000";
-                add_header Access-Control-Allow-Origin "{{ include "logfire.api" . }}";
+                add_header Access-Control-Allow-Origin "{{ include "logfire.url" . }}";
             }
         
             # custom panels iframe
@@ -160,7 +183,7 @@ data:
                 try_files /index.html =404;
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
-                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.api" . }} {{ .Values.ingress.tls | default false | ternary "wss" "ws" }}://{{ .Values.ingress.apiHostname }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https https://github.com https://avatars.githubusercontent.com data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.url" . }} {{ .Values.ingress.tls | default false | ternary "wss" "ws" }}://{{ .Values.ingress.hostname }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https https://github.com https://avatars.githubusercontent.com data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
             # Security Headers

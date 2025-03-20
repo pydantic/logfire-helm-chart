@@ -115,9 +115,9 @@ spec:
             - name: LOGFIRE_REGION
               value: {{ .Values.logfireRegion | default "local" }}
             - name: KNOWN_LOGFIRE_REGIONS
-              value: '[{"name": "local", "frontend_host": "{{ include "logfire.frontend" . }}", "api_host": "{{ include "logfire.api" . }}", "auth_host": "{{ include "logfire.api" . }}"}]'
+              value: '[{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}]'
             - name: FRONTEND_HOST
-              value: {{ include "logfire.frontend" . | quote }}
+              value: {{ include "logfire.url" . | quote }}
             - name: META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:

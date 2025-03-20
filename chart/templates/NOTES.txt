@@ -8,21 +8,14 @@ To learn more about the release, try:
   $ helm get all {{ .Release.Name }}
 
 {{- if .Values.ingress.enabled }}
-You can access Logfire at:
-  - Frontend: http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.frontendHostname }}
-  - API: http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.apiHostname }}
+You can access Logfire at: {{ include "logfire.url" . }}
 {{- else }}
 Logfire is not exposed through an ingress. To access the application, you can:
 
 1. Port-forward the frontend service:
-   kubectl port-forward svc/logfire-frontend 3000:3000 -n {{ .Release.Namespace }}
-
-2. Port-forward the backend service:
-   kubectl port-forward svc/logfire-backend 8000:8000 -n {{ .Release.Namespace }}
-
+   kubectl port-forward svc/logfire-service 8080:8080 -n {{ .Release.Namespace }}
 Then access:
-  - Frontend: http://localhost:3000
-  - API: http://localhost:8000
+  - http://localhost:8080
 {{- end }}
 
 Or set up your own Ingress / tunneling to these services.
