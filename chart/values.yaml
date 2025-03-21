@@ -22,13 +22,13 @@ postgresSecret:
   name: ""
 
 # -- Postgres DSN used for `crud` database
-postgresDsn: 
+postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 
 # -- Postgres DSN used for `ff` database
-postgresFFDsn:
+postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
 
 # -- Postgres DSN used for `ingest` database
-postgresIngestDsn:
+postgresIngestDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ingest"
 
 smtp:
   # -- Hostname of the SMTP server

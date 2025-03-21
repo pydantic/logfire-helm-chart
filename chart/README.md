@@ -316,9 +316,9 @@ See [`values.yaml`](./values.yaml) for some production level values
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
 | objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
 | podSecurityContext | object | `{}` | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details. |
-| postgresDsn | string | `nil` | Postgres DSN used for `crud` database |
-| postgresFFDsn | string | `nil` | Postgres DSN used for `ff` database |
-| postgresIngestDsn | string | `nil` | Postgres DSN used for `ingest` database |
+| postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for `crud` database |
+| postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for `ff` database |
+| postgresIngestDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ingest"` | Postgres DSN used for `ingest` database |
 | postgresSecret | object | `{"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys |
 | postgresSecret.enabled | bool | `false` | Whether to use an existing secret |
 | postgresSecret.name | string | `""` | Secret name |
@@ -442,9 +442,9 @@ Helm chart for self-hosted Logfire
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
 | objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
 | podSecurityContext | object | `{}` | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details. |
-| postgresDsn | string | `nil` | Postgres DSN used for `crud` database |
-| postgresFFDsn | string | `nil` | Postgres DSN used for `ff` database |
-| postgresIngestDsn | string | `nil` | Postgres DSN used for `ingest` database |
+| postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for `crud` database |
+| postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for `ff` database |
+| postgresIngestDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ingest"` | Postgres DSN used for `ingest` database |
 | postgresSecret | object | `{"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys |
 | postgresSecret.enabled | bool | `false` | Whether to use an existing secret |
 | postgresSecret.name | string | `""` | Secret name |
