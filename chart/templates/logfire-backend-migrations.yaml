@@ -39,7 +39,7 @@ spec:
           command:
             - "uv"
             - "run"
-            - "--no-sync",
+            - "--no-sync"
             - "src/packages/logfire-db/logfire_db/migrations/main.py"
           env:
             - name: LOGFIRE_SEND_TO_LOGFIRE
