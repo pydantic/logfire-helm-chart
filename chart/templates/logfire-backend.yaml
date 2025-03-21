@@ -69,9 +69,15 @@ spec:
             - name: APP_PORT
               value: "8000"
             - name: CRUD_PG_DSN
-              value: {{ .Values.postgresDsn }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}
+                  key: postgresDsn
             - name: INGEST_PG_DSN
-              value: {{ .Values.postgresIngestDsn }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}
+                  key: postgresIngestDsn
             - name: SHARED_REDIS_DSN
               value: {{ .Values.redisDsn }}
             - name: REDIS_DSN

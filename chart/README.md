@@ -319,6 +319,9 @@ See [`values.yaml`](./values.yaml) for some production level values
 | postgresDsn | string | `nil` | Postgres DSN used for `crud` database |
 | postgresFFDsn | string | `nil` | Postgres DSN used for `ff` database |
 | postgresIngestDsn | string | `nil` | Postgres DSN used for `ingest` database |
+| postgresSecret | object | `{"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys |
+| postgresSecret.enabled | bool | `false` | Whether to use an existing secret |
+| postgresSecret.name | string | `""` | Secret name |
 | priorityClassName | string | `""` | Specify a priority class name to set [pod priority](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | redisDsn | string | `"redis://logfire-redis:6379"` | The DSN for redis.  Change from default if you have an external redis instance |
 | revisionHistoryLimit | int | `2` | Define the [count of deployment revisions](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) to be kept. May be set to 0 in case of GitOps deployment approach. |
@@ -442,6 +445,9 @@ Helm chart for self-hosted Logfire
 | postgresDsn | string | `nil` | Postgres DSN used for `crud` database |
 | postgresFFDsn | string | `nil` | Postgres DSN used for `ff` database |
 | postgresIngestDsn | string | `nil` | Postgres DSN used for `ingest` database |
+| postgresSecret | object | `{"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys |
+| postgresSecret.enabled | bool | `false` | Whether to use an existing secret |
+| postgresSecret.name | string | `""` | Secret name |
 | priorityClassName | string | `""` | Specify a priority class name to set [pod priority](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | redisDsn | string | `"redis://logfire-redis:6379"` | The DSN for redis.  Change from default if you have an external redis instance |
 | revisionHistoryLimit | int | `2` | Define the [count of deployment revisions](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) to be kept. May be set to 0 in case of GitOps deployment approach. |

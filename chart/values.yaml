@@ -13,6 +13,14 @@ ingress:
   # -- Any annotations required.
   annotations: {}
 
+# -- User provided postgres credentials
+# containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys
+postgresSecret:
+  # -- Whether to use an existing secret
+  enabled: false
+  # -- Secret name
+  name: ""
+
 # -- Postgres DSN used for `crud` database
 postgresDsn: 
 
