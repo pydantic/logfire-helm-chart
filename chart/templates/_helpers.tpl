@@ -136,7 +136,7 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $client := dict -}}
 {{- $_ := set $client "id" (include "logfire.dexClientId" .) -}}
 {{- $_ := set $client "name" "Logfire Backend" -}}
-{{- $_ := set $client "secret" "$LOGFIRE_CLIENT_SECRET" -}}
+{{- $_ := set $client "secretEnv" "LOGFIRE_CLIENT_SECRET" -}}
 {{- $_ := set $client "redirectURIs" (list (printf "%s/auth/code-callback" $logfireFrontend) (printf "%s/auth/link-provider-code-callback" $logfireFrontend)) -}}
 {{- $_ := set $client "public" false -}}
 {{- $_ := set $client "scopes"  (list "openid" "email" "profile") -}}
