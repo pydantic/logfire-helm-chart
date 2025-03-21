@@ -94,6 +94,16 @@ spec:
               value: "3650000d"
             - name: FF_ENABLE_SPILL_TO_DISK
               value: "false"
+            - name: PG_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}
+                  key: postgresFFDsn
+            - name: FF_INGEST_PG_DSNS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}-json
+                  key: postgresIngestDsn
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}

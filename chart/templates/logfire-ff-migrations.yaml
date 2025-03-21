@@ -45,9 +45,15 @@ spec:
             - "migrate"
           env:
             - name: PG_DSN
-              value: {{ .Values.postgresFFDsn | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}
+                  key: postgresIngestFFDsn
             - name: FF_INGEST_PG_DSNS
-              value: '["{{ .Values.postgresIngestDsn }}"]'
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}-json
+                  key: postgresIngestDsn
             - name: FF_SEND_TO_LOGFIRE
               value: "false"
             - name: FF_CONSOLE_MODE

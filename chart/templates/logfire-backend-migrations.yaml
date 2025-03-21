@@ -45,4 +45,7 @@ spec:
             - name: LOGFIRE_SEND_TO_LOGFIRE
               value: "false"
             - name: CRUD_PG_DSN
-              value: {{ .Values.postgresDsn | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}
+                  key: postgresDsn

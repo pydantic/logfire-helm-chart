@@ -13,8 +13,6 @@ data:
   FF_CACHE_OBJECT_STORE_URI: "http://logfire-ff-conhash-cache:9001"
   FF_CACHE_ARROW_IPC_CHANCE: "1.0"
   FF_BACKEND_SERVICE_URL: "http://logfire-backend:8000"
-  PG_DSN: {{ .Values.postgresFFDsn }}
-  FF_INGEST_PG_DSNS: '["{{ .Values.postgresIngestDsn }}"]'
   FF_AUTH_TOKEN_REDIS_DSN: {{ .Values.redisDsn }}
   RUST_LOG: "info"
   RUST_BACKTRACE: "full"

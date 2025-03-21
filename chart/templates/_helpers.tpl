@@ -115,6 +115,17 @@ Create dex config secret name
 {{- end -}}
 
 {{/*
+Create Postgres secret name
+*/}}
+{{- define "logfire.postgresSecretName" -}}
+{{- if .Values.postgresSecret.enabled }}
+{{- .Values.postgresSecret.name }}
+{{- else }}
+{{- include "logfire.fullname" . }}-pg
+{{- end }}
+{{- end -}}
+
+{{/*
 Create dex config secret name
 */}}
 {{- define "logfire.dexClientId" -}}
@@ -153,4 +164,16 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $_ := set $dexConfig "frontend" $frontend -}}
 
 {{ toYaml $dexConfig | b64enc | quote }}
+{{- end -}}
+
+{{- define "createJsonDsn" -}}
+{{- $dsn := "" -}}
+{{- if .Values.postgresSecret.enabled -}}
+  {{- $secretName := .Values.postgresSecret.name -}}
+  {{- $secretKey := .Values.existingSecret.key | default "postgresIngestDsn" -}}
+  {{- $dsn = (lookup "v1" "Secret" .Release.Namespace $secretName).data $secretKey | b64dec -}}
+{{- else -}}
+  {{- $dsn = .Values.postgresIngestDsn -}}
+{{- end -}}
+{{ printf "[\"%s\"]" $dsn }}
 {{- end -}}

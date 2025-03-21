@@ -63,7 +63,10 @@ spec:
             - name: LOGFIRE_SERVICE_VERSION
               value: {{ .Values.appVersion }}
             - name: CRUD_PG_DSN
-              value: {{ .Values.postgresDsn }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}
+                  key: postgresDsn
             - name: REDIS_DSN
               value: {{ .Values.redisDsn }}
             - name: SHARED_REDIS_DSN
