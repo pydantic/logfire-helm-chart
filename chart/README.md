@@ -307,7 +307,7 @@ See [`values.yaml`](./values.yaml) for some production level values
 | image.tag | string | `"latest"` | The tag/version of the docker images to use |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
-| ingress.enabled | bool | `false` | Enable Ingress Resource.   If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
+| ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
 | ingress.hostname | string | `nil` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
@@ -433,7 +433,7 @@ Helm chart for self-hosted Logfire
 | image.tag | string | `"latest"` | The tag/version of the docker images to use |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
-| ingress.enabled | bool | `false` | Enable Ingress Resource.   If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
+| ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
 | ingress.hostname | string | `nil` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |

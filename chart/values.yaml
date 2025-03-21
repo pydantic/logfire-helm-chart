@@ -2,7 +2,7 @@
 imagePullSecrets: []
 
 ingress:
-  # -- Enable Ingress Resource.  
+  # -- Enable Ingress Resource.
   # If you're not using an ingress resource, you still need to configure `tls`, `hostname`
   enabled: false
   # -- Enable TLS/HTTPS connections.  Required for CORS headers
@@ -32,11 +32,11 @@ postgresIngestDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ingest"
 
 smtp:
   # -- Hostname of the SMTP server
-  host: 
+  host:
   # -- Port of the SMTP server
   port: 25
   # -- SMTP username
-  username: 
+  username:
   # -- SMTP password
   password:
   # -- Whether to use TLS
@@ -57,7 +57,7 @@ smtp:
 #     maxReplicas: 4
 #     memAverage: 65
 #     cpuAverage: 20
-# 
+#
 # # -- Autoscaling & resources for the query api pods
 # logfire-ff-query-api:
 #   replicas: 2
@@ -69,7 +69,7 @@ smtp:
 #     maxReplicas: 8
 #     memAverage: 65
 #     cpuAverage: 20
-# 
+#
 # # -- Autoscaling & resources for the cache pods
 # logfire-ff-cache:
 #   replicas: 2
@@ -142,7 +142,7 @@ objectStore:
 # AWS
 # objectStore:
 #   uri: s3://<bucket_name>
-#   env: 
+#   env:
 #     AWS_DEFAULT_REGION: <region>
 #     AWS_SECRET_ACCESS_KEY: <secret_key>
 #     AWS_ACCESS_KEY_ID: <access_key>
