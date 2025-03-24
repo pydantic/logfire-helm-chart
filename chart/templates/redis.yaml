@@ -23,7 +23,6 @@ metadata:
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
-    test: abc
   annotations:
     "helm.sh/hook": pre-install,post-delete
     "helm.sh/hook-weight": "0"
