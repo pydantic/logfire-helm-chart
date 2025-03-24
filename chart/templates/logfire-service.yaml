@@ -69,8 +69,6 @@ spec:
             - containerPort: 8080
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           env:
-            - name: PUBLIC_API_HOST
-              value: {{ .Values.ingress.apiHostname }}
             - name: STRIPE_PUBLISHABLE_KEY
               value: ""
             - name: IMAGE_TAG
