@@ -98,10 +98,6 @@ spec:
               {{- . | toYaml | nindent 12 }}
             {{- end}}
           volumeMounts:
-            {{ if .Values.dev.hostObjectStore }}
-            - name: storage-data
-              mountPath: /storage
-            {{ end }}
             - name: scratch-data
               mountPath: /scratch
           livenessProbe:
@@ -121,11 +117,6 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 5
       volumes:
-      {{ if .Values.dev.hostObjectStore }}
-      - name: storage-data
-        hostPath:
-          path: /storage
-      {{ end }}
       - name: scratch-data
         emptyDir: {}
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}

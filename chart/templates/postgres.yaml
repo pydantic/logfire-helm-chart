@@ -17,7 +17,7 @@ data:
     CREATE DATABASE ff;
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: logfire-postgres
   labels:
@@ -27,14 +27,15 @@ metadata:
     "helm.sh/hook": pre-install,post-delete
     "helm.sh/hook-weight": "-1"
 spec:
+  serviceName: "logfire-postgres"
   replicas: 1
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "logfire.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: logfire-postgres
-  strategy:
-    type: Recreate
+  updateStrategy:
+    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -47,6 +48,7 @@ spec:
           image: postgres:16
           ports:
             - containerPort: 5432
+              name: postgres
           env:
             - name: POSTGRES_USER
               value: postgres
@@ -57,33 +59,21 @@ spec:
           volumeMounts:
             - name: init-db-scripts
               mountPath: /docker-entrypoint-initdb.d
-            - name: logfire-postgres
+            - name: data
               mountPath: /var/lib/postgresql
               subPath: data
       volumes:
         - name: init-db-scripts
           configMap:
             name: db-init-scripts
-        - name: logfire-postgres
-          persistentVolumeClaim:
-            claimName: logfire-postgres
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: logfire-postgres
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: logfire-postgres
-  annotations:
-    "helm.sh/hook": pre-install,post-delete
-    "helm.sh/hook-weight": "-1"
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi  # Adjust size as needed
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
 ---
 apiVersion: v1
 kind: Service
@@ -100,7 +90,8 @@ spec:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-postgres
   ports:
-    - protocol: TCP
+    - name: postgres
+      protocol: TCP
       port: 5432
       targetPort: 5432
 {{ end }}

@@ -46,7 +46,7 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: redis
-          image: redis:6.0.9
+          image: redis:7.2
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           ports:

@@ -33,7 +33,7 @@ objectStore:
 
 dev:
   deployPostgres: true
-  hostObjectStore: true
+  deployMinio: true
   deployMaildev: true
 
 postgresDsn: postgres://postgres:postgres@logfire-postgres:5432/crud

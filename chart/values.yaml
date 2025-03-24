@@ -204,9 +204,11 @@ dev:
   # -- Deploy maildev for testing emails
   deployMaildev: false
   # -- Deploy internal postgres
+  # -- Do NOT use this in production!
   deployPostgres: false
-  # -- Use host based object store
-  hostObjectStore: false
+  # -- Use a local MinIO instance as object storage
+  # -- Do NOT use this in production!
+  deployMinio: false
 
 # @ignored
 dex:
