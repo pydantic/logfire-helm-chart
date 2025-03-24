@@ -85,11 +85,6 @@ spec:
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}
-          {{ if .Values.dev.hostObjectStore }}
-          volumeMounts:
-          - name: storage-data
-            mountPath: /storage
-          {{ end }}
           livenessProbe:
             httpGet:
               path: /health
@@ -106,10 +101,4 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
-      {{ if .Values.dev.hostObjectStore }}
-      volumes:
-      - name: storage-data
-        hostPath:
-          path: /storage
-      {{ end }}
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}

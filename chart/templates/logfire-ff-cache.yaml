@@ -79,16 +79,7 @@ spec:
           volumeMounts:
             - name: cache-data
               mountPath: /scratch
-          {{ if .Values.dev.hostObjectStore }}
-            - name: storage-data
-              mountPath: /storage
-          {{ end }}
       volumes:
-      {{ if .Values.dev.hostObjectStore }}
-        - name: storage-data
-          hostPath:
-            path: /storage
-      {{ end }}
         - name: cache-data
           ephemeral:
             volumeClaimTemplate:
