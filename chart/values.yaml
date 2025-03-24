@@ -75,6 +75,8 @@ smtp:
 #   replicas: 2
 #   # -- How much disk storage is used for caching
 #   cacheStorage: "10Gi"
+#   # -- Which storage class is used for caching
+#   cacheStorageClassName: "my-storage-class"
 #   resources:
 #     cpu: "4"
 #     memory: "8Gi"
