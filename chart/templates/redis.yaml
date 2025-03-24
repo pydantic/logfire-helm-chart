@@ -23,6 +23,7 @@ metadata:
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
+    test: abc
   annotations:
     "helm.sh/hook": pre-install,post-delete
     "helm.sh/hook-weight": "0"
@@ -46,7 +47,7 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: redis
-          image: redis:6.0.9
+          image: redis:7.2
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           ports:

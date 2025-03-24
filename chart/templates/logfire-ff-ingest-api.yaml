@@ -99,6 +99,8 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
+            - name: FF_SHARED_REDIS_DSN
+              value: {{ .Values.redisDsn }}
             - name: FF_INGEST_PG_DSNS
               valueFrom:
                 secretKeyRef:

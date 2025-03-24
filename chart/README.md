@@ -73,17 +73,13 @@ Here's an example dex config, if using the example hostnames as above:
 
 ```yaml
 dex:
-  ingress:
+  grpc:
     enabled: true
-    hosts:
-      - host: dex.example.com
-        paths:
-          - path: /
-            pathType: Prefix
-    tls:
-      - hosts:
-          - dex.example.com
-        secretName: dex-cert
+  configSecret:
+    create: false
+    name: logfire-dex-config
+  autoscaling:
+    enabled: true
   envVars:
     - name: "DEX_API_CONNECTORS_CRUD"
       value: "true"
@@ -108,13 +104,13 @@ dex:
   ...
   config:
     connectors:
-      - type: "github",
-        id: "github",
-        name: "GitHub",
+      - type: "github"
+        id: "github"
+        name: "GitHub"
         config:
           clientID: client_id
           clientSecret: client_secret
-          redirectURI: `https://logfire.example.com/auth-api/callback`
+          redirectURI: https://logfire.example.com/auth-api/callback
           useLoginAsID: false
           getUserInfo: true
 ```
@@ -125,13 +121,13 @@ Dex allows configuration parameters to reference environment variables.  This ca
 dex:
   config:
     connectors:
-      - type: "github",
-        id: "github",
-        name: "GitHub",
+      - type: "github"
+        id: "github"
+        name: "GitHub"
         config:
           clientID: $GITHUB_CLIENT_ID
           clientSecret: $GITHUB_CLIENT_SECRET
-          redirectURI: `https://logfire.example.com/auth-api/callback`
+          redirectURI: https://logfire.example.com/auth-api/callback
           useLoginAsID: false
           getUserInfo: true
 ```
@@ -395,20 +391,10 @@ dev:
   deployMaildev: true
 ```
 
-### Filesystem Storage
+### Object Storage
 
-*Note: Using filesystem storage requires that all pods are running on the same node.  This is not suitable for production for this reason.*
-
-You can use filesystem storage for testing by adding the following to `values.yaml`:
-
-```yaml
-objectStore:
-  uri: file:///storage
-
-dev:
-  ...
-  hostObjectStore: true
-```
+By default we bundle a single-node [MinIO](https://min.io/) instance to allow you to test out object storage.
+This is not intended for production use, but is useful for development.
 # logfire
 
 ![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![AppVersion: 0.0.0](https://img.shields.io/badge/AppVersion-0.0.0-informational?style=flat-square)
