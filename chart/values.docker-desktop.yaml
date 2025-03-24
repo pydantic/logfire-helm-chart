@@ -30,7 +30,6 @@ objectStore:
 
 dev:
   deployPostgres: true
-#  hostObjectStore: true
   deployMaildev: true
   deployMinio: true
 
@@ -41,6 +40,8 @@ postgresIngestDsn: postgres://postgres:postgres@logfire-postgres:5432/ingest
 ingress:
   enabled: false
   tls: false
+  # You should port-forward `logfire-service` to access logfire
+  # If you use the SDK to send data set the `LOGFIRE_BASE_URL` env var for the SDK to `http://localhost:8080`
   hostname: localhost:8080
   maildevHostname: maildev.docker-desktop.local
   annotations: {}
