@@ -90,21 +90,18 @@ spec:
             path: /storage
       {{ end }}
         - name: cache-data
-          persistentVolumeClaim:
-            claimName: {{ $serviceName }}
-
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: {{ $serviceName }}
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage:  {{ dig "cacheStorage" "10Gi" (index .Values $serviceName | default dict) }}
+          ephemeral:
+            volumeClaimTemplate:
+              metadata:
+                labels:
+                  type: ephemeral
+              spec:
+                accessModes:
+                - ReadWriteOnce
+                {{- with (index (index .Values $serviceName | default dict) "cacheStorageClassName") }}
+                storageClassName: {{ . }}
+                {{- end }}
+                resources:
+                  requests:
+                    storage: {{ dig "cacheStorage" "10Gi" (index .Values $serviceName | default dict) }}
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
