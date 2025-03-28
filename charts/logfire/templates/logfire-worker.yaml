@@ -41,7 +41,7 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ $serviceName }}
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.workerImage }}:{{ .Values.image.tag }}'
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.workerImage }}:{{ include "logfire.defaultTag" .  }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           securityContext:

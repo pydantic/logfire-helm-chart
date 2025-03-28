@@ -98,6 +98,7 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
+
 {{/*
 Selector labels
 */}}
@@ -106,6 +107,12 @@ app.kubernetes.io/name: {{ include "logfire.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+{{/*
+Create default tag 
+*/}}
+{{- define "logfire.defaultTag" -}}
+{{- default .Chart.AppVersion .Values.image.tag }}
+{{- end -}}
 
 {{/*
 Create dex config secret name

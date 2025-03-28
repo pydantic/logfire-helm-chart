@@ -34,7 +34,7 @@ spec:
       {{- end}}
       containers:
         - name: logfire-backend-migrations
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ .Values.image.tag }}'
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.defaultTag" .  }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           command:
             - "uv"

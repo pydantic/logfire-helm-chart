@@ -55,7 +55,7 @@ spec:
         - name: {{ $serviceName }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.frontendImage }}:{{ .Values.image.tag }}'
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.frontendImage }}:{{ include "logfire.defaultTag" .  }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           command: ["nginx", "-c", "/usr/local/nginx/nginx.conf"]
           volumeMounts:
