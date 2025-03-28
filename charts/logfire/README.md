@@ -67,30 +67,7 @@ If you are *not* using kubernetes ingress, you must still set the hostnames unde
 
 Dex is used as the identity service for logfire & can be configured for many different types of connectors.  The full list of connectors can be found here: [https://dexidp.io/docs/connectors/](https://dexidp.io/docs/connectors/)
 
-There is some default configuration provided in `values.yaml` but you will need to make sure that the hostnames (as above) match up.
-
-Here's an example dex config, if using the example hostnames as above:
-
-```yaml
-dex:
-  grpc:
-    enabled: true
-  configSecret:
-    create: false
-    name: logfire-dex-config
-  autoscaling:
-    enabled: true
-  envVars:
-    - name: "DEX_API_CONNECTORS_CRUD"
-      value: "true"
-    - name: LOGFIRE_CLIENT_SECRET
-      valueFrom:
-        secretKeyRef:
-          name: logfire-dex-client-secret
-          key: logfire-dex-client-secret
-  config:
-    connectors: []
-```
+There is some default configuration provided in `values.yaml`.
 
 #### Authentication Configuration
 
@@ -99,8 +76,7 @@ Depending on what [connector you want to use](https://dexidp.io/docs/connectors/
 Here's an example using `github` as a connector:
 
 ```yaml
-dex:
-  # other config as above
+logfire-dex:
   ...
   config:
     connectors:
@@ -112,15 +88,24 @@ dex:
           # See https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app
           clientID: client_id
           clientSecret: client_secret
-          redirectURI: https://logfire.example.com/auth-api/callback
-          useLoginAsID: false
           getUserInfo: true
 ```
 
 Dex allows configuration parameters to reference environment variables.  This can be done by using the `$` symbol.  For example, the `clientID` and `clientSecret` can be set as environment variables:
 
 ```yaml
-dex:
+logfire-dex:
+  env:
+    - name: GITHUB_CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: my-github-secret
+          key: client-id
+    - name: GITHUB_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: my-github-secret
+          key: client-secret
   config:
     connectors:
       - type: "github"
@@ -129,20 +114,11 @@ dex:
         config:
           clientID: $GITHUB_CLIENT_ID
           clientSecret: $GITHUB_CLIENT_SECRET
-          redirectURI: https://logfire.example.com/auth-api/callback
-          useLoginAsID: false
           getUserInfo: true
 ```
 #### Image pull secrets
 
-Remember to add the image pull secrets to dex's service account `logfire-dex` or add the pull secrets directly to the dex config:
-
-```yaml
-dex:
-  imagePullSecrets:
-    - name: logfire-image-key
-  config:
-```
+Remember to add the image pull secrets to dex's service account `logfire-dex` if you're not using `imagePullSecrets`.
 
 We recommend you set secrets as Kubernetes secrets and reference them in the `values.yaml` file instead of hardcoding secrets which is more likely to be exposed and harder to rotate.
 
