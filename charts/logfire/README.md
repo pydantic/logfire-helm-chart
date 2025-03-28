@@ -305,7 +305,7 @@ See [`values.yaml`](./values.yaml) for some production level values
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
 | logfire-dex | object | `{"config":{"connectors":[],"storage":[]},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.config | object | `{"connectors":[],"storage":[]}` | Dex Config |
-| logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ |
+| logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
 | logfire-dex.config.storage | list | `[]` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
 | logfire-dex.replicas | int | `1` | Number of replicas |
 | logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
@@ -421,7 +421,7 @@ Helm chart for self-hosted Logfire
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
 | logfire-dex | object | `{"config":{"connectors":[],"storage":[]},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.config | object | `{"connectors":[],"storage":[]}` | Dex Config |
-| logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ |
+| logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
 | logfire-dex.config.storage | list | `[]` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
 | logfire-dex.replicas | int | `1` | Number of replicas |
 | logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |

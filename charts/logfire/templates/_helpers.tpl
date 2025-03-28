@@ -139,6 +139,7 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $dexConfig := dig "config" dict (index .Values "logfire-dex" | default dict) -}}
 {{- $staticClients := list -}}
 {{- $logfireFrontend := (include "logfire.url" .) -}}
+{{- $dexCallback := printf "%s/auth-api/callback" $logfireFrontend -}}
 
 {{- $frontend := dict -}}
 {{- $extraVars := dict "logfire_frontend_host" (printf "%s" $logfireFrontend) -}}
@@ -164,6 +165,19 @@ Create dex configuration secret, merging backend static clients with user provid
   {{- end -}}
 {{- end -}}
 
+{{- $connectors := list -}}
+
+{{- with $dexConfig.connectors -}}
+  {{- range $connector := . -}}
+    {{- if and (hasKey $connector "config") $connector.config -}}
+      {{- if not (hasKey $connector.config "redirectURI") -}}
+        {{- $_ := set $connector.config "redirectURI" $dexCallback  -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $connectors = append $connectors $connector -}}
+  {{- end -}}
+{{- end -}}
+
 {{- $_ := set $dexConfig "issuer" (printf "%s/auth-api" $logfireFrontend) -}}
 {{- $_ := set $dexConfig "staticClients" $staticClients -}}
 {{- $_ := set $dexConfig "frontend" $frontend -}}
@@ -171,6 +185,7 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $_ := set $dexConfig "web" $web -}}
 {{- $_ := set $dexConfig "grpc" $grpc -}}
 {{- $_ := set $dexConfig "enablePasswordDB" true -}}
+{{- $_ := set $dexConfig "connectors" $connectors -}}
 
 {{ toYaml $dexConfig | b64enc | quote }}
 {{- end -}}

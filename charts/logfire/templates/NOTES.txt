@@ -26,6 +26,9 @@ A PostgreSQL database has been deployed as part of this installation.
 You are using an external PostgreSQL database.
 {{- end }}
 
+When configuring authentication with an external provider, set the redirect URI to:
+- {{ printf "%s/auth-api/callback" (include "logfire.url" .) }}
+
 An admin account was created with access to Logfire's own internal observability.
 The email address used is {{ .Values.adminEmail }}.
 You'll need to reset the password to log in.
