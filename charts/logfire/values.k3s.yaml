@@ -17,6 +17,8 @@ image:
   schedulerImage: logfire-python-prod
   # @ignored
   fusionfireImage: fusionfire
+  # @ignored
+  dexImage: dex
 
 ingress:
   enabled: true
@@ -60,27 +62,7 @@ securityContext:
   readOnlyRootFilesystem: true
   runAsNonRoot: true
 
-dex:
-  image:
-    repository: registry:5000/dex
-    tag: latest
-  configSecret:
-    create: false
-    name: logfire-dex-config
-  ingress:
-    enabled: true
-    className: nginx
-    annotations:
-      cert-manager.io/cluster-issuer: k3s-ca-issuer
-    hosts:
-      - host: dex.k3s.local
-        paths:
-          - path: /
-            pathType: Prefix
-    tls:
-      - hosts:
-          - dex.k3s.local
-        secretName: dex-cert
+logfire-dex:
   config:
     storage:
       type: postgres
@@ -93,11 +75,3 @@ dex:
         ssl:
           mode: disable
     staticClients: []
-    web:
-      http: 0.0.0.0:5556
-    grpc:
-      addr: 0.0.0.0:5557
-    oauth2:
-      skipApprovalScreen: true
-      passwordConnector: local
-    enablePasswordDB: true

@@ -8,7 +8,7 @@ ingress:
   # -- Enable TLS/HTTPS connections.  Required for CORS headers
   tls: false
   # -- The hostname used for Logfire
-  hostname:
+  hostname: "logfire.example.com"
   ingressClassName: nginx
   # -- Any annotations required.
   annotations: {}
@@ -42,7 +42,36 @@ smtp:
   # -- Whether to use TLS
   use_tls: false
 
-
+# -- Configuration, autoscaling & resources for `logfire-dex` deployment
+logfire-dex:
+  # -- Number of replicas
+  replicas: 1
+  # -- Dex Config
+  config:
+    # -- Dex storage configuration, see https://dexidp.io/docs/configuration/storage/
+    storage:
+      type: postgres
+      config:
+        host: logfire-postgres
+        port: 5432
+        user: postgres
+        database: dex
+        password: postgres
+        ssl:
+          mode: disable
+    # -- Dex auth connectors, see https://dexidp.io/docs/connectors/
+    # redirectURI config option can be omitted, as it will be automatically generated
+    # however if specified, the custom value will be honored
+    connectors: []
+  # -- resources
+  resources:
+    cpu: "1"
+    memory: "1Gi"
+#  autoscaling:
+#    minReplicas: 2
+#    maxReplicas: 4
+#    memAverage: 65
+#    cpuAverage: 20
 # # -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
 #   # -- Number of pod replicas
@@ -191,6 +220,8 @@ image:
   schedulerImage: python-prod
   # @ignored
   fusionfireImage: fusionfire
+  # @ignored
+  dexImage: dex
 
 logfire-redis:
   # -- Enable redis as part of this helm chart
@@ -209,34 +240,3 @@ dev:
   # -- Use a local MinIO instance as object storage
   # -- Do NOT use this in production!
   deployMinio: false
-
-# @ignored
-dex:
-  enabled: true
-  image:
-    repository: us-docker.pkg.dev/pydantic-public-registries/logfire/dex
-    tag: 4d53490b  # ask the team for updated tags, for now this is not automated
-  grpc:
-    enabled: true
-  configSecret:
-    create: false
-    name: logfire-dex-config
-  autoscaling:
-    enabled: true
-  envVars:
-    - name: "DEX_API_CONNECTORS_CRUD"
-      value: "true"
-    - name: LOGFIRE_CLIENT_SECRET
-      valueFrom:
-        secretKeyRef:
-          name: logfire-dex-client-secret
-          key: logfire-dex-client-secret
-  config:
-    web:
-      http: 0.0.0.0:5556
-    grpc:
-      addr: 0.0.0.0:5557
-    oauth2:
-      skipApprovalScreen: true
-      passwordConnector: local
-    enablePasswordDB: true

@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![AppVersion: 0.0.0](https://img.shields.io/badge/AppVersion-0.0.0-informational?style=flat-square)
+![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![AppVersion: 4d53490b](https://img.shields.io/badge/AppVersion-4d53490b-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -67,30 +67,7 @@ If you are *not* using kubernetes ingress, you must still set the hostnames unde
 
 Dex is used as the identity service for logfire & can be configured for many different types of connectors.  The full list of connectors can be found here: [https://dexidp.io/docs/connectors/](https://dexidp.io/docs/connectors/)
 
-There is some default configuration provided in `values.yaml` but you will need to make sure that the hostnames (as above) match up.
-
-Here's an example dex config, if using the example hostnames as above:
-
-```yaml
-dex:
-  grpc:
-    enabled: true
-  configSecret:
-    create: false
-    name: logfire-dex-config
-  autoscaling:
-    enabled: true
-  envVars:
-    - name: "DEX_API_CONNECTORS_CRUD"
-      value: "true"
-    - name: LOGFIRE_CLIENT_SECRET
-      valueFrom:
-        secretKeyRef:
-          name: logfire-dex-client-secret
-          key: logfire-dex-client-secret
-  config:
-    connectors: []
-```
+There is some default configuration provided in `values.yaml`.
 
 #### Authentication Configuration
 
@@ -99,8 +76,7 @@ Depending on what [connector you want to use](https://dexidp.io/docs/connectors/
 Here's an example using `github` as a connector:
 
 ```yaml
-dex:
-  # other config as above
+logfire-dex:
   ...
   config:
     connectors:
@@ -112,15 +88,24 @@ dex:
           # See https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app
           clientID: client_id
           clientSecret: client_secret
-          redirectURI: https://logfire.example.com/auth-api/callback
-          useLoginAsID: false
           getUserInfo: true
 ```
 
 Dex allows configuration parameters to reference environment variables.  This can be done by using the `$` symbol.  For example, the `clientID` and `clientSecret` can be set as environment variables:
 
 ```yaml
-dex:
+logfire-dex:
+  env:
+    - name: GITHUB_CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: my-github-secret
+          key: client-id
+    - name: GITHUB_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: my-github-secret
+          key: client-secret
   config:
     connectors:
       - type: "github"
@@ -129,20 +114,11 @@ dex:
         config:
           clientID: $GITHUB_CLIENT_ID
           clientSecret: $GITHUB_CLIENT_SECRET
-          redirectURI: https://logfire.example.com/auth-api/callback
-          useLoginAsID: false
           getUserInfo: true
 ```
 #### Image pull secrets
 
-Remember to add the image pull secrets to dex's service account `logfire-dex` or add the pull secrets directly to the dex config:
-
-```yaml
-dex:
-  imagePullSecrets:
-    - name: logfire-image-key
-  config:
-```
+Remember to add the image pull secrets to dex's service account `logfire-dex` if you're not using `imagePullSecrets`.
 
 We recommend you set secrets as Kubernetes secrets and reference them in the `values.yaml` file instead of hardcoding secrets which is more likely to be exposed and harder to rotate.
 
@@ -287,12 +263,6 @@ Each service has both resources and autoscaling configured in the same way:
 
 See [`values.yaml`](./values.yaml) for some production level values
 
-## Requirements
-
-| Repository | Name | Version |
-|------------|------|---------|
-| https://charts.dexidp.io | dex | 0.20.0 |
-
 ## Values
 
 | Key | Type | Default | Description |
@@ -306,9 +276,15 @@ See [`values.yaml`](./values.yaml) for some production level values
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
 | ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
-| ingress.hostname | string | `nil` | The hostname used for Logfire |
+| ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
+| logfire-dex | object | `{"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
+| logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
+| logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
+| logfire-dex.replicas | int | `1` | Number of replicas |
+| logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
 | logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
@@ -399,15 +375,9 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![AppVersion: 0.0.0](https://img.shields.io/badge/AppVersion-0.0.0-informational?style=flat-square)
+![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![AppVersion: 4d53490b](https://img.shields.io/badge/AppVersion-4d53490b-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
-
-## Requirements
-
-| Repository | Name | Version |
-|------------|------|---------|
-| https://charts.dexidp.io | dex | 0.20.0 |
 
 ## Values
 
@@ -422,9 +392,15 @@ Helm chart for self-hosted Logfire
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
 | ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
-| ingress.hostname | string | `nil` | The hostname used for Logfire |
+| ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
+| logfire-dex | object | `{"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
+| logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
+| logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
+| logfire-dex.replicas | int | `1` | Number of replicas |
+| logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
 | logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
