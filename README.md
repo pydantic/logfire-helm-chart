@@ -1,1 +1,1 @@
-chart/README.md
+charts/logfire/README.md
