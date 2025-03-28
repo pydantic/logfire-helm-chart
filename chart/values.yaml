@@ -178,9 +178,9 @@ image:
   # -- The pull policy for docker images
   pullPolicy: IfNotPresent
   # @ignored
-  repository: us-docker.pkg.dev/pydantic-public-registries/docker
+  repository: us-docker.pkg.dev/pydantic-public-registries/logfire/
   # -- The tag/version of the docker images to use
-  tag: latest
+  tag: 4d53490b  # ask the team for updated tags, for now this is not automated
   # @ignored
   workerImage: python-prod
   # @ignored
@@ -214,8 +214,8 @@ dev:
 dex:
   enabled: true
   image:
-    repository: us-docker.pkg.dev/pydantic-public-registries/docker/dex
-    tag: latest
+    repository: us-docker.pkg.dev/pydantic-public-registries/logfire/dex
+    tag: 4d53490b  # ask the team for updated tags, for now this is not automated
   grpc:
     enabled: true
   configSecret:

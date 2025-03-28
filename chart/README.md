@@ -108,6 +108,8 @@ dex:
         id: "github"
         name: "GitHub"
         config:
+          # You get clientID and clientSecret by creating a GitHub OAuth App
+          # See https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app
           clientID: client_id
           clientSecret: client_secret
           redirectURI: https://logfire.example.com/auth-api/callback
@@ -300,7 +302,7 @@ See [`values.yaml`](./values.yaml) for some production level values
 | dev.deployMinio | bool | `false` | Do NOT use this in production! |
 | dev.deployPostgres | bool | `false` | Do NOT use this in production! |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
-| image.tag | string | `"latest"` | The tag/version of the docker images to use |
+| image.tag | string | `"4d53490b"` | The tag/version of the docker images to use |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
 | ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
@@ -416,7 +418,7 @@ Helm chart for self-hosted Logfire
 | dev.deployMinio | bool | `false` | Do NOT use this in production! |
 | dev.deployPostgres | bool | `false` | Do NOT use this in production! |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
-| image.tag | string | `"latest"` | The tag/version of the docker images to use |
+| image.tag | string | `"4d53490b"` | The tag/version of the docker images to use |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
 | ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
