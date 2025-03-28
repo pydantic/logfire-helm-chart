@@ -279,10 +279,10 @@ See [`values.yaml`](./values.yaml) for some production level values
 | ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
-| logfire-dex | object | `{"config":{"connectors":[],"storage":[]},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
-| logfire-dex.config | object | `{"connectors":[],"storage":[]}` | Dex Config |
+| logfire-dex | object | `{"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
 | logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
-| logfire-dex.config.storage | list | `[]` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
+| logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
 | logfire-dex.replicas | int | `1` | Number of replicas |
 | logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
 | logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |
@@ -395,10 +395,10 @@ Helm chart for self-hosted Logfire
 | ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
-| logfire-dex | object | `{"config":{"connectors":[],"storage":[]},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
-| logfire-dex.config | object | `{"connectors":[],"storage":[]}` | Dex Config |
+| logfire-dex | object | `{"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
 | logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
-| logfire-dex.config.storage | list | `[]` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
+| logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
 | logfire-dex.replicas | int | `1` | Number of replicas |
 | logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
 | logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |

@@ -49,7 +49,16 @@ logfire-dex:
   # -- Dex Config
   config:
     # -- Dex storage configuration, see https://dexidp.io/docs/configuration/storage/
-    storage: []
+    storage:
+      type: postgres
+      config:
+        host: logfire-postgres
+        port: 5432
+        user: postgres
+        database: dex
+        password: postgres
+        ssl:
+          mode: disable
     # -- Dex auth connectors, see https://dexidp.io/docs/connectors/
     # redirectURI config option can be omitted, as it will be automatically generated
     # however if specified, the custom value will be honored
