@@ -4,6 +4,13 @@
 
 Helm chart for self-hosted Logfire
 
+## Chart installation
+
+``` sh
+$ helm repo add pydantic https://charts.pydantic.dev/
+$ helm upgrade --install logfire pydantic/logfire
+```
+
 ## Prerequisites
 
 There are a number of logfire external prerequisites including PostgreSQL, Dex and Object Storage.
