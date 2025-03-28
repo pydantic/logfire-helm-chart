@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![AppVersion: 4d53490b](https://img.shields.io/badge/AppVersion-4d53490b-informational?style=flat-square)
+![Version: 0.1.2](https://img.shields.io/badge/Version-0.1.2-informational?style=flat-square) ![AppVersion: c3bd8f69](https://img.shields.io/badge/AppVersion-c3bd8f69-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -101,7 +101,7 @@ logfire-dex:
 To use GitHub as an example, you can find general instructions for creating an OAuth app [in the GitHub docs](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app).
 It should look something like this:
 
-![GitHub OAuth App Example](https://raw.githubusercontent.com/pydantic/logfire-helm-chart/refs/heads/main/docs/images/github-oauth-app.png)
+![GitHub OAuth App Example](https://raw.githubusercontent.com/pydantic/logfire-helm-chart/refs/heads/main/docs/images/local-github-oauth-app.png)
 
 Dex allows configuration parameters to reference environment variables.
 This can be done by using the `$` symbol.  For example, the `clientID` and `clientSecret` can be set as environment variables:
@@ -392,7 +392,7 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![AppVersion: 4d53490b](https://img.shields.io/badge/AppVersion-4d53490b-informational?style=flat-square)
+![Version: 0.1.2](https://img.shields.io/badge/Version-0.1.2-informational?style=flat-square) ![AppVersion: c3bd8f69](https://img.shields.io/badge/AppVersion-c3bd8f69-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
