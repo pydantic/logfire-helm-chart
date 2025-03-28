@@ -1,0 +1,116 @@
+{{- $serviceName := "logfire-dex" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+  - name: http
+    port: 5556
+    targetPort: http
+    protocol: TCP
+  - name: grpc
+    port: 5557
+    targetPort: grpc
+    protocol: TCP
+  - name: telemetry
+    port: 5558
+    targetPort: telemetry
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  {{- if not (hasKey (index .Values $serviceName | default dict) "autoscaling") }}
+  replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/dex/secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range . }}
+        - name: {{ . | quote }}
+      {{- end }}
+      {{- end }}
+      serviceAccountName: {{ $serviceName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $serviceName }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.dexImage }}:{{ .Values.image.tag }}'
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          args:
+            - dex
+            - serve
+            - --web-http-addr
+            - 0.0.0.0:5556
+            - --grpc-addr
+            - 0.0.0.0:5557
+            - --telemetry-addr
+            - 0.0.0.0:5558
+            - /etc/dex/config.yaml
+          env:
+            - name: "DEX_API_CONNECTORS_CRUD"
+              value: "true"
+            - name: LOGFIRE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: logfire-dex-client-secret
+                  key: logfire-dex-client-secret
+            {{- with (index .Values $serviceName | default dict).env }}
+              {{- . | toYaml | nindent 12 }}
+            {{- end}}
+          ports:
+            - name: http
+              containerPort: 5556
+              protocol: TCP
+            - name: grpc
+              containerPort: 5557
+              protocol: TCP
+            - name: telemetry
+              containerPort: 5558
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: telemetry
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: telemetry
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dex
+              readOnly: true
+      volumes:
+        - name: config
+          secret:
+            secretName: {{ include "logfire.dexSecretName" . }}
+{{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}

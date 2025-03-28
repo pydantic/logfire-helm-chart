@@ -287,12 +287,6 @@ Each service has both resources and autoscaling configured in the same way:
 
 See [`values.yaml`](./values.yaml) for some production level values
 
-## Requirements
-
-| Repository | Name | Version |
-|------------|------|---------|
-| https://charts.dexidp.io | dex | 0.20.0 |
-
 ## Values
 
 | Key | Type | Default | Description |
@@ -306,9 +300,15 @@ See [`values.yaml`](./values.yaml) for some production level values
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
 | ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
-| ingress.hostname | string | `nil` | The hostname used for Logfire |
+| ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
+| logfire-dex | object | `{"config":{"connectors":[],"storage":[]},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex.config | object | `{"connectors":[],"storage":[]}` | Dex Config |
+| logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ |
+| logfire-dex.config.storage | list | `[]` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
+| logfire-dex.replicas | int | `1` | Number of replicas |
+| logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
 | logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
@@ -403,12 +403,6 @@ This is not intended for production use, but is useful for development.
 
 Helm chart for self-hosted Logfire
 
-## Requirements
-
-| Repository | Name | Version |
-|------------|------|---------|
-| https://charts.dexidp.io | dex | 0.20.0 |
-
 ## Values
 
 | Key | Type | Default | Description |
@@ -422,9 +416,15 @@ Helm chart for self-hosted Logfire
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
 | ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
-| ingress.hostname | string | `nil` | The hostname used for Logfire |
+| ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
+| logfire-dex | object | `{"config":{"connectors":[],"storage":[]},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex.config | object | `{"connectors":[],"storage":[]}` | Dex Config |
+| logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ |
+| logfire-dex.config.storage | list | `[]` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
+| logfire-dex.replicas | int | `1` | Number of replicas |
+| logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
 | logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
 | objectStore.env | object | `{}` | additional env vars for the object store connection |

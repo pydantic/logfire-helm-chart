@@ -5,8 +5,4 @@ description: Helm chart for self-hosted Logfire
 
 appVersion: "0.0.0"
 
-dependencies:
-- name: dex
-  version: "0.20.0"
-  repository: "https://charts.dexidp.io"
-  condition: dex.enabled
+dependencies: []

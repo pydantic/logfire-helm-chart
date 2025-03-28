@@ -111,7 +111,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Create dex config secret name
 */}}
 {{- define "logfire.dexSecretName" -}}
-{{- printf "%s" .Values.dex.configSecret.name }}
+{{- printf "%s-dex-config" (include "logfire.fullname" .) }}
 {{- end -}}
 
 {{/*
@@ -136,13 +136,18 @@ Create dex config secret name
 Create dex configuration secret, merging backend static clients with user provided storage and oauth connectors.
 */}}
 {{- define "logfire.dexConfig" -}}
-{{- $dexConfig := .Values.dex.config -}}
+{{- $dexConfig := dig "config" dict (index .Values "logfire-dex" | default dict) -}}
 {{- $staticClients := list -}}
 {{- $logfireFrontend := (include "logfire.url" .) -}}
 
 {{- $frontend := dict -}}
 {{- $extraVars := dict "logfire_frontend_host" (printf "%s" $logfireFrontend) -}}
 {{- $_ := set $frontend "extra" $extraVars -}}
+
+{{- $oauth2 := dict "skipApprovalScreen" true "passwordConnector" "local" -}}
+
+{{- $web := dict "http" "0.0.0.0:5556" -}}
+{{- $grpc := dict "addr" "0.0.0.0:5557" -}}
 
 {{- $client := dict -}}
 {{- $_ := set $client "id" (include "logfire.dexClientId" .) -}}
@@ -162,6 +167,10 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $_ := set $dexConfig "issuer" (printf "%s/auth-api" $logfireFrontend) -}}
 {{- $_ := set $dexConfig "staticClients" $staticClients -}}
 {{- $_ := set $dexConfig "frontend" $frontend -}}
+{{- $_ := set $dexConfig "oauth2" $oauth2 -}}
+{{- $_ := set $dexConfig "web" $web -}}
+{{- $_ := set $dexConfig "grpc" $grpc -}}
+{{- $_ := set $dexConfig "enablePasswordDB" true -}}
 
 {{ toYaml $dexConfig | b64enc | quote }}
 {{- end -}}
