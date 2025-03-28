@@ -109,8 +109,12 @@ spec:
             - name: config
               mountPath: /etc/dex
               readOnly: true
+            - name: temp
+              mountPath: /tmp
       volumes:
         - name: config
           secret:
             secretName: {{ include "logfire.dexSecretName" . }}
+        - name: temp
+          emptyDir: {}
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}

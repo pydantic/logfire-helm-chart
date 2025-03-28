@@ -1,21 +1,4 @@
-adminEmail: engineering@pydantic.dev
-
-image:
-  pullPolicy: Never
-  repository: ""
-  tag: latest
-  # @ignored
-  workerImage: logfire-python-prod
-  # @ignored
-  backendImage: logfire-python-prod
-  # @ignored
-  frontendImage: logfire-frontend-prod
-  # @ignored
-  schedulerImage: logfire-python-prod
-  # @ignored
-  fusionfireImage: fusionfire-dev
-  # @ignored
-  dexImage: dex
+adminEmail: engineering@example.com
 
 objectStore:
   uri: s3://logfire

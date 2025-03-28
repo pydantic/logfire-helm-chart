@@ -98,7 +98,13 @@ logfire-dex:
           getUserInfo: true
 ```
 
-Dex allows configuration parameters to reference environment variables.  This can be done by using the `$` symbol.  For example, the `clientID` and `clientSecret` can be set as environment variables:
+To use GitHub as an example, you can find general instructions for creating an OAuth app [in the GitHub docs](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app).
+It should look something like this:
+
+![GitHub OAuth App Example](https://raw.githubusercontent.com/pydantic/logfire-helm-chart/refs/heads/main/docs/images/github-oauth-app.png)
+
+Dex allows configuration parameters to reference environment variables.
+This can be done by using the `$` symbol.  For example, the `clientID` and `clientSecret` can be set as environment variables:
 
 ```yaml
 logfire-dex:
@@ -123,6 +129,10 @@ logfire-dex:
           clientSecret: $GITHUB_CLIENT_SECRET
           getUserInfo: true
 ```
+
+You would have to manually (or via IaC, etc.) create `my-github-secret`.
+This allows you to avoid putting any secrets into a `values.yaml` file.
+
 #### Image pull secrets
 
 Remember to add the image pull secrets to dex's service account `logfire-dex` if you're not using `imagePullSecrets`.
@@ -279,7 +289,7 @@ See [`values.yaml`](./values.yaml) for some production level values
 | dev.deployMinio | bool | `false` | Do NOT use this in production! |
 | dev.deployPostgres | bool | `false` | Do NOT use this in production! |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
-| image.tag | string | `"4d53490b"` | The tag/version of the docker images to use |
+| image.tag | string | `"c3bd8f69"` | The tag/version of the docker images to use |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
 | ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
@@ -395,7 +405,7 @@ Helm chart for self-hosted Logfire
 | dev.deployMinio | bool | `false` | Do NOT use this in production! |
 | dev.deployPostgres | bool | `false` | Do NOT use this in production! |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
-| image.tag | string | `"4d53490b"` | The tag/version of the docker images to use |
+| image.tag | string | `"c3bd8f69"` | The tag/version of the docker images to use |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
 | ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
