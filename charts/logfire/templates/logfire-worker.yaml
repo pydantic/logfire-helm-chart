@@ -78,7 +78,7 @@ spec:
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.05"
             - name: FUSIONFIRE_HOST
-              value: logfire-fusionfire
+              value: http://logfire-ff-query-api
             - name: FUSIONFIRE_PORT
               value: "8011"
             - name: OTEL_RESOURCE_ATTRIBUTES
