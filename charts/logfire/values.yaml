@@ -208,8 +208,6 @@ image:
   pullPolicy: IfNotPresent
   # @ignored
   repository: us-docker.pkg.dev/pydantic-public-registries/logfire/
-  # -- The tag/version of the docker images to use
-  tag: c3bd8f69  # ask the team for updated tags, for now this is not automated
   # @ignored
   workerImage: python-prod
   # @ignored
