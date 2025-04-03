@@ -98,7 +98,7 @@ data:
 
             # Proxy requests to /auth-api to dex
             location ~ ^/auth-api {
-                proxy_pass http://{{ .Release.Name }}-dex:5556;
+                proxy_pass http://logfire-dex:5556;
                 # WebSocket headers
                 proxy_set_header Upgrade $http_upgrade;
                 proxy_set_header Connection "upgrade";

@@ -1,4 +1,4 @@
-name: Lint Chart
+name: Test Chart
 
 on:
   pull_request:
@@ -7,8 +7,11 @@ on:
       - main
 
 jobs:
-  lint-test:
+  test:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,7 +23,8 @@ jobs:
         with:
           version: latest
 
-      - uses: actions/setup-python@v5
+      - name: Set up python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
           check-latest: true
@@ -28,5 +32,48 @@ jobs:
       - name: Set up chart-testing
         uses: helm/chart-testing-action@v2.7.0
 
+      - name: Run chart-testing (list-changed)
+        id: list-changed
+        run: |
+          changed=$(ct list-changed --target-branch ${{ github.event.repository.default_branch }})
+          if [[ -n "$changed" ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Chart linting
-        run: ct lint --target-branch ${{ github.event.repository.default_branch }} --all --skip-helm-dependencies --validate-maintainers=false
+        if: steps.list-changed.outputs.changed == 'true'
+        run: ct lint --config ci/ct.yaml
+
+      - name: Set up GCP auth
+        id: auth
+        if: steps.list-changed.outputs.changed == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT }}
+          token_format: 'access_token'
+          access_token_lifetime: 600s
+
+      - name: Generate pull secret
+        if: steps.list-changed.outputs.changed == 'true'
+        env:
+          DOCKER_CONFIG: "."
+          REPOSITORY: "us-docker.pkg.dev"
+        run: |
+          echo "::add-mask::${{ steps.auth.outputs.access_token }}"
+          cat <<EOF >"${DOCKER_CONFIG}/config.json"
+          {
+           "auths": { "${REPOSITORY}": {} }
+          }
+          EOF
+          echo "${{ steps.auth.outputs.access_token }}" | docker login -u oauth2accesstoken --password-stdin "${REPOSITORY}"
+
+      - name: Create Kind Cluster
+        if: steps.list-changed.outputs.changed == 'true'
+        uses: helm/kind-action@v1
+        with:
+          config: 'ci/kind.yaml'
+
+      - name: Run chart testing
+        if: steps.list-changed.outputs.changed == 'true'
+        run: ct install --upgrade --config ci/ct.yaml

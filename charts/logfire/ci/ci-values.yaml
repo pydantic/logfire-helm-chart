@@ -1,0 +1,39 @@
+adminEmail: hello@pydantic.dev
+
+ingress:
+  enabled: true
+  tls: false
+  hostname: logfire.example.com
+  maildevHostname: maildev.example.com
+
+objectStore:
+  uri: s3://logfire
+  env:
+    AWS_ACCESS_KEY_ID: logfire-minio
+    AWS_SECRET_ACCESS_KEY: logfire-minio
+    AWS_ENDPOINT: http://logfire-minio:9000
+    AWS_ALLOW_HTTP: "true"
+
+dev:
+  deployPostgres: true
+  deployMinio: true
+  deployMaildev: true
+  postgresImage: postgres:16-alpine
+
+postgresDsn: postgres://postgres:postgres@logfire-postgres:5432/crud
+postgresFFDsn: postgres://postgres:postgres@logfire-postgres:5432/ff
+postgresIngestDsn: postgres://postgres:postgres@logfire-postgres:5432/ingest
+
+logfire-dex:
+  config:
+    storage:
+      type: postgres
+      config:
+        host: logfire-postgres
+        port: 5432
+        user: postgres
+        database: dex
+        password: postgres
+        ssl:
+          mode: disable
+    staticClients: []
