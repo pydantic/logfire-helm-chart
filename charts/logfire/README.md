@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.1.5](https://img.shields.io/badge/Version-0.1.5-informational?style=flat-square) ![AppVersion: 6036817f](https://img.shields.io/badge/AppVersion-6036817f-informational?style=flat-square)
+![Version: 0.1.6](https://img.shields.io/badge/Version-0.1.6-informational?style=flat-square) ![AppVersion: 6036817f](https://img.shields.io/badge/AppVersion-6036817f-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -289,7 +289,6 @@ See [`values.yaml`](./values.yaml) for some production level values
 | dev.deployMinio | bool | `false` | Do NOT use this in production! |
 | dev.deployPostgres | bool | `false` | Do NOT use this in production! |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
-| image.tag | string | `"c3bd8f69"` | The tag/version of the docker images to use |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
 | ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
@@ -392,7 +391,7 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.1.5](https://img.shields.io/badge/Version-0.1.5-informational?style=flat-square) ![AppVersion: 6036817f](https://img.shields.io/badge/AppVersion-6036817f-informational?style=flat-square)
+![Version: 0.1.6](https://img.shields.io/badge/Version-0.1.6-informational?style=flat-square) ![AppVersion: 6036817f](https://img.shields.io/badge/AppVersion-6036817f-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -405,7 +404,6 @@ Helm chart for self-hosted Logfire
 | dev.deployMinio | bool | `false` | Do NOT use this in production! |
 | dev.deployPostgres | bool | `false` | Do NOT use this in production! |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
-| image.tag | string | `"c3bd8f69"` | The tag/version of the docker images to use |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
 | ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
