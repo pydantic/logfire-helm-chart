@@ -48,8 +48,9 @@ spec:
                     # Wait for the server to start
                     sleep 5
                     # Create a bucket
-                    mc mb logfire/logfire >> /startup-log.txt 2>&1
-                    mc anonymous set public logfire/logfire >> /startup-log.txt 2>&1
+                    mc alias set local http://localhost:9000 $MINIO_ROOT_USER $MINIO_ROOT_PASSWORD
+                    mc mb local/logfire >> /startup-log.txt 2>&1
+                    mc anonymous set public local/logfire >> /startup-log.txt 2>&1
           ports:
             - containerPort: 9000
               name: api
