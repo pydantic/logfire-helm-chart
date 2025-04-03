@@ -45,7 +45,7 @@ spec:
       priorityClassName: {{ .Values.priorityClassName }}
       containers:
         - name: postgres
-          image: postgres:16
+          image: {{ .Values.dev.postgresImage | default "postgres:16" }}
           ports:
             - containerPort: 5432
               name: postgres

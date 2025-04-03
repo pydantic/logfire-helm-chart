@@ -18,6 +18,7 @@ dev:
   deployPostgres: true
   deployMinio: true
   deployMaildev: true
+  postgresImage: postgres:16-alpine
 
 postgresDsn: postgres://postgres:postgres@logfire-postgres:5432/crud
 postgresFFDsn: postgres://postgres:postgres@logfire-postgres:5432/ff
