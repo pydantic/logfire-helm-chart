@@ -37,6 +37,34 @@ spec:
 {{- end}}
 {{- end}}
 
+{{- define "logfire.pdb" }}
+{{- $root := .root -}}
+{{- $serviceName := .serviceName -}}
+{{- if hasKey $root.Values $serviceName }}
+{{- if index (index $root.Values $serviceName | default dict) "pdb" }}
+{{- with index $root.Values $serviceName "pdb" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $serviceName }}
+spec:
+  {{- with .maxUnavailable }}
+  maxUnavailable: {{ . }}
+  {{- end }}
+  {{- with .minAvailable }}
+  minAvailable: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+
 {{- define "logfire.resources"}}
 {{- if index (index .Values .serviceName | default dict) "resources" }}
 {{- with index .Values .serviceName "resources" }}
