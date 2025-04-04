@@ -72,6 +72,9 @@ logfire-dex:
 #    maxReplicas: 4
 #    memAverage: 65
 #    cpuAverage: 20
+#  pdb:
+#    maxUnavailable: 1
+#    minAvaliable: 1
 # # -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
 #   # -- Number of pod replicas
@@ -86,6 +89,9 @@ logfire-dex:
 #     maxReplicas: 4
 #     memAverage: 65
 #     cpuAverage: 20
+#   pdb:
+#     maxUnavailable: 1
+#     minAvaliable: 1
 #
 # # -- Autoscaling & resources for the query api pods
 # logfire-ff-query-api:
@@ -98,6 +104,9 @@ logfire-dex:
 #     maxReplicas: 8
 #     memAverage: 65
 #     cpuAverage: 20
+#  pdb:
+#    maxUnavailable: 1
+#    minAvaliable: 1
 #
 # # -- Autoscaling & resources for the cache pods
 # logfire-ff-cache:
@@ -109,17 +118,26 @@ logfire-dex:
 #   resources:
 #     cpu: "4"
 #     memory: "8Gi"
+#   pdb:
+#     maxUnavailable: 1
+#     minAvaliable: 1
 #
 # logfire-ff-conhash-cache:
 #   replicas: 2
 #   resources:
 #     cpu: "1"
 #     memory: "1Gi"
+#   pdb:
+#     maxUnavailable: 1
+#     minAvaliable: 1
 #
 # logfire-ff-ingest-api:
 #   resources:
 #     cpu: "1"
 #     memory: "1Gi"
+#   pdb:
+#     maxUnavailable: 1
+#     minAvaliable: 1
 #
 # logfire-ff-ingest-worker:
 #   replicas: 6
@@ -131,6 +149,9 @@ logfire-dex:
 #     maxReplicas: 24
 #     memAverage: 25
 #     cpuAverage: 15
+#   pdb:
+#     maxUnavailable: 1
+#     minAvaliable: 1
 #
 # logfire-ff-maintenance-worker:
 #   replicas: 2
@@ -142,6 +163,9 @@ logfire-dex:
 #     maxReplicas: 4
 #     memAverage: 50
 #     cpuAverage: 50
+#   pdb:
+#     maxUnavailable: 1
+#     minAvaliable: 1
 #
 ## Optional query worker deployment
 # logfire-ff-query-worker:
@@ -155,6 +179,9 @@ logfire-dex:
 #     maxReplicas: 128
 #     memAverage: 20
 #     cpuAverage: 50
+#   pdb:
+#     maxUnavailable: 1
+#     minAvaliable: 1
 
 # -- Object storage details
 objectStore:

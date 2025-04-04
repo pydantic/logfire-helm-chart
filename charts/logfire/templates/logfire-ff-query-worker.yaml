@@ -103,4 +103,5 @@ spec:
       - name: scratch
         emptyDir: {}
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
+{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
 {{- end }}

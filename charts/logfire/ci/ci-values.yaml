@@ -37,3 +37,6 @@ logfire-dex:
         ssl:
           mode: disable
     staticClients: []
+logfire-backend:
+  pdb:
+    minUnavailable: 1
