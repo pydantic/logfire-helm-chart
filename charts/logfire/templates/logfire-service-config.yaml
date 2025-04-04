@@ -12,6 +12,7 @@ data:
       region: '{{ .Values.logfireRegion | default "local" }}',
       regions: [{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}],
       dexPublicUrl: '{{ include "logfire.url" . }}',
+      selfHosted: true,
       dexDynamicRedirect: {{ .Values.dexDynamicRedirect | default false }}
     }
 ---
