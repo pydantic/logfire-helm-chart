@@ -195,14 +195,22 @@ objectStore:
 #   uri: az://<container_name>
 #   env:
 #     AZURE_STORAGE_ACCOUNT_NAME: <storage_account_name>
-#     AZURE_STORAGE_ACCOUNT_KEY: <storage_account_master_key>
+#     AZURE_STORAGE_ACCOUNT_KEY:
+#       valueFrom:
+#         secretKeyRef:
+#           name: my-azure-secret
+#           key: account-key
 # objectStoreEnv:
 # AWS
 # objectStore:
 #   uri: s3://<bucket_name>
 #   env:
 #     AWS_DEFAULT_REGION: <region>
-#     AWS_SECRET_ACCESS_KEY: <secret_key>
+#     AWS_SECRET_ACCESS_KEY:
+#       valueFrom:
+#         secretKeyRef:
+#           name: my-aws-secret
+#           key: secret-key
 #     AWS_ACCESS_KEY_ID: <access_key>
 
 # -- the Kubernetes Service Account that is used by the pods
