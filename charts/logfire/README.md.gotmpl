@@ -171,7 +171,11 @@ objectStore:
   # Note: not needed if the service account specified by `serviceAccountName` itself has credentials
   env: 
     AWS_DEFAULT_REGION: <region>
-    AWS_SECRET_ACCESS_KEY: <secret_key>
+    AWS_SECRET_ACCESS_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: my-aws-secret
+          key: secret-key
     AWS_ACCESS_KEY_ID: <access_key>
 ```
 
@@ -214,7 +218,11 @@ objectStore:
   uri: az://<container_name>
   env:
     AZURE_STORAGE_ACCOUNT_NAME: <storage_account_name>
-    AZURE_STORAGE_ACCOUNT_KEY: <storage_account_master_key>
+    AZURE_STORAGE_ACCOUNT_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: my-azure-secret
+          key: account-key
 ```
 
 

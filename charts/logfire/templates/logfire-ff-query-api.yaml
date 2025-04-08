@@ -38,7 +38,6 @@ spec:
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
         checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
-        checksum/storage-config: {{ include (print $.Template.BasePath "/logfire-storage-config.yaml") . | sha256sum }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
       {{- with .Values.serviceAccountName }}
@@ -73,8 +72,6 @@ spec:
           envFrom:
             - configMapRef:
                 name: logfire-ff-config
-            - configMapRef:
-                name: logfire-storage-config
           env:
             - name: OTEL_SERVICE_NAME
               value: $serviceName
@@ -94,9 +91,10 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}-json
                   key: postgresIngestDsn
+            {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
-            {{- end}}
+            {{- end }}
           volumeMounts:
             - name: scratch-data
               mountPath: /scratch

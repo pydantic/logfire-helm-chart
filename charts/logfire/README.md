@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.1.8](https://img.shields.io/badge/Version-0.1.8-informational?style=flat-square) ![AppVersion: 6036817f](https://img.shields.io/badge/AppVersion-6036817f-informational?style=flat-square)
+![Version: 0.1.9](https://img.shields.io/badge/Version-0.1.9-informational?style=flat-square) ![AppVersion: 6036817f](https://img.shields.io/badge/AppVersion-6036817f-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -169,7 +169,11 @@ objectStore:
   # Note: not needed if the service account specified by `serviceAccountName` itself has credentials
   env:
     AWS_DEFAULT_REGION: <region>
-    AWS_SECRET_ACCESS_KEY: <secret_key>
+    AWS_SECRET_ACCESS_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: my-aws-secret
+          key: secret-key
     AWS_ACCESS_KEY_ID: <access_key>
 ```
 
@@ -212,7 +216,11 @@ objectStore:
   uri: az://<container_name>
   env:
     AZURE_STORAGE_ACCOUNT_NAME: <storage_account_name>
-    AZURE_STORAGE_ACCOUNT_KEY: <storage_account_master_key>
+    AZURE_STORAGE_ACCOUNT_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: my-azure-secret
+          key: account-key
 ```
 
 ### PostgreSQL
@@ -391,7 +399,7 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.1.8](https://img.shields.io/badge/Version-0.1.8-informational?style=flat-square) ![AppVersion: 6036817f](https://img.shields.io/badge/AppVersion-6036817f-informational?style=flat-square)
+![Version: 0.1.9](https://img.shields.io/badge/Version-0.1.9-informational?style=flat-square) ![AppVersion: 6036817f](https://img.shields.io/badge/AppVersion-6036817f-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 

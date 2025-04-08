@@ -160,6 +160,26 @@ Create Postgres secret name
 {{- end }}
 {{- end -}}
 
+{{- define "logfire.objectStoreEnv" -}}
+- name: FF_OBJECT_STORE_URI
+  value: {{ .Values.objectStore.uri }}
+{{- range $key, $value := .Values.objectStore.env }}
+{{- if kindIs "map" $value }}
+- name: {{ $key }}
+  {{- if hasKey $value "value" }}
+  value: {{ $value.value }}
+  {{- end }}
+  {{- if hasKey $value "valueFrom" }}
+  valueFrom:
+    {{- toYaml $value.valueFrom | nindent 4 }}
+  {{- end }}
+{{- else }}
+- name: {{ $key }}
+  value: {{ $value | toString | quote }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
 {{/*
 Create dex config secret name
 */}}
