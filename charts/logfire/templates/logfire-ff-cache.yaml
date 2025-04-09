@@ -68,7 +68,7 @@ spec:
             - name: FF_INGEST_PG_DSNS
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.postgresSecretName" . }}-json
+                  name: {{ include "logfire.postgresJSONSecretName" . }}
                   key: postgresIngestDsn
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}

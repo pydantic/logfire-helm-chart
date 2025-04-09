@@ -160,6 +160,17 @@ Create Postgres secret name
 {{- end }}
 {{- end -}}
 
+{{/*
+Create Postgres JSON secret name
+*/}}
+{{- define "logfire.postgresJSONSecretName" -}}
+{{- if (get (default (dict) .Values.postgresJSONSecret) "enabled") }}
+{{- .Values.postgresJSONSecret.name }}
+{{- else }}
+{{- include "logfire.fullname" . }}-pg-json
+{{- end }}
+{{- end -}}
+
 {{- define "logfire.objectStoreEnv" -}}
 - name: FF_OBJECT_STORE_URI
   value: {{ .Values.objectStore.uri }}
@@ -249,8 +260,9 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $dsn := "" -}}
 {{- if .Values.postgresSecret.enabled -}}
   {{- $secretName := .Values.postgresSecret.name -}}
-  {{- $secretKey := .Values.existingSecret.key | default "postgresIngestDsn" -}}
-  {{- $dsn = (lookup "v1" "Secret" .Release.Namespace $secretName).data $secretKey | b64dec -}}
+  {{- $secretKey := .Values.postgresSecret.key | default "postgresIngestDsn" -}}
+  {{- $existingSecret := (lookup "v1" "Secret" .Release.Namespace $secretName) -}}
+  {{- $dsn = (index $existingSecret.data $secretKey) | b64dec -}}
 {{- else -}}
   {{- $dsn = .Values.postgresIngestDsn -}}
 {{- end -}}
