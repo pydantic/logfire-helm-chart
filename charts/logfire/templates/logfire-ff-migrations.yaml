@@ -52,7 +52,7 @@ spec:
             - name: FF_INGEST_PG_DSNS
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.postgresSecretName" . }}-json
+                  name: {{ include "logfire.postgresJSONSecretName" . }}
                   key: postgresIngestDsn
             - name: FF_SEND_TO_LOGFIRE
               value: "false"
