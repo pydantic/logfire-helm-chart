@@ -267,6 +267,24 @@ smtp:
   use_tls: false
 ```
 
+### AI
+
+Logfire AI features can be enabled by setting the `ai` configuration in `values.yaml`.
+You need to specify the model provider and model name you want to use:
+
+```yaml
+ai:
+  model: provider:model-name
+  openAi:
+    apiKey: openai-api-key
+  vertexAi:
+    region: region  # Optional, only needed for Vertex AI if not using default region
+  azureOpenAi:
+    endpoint: azure-openai-endpoint
+    apiKey: azure-openai-api-key
+    apiVersion: azure-openai-api-version
+```
+
 ## Scaling
 
 A number of components within logfire allow containers/pods to be horizontally scaled. Also: depending on your setup you may want a number of replicas to run to ensure redundancy if a node fails.

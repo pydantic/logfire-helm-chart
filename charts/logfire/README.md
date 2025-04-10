@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.1.10](https://img.shields.io/badge/Version-0.1.10-informational?style=flat-square) ![AppVersion: 6036817f](https://img.shields.io/badge/AppVersion-6036817f-informational?style=flat-square)
+![Version: 0.1.11](https://img.shields.io/badge/Version-0.1.11-informational?style=flat-square) ![AppVersion: 796a41fb](https://img.shields.io/badge/AppVersion-796a41fb-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -264,6 +264,24 @@ smtp:
   use_tls: false
 ```
 
+### AI
+
+Logfire AI features can be enabled by setting the `ai` configuration in `values.yaml`.
+You need to specify the model provider and model name you want to use:
+
+```yaml
+ai:
+  model: provider:model-name
+  openAi:
+    apiKey: openai-api-key
+  vertexAi:
+    region: region  # Optional, only needed for Vertex AI if not using default region
+  azureOpenAi:
+    endpoint: azure-openai-endpoint
+    apiKey: azure-openai-api-key
+    apiVersion: azure-openai-api-version
+```
+
 ## Scaling
 
 A number of components within logfire allow containers/pods to be horizontally scaled. Also: depending on your setup you may want a number of replicas to run to ensure redundancy if a node fails.
@@ -292,6 +310,12 @@ See [`values.yaml`](./values.yaml) for some production level values
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| ai.azureOpenAi.apiKey | string | `nil` | The Azure OpenAI API key |
+| ai.azureOpenAi.apiVersion | string | `nil` | The Azure OpenAI API version |
+| ai.azureOpenAi.endpoint | string | `nil` | The Azure OpenAI endpoint |
+| ai.model | string | `nil` | The AI provide and model to use |
+| ai.openAi.apiKey | string | `nil` | The OpenAI API key |
+| ai.vertexAi.region | string | `nil` | The region for Vertex AI |
 | dev | object | `{"deployMaildev":false,"deployMinio":false,"deployPostgres":false}` | Development mode settings |
 | dev.deployMaildev | bool | `false` | Deploy maildev for testing emails |
 | dev.deployMinio | bool | `false` | Do NOT use this in production! |
@@ -402,7 +426,7 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.1.10](https://img.shields.io/badge/Version-0.1.10-informational?style=flat-square) ![AppVersion: 6036817f](https://img.shields.io/badge/AppVersion-6036817f-informational?style=flat-square)
+![Version: 0.1.11](https://img.shields.io/badge/Version-0.1.11-informational?style=flat-square) ![AppVersion: 796a41fb](https://img.shields.io/badge/AppVersion-796a41fb-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -410,6 +434,12 @@ Helm chart for self-hosted Logfire
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| ai.azureOpenAi.apiKey | string | `nil` | The Azure OpenAI API key |
+| ai.azureOpenAi.apiVersion | string | `nil` | The Azure OpenAI API version |
+| ai.azureOpenAi.endpoint | string | `nil` | The Azure OpenAI endpoint |
+| ai.model | string | `nil` | The AI provide and model to use |
+| ai.openAi.apiKey | string | `nil` | The OpenAI API key |
+| ai.vertexAi.region | string | `nil` | The region for Vertex AI |
 | dev | object | `{"deployMaildev":false,"deployMinio":false,"deployPostgres":false}` | Development mode settings |
 | dev.deployMaildev | bool | `false` | Deploy maildev for testing emails |
 | dev.deployMinio | bool | `false` | Do NOT use this in production! |
