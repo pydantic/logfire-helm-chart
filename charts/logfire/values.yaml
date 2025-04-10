@@ -54,6 +54,23 @@ smtp:
   # -- Whether to use TLS
   use_tls: false
 
+ai:
+  # -- The AI provide and model to use
+  model:
+  openAi:
+    # -- The OpenAI API key
+    apiKey:
+  vertexAi:
+    # -- The region for Vertex AI
+    region:
+  azureOpenAi:
+    # -- The Azure OpenAI endpoint
+    endpoint:
+    # -- The Azure OpenAI API key
+    apiKey:
+    # -- The Azure OpenAI API version
+    apiVersion:
+
 # -- Configuration, autoscaling & resources for `logfire-dex` deployment
 logfire-dex:
   # -- Number of replicas
