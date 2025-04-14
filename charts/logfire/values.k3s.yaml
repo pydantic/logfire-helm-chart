@@ -31,7 +31,17 @@ ingress:
 
 
 objectStore:
-  uri: file:///storage
+  uri: s3://logfire
+  env:
+    # Defaults we configure for MinIO
+    # Do NOT use this in production!
+    # This does not talk to actual AWS,
+    # we just use MinIO as an S3 compatible implementation
+    # and pipe these env vars into our client.
+    AWS_ACCESS_KEY_ID: logfire-minio
+    AWS_SECRET_ACCESS_KEY: logfire-minio
+    AWS_ENDPOINT: http://logfire-minio:9000
+    AWS_ALLOW_HTTP: "true"
 
 dev:
   deployPostgres: true
@@ -54,13 +64,6 @@ podSecurityContext: {}
 # -- Define the [count of deployment revisions](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) to be kept.
 # May be set to 0 in case of GitOps deployment approach.
 revisionHistoryLimit: 2
-
-# -- Container [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container).
-# See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1) for details.
-securityContext:
-  runAsUser: 1000
-  readOnlyRootFilesystem: true
-  runAsNonRoot: true
 
 logfire-dex:
   config:
