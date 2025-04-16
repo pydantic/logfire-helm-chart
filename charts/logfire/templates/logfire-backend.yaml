@@ -89,23 +89,31 @@ spec:
             - name: DEX_INTERNAL_URL
               value: http://logfire-dex:5556
             {{- with .Values.ai }}
+            {{- with .model }}
             - name: AI_MODEL
-              value: {{ .model }}
-            {{- with .openAi }}
-            - name: OPENAI_API_KEY
-              value: {{ .apiKey }}
+              value: {{ . }}
             {{- end }}
-            {{- with .vertexAi }}
+            {{- with .openAi.apyKey }}
+            - name: OPENAI_API_KEY
+              value: {{ . }}
+            {{- end }}
+            {{- with .vertexAi.region }}
             - name: VERTEX_AI_REGION
-              value: {{ .region }}
+              value: {{ . }}
             {{- end }}
             {{- with .azureOpenAi }}
+            {{- with .endpoint}}
             - name: AZURE_OPENAI_ENDPOINT
-              value: {{ .endpoint }}
+              value: {{ . }}
+            {{- end }}
+            {{- with .apiKey}}
             - name: AZURE_OPENAI_API_KEY
-              value: {{ .apiKey }}
+              value: {{ . }}
+            {{- end }}
+            {{- with .apiVersion}}
             - name: OPENAI_API_VERSION
-              value: {{ .apiVersion }}
+              value: {{ . }}
+            {{- end }}
             {{- end }}
             {{- end }}
             - name: DEX_CLIENT_ID
