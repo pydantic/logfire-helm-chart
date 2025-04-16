@@ -65,6 +65,14 @@ spec:
           command: ["python", "-m", "logfire_backend"]
           ports:
             - containerPort: 8000
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
           env:
             - name: APP_PORT
               value: "8000"
