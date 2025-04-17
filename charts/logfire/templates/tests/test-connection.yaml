@@ -1,0 +1,130 @@
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "logfire.fullname" . }}-test-backend
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: test-backend
+      image: curlimages/curl
+      imagePullPolicy: IfNotPresent
+      command: ['curl', '--fail', 'http://logfire-service:8080/api/platform-config/']
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "logfire.fullname" . }}-test-dex
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: test-dex
+      image: curlimages/curl
+      imagePullPolicy: IfNotPresent
+      command: ['curl', '--fail', 'http://logfire-service:8080/auth/api/.well-known/openid-configuration']
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "logfire.fullname" . }}-test-ingest
+  annotations:
+    "helm.sh/hook": test
+data:
+  test_ingest.sh: |
+      #!/usr/bin/env bash
+      set -e
+      COLLECTOR_ENDPOINT="http://logfire-service:8080/v1/traces"
+      SERVICE_NAME="helm-e2e"
+      SPAN_NAME="test-span"
+      CURRENT_TIME_NANOS=$(date +%s%N)
+      START_TIME_NANOS=$CURRENT_TIME_NANOS
+      END_TIME_NANOS=$(($START_TIME_NANOS + 1000000))
+      TRACE_ID=$(head -c 16 /dev/urandom | xxd -p)
+      SPAN_ID=$(head -c 8 /dev/urandom | xxd -p)
+
+      apk add curl
+
+      PAYLOAD=$(cat <<EOF
+      {
+        "resourceSpans": [
+          {
+            "resource": {
+              "attributes": [
+                {
+                  "key": "service.name",
+                  "value": {
+                    "stringValue": "$SERVICE_NAME"
+                  }
+                }
+              ]
+            },
+            "scopeSpans": [
+              {
+                "scope": {
+                  "name": "otel-bash-script"
+                },
+                "spans": [
+                  {
+                    "traceId": "$TRACE_ID",
+                    "spanId": "$SPAN_ID",
+                    "name": "$SPAN_NAME",
+                    "kind": 1,
+                    "startTimeUnixNano": "$START_TIME_NANOS",
+                    "endTimeUnixNano": "$END_TIME_NANOS",
+                    "attributes": [
+                      {
+                        "key": "operation.type",
+                        "value": {
+                          "stringValue": "test"
+                        }
+                      }
+                    ],
+                    "status": {}
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+      EOF
+      )
+
+      echo "Sending OTLP trace to $COLLECTOR_ENDPOINT..."
+      curl -s --fail -X POST "$COLLECTOR_ENDPOINT" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: ${META_WRITE_TOKEN}" \
+        -d "$PAYLOAD"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "logfire.fullname" . }}-test-ingest
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: test-ingest
+      image: bash:5.2-alpine3.21
+      imagePullPolicy: IfNotPresent
+      command: ['/usr/local/bin/bash', '-c', '/app/test_ingest.sh']
+      env:
+        - name: META_WRITE_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: logfire-meta-write-token
+              key: logfire-meta-write-token
+      volumeMounts:
+      - name: config-volume
+        mountPath: /app/test_ingest.sh
+        subPath: test_ingest.sh
+  volumes:
+    - name: config-volume
+      configMap:
+        defaultMode: 0520
+        name: {{ include "logfire.fullname" . }}-test-ingest
+  restartPolicy: Never

@@ -55,7 +55,9 @@ smtp:
   use_tls: false
 
 ai:
-  # -- The AI provide and model to use
+  # -- The AI provide and model to use. Prefix with the provider. I.e, For azure use `azure:gpt-4o`
+  #
+  # See https://ai.pydantic.dev/models/ for more info
   model:
   openAi:
     # -- The OpenAI API key

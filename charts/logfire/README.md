@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.1.12](https://img.shields.io/badge/Version-0.1.12-informational?style=flat-square) ![AppVersion: 39803eac](https://img.shields.io/badge/AppVersion-39803eac-informational?style=flat-square)
+![Version: 0.1.13](https://img.shields.io/badge/Version-0.1.13-informational?style=flat-square) ![AppVersion: 39803eac](https://img.shields.io/badge/AppVersion-39803eac-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -313,7 +313,7 @@ See [`values.yaml`](./values.yaml) for some production level values
 | ai.azureOpenAi.apiKey | string | `nil` | The Azure OpenAI API key |
 | ai.azureOpenAi.apiVersion | string | `nil` | The Azure OpenAI API version |
 | ai.azureOpenAi.endpoint | string | `nil` | The Azure OpenAI endpoint |
-| ai.model | string | `nil` | The AI provide and model to use |
+| ai.model | string | `nil` | The AI provide and model to use. Prefix with the provider. I.e, For azure use `azure:gpt-4o`  See https://ai.pydantic.dev/models/ for more info |
 | ai.openAi.apiKey | string | `nil` | The OpenAI API key |
 | ai.vertexAi.region | string | `nil` | The region for Vertex AI |
 | dev | object | `{"deployMaildev":false,"deployMinio":false,"deployPostgres":false}` | Development mode settings |
@@ -426,7 +426,7 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.1.12](https://img.shields.io/badge/Version-0.1.12-informational?style=flat-square) ![AppVersion: 39803eac](https://img.shields.io/badge/AppVersion-39803eac-informational?style=flat-square)
+![Version: 0.1.13](https://img.shields.io/badge/Version-0.1.13-informational?style=flat-square) ![AppVersion: 39803eac](https://img.shields.io/badge/AppVersion-39803eac-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -437,7 +437,7 @@ Helm chart for self-hosted Logfire
 | ai.azureOpenAi.apiKey | string | `nil` | The Azure OpenAI API key |
 | ai.azureOpenAi.apiVersion | string | `nil` | The Azure OpenAI API version |
 | ai.azureOpenAi.endpoint | string | `nil` | The Azure OpenAI endpoint |
-| ai.model | string | `nil` | The AI provide and model to use |
+| ai.model | string | `nil` | The AI provide and model to use. Prefix with the provider. I.e, For azure use `azure:gpt-4o`  See https://ai.pydantic.dev/models/ for more info |
 | ai.openAi.apiKey | string | `nil` | The OpenAI API key |
 | ai.vertexAi.region | string | `nil` | The region for Vertex AI |
 | dev | object | `{"deployMaildev":false,"deployMinio":false,"deployPostgres":false}` | Development mode settings |
