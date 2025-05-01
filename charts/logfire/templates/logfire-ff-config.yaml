@@ -11,6 +11,7 @@ data:
   FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
   FF_USAGE_REDIS_DSN: {{ .Values.redisDsn }}
   FF_CACHE_OBJECT_STORE_URI: "http://logfire-ff-conhash-cache:9001"
+  FF_IPC_CACHE_URI: "http://logfire-ff-conhash-cache:9001"
   FF_CACHE_ARROW_IPC_CHANCE: "1.0"
   FF_BACKEND_SERVICE_URL: "http://logfire-backend:8000"
   FF_AUTH_TOKEN_REDIS_DSN: {{ .Values.redisDsn }}
