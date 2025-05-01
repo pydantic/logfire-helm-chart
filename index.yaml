@@ -3,6 +3,15 @@ entries:
   logfire:
   - apiVersion: v2
     appVersion: 39803eac
+    created: "2025-05-01T16:51:50.545326394Z"
+    description: Helm chart for self-hosted Logfire
+    digest: 1f25e5886db78aa19bdbd540e2623a075117f24fa05232760baa8bdd02da4501
+    name: logfire
+    urls:
+    - https://github.com/pydantic/logfire-helm-chart/releases/download/logfire-0.1.14/logfire-0.1.14.tgz
+    version: 0.1.14
+  - apiVersion: v2
+    appVersion: 39803eac
     created: "2025-04-17T00:01:00.404426991Z"
     description: Helm chart for self-hosted Logfire
     digest: 660e64fd3c5df3bb8c54230812cfb5d198bbe2cd23db78fe6927101d78009caa
@@ -127,4 +136,4 @@ entries:
     urls:
     - https://github.com/pydantic/logfire-helm-chart/releases/download/logfire-0.1.0/logfire-0.1.0.tgz
     version: 0.1.0
-generated: "2025-04-17T00:01:00.404531958Z"
+generated: "2025-05-01T16:51:50.545443632Z"
