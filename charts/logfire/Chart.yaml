@@ -3,6 +3,6 @@ version: 0.1.16
 name: logfire
 description: Helm chart for self-hosted Logfire
 
-appVersion: "fd3a66c"
+appVersion: "fd3a66c3"
 
 dependencies: []
