@@ -131,6 +131,8 @@ spec:
                 secretKeyRef:
                   name: logfire-dex-client-secret
                   key: logfire-dex-client-secret
+            - name: ON_PREM
+              value: "true"
             - name: FUSIONFIRE_HOST
               value: http://logfire-ff-query-api
             - name: BROWSER_TELEMETRY_COLLECTOR_OTLP_HTTP_HOST
