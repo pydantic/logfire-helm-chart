@@ -247,19 +247,6 @@ Create dex configuration secret, merging backend static clients with user provid
 {{ toYaml $dexConfig | b64enc | quote }}
 {{- end -}}
 
-{{- define "createJsonDsn" -}}
-{{- $dsn := "" -}}
-{{- if .Values.postgresSecret.enabled -}}
-  {{- $secretName := .Values.postgresSecret.name -}}
-  {{- $secretKey := .Values.postgresSecret.key | default "postgresIngestDsn" -}}
-  {{- $existingSecret := (lookup "v1" "Secret" .Release.Namespace $secretName) -}}
-  {{- $dsn = (index $existingSecret.data $secretKey) | b64dec -}}
-{{- else -}}
-  {{- $dsn = .Values.postgresIngestDsn -}}
-{{- end -}}
-{{ printf "[\"%s\"]" $dsn }}
-{{- end -}}
-
 {{- define "isPrometheusExporterEnabled" -}}
 {{- with .Values.otel_collector }}
   {{- with .prometheus }}
