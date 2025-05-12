@@ -160,20 +160,11 @@ Create Postgres secret name
 {{- end }}
 {{- end -}}
 
-{{/*
-Create Postgres JSON secret name
-*/}}
-{{- define "logfire.postgresJSONSecretName" -}}
-{{- if (get (default (dict) .Values.postgresJSONSecret) "enabled") }}
-{{- .Values.postgresJSONSecret.name }}
-{{- else }}
-{{- include "logfire.fullname" . }}-pg-json
-{{- end }}
-{{- end -}}
-
 {{- define "logfire.objectStoreEnv" -}}
 - name: FF_OBJECT_STORE_URI
   value: {{ .Values.objectStore.uri }}
+- name: FF_FAILOVER_OBJECT_STORE_URI
+  value: {{ .Values.objectStore.uri }}/_ingest_failover
 {{- range $key, $value := .Values.objectStore.env }}
 {{- if kindIs "map" $value }}
 - name: {{ $key }}
