@@ -19,61 +19,12 @@ spec:
       port: 4318
       targetPort: 4318
       name: otlp-http
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: otel-collector-config
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-data:
-  otel-collector-config.yaml: |
-    receivers:
-      otlp:
-        protocols:
-          grpc:
-            endpoint: "0.0.0.0:4317"
-          http:
-            endpoint: "0.0.0.0:4318"
-
-    exporters:
-      debug:
-      otlphttp:
-        endpoint: http://logfire-ff-ingest-api:8012
-        tls:
-          insecure: true
-        headers:
-          Authorization: "Bearer ${LOGFIRE_META_WRITE_TOKEN}"
-
-    processors:
-      memory_limiter:
-        check_interval: 1s
-        limit_mib: 512
-        spike_limit_mib: 128
-      batch:
-        timeout: 1s
-        send_batch_size: 2048
-
-    extensions:
-      health_check:
-        endpoint: "0.0.0.0:13133"
-
-    service:
-      extensions: [health_check]
-      pipelines:
-        traces:
-          receivers: [otlp]
-          processors: [batch]
-          exporters: [debug, otlphttp]
-        metrics:
-          receivers: [otlp]
-          processors: [batch]
-          exporters: [debug, otlphttp]
-        logs:
-          receivers: [otlp]
-          processors: [batch]
-          exporters: [otlphttp]
+    {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
+    - protocol: TCP
+      port: {{ .Values.otel_collector.prometheus.port }}
+      targetPort: {{ .Values.otel_collector.prometheus.port }}
+      name: prometheus-http
+    {{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -98,6 +49,8 @@ spec:
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/logfire-otel-collector-cfg.yaml") . | sha256sum }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
       {{- with .Values.serviceAccountName }}
@@ -124,6 +77,9 @@ spec:
           ports:
             - containerPort: 4317
             - containerPort: 4318
+            {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
+            - containerPort: {{ .Values.otel_collector.prometheus.port }}
+            {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           volumeMounts:

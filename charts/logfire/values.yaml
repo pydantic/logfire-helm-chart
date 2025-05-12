@@ -279,6 +279,19 @@ logfire-redis:
   # -- Enable redis as part of this helm chart
   enabled: true
 
+# -- Config for otel-collector
+otel_collector:
+  prometheus:
+    enabled: false
+    port: 9090
+    endpoint: "0.0.0.0"
+    send_timestamp: true
+    metric_expiration: 180m
+    enable_open_metrics: true
+    add_metric_suffixes: false
+    resource_to_telemetry_conversion:
+      enabled: true
+
 # -- The DSN for redis.  Change from default if you have an external redis instance
 redisDsn: redis://logfire-redis:6379
 

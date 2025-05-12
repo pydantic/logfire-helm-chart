@@ -1,0 +1,74 @@
+{{- $serviceName := "logfire-otel-collector" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: "0.0.0.0:4317"
+          http:
+            endpoint: "0.0.0.0:4318"
+
+    exporters:
+      debug:
+      otlphttp:
+        endpoint: http://logfire-ff-ingest-api:8012
+        tls:
+          insecure: true
+        headers:
+          Authorization: "Bearer ${LOGFIRE_META_WRITE_TOKEN}"
+      {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
+      {{- with .Values.otel_collector.prometheus }}
+      prometheus:
+        endpoint: {{ printf "%s:%s" .endpoint (.port | toString) }}
+        send_timestamps: {{ .send_timestamp }}
+        metric_expiration: {{ .metric_expiration }}
+        enable_open_metrics: {{ .enable_open_metrics }}
+        add_metric_suffixes: {{ .add_metric_suffixes }}
+        {{- with .resource_to_telemetry_conversion }}
+        resource_to_telemetry_conversion:
+        {{- . | toYaml | nindent 12 }}
+        {{- end }}
+      {{- end }}
+      {{- end }}
+
+
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 512
+        spike_limit_mib: 128
+      batch:
+        timeout: 1s
+        send_batch_size: 2048
+
+    extensions:
+      health_check:
+        endpoint: "0.0.0.0:13133"
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug, otlphttp]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
+          exporters: [debug, otlphttp, prometheus]
+          {{- else }}
+          exporters: [debug, otlphttp]
+          {{- end }}
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlphttp]

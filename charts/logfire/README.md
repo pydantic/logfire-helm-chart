@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.1.17](https://img.shields.io/badge/Version-0.1.17-informational?style=flat-square) ![AppVersion: 264baa62](https://img.shields.io/badge/AppVersion-264baa62-informational?style=flat-square)
+![Version: 0.1.18](https://img.shields.io/badge/Version-0.1.18-informational?style=flat-square) ![AppVersion: 264baa62](https://img.shields.io/badge/AppVersion-264baa62-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -337,6 +337,7 @@ See [`values.yaml`](./values.yaml) for some production level values
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
 | objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
+| otel_collector | object | `{"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | Config for otel-collector |
 | podSecurityContext | object | `{}` | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for `ff` database |
@@ -423,7 +424,7 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.1.17](https://img.shields.io/badge/Version-0.1.17-informational?style=flat-square) ![AppVersion: 264baa62](https://img.shields.io/badge/AppVersion-264baa62-informational?style=flat-square)
+![Version: 0.1.18](https://img.shields.io/badge/Version-0.1.18-informational?style=flat-square) ![AppVersion: 264baa62](https://img.shields.io/badge/AppVersion-264baa62-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -458,6 +459,7 @@ Helm chart for self-hosted Logfire
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
 | objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
+| otel_collector | object | `{"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | Config for otel-collector |
 | podSecurityContext | object | `{}` | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for `ff` database |
