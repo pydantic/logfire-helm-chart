@@ -259,3 +259,15 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- end -}}
 {{ printf "[\"%s\"]" $dsn }}
 {{- end -}}
+
+{{- define "isPrometheusExporterEnabled" -}}
+{{- with .Values.otel_collector }}
+  {{- with .prometheus }}
+    {{- if eq .enabled true }}true{{- else }}false{{- end }}
+  {{- else }}
+    false
+  {{- end }}
+{{- else }}
+  false
+{{- end }}
+{{- end }}
