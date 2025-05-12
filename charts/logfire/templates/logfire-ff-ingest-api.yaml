@@ -89,6 +89,8 @@ spec:
               value: "3650000d"
             - name: FF_INGEST_MAX_PAST_TIME_DRIFT
               value: "3650000d"
+            - name: RUST_BACKTRACE
+              value: "1"
             - name: FF_ENABLE_SPILL_TO_DISK
               value: "false"
             - name: PG_DSN
@@ -98,10 +100,10 @@ spec:
                   key: postgresFFDsn
             - name: FF_SHARED_REDIS_DSN
               value: {{ .Values.redisDsn }}
-            - name: FF_INGEST_PG_DSNS
+            - name: FF_INGEST_PG_DSN_1
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.postgresJSONSecretName" . }}
+                  name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresIngestDsn
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}
