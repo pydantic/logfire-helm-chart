@@ -65,6 +65,8 @@ spec:
               value: /scratch/fusionfire
             - name: OTEL_SERVICE_NAME
               value: {{ $serviceName }}
+            - name: FF_DATAFUSION_MEMORY_LIMIT
+              value: {{ (get (get .Values $serviceName | default dict) "datafusionMemory" | default "512MB" | quote) }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
@@ -75,6 +77,8 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresIngestDsn
+            {{- include "logfire.ffmaxRowPerRowGroup" . | nindent 12 -}}
+            {{- include "logfire.ffCompactionTiers" . | nindent 12 -}}
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
