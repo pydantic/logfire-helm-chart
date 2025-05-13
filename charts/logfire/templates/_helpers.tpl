@@ -169,9 +169,9 @@ Create dex config secret name
 
 {{- define "logfire.hooksAnnotations" -}}
 {{- with .Values.hooksAnnotations }}
-{{- range $key, $value := . -}}
+{{- range $key, $value := . }}
 {{ $key }}: {{ $value | quote }}
-{{- end -}}
+{{- end }}
 {{- end }}
 {{- end -}}
 
