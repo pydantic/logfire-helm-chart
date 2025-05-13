@@ -71,6 +71,10 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
+            - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
+              value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "1" | quote) }} 
+            - name: FF_COMPACTION_JOB_PARALLELISM
+              value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "1" | quote) }} 
             - name: FF_INGEST_PG_DSN_1
               valueFrom:
                 secretKeyRef:
