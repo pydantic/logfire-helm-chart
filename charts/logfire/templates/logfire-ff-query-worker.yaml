@@ -58,8 +58,7 @@ spec:
             - configMapRef:
                 name: logfire-ff-config
           env:
-            - name: OTEL_SERVICE_NAME
-              value: {{ $serviceName }}
+            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             - name: FF_ENABLE_SPILL_TO_DISK
               value: "true"
             - name: FF_TEMP_DIR

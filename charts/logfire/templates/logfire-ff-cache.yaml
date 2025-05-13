@@ -56,8 +56,6 @@ spec:
             - configMapRef:
                 name: logfire-ff-config
           env:
-            - name: OTEL_SERVICE_NAME
-              value: {{ $serviceName }}
             - name: FF_CACHE_LOCAL_DIR
               value: /scratch
             - name: PG_DSN
@@ -70,6 +68,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresIngestDsn
+            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}

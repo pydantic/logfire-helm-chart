@@ -57,8 +57,7 @@ spec:
             - configMapRef:
                 name: logfire-ff-config
           env:
-            - name: OTEL_SERVICE_NAME
-              value: {{ $serviceName }}
+            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             - name: FF_UNPACK_SPAN_EVENTS
               value: "true"
             - name: FF_INGEST_MAX_FUTURE_TIME_DRIFT
