@@ -64,6 +64,24 @@ spec:
 {{- end }}
 {{- end }}
 
+{{- define "logfire.ffCompactionTiers" -}}
+{{- if (get (get .Values "logfire-ff-maintenance-worker" | default  dict) "compactionTiers") -}}
+{{- with (get (get .Values "logfire-ff-maintenance-worker" | default  dict) "compactionTiers") -}}
+- name: FF_COMPACTION_TIERS
+  value: {{ . | toJson | squote }}
+{{- end -}}
+{{- else -}}
+- name: FF_COMPACTION_TIERS
+  value: '[{"count_threshold":10,"size_threshold_bytes":"1KB"},{"count_threshold":10,"size_threshold_bytes":"10KB"},{"count_threshold":10,"size_threshold_bytes":"100KB"},{"count_threshold":10,"size_threshold_bytes":"1MB"},{"count_threshold":10,"size_threshold_bytes":"10MB"},{"count_threshold":10,"size_threshold_bytes":"100MB"}]'
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.ffmaxRowPerRowGroup" -}}
+- name: "FF_PARQUET_WRITER_MAX_ROWS_PER_ROW_GROUP"
+  value: "125000"
+- name: "FF_PARQUET_WRITER_MAX_ROWS_PER_PAGE"
+  value: "20000"
+{{- end -}}
 
 {{- define "logfire.resources"}}
 {{- if index (index .Values .serviceName | default dict) "resources" }}

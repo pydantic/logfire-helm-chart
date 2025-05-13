@@ -180,6 +180,20 @@ logfire-dex:
 #
 # logfire-ff-maintenance-worker:
 #   replicas: 2
+#   datafusionMemory: "3072MB"
+#   compactionTiers:
+#     - size_threshold_bytes: "1KB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "10KB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "100KB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "1MB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "10MB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "100MB"
+#       count_threshold: 10
 #   resources:
 #     cpu: "4"
 #     memory: "8Gi"
