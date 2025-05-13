@@ -292,4 +292,6 @@ Create dex configuration secret, merging backend static clients with user provid
   value: http://logfire-otel-collector:4317
 - name: LOGFIRE_SERVICE_NAME
   value: {{ . }}
+- name: OTEL_SERVICE_NAME
+  value: {{ . }}
 {{- end }}
