@@ -1,4 +1,4 @@
-adminEmail: peter@pydantic.dev
+adminEmail: peter@example.dev
 
 # These values are for development testing using k3s
 # See https://github.com/cetra3/kubernetes-activitypub-testing for setup details

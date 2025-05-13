@@ -1,4 +1,4 @@
-adminEmail: hello@pydantic.dev
+adminEmail: hello@example.dev
 
 ingress:
   enabled: true
