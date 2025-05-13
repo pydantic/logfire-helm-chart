@@ -77,8 +77,7 @@ spec:
               value: "0.05"
             - name: OTEL_TRACES_SAMPLER
               value: "parentbased_traceidratio"
-            - name: OTEL_SERVICE_NAME
-              value: {{ $serviceName }}
+            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             - name: FF_WRITE_TOKEN_MEMORY_CACHE_TTL
               value: "500ms"
             - name: FF_TAIL_PATH

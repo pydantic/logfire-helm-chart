@@ -63,8 +63,7 @@ spec:
               value: "true"
             - name: FF_TEMP_DIR
               value: /scratch/fusionfire
-            - name: OTEL_SERVICE_NAME
-              value: {{ $serviceName }}
+            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             - name: FF_DATAFUSION_MEMORY_LIMIT
               value: {{ (get (get .Values $serviceName | default dict) "datafusionMemory" | default "512MB" | quote) }}
             - name: PG_DSN
@@ -72,6 +71,10 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
+            - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
+              value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "1" | quote) }} 
+            - name: FF_COMPACTION_JOB_PARALLELISM
+              value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "1" | quote) }} 
             - name: FF_INGEST_PG_DSN_1
               valueFrom:
                 secretKeyRef:

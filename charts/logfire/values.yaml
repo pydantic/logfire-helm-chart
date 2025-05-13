@@ -179,6 +179,8 @@ logfire-dex:
 #     minAvaliable: 1
 #
 # logfire-ff-maintenance-worker:
+#   jobParallelism: 32
+#   downloadParallelism: 32
 #   replicas: 2
 #   datafusionMemory: "3072MB"
 #   compactionTiers:

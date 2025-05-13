@@ -284,3 +284,12 @@ Create dex configuration secret, merging backend static clients with user provid
   false
 {{- end }}
 {{- end }}
+
+{{- define "logfire.otlpExporterEnv" }}
+- name: "OTEL_EXPORTER_OTLP_PROTOCOL"
+  value: "grpc"
+- name: "COLLECTOR_OTLP_GRPC_HOST"
+  value: http://logfire-otel-collector:4317
+- name: LOGFIRE_SERVICE_NAME
+  value: {{ . }}
+{{- end }}
