@@ -149,6 +149,14 @@ Create dex config secret name
 {{- printf "%s-dex-config" (include "logfire.fullname" .) }}
 {{- end -}}
 
+{{- define "logfire.hooksAnnotations" -}}
+{{- with .Values.hooksAnnotations }}
+{{- range $key, $value := . -}}
+{{ $key }}: {{ $value | quote }}
+{{- end -}}
+{{- end }}
+{{- end -}}
+
 {{/*
 Create Postgres secret name
 */}}

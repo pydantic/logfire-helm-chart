@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.1.18](https://img.shields.io/badge/Version-0.1.18-informational?style=flat-square) ![AppVersion: 264baa62](https://img.shields.io/badge/AppVersion-264baa62-informational?style=flat-square)
+![Version: 0.1.19](https://img.shields.io/badge/Version-0.1.19-informational?style=flat-square) ![AppVersion: 264baa62](https://img.shields.io/badge/AppVersion-264baa62-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -320,6 +320,7 @@ See [`values.yaml`](./values.yaml) for some production level values
 | dev.deployMaildev | bool | `false` | Deploy maildev for testing emails |
 | dev.deployMinio | bool | `false` | Do NOT use this in production! |
 | dev.deployPostgres | bool | `false` | Do NOT use this in production! |
+| hooksAnnotations | string | `nil` | Custom annotations for migration Jobs |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
@@ -424,7 +425,7 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.1.18](https://img.shields.io/badge/Version-0.1.18-informational?style=flat-square) ![AppVersion: 264baa62](https://img.shields.io/badge/AppVersion-264baa62-informational?style=flat-square)
+![Version: 0.1.19](https://img.shields.io/badge/Version-0.1.19-informational?style=flat-square) ![AppVersion: 264baa62](https://img.shields.io/badge/AppVersion-264baa62-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -442,6 +443,7 @@ Helm chart for self-hosted Logfire
 | dev.deployMaildev | bool | `false` | Deploy maildev for testing emails |
 | dev.deployMinio | bool | `false` | Do NOT use this in production! |
 | dev.deployPostgres | bool | `false` | Do NOT use this in production! |
+| hooksAnnotations | string | `nil` | Custom annotations for migration Jobs |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |

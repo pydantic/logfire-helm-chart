@@ -21,6 +21,12 @@ postgresSecret:
   # -- Secret name
   name: ""
 
+
+# -- Custom annotations for migration Jobs
+hooksAnnotations:
+#  argocd.argoproj.io/hook: PreSync
+#  argocd.argoproj.io/hook-delete-policy: HookSucceeded
+
 # -- Postgres DSN used for `crud` database
 postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 
