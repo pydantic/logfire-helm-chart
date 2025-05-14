@@ -15,8 +15,6 @@ spec:
     matchLabels:
       {{- include "logfire.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: {{ $serviceName }}
-  strategy:
-    type: Recreate
   template:
     metadata:
       labels:
