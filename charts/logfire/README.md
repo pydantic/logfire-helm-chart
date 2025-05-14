@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.1.23](https://img.shields.io/badge/Version-0.1.23-informational?style=flat-square) ![AppVersion: 264baa62](https://img.shields.io/badge/AppVersion-264baa62-informational?style=flat-square)
+![Version: 0.1.24](https://img.shields.io/badge/Version-0.1.24-informational?style=flat-square) ![AppVersion: a78cd4a2](https://img.shields.io/badge/AppVersion-a78cd4a2-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -425,7 +425,7 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.1.23](https://img.shields.io/badge/Version-0.1.23-informational?style=flat-square) ![AppVersion: 264baa62](https://img.shields.io/badge/AppVersion-264baa62-informational?style=flat-square)
+![Version: 0.1.24](https://img.shields.io/badge/Version-0.1.24-informational?style=flat-square) ![AppVersion: a78cd4a2](https://img.shields.io/badge/AppVersion-a78cd4a2-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
