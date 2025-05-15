@@ -88,7 +88,7 @@ spec:
             - name: LOGFIRE_META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: logfire-meta-write-token
+                  name: {{ include "logfire.secretName" (dict "secretName" "logfire-meta-write-token" "existingSecret" (get .Values "existingSecret" | default dict)) }}
                   key: logfire-meta-write-token
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}

@@ -186,6 +186,17 @@ Create Postgres secret name
 {{- end }}
 {{- end -}}
 
+{{/*
+Logfire secret name
+*/}}
+{{- define "logfire.secretName" -}}
+{{- if (get .existingSecret "enabled") }}
+{{- .existingSecret.name }}
+{{- else }}
+{{- .secretName }}
+{{- end }}
+{{- end -}}
+
 {{- define "logfire.objectStoreEnv" -}}
 - name: FF_OBJECT_STORE_URI
   value: {{ .Values.objectStore.uri }}

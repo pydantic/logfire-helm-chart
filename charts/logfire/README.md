@@ -320,6 +320,7 @@ See [`values.yaml`](./values.yaml) for some production level values
 | dev.deployMaildev | bool | `false` | Deploy maildev for testing emails |
 | dev.deployMinio | bool | `false` | Do NOT use this in production! |
 | dev.deployPostgres | bool | `false` | Do NOT use this in production! |
+| existingSecret | object | `{"enabled":false,"name":""}` | Existing Secret with the following keys  logfire-dex-client-secret  logfire-meta-write-token  logfire-meta-frontend-token  logfire-jwt-secret |
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
@@ -443,6 +444,7 @@ Helm chart for self-hosted Logfire
 | dev.deployMaildev | bool | `false` | Deploy maildev for testing emails |
 | dev.deployMinio | bool | `false` | Do NOT use this in production! |
 | dev.deployPostgres | bool | `false` | Do NOT use this in production! |
+| existingSecret | object | `{"enabled":false,"name":""}` | Existing Secret with the following keys  logfire-dex-client-secret  logfire-meta-write-token  logfire-meta-frontend-token  logfire-jwt-secret |
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs |
 | image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
