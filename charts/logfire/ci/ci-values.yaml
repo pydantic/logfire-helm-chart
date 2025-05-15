@@ -20,9 +20,13 @@ dev:
   deployMaildev: true
   postgresImage: postgres:16-alpine
 
-postgresDsn: postgres://postgres:postgres@logfire-postgres:5432/crud
-postgresFFDsn: postgres://postgres:postgres@logfire-postgres:5432/ff
-postgresIngestDsn: postgres://postgres:postgres@logfire-postgres:5432/ingest
+postgresSecret:
+  enabled: true
+  name: "pg-dsns"
+
+existingSecret:
+  enabled: true
+  name: "logfire-tokens"
 
 logfire-dex:
   config:
