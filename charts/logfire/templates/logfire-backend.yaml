@@ -127,7 +127,7 @@ spec:
             - name: DEX_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: logfire-dex-client-secret
+                  name: {{ include "logfire.secretName" (dict "secretName" "logfire-dex-client-secret" "existingSecret" (get .Values "existingSecret" | default dict)) }}
                   key: logfire-dex-client-secret
             - name: ON_PREM
               value: "true"
@@ -146,7 +146,7 @@ spec:
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: logfire-jwt-secret
+                  name: {{ include "logfire.secretName" (dict "secretName" "logfire-jwt-secret" "existingSecret" (get .Values "existingSecret" | default dict)) }}
                   key: logfire-jwt-secret
             - name: FUSIONFIRE_PORT
               value: "8011"
@@ -163,12 +163,12 @@ spec:
             - name: META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: logfire-meta-write-token
+                  name: {{ include "logfire.secretName" (dict "secretName" "logfire-meta-write-token" "existingSecret" (get .Values "existingSecret" | default dict)) }}
                   key: logfire-meta-write-token
             - name: META_FRONTEND_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: logfire-meta-frontend-token
+                  name: {{ include "logfire.secretName" (dict "secretName" "logfire-meta-frontend-token" "existingSecret" (get .Values "existingSecret" | default dict)) }}
                   key: logfire-meta-frontend-token
             - name: BOOTSTRAPPED_ORGANIZATIONS
               # This will make it possible to log-in sans-credentials by visiting a URL like:

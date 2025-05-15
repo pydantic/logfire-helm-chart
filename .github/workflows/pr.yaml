@@ -74,6 +74,20 @@ jobs:
         with:
           config: 'ci/kind.yaml'
 
+      - name: Create k8s secrets
+        if: steps.list-changed.outputs.changed == 'true'
+        run: |
+          kubectl create secret generic pg-dsns \
+            --from-literal="postgresDsn=postgres://postgres:postgres@logfire-postgres:5432/crud" \
+            --from-literal="postgresFFDsn=postgres://postgres:postgres@logfire-postgres:5432/ff" \
+            --from-literal="postgresIngestDsn=postgres://postgres:postgres@logfire-postgres:5432/ingest"
+
+          kubectl create secret generic logfire-tokens \
+            --from-literal="logfire-dex-client-secret=$(date +%s%N | sha256sum | head -c 32)" \
+            --from-literal="logfire-meta-write-token=$(date +%s%N | sha256sum | head -c 32)" \
+            --from-literal="logfire-meta-frontend-token=$(date +%s%N | sha256sum | head -c 32)" \
+            --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)"
+
       - name: Run chart testing
         if: steps.list-changed.outputs.changed == 'true'
         run: ct install --upgrade --config ci/ct.yaml

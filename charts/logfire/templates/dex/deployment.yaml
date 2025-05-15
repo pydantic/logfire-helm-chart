@@ -82,7 +82,7 @@ spec:
             - name: LOGFIRE_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: logfire-dex-client-secret
+                  name: {{ include "logfire.secretName" (dict "secretName" "logfire-dex-client-secret" "existingSecret" (get .Values "existingSecret" | default dict)) }}
                   key: logfire-dex-client-secret
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
