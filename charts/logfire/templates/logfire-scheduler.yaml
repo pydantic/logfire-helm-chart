@@ -85,6 +85,8 @@ spec:
               value: 00:05:00
             - name: SAVE_TOKENS_USAGE_INTERVAL
               value: 00:01:00
+            - name: DELETE_EXPIRED_USER_TOKENS_INTERVAL
+              value: 00:05:00
             - name: PUBLISH_USAGE_TO_BUCKET
               value: "true"
             - name: COLLECTOR_OTLP_GRPC_HOST
