@@ -13,6 +13,7 @@ data:
       regions: [{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}],
       dexPublicUrl: '{{ include "logfire.url" . }}',
       dexDynamicRedirect: {{ .Values.dexDynamicRedirect | default false }},
+      appVersion: '{{ .Chart.AppVersion }}',
       selfHosted: true
     }
 ---
@@ -32,13 +33,13 @@ data:
     # from nginx unprivileged: https://github.com/nginxinc/docker-nginx-unprivileged/blob/3dd602719a37ff9b6095c44d4fd7f35b3c07b012/Dockerfile-debian.template#L129-L132
     pid /tmp/nginx.pid;
     daemon off;
-    
+
     events {
         multi_accept        on;
         worker_connections  1024;
         use                 epoll;
     }
-    
+
     http {
         # from nginx unprivileged: https://github.com/nginxinc/docker-nginx-unprivileged/blob/3dd602719a37ff9b6095c44d4fd7f35b3c07b012/Dockerfile-debian.template#L129-L132
         proxy_temp_path /tmp/proxy_temp;
@@ -157,11 +158,11 @@ data:
                 add_header Cache-Control "public, max-age=2592000";
                 add_header Access-Control-Allow-Origin "{{ include "logfire.url" . }}";
             }
-        
+
             # custom panels iframe
             location /custom-components-iframe.html {
                 try_files /custom-components-iframe.html =404;
-        
+
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
             }

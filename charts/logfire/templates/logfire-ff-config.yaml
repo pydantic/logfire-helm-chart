@@ -18,5 +18,5 @@ data:
   RUST_LOG: "info"
   RUST_BACKTRACE: "full"
   FF_SEND_TO_LOGFIRE: "true"
-  FF_CONSOLE_MODE: "force"
+  FF_FORCE_CONSOLE_LOGGING: "true"
   OTEL_RESOURCE_ATTRIBUTES: "vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app"
