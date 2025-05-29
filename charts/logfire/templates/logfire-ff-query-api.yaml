@@ -64,7 +64,11 @@ spec:
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
             - fusionfire
+            {{- if (get (get .Values "logfire-ff-query-worker" | default  dict) "enabled") }}
             - query
+            {{- else }}
+            - query-worker
+            {{- end }}
             - --host=0.0.0.0
             - --port=8011
           ports:
