@@ -44,3 +44,8 @@ logfire-dex:
 logfire-backend:
   pdb:
     minUnavailable: 1
+
+logfire-ff-maintenance-worker:
+  scratchVolume:
+    storageClassName: standard
+    storage: "1Gi"

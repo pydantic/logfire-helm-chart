@@ -306,3 +306,28 @@ Create dex configuration secret, merging backend static clients with user provid
 - name: OTEL_SERVICE_NAME
   value: {{ . }}
 {{- end }}
+
+{{- define "logfire.scratchVolumeName" -}}
+scratch-data
+{{- end -}}
+
+{{- define "logfire.scratchVolume" -}}
+{{- $scratchVolume := . -}}
+{{- if $scratchVolume -}}
+- name: {{ include "logfire.scratchVolumeName" . }}
+  ephemeral:
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          {{ $scratchVolume.labels | toYaml }}
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{ $scratchVolume.storageClassName }}
+        resources:
+          requests:
+            storage: {{ $scratchVolume.storage }}
+{{- else -}}
+- name: {{ include "logfire.scratchVolumeName" . }}
+  emptyDir: {}
+{{- end -}}
+{{- end -}}

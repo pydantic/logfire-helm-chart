@@ -207,6 +207,11 @@ logfire-dex:
 #   pdb:
 #     maxUnavailable: 1
 #     minAvaliable: 1
+#   scratchVolume:
+#     storageClassName: my-storage-class
+#     storage: 1Gi
+#     labels:
+#       type: my-volume
 #
 ## Optional query worker deployment
 # logfire-ff-query-worker:
