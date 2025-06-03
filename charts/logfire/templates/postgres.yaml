@@ -56,12 +56,14 @@ spec:
               value: postgres
             - name: POSTGRES_DB
               value: postgres
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           volumeMounts:
             - name: init-db-scripts
               mountPath: /docker-entrypoint-initdb.d
             - name: data
-              mountPath: /var/lib/postgresql
-              subPath: data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
       volumes:
         - name: init-db-scripts
           configMap:
