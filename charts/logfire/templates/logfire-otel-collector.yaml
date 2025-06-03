@@ -1,5 +1,54 @@
 {{- $serviceName := "logfire-otel-collector" }}
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $serviceName }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $serviceName }}
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - 'pods'
+      - 'namespaces'
+    verbs:
+      - 'get'
+      - 'watch'
+      - 'list'
+  - apiGroups:
+      - 'apps'
+    resources:
+      - 'replicasets'
+    verbs:
+      - 'get'
+      - 'list'
+      - 'watch'
+  - apiGroups:
+      - 'extensions'
+    resources:
+      - 'replicasets'
+    verbs:
+      - 'get'
+      - 'list'
+      - 'watch'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $serviceName }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $serviceName }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ $serviceName }}
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: {{ $serviceName }}
@@ -51,9 +100,7 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/logfire-otel-collector-cfg.yaml") . | sha256sum }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
-      {{- with .Values.serviceAccountName }}
-      serviceAccountName: {{ . }}
-      {{- end}}
+      serviceAccountName: {{ $serviceName }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
       {{- range . }}
