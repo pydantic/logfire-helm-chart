@@ -120,6 +120,7 @@ logfire-dex:
 #
 # # -- Autoscaling & resources for the query api pods
 # logfire-ff-query-api:
+#   queryParallelism: 4
 #   replicas: 2
 #   resources:
 #     cpu: "2"
