@@ -49,3 +49,8 @@ logfire-ff-maintenance-worker:
   scratchVolume:
     storageClassName: standard
     storage: "1Gi"
+
+logfire-ff-compaction-worker:
+  scratchVolume:
+    storageClassName: standard
+    storage: "1Gi"
