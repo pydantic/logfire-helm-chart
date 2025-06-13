@@ -118,6 +118,7 @@ logfire-ff-ingest:
 #   pdb:
 #     maxUnavailable: 1
 #     minAvaliable: 1
+#
 # # -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
 #   # -- Number of pod replicas
@@ -174,8 +175,6 @@ logfire-ff-ingest:
 #   pdb:
 #     maxUnavailable: 1
 #     minAvaliable: 1
-#
-#   
 #
 # logfire-ff-ingest-api:
 #   resources:
