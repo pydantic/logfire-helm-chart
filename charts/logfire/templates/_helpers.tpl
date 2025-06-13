@@ -331,3 +331,19 @@ scratch-data
   emptyDir: {}
 {{- end -}}
 {{- end -}}
+
+{{- define "logfire.ingestVolumeName" -}}
+ingest-data
+{{- end -}}
+
+{{- define "logfire.ingestVolume" -}}
+{{- $ingestVolume := . -}}
+- metadata:
+    name: {{ include "logfire.ingestVolumeName" . }}
+  spec:
+    accessModes: [ "ReadWriteOnce" ]
+    storageClassName: {{ $ingestVolume.storageClassName }}
+    resources:
+      requests:
+        storage: {{ $ingestVolume.storage }}
+{{- end -}}
