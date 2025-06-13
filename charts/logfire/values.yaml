@@ -199,8 +199,43 @@ logfire-ff-ingest:
 #     minAvaliable: 1
 #
 # logfire-ff-maintenance-worker:
-#   jobParallelism: 32
-#   downloadParallelism: 32
+#   jobParallelism: 1
+#   downloadParallelism: 10
+#   replicas: 2
+#   datafusionMemory: "3072MB"
+#   compactionTiers:
+#     - size_threshold_bytes: "1KB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "10KB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "100KB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "1MB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "10MB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "100MB"
+#       count_threshold: 10
+#   resources:
+#     cpu: "4"
+#     memory: "8Gi"
+#   autoscaling:
+#     minReplicas: 2
+#     maxReplicas: 4
+#     memAverage: 50
+#     cpuAverage: 50
+#   pdb:
+#     maxUnavailable: 1
+#     minAvaliable: 1
+#   scratchVolume:
+#     storageClassName: my-storage-class
+#     storage: 1Gi
+#     labels:
+#       type: my-volume
+#
+# logfire-ff-compaction-worker:
+#   jobParallelism: 1
+#   downloadParallelism: 10
 #   replicas: 2
 #   datafusionMemory: "3072MB"
 #   compactionTiers:

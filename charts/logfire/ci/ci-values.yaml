@@ -57,3 +57,8 @@ logfire-ff-ingest:
 
 legacyIngest:
   enabled: true
+
+logfire-ff-compaction-worker:
+  scratchVolume:
+    storageClassName: standard
+    storage: "1Gi"

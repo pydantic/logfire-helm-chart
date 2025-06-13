@@ -1,4 +1,4 @@
-{{- $serviceName := "logfire-ff-maintenance-worker" }}
+{{- $serviceName := "logfire-ff-compaction-worker" }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -48,11 +48,11 @@ spec:
 {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | indent 10 }}
           command:
             - fusionfire
-            - maintenance-worker
+            - compaction-worker
             - --host=0.0.0.0
-            - --port=8013
+            - --port=8015
           ports:
-            - containerPort: 8013
+            - containerPort: 8015
           envFrom:
             - configMapRef:
                 name: logfire-ff-config
@@ -92,7 +92,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: 8013
+              port: 8015
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -100,7 +100,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /health
-              port: 8013
+              port: 8015
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
