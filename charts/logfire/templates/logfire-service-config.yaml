@@ -61,6 +61,10 @@ stringData:
 
       log stdout local0 info
       option httplog
+      option http-keep-alive
+      no option httpclose
+      timeout http-keep-alive 60s
+      timeout client 80s
 
       use_backend logfire-ingest if path_ingest
       use_backend logfire-dex if path_dex
@@ -84,6 +88,9 @@ stringData:
       option httpchk GET /health
       http-check expect status 200
       option tcp-check
+      option http-server-close
+      timeout connect 3s
+      timeout server 50s
       # Retry a total of 4 times, move to a different server every 2 retries
       retries 4
       option redispatch 2
@@ -95,6 +102,9 @@ stringData:
       balance roundrobin
       # Health checks
       option httpchk GET /healthz
+      option http-server-close
+      timeout connect 3s
+      timeout server 50s
       http-check expect status 200
 
       server logfire-dex logfire-dex.default.svc.cluster.local:5556 check port 5558 resolvers kubernetes
@@ -103,6 +113,9 @@ stringData:
       balance roundrobin
       # Health checks
       option httpchk GET /health
+      option http-server-close
+      timeout connect 3s
+      timeout server 50s
       http-check expect status 200
 
       server logfire-backend logfire-backend.default.svc.cluster.local:8000 check resolvers kubernetes
@@ -111,5 +124,8 @@ stringData:
       balance roundrobin
       # Health checks
       option httpchk GET /health
+      option http-server-close
+      timeout connect 3s
+      timeout server 50s
       http-check expect status 200
       server logfire-frontend logfire-frontend-service.default.svc.cluster.local:8080 check resolvers kubernetes

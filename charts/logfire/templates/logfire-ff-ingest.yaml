@@ -69,6 +69,12 @@ spec:
             - --port=8012
           ports:
             - containerPort: 8012
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "sleep"
+                  - "5"
           envFrom:
             - configMapRef:
                 name: logfire-ff-config
