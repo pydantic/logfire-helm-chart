@@ -1,195 +1,131 @@
 apiVersion: v1
-kind: ConfigMap
+kind: Secret
 metadata:
-  name: logfire-service-config
+  name: logfire-haproxy-config
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: logfire-service-config
-data:
-  config.1.js: |
-    window.appConfig = {
-      apiHost: '{{ .Values.ingress.hostname}}',
-      region: '{{ .Values.logfireRegion | default "local" }}',
-      regions: [{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}],
-      dexPublicUrl: '{{ include "logfire.url" . }}',
-      dexDynamicRedirect: {{ .Values.dexDynamicRedirect | default false }},
-      appVersion: '{{ .Chart.AppVersion }}',
-      selfHosted: true
-    }
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: logfire-nginx-config
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: logfire-nginx-config
-data:
-  nginx.conf: |
-    worker_processes auto;
-    error_log stderr notice;
+    app.kubernetes.io/component: logfire-haproxy-config
+stringData:
+  haproxy.cfg: |
+    global
+      daemon
+      maxconn 10000
+      log stdout sample 1:1000 local0 info
 
+    defaults
+      mode http
+      option forwardfor
+      timeout connect 5000ms
+      timeout client 3600s #30000ms
+      timeout server 3600s #30000ms
 
-    # from nginx unprivileged: https://github.com/nginxinc/docker-nginx-unprivileged/blob/3dd602719a37ff9b6095c44d4fd7f35b3c07b012/Dockerfile-debian.template#L129-L132
-    pid /tmp/nginx.pid;
-    daemon off;
+    listen stats
+      bind :8181
+      mode http
+      stats enable
+      stats uri /stats
+      stats show-modules
 
-    events {
-        multi_accept        on;
-        worker_connections  1024;
-        use                 epoll;
-    }
+    resolvers kubernetes
+      nameserver skydns tcp@kube-dns.kube-system:53
+      resolve_retries 10
+      timeout retry 2s
+      hold valid 5s
+      accepted_payload_size 65535
 
-    http {
-        # from nginx unprivileged: https://github.com/nginxinc/docker-nginx-unprivileged/blob/3dd602719a37ff9b6095c44d4fd7f35b3c07b012/Dockerfile-debian.template#L129-L132
-        proxy_temp_path /tmp/proxy_temp;
-        client_body_temp_path /tmp/client_temp;
-        fastcgi_temp_path /tmp/fastcgi_temp;
-        uwsgi_temp_path /tmp/uwsgi_temp;
-        scgi_temp_path /tmp/scgi_temp;
+    frontend http-in
+      bind :8080 alpn h2,http/1.1
 
-        aio                   threads;
-        aio_write             on;
-        tcp_nopush            on;
-        tcp_nodelay           on;
-        client_max_body_size  0;
+      http-request set-header Host %[req.hdr(Host)]
+      http-request set-header X-Real-IP %[src]
 
-        include /etc/nginx/mime.types;
+      # Handle WebSocket upgrade headers
+      acl is_websocket hdr(Upgrade) -i WebSocket
+      http-request set-header Connection Upgrade if is_websocket
 
-        server_names_hash_bucket_size 128;
+      acl is_options method OPTIONS
+      acl cors_path_ingest path_reg -i ^/v1/(traces|metrics|logs)$
+      acl cors_path_api path_reg -i ^/(api|v1)/
+      # Respond to preflight requests directly from HAProxy
+      http-request return status 204 if is_options cors_path_ingest or is_options cors_path_api
+      http-request set-header Access-Control-Allow-Origin "{{ include "logfire.url" . }}" if is_options cors_path_ingest or is_options cors_path_api
+      http-request set-header Access-Control-Allow-Credentials "true" if is_options cors_path_ingest or is_options  cors_path_api
+      http-request set-header Access-Control-Allow-Methods "*" if is_options cors_path_ingest or is_options cors_path_api
+      http-request set-header Access-Control-Allow-Headers "Authorization,Content-type,X-Logfire-Context" if is_options cors_path_ingest or is_options cors_path_api
+      http-request set-header Access-Control-Max-Age "1728000" if is_options cors_path_ingest or is_options cors_path_api
+      
+      
+      acl path_ingest path_reg -i ^/v1/(traces|metrics|logs)$
+      acl path_dex path_beg /auth-api
+      acl path_backend path_reg -i ^/(api|v1)/
 
-        server {
-            server_name {{ .Values.ingress.hostname }};
-            listen 8080 reuseport backlog=4096;
-            http2 on;
-            access_log /dev/stdout;
+      log stdout local0 info
+      option httplog
+      option http-keep-alive
+      no option httpclose
+      timeout http-keep-alive 60s
+      timeout client 80s
 
-            root /usr/share/nginx/html; # Root directory for the static files
+      use_backend logfire-ingest if path_ingest
+      use_backend logfire-dex if path_dex
+      use_backend logfire-backend if path_backend
 
+      default_backend logfire-frontend
 
-            # Proxy /v1/traces and /v1/metrics to fusionfire-ingest-api
-            location ~ ^/v1/(traces|metrics|logs)$ {
-                if ($request_method = 'OPTIONS') {
-                    add_header 'Access-Control-Allow-Origin' '{{ include "logfire.url" . }}' always;
-                    add_header 'Access-Control-Allow-Credentials' 'true' always;
-                    add_header 'Access-Control-Allow-Methods' '*' always;
-                    add_header 'Access-Control-Allow-Headers' 'Authorization,Content-type,X-Logfire-Context' always;
-                    add_header 'Access-Control-Max-Age' '1728000' always;
+    backend logfire-ingest
+      # Create hash from authorization header, path, and query params
+      http-request set-var-fmt(txn.auth_hash) "%[req.hdr(authorization)]"
+      http-request set-var-fmt(txn.path_hash) "%[path]"
+      http-request set-var-fmt(txn.query_hash) "%[query]"
+      http-request set-var-fmt(txn.hash) "%[var(txn.auth_hash)] %[var(txn.path_hash)] %[var(txn.query_hash)]"
 
-                    add_header 'Content-Type'  'text/plain charset=UTF-8' always;
-                    add_header 'Content-Length' '0' always;
-                    return 204;
-                }
+      # Use consistent hashing with the combined hash
+      balance hash var(txn.hash)
+      hash-type consistent
+      # Use a hash balance factor to control the distribution of requests and avoid overloading a single pod if a hot hash keeps hitting the same pod
+      hash-balance-factor 150
+      # Enable both TCP and HTTP checks
+      option httpchk GET /health
+      http-check expect status 200
+      option tcp-check
+      option http-server-close
+      timeout connect 3s
+      timeout server 50s
+      # Retry a total of 4 times, move to a different server every 2 retries
+      retries 4
+      option redispatch 2
 
-                proxy_pass http://logfire-ff-ingest-api:8012;
-                # WebSocket headers
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection "upgrade";
+      server logfire-ff-ingest-api logfire-ff-ingest-api.default.svc.cluster.local:8012 check resolvers kubernetes hash-key addr
+      server-template logfire-ff-ingest 1-{{ default 1 (get (get .Values "logfire-ff-ingest" | default dict) "autoscaling.maxReplicas") }} logfire-ff-ingest.default.svc.cluster.local:8012 check resolvers kubernetes inter 250ms hash-key addr
 
-                # Optional for WebSocket stability
-                proxy_set_header Host $host;
-                proxy_http_version 1.1;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
+    backend logfire-dex
+      balance roundrobin
+      # Health checks
+      option httpchk GET /healthz
+      option http-server-close
+      timeout connect 3s
+      timeout server 50s
+      http-check expect status 200
 
-                # Timeout settings
-                proxy_read_timeout 3600s;
-                proxy_send_timeout 3600s;
-            }
+      server logfire-dex logfire-dex.default.svc.cluster.local:5556 check port 5558 resolvers kubernetes
 
-            # Proxy requests to /auth-api to dex
-            location ~ ^/auth-api {
-                proxy_pass http://logfire-dex:5556;
-                # WebSocket headers
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection "upgrade";
+    backend logfire-backend
+      balance roundrobin
+      # Health checks
+      option httpchk GET /health
+      option http-server-close
+      timeout connect 3s
+      timeout server 50s
+      http-check expect status 200
 
-                # Optional for WebSocket stability
-                proxy_set_header Host $host;
-                proxy_http_version 1.1;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
+      server logfire-backend logfire-backend.default.svc.cluster.local:8000 check resolvers kubernetes
 
-                # Timeout settings
-                proxy_read_timeout 3600s;
-            }
-
-            # Proxy all other /v1/ or /api/ requests to logfire-backend
-            location ~ ^/(api|v1)/ {
-
-                if ($request_method = 'OPTIONS') {
-                    add_header 'Access-Control-Allow-Origin' '{{ include "logfire.url" . }}' always;
-                    add_header 'Access-Control-Allow-Credentials' 'true' always;
-                    add_header 'Access-Control-Allow-Methods' '*' always;
-                    add_header 'Access-Control-Allow-Headers' 'Authorization,Content-type,X-Logfire-Context' always;
-                    add_header 'Access-Control-Max-Age' '1728000' always;
-
-                    add_header 'Content-Type'  'text/plain charset=UTF-8' always;
-                    add_header 'Content-Length' '0' always;
-                    return 204;
-                }
-
-                proxy_pass http://logfire-backend:8000;
-                # WebSocket headers
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection "upgrade";
-
-                # Optional for WebSocket stability
-                proxy_set_header Host $host;
-                proxy_http_version 1.1;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-
-                # Timeout settings
-                proxy_read_timeout 3600s;
-                proxy_send_timeout 3600s;
-            }
-
-            gzip on;
-            gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
-
-            # Location block for static assets (JS, CSS, images)
-            # These can be cached for longer as they have hashed names
-            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
-                expires 30d;
-                add_header Cache-Control "public, max-age=2592000";
-                add_header Access-Control-Allow-Origin "{{ include "logfire.url" . }}";
-            }
-
-            # custom panels iframe
-            location /custom-components-iframe.html {
-                try_files /custom-components-iframe.html =404;
-
-                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
-            }
-
-            # Serve the generated config file from the ephemeral directory:
-            location = /config.1.js {
-                alias /opt/nginx/config.1.js;
-                default_type "application/javascript";
-            }
-
-            # Main location block for the app
-            location / {
-                index index.html index.htm;
-                try_files $uri $uri/ @index;
-            }
-
-            # Fallback location for SPA routing
-            location @index {
-                add_header "Cache-Control" "no-cache"; # No cache for index.html
-                try_files /index.html =404;
-
-                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
-                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.url" . }} {{ .Values.ingress.tls | default false | ternary "wss" "ws" }}://{{ .Values.ingress.hostname }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https https://github.com https://avatars.githubusercontent.com data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
-            }
-
-            # Security Headers
-            add_header X-Content-Type-Options "nosniff";
-
-        }
-    }
+    backend logfire-frontend
+      balance roundrobin
+      # Health checks
+      option httpchk GET /health
+      option http-server-close
+      timeout connect 3s
+      timeout server 50s
+      http-check expect status 200
+      server logfire-frontend logfire-frontend-service.default.svc.cluster.local:8080 check resolvers kubernetes

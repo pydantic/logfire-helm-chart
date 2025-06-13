@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logfire-frontend-service-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-frontend-service-config
+data:
+  config.1.js: |
+    window.appConfig = {
+      apiHost: '{{ .Values.ingress.hostname}}',
+      region: '{{ .Values.logfireRegion | default "local" }}',
+      regions: [{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}],
+      dexPublicUrl: '{{ include "logfire.url" . }}',
+      dexDynamicRedirect: {{ .Values.dexDynamicRedirect | default false }},
+      appVersion: '{{ .Chart.AppVersion }}',
+      selfHosted: true
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logfire-frontend-nginx-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-frontend-nginx-config
+data:
+  nginx.conf: |
+    worker_processes auto;
+    error_log stderr notice;
+
+
+    # from nginx unprivileged: https://github.com/nginxinc/docker-nginx-unprivileged/blob/3dd602719a37ff9b6095c44d4fd7f35b3c07b012/Dockerfile-debian.template#L129-L132
+    pid /tmp/nginx.pid;
+    daemon off;
+
+    events {
+        multi_accept        on;
+        worker_connections  1024;
+        use                 epoll;
+    }
+
+    http {
+        # from nginx unprivileged: https://github.com/nginxinc/docker-nginx-unprivileged/blob/3dd602719a37ff9b6095c44d4fd7f35b3c07b012/Dockerfile-debian.template#L129-L132
+        proxy_temp_path /tmp/proxy_temp;
+        client_body_temp_path /tmp/client_temp;
+        fastcgi_temp_path /tmp/fastcgi_temp;
+        uwsgi_temp_path /tmp/uwsgi_temp;
+        scgi_temp_path /tmp/scgi_temp;
+
+        aio                   threads;
+        aio_write             on;
+        tcp_nopush            on;
+        tcp_nodelay           on;
+        client_max_body_size  0;
+
+        include /etc/nginx/mime.types;
+
+        server_names_hash_bucket_size 128;
+
+        server {
+            server_name {{ .Values.ingress.hostname }};
+            listen 8080 reuseport backlog=4096;
+            http2 on;
+            access_log /dev/stdout;
+
+            root /usr/share/nginx/html; # Root directory for the static files
+
+            gzip on;
+            gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+            # Location block for static assets (JS, CSS, images)
+            # These can be cached for longer as they have hashed names
+            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+                expires 30d;
+                add_header Cache-Control "public, max-age=2592000";
+                add_header Access-Control-Allow-Origin "{{ include "logfire.url" . }}";
+            }
+
+            # custom panels iframe
+            location /custom-components-iframe.html {
+                try_files /custom-components-iframe.html =404;
+
+                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+            }
+
+            # Serve the generated config file from the ephemeral directory:
+            location = /config.1.js {
+                alias /opt/nginx/config.1.js;
+                default_type "application/javascript";
+            }
+
+            # Main location block for the app
+            location / {
+                index index.html index.htm;
+                try_files $uri $uri/ @index;
+            }
+
+            # Fallback location for SPA routing
+            location @index {
+                add_header "Cache-Control" "no-cache"; # No cache for index.html
+                try_files /index.html =404;
+
+                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.url" . }} {{ .Values.ingress.tls | default false | ternary "wss" "ws" }}://{{ .Values.ingress.hostname }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https https://github.com https://avatars.githubusercontent.com data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
+            }
+
+            # Security Headers
+            add_header X-Content-Type-Options "nosniff";
+
+        }
+    }

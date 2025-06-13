@@ -1,4 +1,4 @@
-{{- $serviceName := "logfire-service" }}
+{{- $serviceName := "logfire-frontend-service" }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -34,7 +34,7 @@ spec:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
-        checksum/service-config: {{ include (print $.Template.BasePath "/logfire-service-config.yaml") . | sha256sum }}
+        checksum/service-config: {{ include (print $.Template.BasePath "/logfire-frontend-service-config.yaml") . | sha256sum }}
     spec:
       {{- with .Values.serviceAccountName }}
       serviceAccountName: {{ . }}
@@ -55,22 +55,18 @@ spec:
         - name: {{ $serviceName }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: haproxy:3.2
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.frontendImage }}:{{ include "logfire.defaultTag" .  }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          command: ["nginx", "-c", "/usr/local/nginx/nginx.conf"]
           volumeMounts:
-            - name: logfire-haproxy-config
-              mountPath: /usr/local/etc/haproxy/haproxy.cfg
-              subPath: haproxy.cfg
-              readOnly: true
-          lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "5"
+            - name: logfire-frontend-nginx-config
+              mountPath: /usr/local/nginx
+            - name: logfire-frontend-service-config
+              mountPath: /opt/nginx
+            - name: tmp
+              mountPath: /tmp
           ports:
             - containerPort: 8080
-            - containerPort: 8181 # Stats port
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           env:
             - name: STRIPE_PUBLISHABLE_KEY
@@ -90,25 +86,14 @@ spec:
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}
-          livenessProbe:
-            httpGet:
-              path: "/stats"
-              port: 8181
-          startupProbe:
-            httpGet:
-              path: "/stats"
-              port: 8181
-          readinessProbe:
-            httpGet:
-              path: "/stats"
-              port: 8181
       volumes:
-        - name: logfire-haproxy-config
-          secret:
-            secretName: logfire-haproxy-config
-            items:
-              - key: haproxy.cfg
-                path: haproxy.cfg
-
+        - name: logfire-frontend-nginx-config
+          configMap:
+            name: logfire-frontend-nginx-config
+        - name: logfire-frontend-service-config
+          configMap:
+            name: logfire-frontend-service-config
+        - name: tmp
+          emptyDir: {}
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
