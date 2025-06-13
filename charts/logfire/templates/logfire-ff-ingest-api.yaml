@@ -1,3 +1,4 @@
+{{- if .Values.legacyIngest.enabled }}
 {{- $serviceName := "logfire-ff-ingest-api" }}
 apiVersion: v1
 kind: Service
@@ -127,3 +128,4 @@ spec:
 
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
+{{- end }}

@@ -21,6 +21,8 @@ postgresSecret:
   # -- Secret name
   name: ""
 
+legacyIngest:
+  enabled: true
 
 # -- Custom annotations for migration Jobs
 hooksAnnotations:
