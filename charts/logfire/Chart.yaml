@@ -5,4 +5,12 @@ description: Helm chart for self-hosted Logfire
 
 appVersion: "2b40212f"
 
-dependencies: []
+dependencies:
+  - name: postgresql
+    version: "16.7.11"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: dev.deployPostgres
+  - name: minio
+    version: "17.0.4"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: dev.deployMinio
