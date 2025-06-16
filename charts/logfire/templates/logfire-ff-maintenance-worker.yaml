@@ -48,7 +48,7 @@ spec:
 {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | indent 10 }}
           command:
             - fusionfire
-            - background
+            - maintenance-worker
             - --host=0.0.0.0
             - --port=8013
           ports:

@@ -1,21 +1,4 @@
-{{- if .Values.legacyIngest.enabled }}
-{{- $serviceName := "logfire-ff-ingest-api" }}
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ $serviceName }}
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-spec:
-  selector:
-    {{- include "logfire.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-  ports:
-  - port: 8012
-    targetPort: 8012
-  type: ClusterIP
----
+{{- $serviceName := "logfire-ff-compaction-worker" }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -62,57 +45,54 @@ spec:
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+{{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | indent 10 }}
           command:
             - fusionfire
-            - ingest
+            - compaction-worker
             - --host=0.0.0.0
-            - --port=8012
+            - --port=8015
           ports:
-            - containerPort: 8012
+            - containerPort: 8015
           envFrom:
             - configMapRef:
                 name: logfire-ff-config
           env:
-            - name: OTEL_TRACES_SAMPLER_ARG
-              value: "0.05"
-            - name: OTEL_TRACES_SAMPLER
-              value: "parentbased_traceidratio"
-            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
-            - name: FF_WRITE_TOKEN_MEMORY_CACHE_TTL
-              value: "500ms"
-            - name: FF_TAIL_PATH
-              value: "ff"
-            - name: FF_UNPACK_SPAN_EVENTS
-              value: "true"
-            - name: FF_INGEST_MAX_FUTURE_TIME_DRIFT
-              value: "3650000d"
-            - name: FF_INGEST_MAX_PAST_TIME_DRIFT
-              value: "3650000d"
-            - name: RUST_BACKTRACE
-              value: "1"
+            - name: FF_CACHE_OBJECT_STORE_HTTP_HEADERS
+              value: x-ff-no-warm-cache=1
             - name: FF_ENABLE_SPILL_TO_DISK
-              value: "false"
+              value: "true"
+            - name: FF_TEMP_DIR
+              value: /scratch/fusionfire
+            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
+            - name: FF_DATAFUSION_MEMORY_LIMIT
+              value: {{ (get (get .Values $serviceName | default dict) "datafusionMemory" | default "512MB" | quote) }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
-            - name: FF_SHARED_REDIS_DSN
-              value: {{ .Values.redisDsn }}
+            - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
+              value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "1" | quote) }} 
+            - name: FF_COMPACTION_JOB_PARALLELISM
+              value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "1" | quote) }} 
             - name: FF_INGEST_PG_DSN_1
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresIngestDsn
+            {{- include "logfire.ffmaxRowPerRowGroup" . | nindent 12 -}}
+            {{- include "logfire.ffCompactionTiers" . | nindent 12 -}}
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end }}
+          volumeMounts:
+            - name: {{ include "logfire.scratchVolumeName" . }}
+              mountPath: /scratch
           livenessProbe:
             httpGet:
               path: /health
-              port: 8012
+              port: 8015
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -120,12 +100,12 @@ spec:
           readinessProbe:
             httpGet:
               path: /health
-              port: 8012
+              port: 8015
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
-
+      volumes:
+      {{- include "logfire.scratchVolume" (get (get .Values $serviceName | default dict) "scratchVolume" | default dict) | nindent 6 }}
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
-{{- end }}

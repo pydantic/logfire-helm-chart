@@ -1,3 +1,4 @@
+{{- if .Values.legacyIngest.enabled }}
 {{- $serviceName := "logfire-ff-ingest-worker" }}
 apiVersion: apps/v1
 kind: Deployment
@@ -101,3 +102,4 @@ spec:
             failureThreshold: 5
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
+{{- end}}

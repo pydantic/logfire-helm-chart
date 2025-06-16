@@ -1,5 +1,4 @@
-{{- if .Values.legacyIngest.enabled }}
-{{- $serviceName := "logfire-ff-ingest-api" }}
+{{- $serviceName := "logfire-ff-ingest" }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -14,10 +13,10 @@ spec:
   ports:
   - port: 8012
     targetPort: 8012
-  type: ClusterIP
+  clusterIP: None
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ $serviceName }}
   labels:
@@ -65,11 +64,17 @@ spec:
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
             - fusionfire
-            - ingest
+            - ingester
             - --host=0.0.0.0
             - --port=8012
           ports:
             - containerPort: 8012
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "sleep"
+                  - "5"
           envFrom:
             - configMapRef:
                 name: logfire-ff-config
@@ -79,20 +84,14 @@ spec:
             - name: OTEL_TRACES_SAMPLER
               value: "parentbased_traceidratio"
             {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
-            - name: FF_WRITE_TOKEN_MEMORY_CACHE_TTL
-              value: "500ms"
-            - name: FF_TAIL_PATH
-              value: "ff"
             - name: FF_UNPACK_SPAN_EVENTS
               value: "true"
             - name: FF_INGEST_MAX_FUTURE_TIME_DRIFT
-              value: "3650000d"
+              value: "1h"
             - name: FF_INGEST_MAX_PAST_TIME_DRIFT
-              value: "3650000d"
+              value: "24h"
             - name: RUST_BACKTRACE
               value: "1"
-            - name: FF_ENABLE_SPILL_TO_DISK
-              value: "false"
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
@@ -100,12 +99,9 @@ spec:
                   key: postgresFFDsn
             - name: FF_SHARED_REDIS_DSN
               value: {{ .Values.redisDsn }}
-            - name: FF_INGEST_PG_DSN_1
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "logfire.postgresSecretName" . }}
-                  key: postgresIngestDsn
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
+            {{- include "logfire.ffmaxRowPerRowGroup" . | nindent 12 -}}
+
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end }}
@@ -125,7 +121,16 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
+          volumeMounts: 
+            - name: {{ include "logfire.ingestVolumeName" . }}
+              mountPath: "/fusionfire/ingest-data"
+  updateStrategy:
+    type: "RollingUpdate"
+    rollingUpdate:
+      maxUnavailable: 25%
+  volumeClaimTemplates:    
+  {{- include "logfire.ingestVolume" (get (get .Values $serviceName | default dict) "volumeClaimTemplates" | default dict) | nindent 4 }}
+
 
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
-{{- end }}

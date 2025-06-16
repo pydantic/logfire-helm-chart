@@ -49,3 +49,16 @@ logfire-ff-maintenance-worker:
   scratchVolume:
     storageClassName: standard
     storage: "1Gi"
+
+logfire-ff-ingest:
+  volumeClaimTemplates:
+    storageClassName: standard
+    storage: "1Gi"
+
+legacyIngest:
+  enabled: true
+
+logfire-ff-compaction-worker:
+  scratchVolume:
+    storageClassName: standard
+    storage: "1Gi"
