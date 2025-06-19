@@ -19,13 +19,10 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $serviceName }}
+  name: {{ $serviceName }}-instance
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
-  annotations:
-    "helm.sh/hook": pre-install,post-delete
-    "helm.sh/hook-weight": "0"
 spec:
   replicas: 1
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
