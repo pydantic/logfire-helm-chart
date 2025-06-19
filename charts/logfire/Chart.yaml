@@ -3,6 +3,6 @@ version: 0.2.2
 name: logfire
 description: Helm chart for self-hosted Logfire
 
-appVersion: "a9de61aa"
+appVersion: "2b40212f"
 
 dependencies: []
