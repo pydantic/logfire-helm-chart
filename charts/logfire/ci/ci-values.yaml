@@ -18,7 +18,6 @@ dev:
   deployPostgres: true
   deployMinio: true
   deployMaildev: true
-  postgresImage: postgres:16-alpine
 
 postgresSecret:
   enabled: true
@@ -33,7 +32,7 @@ logfire-dex:
     storage:
       type: postgres
       config:
-        host: logfire-postgres
+        host: logfire-postgresql
         port: 5432
         user: postgres
         database: dex
@@ -62,3 +61,52 @@ logfire-ff-compaction-worker:
   scratchVolume:
     storageClassName: standard
     storage: "1Gi"
+
+postgresql:
+  fullnameOverride: "logfire-postgresql"
+  auth:
+    postgresPassword: "postgres"
+  primary:
+    initdb:
+      scripts:
+        create_databases.sql: |
+          CREATE DATABASE crud;
+          CREATE DATABASE ingest;
+          CREATE DATABASE dex;
+          CREATE DATABASE ff;
+    persistence:
+      size: 10Gi
+  image:
+    debug: true
+
+minio:
+  fullnameOverride: "logfire-minio"
+  auth:
+    rootUser: logfire-minio
+    rootPassword: logfire-minio
+  persistence:
+    mountPath: /data
+    size: 32Gi
+  command:
+    - minio
+  args:
+    - server
+    - /data
+  lifecycleHooks:
+    postStart:
+      exec:
+        command:
+          - sh
+          - -c
+          - |
+            # Wait for the server to start
+            sleep 5
+            # Create a bucket
+            mc alias set local http://localhost:9000 logfire-minio logfire-minio
+            mc mb local/logfire
+            mc anonymous set public local/logfire
+  containerPorts:
+    api: 9000
+  service:
+    ports:
+      api: 9000

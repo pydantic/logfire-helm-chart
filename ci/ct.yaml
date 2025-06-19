@@ -5,9 +5,11 @@ chart-dirs:
 namespace: default
 release-label: "app.kubernetes.io/instance"
 validate-maintainers: false
-debug: false
+debug: true
 check-version-increment: true
 helm-tests:
   - run-tests: true
 helm-extra-args: "--timeout 600s"
 print-logs: false
+chart-repos:
+  - bitnami=https://charts.bitnami.com/bitnami

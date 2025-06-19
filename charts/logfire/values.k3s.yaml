@@ -48,9 +48,9 @@ dev:
   deployMinio: true
   deployMaildev: true
 
-postgresDsn: postgres://postgres:postgres@logfire-postgres:5432/crud
-postgresFFDsn: postgres://postgres:postgres@logfire-postgres:5432/ff
-postgresIngestDsn: postgres://postgres:postgres@logfire-postgres:5432/ingest
+postgresDsn: postgres://postgres:postgres@logfire-postgresql:5432/crud
+postgresFFDsn: postgres://postgres:postgres@logfire-postgresql:5432/ff
+postgresIngestDsn: postgres://postgres:postgres@logfire-postgresql:5432/ingest
 
 
 # -- Specify a priority class name to set [pod priority](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority).
