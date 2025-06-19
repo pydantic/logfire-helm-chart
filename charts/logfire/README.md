@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.2.1](https://img.shields.io/badge/Version-0.2.1-informational?style=flat-square) ![AppVersion: a9de61aa](https://img.shields.io/badge/AppVersion-a9de61aa-informational?style=flat-square)
+![Version: 0.2.2](https://img.shields.io/badge/Version-0.2.2-informational?style=flat-square) ![AppVersion: a9de61aa](https://img.shields.io/badge/AppVersion-a9de61aa-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -329,13 +329,16 @@ See [`values.yaml`](./values.yaml) for some production level values
 | ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
+| legacyIngest.enabled | bool | `true` |  |
 | logfire-dex | object | `{"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
 | logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
 | logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
 | logfire-dex.replicas | int | `1` | Number of replicas |
 | logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
+| logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` |  |
 | logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |
+| minio.auth.rootPassword | string | `"logfire-minio"` |  |
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
 | objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
@@ -426,7 +429,7 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.2.1](https://img.shields.io/badge/Version-0.2.1-informational?style=flat-square) ![AppVersion: a9de61aa](https://img.shields.io/badge/AppVersion-a9de61aa-informational?style=flat-square)
+![Version: 0.2.2](https://img.shields.io/badge/Version-0.2.2-informational?style=flat-square) ![AppVersion: a9de61aa](https://img.shields.io/badge/AppVersion-a9de61aa-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -453,13 +456,16 @@ Helm chart for self-hosted Logfire
 | ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
+| legacyIngest.enabled | bool | `true` |  |
 | logfire-dex | object | `{"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
 | logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
 | logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
 | logfire-dex.replicas | int | `1` | Number of replicas |
 | logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
+| logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` |  |
 | logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |
+| minio.auth.rootPassword | string | `"logfire-minio"` |  |
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
 | objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
