@@ -50,12 +50,17 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
-            {{- if .Values.legacyIngest }}
+            {{- if .Values.legacyIngest.enabled }}
             - name: FF_INGEST_PG_DSN_1
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresIngestDsn
+            - name: FF_ENABLE_PG_INGEST
+              value: "true"
+            {{- else }}
+            - name: FF_ENABLE_PG_INGEST
+              value: "false"
             {{- end }}
             - name: FF_SEND_TO_LOGFIRE
               value: "false"
