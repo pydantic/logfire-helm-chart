@@ -79,11 +79,6 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresDsn
-            - name: INGEST_PG_DSN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "logfire.postgresSecretName" . }}
-                  key: postgresIngestDsn
             - name: SHARED_REDIS_DSN
               value: {{ .Values.redisDsn }}
             - name: REDIS_DSN
