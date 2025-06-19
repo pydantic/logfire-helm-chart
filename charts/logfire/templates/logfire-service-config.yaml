@@ -95,8 +95,12 @@ stringData:
       retries 4
       option redispatch 2
 
+      {{- if .Values.legacyIngest.enabled }}
       server logfire-ff-ingest-api logfire-ff-ingest-api.default.svc.cluster.local:8012 check resolvers kubernetes hash-key addr
       server-template logfire-ff-ingest 1-{{ default 1 (get (get .Values "logfire-ff-ingest" | default dict) "autoscaling.maxReplicas") }} logfire-ff-ingest.default.svc.cluster.local:8012 check resolvers kubernetes inter 250ms hash-key addr
+      {{- else}}
+      server-template logfire-ff-ingest 1-{{ default 1 (get (get .Values "logfire-ff-ingest" | default dict) "autoscaling.maxReplicas") }} logfire-ff-ingest.default.svc.cluster.local:8012 check resolvers kubernetes inter 250ms hash-key addr
+      {{- end }}
 
     backend logfire-dex
       balance roundrobin

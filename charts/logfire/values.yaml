@@ -105,8 +105,7 @@ logfire-dex:
 # # -- Autoscaling & resources for the `logfire-ff-ingest` pod
 logfire-ff-ingest:
   volumeClaimTemplates:
-    storageClassName: standard
-    storage: 64Gi
+    storage: 16Gi
 #   resources:
 #     cpu: "2"
 #     memory: "5Gi"
@@ -396,3 +395,7 @@ dev:
   # -- Use a local MinIO instance as object storage
   # -- Do NOT use this in production!
   deployMinio: false
+
+minio:
+  auth:
+    rootPassword: logfire-minio

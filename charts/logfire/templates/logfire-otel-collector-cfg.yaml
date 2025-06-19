@@ -19,7 +19,7 @@ data:
     exporters:
       debug:
       otlphttp:
-        endpoint: http://logfire-ff-ingest-api:8012
+        endpoint: http://logfire-ff-ingest:8012
         tls:
           insecure: true
         headers:
