@@ -50,11 +50,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
+            {{- if .Values.legacyIngest }}
             - name: FF_INGEST_PG_DSN_1
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresIngestDsn
+            {{- end }}
             - name: FF_SEND_TO_LOGFIRE
               value: "false"
             - name: FF_CONSOLE_MODE
