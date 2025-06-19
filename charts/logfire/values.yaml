@@ -30,13 +30,13 @@ hooksAnnotations:
 #  argocd.argoproj.io/hook-delete-policy: HookSucceeded
 
 # -- Postgres DSN used for `crud` database
-postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
+postgresDsn: "postgresql://postgres:postgres@logfire-postgresql:5432/crud"
 
 # -- Postgres DSN used for `ff` database
-postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
+postgresFFDsn: "postgresql://postgres:postgres@logfire-postgresql:5432/ff"
 
 # -- Postgres DSN used for `ingest` database
-postgresIngestDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ingest"
+postgresIngestDsn: "postgresql://postgres:postgres@logfire-postgresql:5432/ingest"
 
 smtp:
   # -- Hostname of the SMTP server
@@ -79,7 +79,7 @@ logfire-dex:
     storage:
       type: postgres
       config:
-        host: logfire-postgres
+        host: logfire-postgresql
         port: 5432
         user: postgres
         database: dex
@@ -396,6 +396,51 @@ dev:
   # -- Do NOT use this in production!
   deployMinio: false
 
-minio:
+postgresql:
+  fullnameOverride: "logfire-postgresql"
   auth:
+    postgresPassword: "postgres"
+  primary:
+    initdb:
+      scripts:
+        create_databases.sql: |
+          CREATE DATABASE crud;
+          CREATE DATABASE ingest;
+          CREATE DATABASE dex;
+          CREATE DATABASE ff;
+    persistence:
+      size: 10Gi
+  image:
+    debug: true
+
+minio:
+  fullnameOverride: "logfire-minio"
+  auth:
+    rootUser: logfire-minio
     rootPassword: logfire-minio
+  persistence:
+    mountPath: /data
+    size: 32Gi
+  command:
+    - minio
+  args:
+    - server
+    - /data
+  lifecycleHooks:
+    postStart:
+      exec:
+        command:
+          - sh
+          - -c
+          - |
+            # Wait for the server to start
+            sleep 5
+            # Create a bucket
+            mc alias set local http://localhost:9000 logfire-minio logfire-minio
+            mc mb local/logfire
+            mc anonymous set public local/logfire
+  containerPorts:
+    api: 9000
+  service:
+    ports:
+      api: 9000

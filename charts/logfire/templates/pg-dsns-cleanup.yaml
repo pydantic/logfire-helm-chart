@@ -1,0 +1,119 @@
+{{- if .Values.dev.deployPostgres }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pg-dsns-cleanup-sa
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-11"
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+    {{- include "logfire.hooksAnnotations" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pg-dsns-cleanup-role
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-11" 
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+    {{- include "logfire.hooksAnnotations" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pg-dsns-cleanup-rb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-11" # Run this before the job
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
+    {{- include "logfire.hooksAnnotations" . | nindent 4 }}
+subjects:
+- kind: ServiceAccount
+  name: pg-dsns-cleanup-sa
+roleRef:
+  kind: Role
+  name: pg-dsns-cleanup-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pg-dsns-cleanup
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-pg-dsns-cleanup
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": hook-succeeded
+    {{- include "logfire.hooksAnnotations" . | nindent 4 }}
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: pg-dsns-cleanup-sa
+      restartPolicy: Never
+      containers:
+        - name: logfire-pg-dsns-cleanup
+          image: "bitnami/kubectl"
+          command:
+          - "/bin/sh"
+          - "-c"
+          - |
+            echo "Starting secret modification job..."
+            SECRET_NAME="{{ .Values.postgresSecret.name }}"
+            OLD_STRING="logfire-postgres"
+            NEW_STRING="logfire-postgresql"
+            KEYS_TO_UPDATE="postgresDsn postgresFFDsn postgresIngestDsn"
+
+            PATCH_OPERATIONS=""
+
+            for key in $KEYS_TO_UPDATE; do
+            echo "Processing key: $key"
+            ENCODED_DATA=$(kubectl get secret "$SECRET_NAME" -n {{ .Release.Namespace }} -o jsonpath="{.data.$key}")
+                if [ -z "$ENCODED_DATA" ]; then
+                echo "Warning: Key '$key' not found in secret '$SECRET_NAME'. Skipping."
+                continue
+                fi
+            DECODED_DATA=$(echo "$ENCODED_DATA" | base64 --decode)
+
+            if echo "$DECODED_DATA" | grep -q "$OLD_STRING" && ! echo "$DECODED_DATA" | grep -q "$NEW_STRING"; then
+                MODIFIED_DATA=$(echo "$DECODED_DATA" | sed "s/$OLD_STRING/$NEW_STRING/g")
+                
+                NEW_ENCODED_DATA=$(echo -n "$MODIFIED_DATA" | base64 | tr -d '\n')
+                
+                PATCH_OPERATIONS="$PATCH_OPERATIONS {\"op\": \"replace\", \"path\": \"/data/$key\", \"value\": \"$NEW_ENCODED_DATA\"},"
+                echo "Key '$key' will be updated."
+              else
+                echo "Key '$key' does not contain '$OLD_STRING' or has already been updated. No update needed."
+              fi
+            done
+            if [ -n "$PATCH_OPERATIONS" ]; then
+                PATCH_PAYLOAD="[$(echo "$PATCH_OPERATIONS" | sed 's/,$//')]"
+
+                echo "Applying patch to secret '$SECRET_NAME'..."
+                echo "Final Patch Payload: $PATCH_PAYLOAD"
+                
+                kubectl patch secret "$SECRET_NAME" -n {{ .Release.Namespace }} --type='json' -p="$PATCH_PAYLOAD"
+                
+                echo "Secret patched successfully."
+            else
+                echo "No keys needed updating. Job complete."
+            fi
+            echo "Job finished."
+{{- end }}

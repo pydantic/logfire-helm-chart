@@ -32,7 +32,7 @@ logfire-dex:
     storage:
       type: postgres
       config:
-        host: logfire-postgres
+        host: logfire-postgresql
         port: 5432
         user: postgres
         database: dex
@@ -63,10 +63,9 @@ logfire-ff-compaction-worker:
     storage: "1Gi"
 
 postgresql:
-  fullnameOverride: "logfire-postgres"
+  fullnameOverride: "logfire-postgresql"
   auth:
     postgresPassword: "postgres"
-  postgresqlDataDir: /var/lib/postgresql/data/pgdata
   primary:
     initdb:
       scripts:
@@ -76,8 +75,6 @@ postgresql:
           CREATE DATABASE dex;
           CREATE DATABASE ff;
     persistence:
-      mountPath: /var/lib/postgresql/data
-      subPath: pgdata
       size: 10Gi
   image:
     debug: true
@@ -95,8 +92,6 @@ minio:
   args:
     - server
     - /data
-    - --console-address
-    - ":9001"
   lifecycleHooks:
     postStart:
       exec:
