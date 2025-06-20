@@ -106,9 +106,9 @@ logfire-dex:
 logfire-ff-ingest:
   volumeClaimTemplates:
     storage: 16Gi
-  resources:
-    cpu: "2"
-    memory: "4Gi"
+  # resources:
+  #   cpu: "2"
+  #   memory: "4Gi"
 #   autoscaling:
 #     minReplicas: 2
 #     maxReplicas: 24
