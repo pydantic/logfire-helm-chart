@@ -90,6 +90,8 @@ spec:
               value: "1h"
             - name: FF_INGEST_MAX_PAST_TIME_DRIFT
               value: "24h"
+            - name: FF_INGEST_PATH
+              value: "/fusionfire/ingest-data"
             - name: RUST_BACKTRACE
               value: "1"
             - name: PG_DSN
