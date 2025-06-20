@@ -5,7 +5,7 @@ chart-dirs:
 namespace: default
 release-label: "app.kubernetes.io/instance"
 validate-maintainers: false
-debug: true
+debug: false
 check-version-increment: true
 helm-tests:
   - run-tests: true

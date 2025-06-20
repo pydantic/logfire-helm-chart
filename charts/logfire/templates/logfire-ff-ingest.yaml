@@ -1,5 +1,5 @@
 {{- $serviceName := "logfire-ff-ingest" }}
-{{- $defaultCpu := "2" -}}
+{{- $defaultCpu := "1" -}}
 {{- $serviceValues := get .Values $serviceName | default dict -}}
 {{- $resources := get $serviceValues "resources" | default dict -}}
 {{- $cpu := get $resources "cpu" | default $defaultCpu -}}
