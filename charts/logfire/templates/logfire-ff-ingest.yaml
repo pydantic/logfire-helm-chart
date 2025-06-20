@@ -92,6 +92,12 @@ spec:
               value: "24h"
             - name: FF_INGEST_PATH
               value: "/fusionfire/ingest-data"
+            - name: FF_INGEST_NUM_WORKERS
+              value: {{ mul (atoi (toString (index .Values $serviceName "resources" "cpu"))) 8 | quote }}
+            - name: FF_IO_THREADS
+              value: {{ index .Values $serviceName "resources" "cpu" | quote }}
+            - name: FF_DATAFUSION_THREADS
+              value: {{ sub (atoi (toString (index .Values $serviceName "resources" "cpu"))) 1 | quote }}
             - name: RUST_BACKTRACE
               value: "1"
             - name: PG_DSN
