@@ -137,10 +137,6 @@ spec:
           volumeMounts: 
             - name: {{ include "logfire.ingestVolumeName" . }}
               mountPath: "/fusionfire/ingest-data"
-  updateStrategy:
-    type: "RollingUpdate"
-    rollingUpdate:
-      maxUnavailable: 25%
   volumeClaimTemplates:    
   {{- include "logfire.ingestVolume" (get (get .Values $serviceName | default dict) "volumeClaimTemplates" | default dict) | nindent 4 }}
 

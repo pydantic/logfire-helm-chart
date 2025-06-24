@@ -1,5 +1,6 @@
 {{- define "logfire.hpa" }}
 {{- if index (index .Values .serviceName | default dict) "autoscaling" }}
+{{- $kind := (not (eq .serviceName "logfire-ff-ingest") | ternary "Deployment" "StatefulSet" ) }}
 {{- with index .Values .serviceName "autoscaling" }}
 ---
 apiVersion: autoscaling/v2
@@ -9,7 +10,7 @@ metadata:
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
-    kind: Deployment
+    kind: {{ $kind }}
     name: {{ $.serviceName }}
   minReplicas: {{ .minReplicas | default "1" }}
   maxReplicas: {{ .maxReplicas |  default "2" }}
