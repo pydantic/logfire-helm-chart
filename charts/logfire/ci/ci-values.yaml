@@ -54,6 +54,11 @@ logfire-ff-ingest:
   volumeClaimTemplates:
     storageClassName: standard
     storage: "1Gi"
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    memAverage: 65
+    cpuAverage: 20
 
 legacyIngest:
   enabled: true
@@ -62,3 +67,8 @@ logfire-ff-compaction-worker:
   scratchVolume:
     storageClassName: standard
     storage: "1Gi"
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 2
+    memAverage: 65
+    cpuAverage: 20
