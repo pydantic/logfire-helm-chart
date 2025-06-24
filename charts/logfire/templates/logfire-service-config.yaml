@@ -27,11 +27,11 @@ stringData:
       stats show-modules
 
     resolvers kubernetes
-      nameserver skydns tcp@kube-dns.kube-system:53
+      parse-resolv-conf
+      accepted_payload_size 8192
       resolve_retries 10
       timeout retry 2s
       hold valid 5s
-      accepted_payload_size 65535
 
     frontend http-in
       bind :8080 alpn h2,http/1.1
@@ -96,11 +96,9 @@ stringData:
       option redispatch 2
 
       {{- if .Values.legacyIngest.enabled }}
-      server logfire-ff-ingest-api logfire-ff-ingest-api.{{ .Release.Namespace }}.svc.cluster.local:8012 check resolvers kubernetes hash-key addr
-      server-template logfire-ff-ingest 1-{{ default 1 (get (get .Values "logfire-ff-ingest" | default dict) "autoscaling.maxReplicas") }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.cluster.local:8012 check resolvers kubernetes inter 250ms hash-key addr
-      {{- else}}
-      server-template logfire-ff-ingest 1-{{ default 1 (get (get .Values "logfire-ff-ingest" | default dict) "autoscaling.maxReplicas") }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.cluster.local:8012 check resolvers kubernetes inter 250ms hash-key addr
+      server logfire-ff-ingest-api logfire-ff-ingest-api.{{ .Release.Namespace }}.svc.cluster.local.:8012 check resolvers kubernetes hash-key addr
       {{- end }}
+      server-template logfire-ff-ingest 1-{{ default 1 (get (get .Values "logfire-ff-ingest" | default dict) "autoscaling.maxReplicas") }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.cluster.local.:8012 check resolvers kubernetes inter 250ms hash-key addr
 
     backend logfire-dex
       balance roundrobin
@@ -111,7 +109,7 @@ stringData:
       timeout server 50s
       http-check expect status 200
 
-      server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.cluster.local:5556 check port 5558 resolvers kubernetes
+      server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.cluster.local.:5556 check port 5558 resolvers kubernetes
 
     backend logfire-backend
       balance roundrobin
@@ -122,7 +120,7 @@ stringData:
       timeout server 50s
       http-check expect status 200
 
-      server logfire-backend logfire-backend.{{ .Release.Namespace }}.svc.cluster.local:8000 check resolvers kubernetes
+      server logfire-backend logfire-backend.{{ .Release.Namespace }}.svc.cluster.local.:8000 check resolvers kubernetes
 
     backend logfire-frontend
       balance roundrobin
@@ -132,4 +130,4 @@ stringData:
       timeout connect 3s
       timeout server 50s
       http-check expect status 200
-      server logfire-frontend logfire-frontend-service.{{ .Release.Namespace }}.svc.cluster.local:8080 check resolvers kubernetes
+      server logfire-frontend logfire-frontend-service.{{ .Release.Namespace }}.svc.cluster.local.:8080 check resolvers kubernetes
