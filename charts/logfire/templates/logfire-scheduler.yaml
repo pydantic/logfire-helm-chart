@@ -17,6 +17,8 @@ spec:
       app.kubernetes.io/component: {{ $serviceName }}
   template:
     metadata:
+      annotations:
+        checksum/logfire-postgres-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresDsn" )}}
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}

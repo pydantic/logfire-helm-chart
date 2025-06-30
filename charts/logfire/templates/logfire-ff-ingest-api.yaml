@@ -39,6 +39,8 @@ spec:
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
         checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
+        checksum/logfire-postgres-ff-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresFFDsn" )}}
+        checksum/logfire-postgres-ingest-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresIngestDsn" )}}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
       {{- with .Values.serviceAccountName }}

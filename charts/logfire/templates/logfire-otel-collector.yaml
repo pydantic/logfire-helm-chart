@@ -100,6 +100,7 @@ spec:
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/logfire-otel-collector-cfg.yaml") . | sha256sum }}
+        checksum/logfire-meta-write-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token" )) "key" "logfire-meta-write-token" )}}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
       serviceAccountName: {{ $serviceName }}
@@ -137,7 +138,7 @@ spec:
             - name: LOGFIRE_META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "secretName" "logfire-meta-write-token" "existingSecret" (get .Values "existingSecret" | default dict)) }}
+                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token") }}
                   key: logfire-meta-write-token
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
