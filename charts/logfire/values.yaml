@@ -20,6 +20,8 @@ postgresSecret:
   enabled: false
   # -- Secret name
   name: ""
+  # -- Optional annotations for externally-managed secrets reloading
+  annotations: {}
 
 legacyIngest:
   enabled: true
@@ -414,6 +416,8 @@ redisDsn: redis://logfire-redis:6379
 existingSecret:
   enabled: false
   name: ""
+  # -- Optional annotations for externally-managed secrets reloading
+  annotations: {}
 
 # -- Development mode settings
 dev:
