@@ -152,6 +152,36 @@ logfire-ff-ingest:
 #    maxUnavailable: 1
 #    minAvaliable: 1
 #
+# # -- Autoscaling & resources for the frontend pods
+# logfire-frontend-service:
+#   replicas: 1
+#   resources:
+#     cpu: "1"
+#     memory: "1Gi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 2
+#     memAverage: 65
+#     cpuAverage: 20
+#  pdb:
+#    maxUnavailable: 1
+#    minAvaliable: 1
+#
+# # -- Autoscaling & resources for the proxy pods
+# logfire-service:
+#   replicas: 1
+#   resources:
+#     cpu: "1"
+#     memory: "1Gi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 2
+#     memAverage: 65
+#     cpuAverage: 20
+#  pdb:
+#    maxUnavailable: 1
+#    minAvaliable: 1
+#
 # # -- Autoscaling & resources for the cache pods
 # logfire-ff-cache:
 #   replicas: 2
