@@ -16,11 +16,11 @@ ingress:
 # -- User provided postgres credentials
 # containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys
 postgresSecret:
-  # -- Whether to use an existing secret
+  # -- Set to true to use an existing secret. Highly recommended for Argo CD users.
   enabled: false
-  # -- Secret name
+  # -- The name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for externally-managed secrets reloading
+  # -- Optional annotations for the secret, e.g., for external secret managers.
   annotations: {}
 
 legacyIngest:
@@ -573,9 +573,11 @@ redisDsn: redis://logfire-redis:6379
 #  logfire-meta-frontend-token
 #  logfire-jwt-secret
 existingSecret:
+  # -- Set to true to use an existing secret. Highly recommended for Argo CD users.
   enabled: false
+  # -- The name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for externally-managed secrets reloading
+  # -- Optional annotations for the secret, e.g., for external secret managers.
   annotations: {}
 
 # -- Development mode settings
