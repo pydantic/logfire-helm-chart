@@ -31,6 +31,8 @@ hooksAnnotations:
 #  argocd.argoproj.io/hook: PreSync
 #  argocd.argoproj.io/hook-delete-policy: HookSucceeded
 
+# -- NOTE: The DSNs below are ignored if `postgresSecret.enabled` is true.
+
 # -- Postgres DSN used for `crud` database
 postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 
@@ -73,6 +75,13 @@ ai:
 
 # -- Configuration, autoscaling & resources for `logfire-dex` deployment
 logfire-dex:
+  # -- Workload annotations
+  annotations: {}
+  # -- Pod annotations
+  podAnnotations: {}
+  service:
+    # -- Service annotations
+    annotations: {}
   # -- Number of replicas
   replicas: 1
   # -- Dex Config
@@ -103,10 +112,20 @@ logfire-dex:
 #    cpuAverage: 20
 #  pdb:
 #    maxUnavailable: 1
-#    minAvaliable: 1
+#    minAvailable: 1
+#
 # # -- Autoscaling & resources for the `logfire-ff-ingest` pod
 logfire-ff-ingest:
+  # -- Workload annotations
+  annotations: {}
+  # -- Pod annotations
+  podAnnotations: {}
+  service:
+    # -- Service annotations
+    annotations: {}
+  # -- Configuration for the PersistentVolumeClaim template for the stateful set.
   volumeClaimTemplates:
+    # -- The amount of storage to provision for each pod.
     storage: 16Gi
   # resources:
   #   cpu: "2"
@@ -118,10 +137,17 @@ logfire-ff-ingest:
 #     cpuAverage: 50
 #   pdb:
 #     maxUnavailable: 1
-#     minAvaliable: 1
+#     minAvailable: 1
 #
 # # -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
 #   # -- Number of pod replicas
 #   replicas: 2
 #   # -- Resource limits and allocations
@@ -136,10 +162,17 @@ logfire-ff-ingest:
 #     cpuAverage: 20
 #   pdb:
 #     maxUnavailable: 1
-#     minAvaliable: 1
+#     minAvailable: 1
 #
 # # -- Autoscaling & resources for the query api pods
 # logfire-ff-query-api:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
 #   queryParallelism: 4
 #   replicas: 2
 #   resources:
@@ -152,10 +185,17 @@ logfire-ff-ingest:
 #     cpuAverage: 20
 #  pdb:
 #    maxUnavailable: 1
-#    minAvaliable: 1
+#    minAvailable: 1
 #
 # # -- Autoscaling & resources for the frontend pods
 # logfire-frontend-service:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
 #   replicas: 1
 #   resources:
 #     cpu: "1"
@@ -167,10 +207,55 @@ logfire-ff-ingest:
 #     cpuAverage: 20
 #  pdb:
 #    maxUnavailable: 1
-#    minAvaliable: 1
+#    minAvailable: 1
+#
+# # -- Autoscaling & resources for the scheduler pods
+# logfire-scheduler:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   replicas: 1
+#   resources:
+#     cpu: "1"
+#     memory: "1Gi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 2
+#     memAverage: 65
+#     cpuAverage: 20
+#  pdb:
+#    maxUnavailable: 1
+#    minAvailable: 1
+#
+# # -- Autoscaling & resources for the worker pods
+# logfire-worker:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   replicas: 1
+#   resources:
+#     cpu: "1"
+#     memory: "1Gi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 2
+#     memAverage: 65
+#     cpuAverage: 20
+#  pdb:
+#    maxUnavailable: 1
+#    minAvailable: 1
 #
 # # -- Autoscaling & resources for the proxy pods
 # logfire-service:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
 #   replicas: 1
 #   resources:
 #     cpu: "1"
@@ -180,12 +265,21 @@ logfire-ff-ingest:
 #     maxReplicas: 2
 #     memAverage: 65
 #     cpuAverage: 20
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 2
+#     memAverage: 65
+#     cpuAverage: 20
 #  pdb:
 #    maxUnavailable: 1
-#    minAvaliable: 1
+#    minAvailable: 1
 #
 # # -- Autoscaling & resources for the cache pods
 # logfire-ff-cache:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
 #   replicas: 2
 #   # -- How much disk storage is used for caching
 #   cacheStorage: "10Gi"
@@ -194,28 +288,61 @@ logfire-ff-ingest:
 #   resources:
 #     cpu: "4"
 #     memory: "8Gi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 2
+#     memAverage: 65
+#     cpuAverage: 20
 #   pdb:
 #     maxUnavailable: 1
-#     minAvaliable: 1
+#     minAvailable: 1
 #
 # logfire-ff-conhash-cache:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
 #   replicas: 2
 #   resources:
 #     cpu: "1"
 #     memory: "1Gi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 2
+#     memAverage: 65
+#     cpuAverage: 20
 #   pdb:
 #     maxUnavailable: 1
-#     minAvaliable: 1
+#     minAvailable: 1
 #
 # logfire-ff-ingest-api:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
 #   resources:
 #     cpu: "1"
 #     memory: "1Gi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 2
+#     memAverage: 65
+#     cpuAverage: 20
 #   pdb:
 #     maxUnavailable: 1
-#     minAvaliable: 1
+#     minAvailable: 1
 #
 # logfire-ff-ingest-worker:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
 #   replicas: 6
 #   resources:
 #     cpu: "1"
@@ -227,9 +354,13 @@ logfire-ff-ingest:
 #     cpuAverage: 15
 #   pdb:
 #     maxUnavailable: 1
-#     minAvaliable: 1
+#     minAvailable: 1
 #
 # logfire-ff-maintenance-worker:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
 #   jobParallelism: 1
 #   downloadParallelism: 10
 #   replicas: 2
@@ -257,7 +388,7 @@ logfire-ff-ingest:
 #     cpuAverage: 50
 #   pdb:
 #     maxUnavailable: 1
-#     minAvaliable: 1
+#     minAvailable: 1
 #   scratchVolume:
 #     storageClassName: my-storage-class
 #     storage: 1Gi
@@ -265,6 +396,10 @@ logfire-ff-ingest:
 #       type: my-volume
 #
 # logfire-ff-compaction-worker:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
 #   jobParallelism: 1
 #   downloadParallelism: 10
 #   replicas: 2
@@ -292,15 +427,39 @@ logfire-ff-ingest:
 #     cpuAverage: 50
 #   pdb:
 #     maxUnavailable: 1
-#     minAvaliable: 1
+#     minAvailable: 1
 #   scratchVolume:
 #     storageClassName: my-storage-class
 #     storage: 1Gi
 #     labels:
 #       type: my-volume
 #
+# logfire-otel-collector:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
+#   resources:
+#     cpu: "1"
+#     memory: "1Gi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 2
+#     memAverage: 65
+#     cpuAverage: 20
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+#
 ## Optional query worker deployment
 # logfire-ff-query-worker:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
 #   enabled: true
 #   replicas: 8
 #   resources:
@@ -313,7 +472,8 @@ logfire-ff-ingest:
 #     cpuAverage: 50
 #   pdb:
 #     maxUnavailable: 1
-#     minAvaliable: 1
+#     minAvailable: 1
+
 
 # -- Object storage details
 objectStore:
@@ -332,7 +492,6 @@ objectStore:
 #         secretKeyRef:
 #           name: my-azure-secret
 #           key: account-key
-# objectStoreEnv:
 # AWS
 # objectStore:
 #   uri: s3://<bucket_name>

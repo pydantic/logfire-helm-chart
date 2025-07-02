@@ -6,6 +6,8 @@ metadata:
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
+  annotations:
+    {{- include "logfire.serviceAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
 spec:
   selector:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
@@ -24,6 +26,7 @@ metadata:
     app.kubernetes.io/component: {{ $serviceName }}
   annotations: 
     {{- include "logfire.secretAnnotations" . | nindent 4 }}
+    {{- include "logfire.annotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
 spec:
   {{- if not (hasKey (index .Values $serviceName | default dict) "autoscaling") }}
   replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
@@ -41,6 +44,7 @@ spec:
         checksum/logfire-meta-frontend-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-frontend-token" )) "key" "logfire-meta-frontend-token" )}}
         checksum/logfire-meta-write-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token" )) "key" "logfire-meta-write-token" )}}
         checksum/logfire-postgres-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresDsn" )}}
+        {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
