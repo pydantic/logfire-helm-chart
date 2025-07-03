@@ -43,8 +43,8 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: redis
-          image: {{ (index .Values "logfire-redis").image.repository }}:{{ (index .Values "logfire-redis").image.tag }}
-          imagePullPolicy: {{ (index .Values "logfire-redis").image.pullPolicy }}
+          image: {{ printf "%s:%s" (get (get (index .Values $serviceName) "image" | default dict) "repository" | default "redis") (get (get (index .Values $serviceName) "image" | default dict) "tag" | default "7.2") }}
+          imagePullPolicy: {{ get (get (index .Values $serviceName) "image" | default dict) "pullPolicy" | default "IfNotPresent" }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           ports:
