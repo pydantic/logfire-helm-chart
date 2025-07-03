@@ -6,6 +6,8 @@ metadata:
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
+  annotations:
+    {{- include "logfire.serviceAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
 spec:
   selector:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
@@ -22,6 +24,9 @@ metadata:
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
+  annotations: 
+    {{- include "logfire.secretAnnotations" . | nindent 4 }}
+    {{- include "logfire.annotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
 spec:
   {{- if not (hasKey (index .Values $serviceName | default dict) "autoscaling") }}
   replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
@@ -33,6 +38,17 @@ spec:
       app.kubernetes.io/component: {{ $serviceName }}
   template:
     metadata:
+      annotations:
+        {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
+        checksum/logfire-dex-client-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-dex-client-secret" )) "key" "logfire-dex-client-secret" )}}
+        checksum/logfire-jwt-client-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret" )) "key" "logfire-jwt-secret" )}}
+        checksum/logfire-meta-frontend-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-frontend-token" )) "key" "logfire-meta-frontend-token" )}}
+        checksum/logfire-meta-write-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token" )) "key" "logfire-meta-write-token" )}}
+        {{- end }}
+        {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
+        checksum/logfire-postgres-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresDsn" )}}
+        {{- end }}
+        {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
@@ -122,7 +138,7 @@ spec:
             - name: DEX_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "secretName" "logfire-dex-client-secret" "existingSecret" (get .Values "existingSecret" | default dict)) }}
+                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-dex-client-secret") }}
                   key: logfire-dex-client-secret
             - name: ON_PREM
               value: "true"
@@ -141,7 +157,7 @@ spec:
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "secretName" "logfire-jwt-secret" "existingSecret" (get .Values "existingSecret" | default dict)) }}
+                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
             - name: FUSIONFIRE_PORT
               value: "8011"
@@ -158,12 +174,12 @@ spec:
             - name: META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "secretName" "logfire-meta-write-token" "existingSecret" (get .Values "existingSecret" | default dict)) }}
+                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token") }}
                   key: logfire-meta-write-token
             - name: META_FRONTEND_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "secretName" "logfire-meta-frontend-token" "existingSecret" (get .Values "existingSecret" | default dict)) }}
+                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-frontend-token") }}
                   key: logfire-meta-frontend-token
             - name: BOOTSTRAPPED_ORGANIZATIONS
               # This will make it possible to log-in sans-credentials by visiting a URL like:
