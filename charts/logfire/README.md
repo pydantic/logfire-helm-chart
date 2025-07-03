@@ -347,7 +347,11 @@ See [`values.yaml`](./values.yaml) for some production level values
 | logfire-ff-ingest.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-ingest.volumeClaimTemplates | object | `{"storage":"16Gi"}` | Configuration for the PersistentVolumeClaim template for the stateful set. |
 | logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` | The amount of storage to provision for each pod. |
-| logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart |
+| logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart. Disable this if you want to provide your own redis instance. |
+| logfire-redis.image | object | `{"pullPolicy":"IfNotPresent","repository":"redis","tag":"7.2"}` | Redis image configuration |
+| logfire-redis.image.pullPolicy | string | `"IfNotPresent"` | Redis image pull policy |
+| logfire-redis.image.repository | string | `"redis"` | Redis image repository |
+| logfire-redis.image.tag | string | `"7.2"` | Redis image tag |
 | minio.auth.rootPassword | string | `"logfire-minio"` |  |
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
@@ -438,3 +442,81 @@ dev:
 
 By default we bundle a single-node [MinIO](https://min.io/) instance to allow you to test out object storage.
 This is not intended for production use, but is useful for development.
+# logfire
+
+![Version: 0.2.11](https://img.shields.io/badge/Version-0.2.11-informational?style=flat-square) ![AppVersion: 2b40212f](https://img.shields.io/badge/AppVersion-2b40212f-informational?style=flat-square)
+
+Helm chart for self-hosted Logfire
+
+## Values
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| ai.azureOpenAi.apiKey | string | `nil` | The Azure OpenAI API key |
+| ai.azureOpenAi.apiVersion | string | `nil` | The Azure OpenAI API version |
+| ai.azureOpenAi.endpoint | string | `nil` | The Azure OpenAI endpoint |
+| ai.model | string | `nil` | The AI provide and model to use. Prefix with the provider. I.e, For azure use `azure:gpt-4o`  See https://ai.pydantic.dev/models/ for more info |
+| ai.openAi.apiKey | string | `nil` | The OpenAI API key |
+| ai.vertexAi.region | string | `nil` | The region for Vertex AI |
+| dev | object | `{"deployMaildev":false,"deployMinio":false,"deployPostgres":false}` | Development mode settings |
+| dev.deployMaildev | bool | `false` | Deploy maildev for testing emails |
+| dev.deployMinio | bool | `false` | Do NOT use this in production! |
+| dev.deployPostgres | bool | `false` | Do NOT use this in production! |
+| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys  logfire-dex-client-secret  logfire-meta-write-token  logfire-meta-frontend-token  logfire-jwt-secret |
+| existingSecret.annotations | object | `{}` | Optional annotations for the secret, e.g., for external secret managers. |
+| existingSecret.enabled | bool | `false` | Set to true to use an existing secret. Highly recommended for Argo CD users. |
+| existingSecret.name | string | `""` | The name of the Kubernetes Secret resource. |
+| hooksAnnotations | string | `nil` | Custom annotations for migration Jobs |
+| image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
+| imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
+| ingress.annotations | object | `{}` | Any annotations required. |
+| ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
+| ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
+| ingress.ingressClassName | string | `"nginx"` |  |
+| ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
+| legacyIngest.enabled | bool | `true` |  |
+| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"podAnnotations":{},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex.annotations | object | `{}` | Workload annotations |
+| logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
+| logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
+| logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
+| logfire-dex.podAnnotations | object | `{}` | Pod annotations |
+| logfire-dex.replicas | int | `1` | Number of replicas |
+| logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
+| logfire-dex.service.annotations | object | `{}` | Service annotations |
+| logfire-ff-ingest.annotations | object | `{}` | Workload annotations |
+| logfire-ff-ingest.podAnnotations | object | `{}` | Pod annotations |
+| logfire-ff-ingest.service.annotations | object | `{}` | Service annotations |
+| logfire-ff-ingest.volumeClaimTemplates | object | `{"storage":"16Gi"}` | Configuration for the PersistentVolumeClaim template for the stateful set. |
+| logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` | The amount of storage to provision for each pod. |
+| logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart. Disable this if you want to provide your own redis instance. |
+| logfire-redis.image | object | `{"pullPolicy":"IfNotPresent","repository":"redis","tag":"7.2"}` | Redis image configuration |
+| logfire-redis.image.pullPolicy | string | `"IfNotPresent"` | Redis image pull policy |
+| logfire-redis.image.repository | string | `"redis"` | Redis image repository |
+| logfire-redis.image.tag | string | `"7.2"` | Redis image tag |
+| minio.auth.rootPassword | string | `"logfire-minio"` |  |
+| objectStore | object | `{"env":{},"uri":null}` | Object storage details |
+| objectStore.env | object | `{}` | additional env vars for the object store connection |
+| objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
+| otel_collector | object | `{"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | Config for otel-collector |
+| podSecurityContext | object | `{}` | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details. |
+| postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for `crud` database |
+| postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for `ff` database |
+| postgresIngestDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ingest"` | Postgres DSN used for `ingest` database |
+| postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys |
+| postgresSecret.annotations | object | `{}` | Optional annotations for the secret, e.g., for external secret managers. |
+| postgresSecret.enabled | bool | `false` | Set to true to use an existing secret. Highly recommended for Argo CD users. |
+| postgresSecret.name | string | `""` | The name of the Kubernetes Secret resource. |
+| priorityClassName | string | `""` | Specify a priority class name to set [pod priority](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
+| redisDsn | string | `"redis://logfire-redis:6379"` | The DSN for redis.  Change from default if you have an external redis instance |
+| revisionHistoryLimit | int | `2` | Define the [count of deployment revisions](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) to be kept. May be set to 0 in case of GitOps deployment approach. |
+| securityContext | object | `{}` | Container [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1) for details. |
+| serviceAccountName | string | `"default"` | the Kubernetes Service Account that is used by the pods |
+| smtp.host | string | `nil` | Hostname of the SMTP server |
+| smtp.password | string | `nil` | SMTP password |
+| smtp.port | int | `25` | Port of the SMTP server |
+| smtp.use_tls | bool | `false` | Whether to use TLS |
+| smtp.username | string | `nil` | SMTP username |
+
+----------------------------------------------
+Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)

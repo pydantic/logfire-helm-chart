@@ -548,8 +548,17 @@ image:
   dexImage: dex
 
 logfire-redis:
-  # -- Enable redis as part of this helm chart
+  # -- Enable redis as part of this helm chart.
+  # Disable this if you want to provide your own redis instance.
   enabled: true
+  # -- Redis image configuration
+  image:
+    # -- Redis image repository
+    repository: redis
+    # -- Redis image tag
+    tag: "7.2"
+    # -- Redis image pull policy
+    pullPolicy: IfNotPresent
 
 # -- Config for otel-collector
 otel_collector:
