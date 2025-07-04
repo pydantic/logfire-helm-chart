@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.2.13](https://img.shields.io/badge/Version-0.2.13-informational?style=flat-square) ![AppVersion: b53c846d](https://img.shields.io/badge/AppVersion-b53c846d-informational?style=flat-square)
+![Version: 0.3.0](https://img.shields.io/badge/Version-0.3.0-informational?style=flat-square) ![AppVersion: b53c846d](https://img.shields.io/badge/AppVersion-b53c846d-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -332,7 +332,6 @@ See [`values.yaml`](./values.yaml) for some production level values
 | ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
-| legacyIngest.enabled | bool | `true` |  |
 | logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"podAnnotations":{},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
 | logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
@@ -360,8 +359,7 @@ See [`values.yaml`](./values.yaml) for some production level values
 | podSecurityContext | object | `{}` | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for `ff` database |
-| postgresIngestDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ingest"` | Postgres DSN used for `ingest` database |
-| postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys |
+| postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn` and `postgresFFDsn` keys |
 | postgresSecret.annotations | object | `{}` | Optional annotations for the secret, e.g., for external secret managers. |
 | postgresSecret.enabled | bool | `false` | Set to true to use an existing secret. Highly recommended for Argo CD users. |
 | postgresSecret.name | string | `""` | The name of the Kubernetes Secret resource. |
@@ -444,7 +442,7 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.2.13](https://img.shields.io/badge/Version-0.2.13-informational?style=flat-square) ![AppVersion: b53c846d](https://img.shields.io/badge/AppVersion-b53c846d-informational?style=flat-square)
+![Version: 0.3.0](https://img.shields.io/badge/Version-0.3.0-informational?style=flat-square) ![AppVersion: b53c846d](https://img.shields.io/badge/AppVersion-b53c846d-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -474,7 +472,6 @@ Helm chart for self-hosted Logfire
 | ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
-| legacyIngest.enabled | bool | `true` |  |
 | logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"podAnnotations":{},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
 | logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
@@ -502,8 +499,7 @@ Helm chart for self-hosted Logfire
 | podSecurityContext | object | `{}` | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for `ff` database |
-| postgresIngestDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ingest"` | Postgres DSN used for `ingest` database |
-| postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys |
+| postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn` and `postgresFFDsn` keys |
 | postgresSecret.annotations | object | `{}` | Optional annotations for the secret, e.g., for external secret managers. |
 | postgresSecret.enabled | bool | `false` | Set to true to use an existing secret. Highly recommended for Argo CD users. |
 | postgresSecret.name | string | `""` | The name of the Kubernetes Secret resource. |
