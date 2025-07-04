@@ -80,7 +80,6 @@ jobs:
           kubectl create secret generic pg-dsns \
             --from-literal="postgresDsn=postgres://postgres:postgres@logfire-postgres:5432/crud" \
             --from-literal="postgresFFDsn=postgres://postgres:postgres@logfire-postgres:5432/ff" \
-            --from-literal="postgresIngestDsn=postgres://postgres:postgres@logfire-postgres:5432/ingest"
 
           kubectl create secret generic logfire-tokens \
             --from-literal="logfire-dex-client-secret=$(date +%s%N | sha256sum | head -c 32)" \

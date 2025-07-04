@@ -14,7 +14,7 @@ ingress:
   annotations: {}
 
 # -- User provided postgres credentials
-# containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys
+# containing `postgresDsn` and `postgresFFDsn` keys
 postgresSecret:
   # -- Set to true to use an existing secret. Highly recommended for Argo CD users.
   enabled: false
@@ -22,9 +22,6 @@ postgresSecret:
   name: ""
   # -- Optional annotations for the secret, e.g., for external secret managers.
   annotations: {}
-
-legacyIngest:
-  enabled: true
 
 # -- Custom annotations for migration Jobs
 hooksAnnotations:
@@ -38,9 +35,6 @@ postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 
 # -- Postgres DSN used for `ff` database
 postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
-
-# -- Postgres DSN used for `ingest` database
-postgresIngestDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ingest"
 
 smtp:
   # -- Hostname of the SMTP server

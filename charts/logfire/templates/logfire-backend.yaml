@@ -115,7 +115,7 @@ spec:
               value: {{ . }}
             {{- end }}
             {{- with .vertexAi.region }}
-            - name: VERTEX_AI_REGION
+            - name: GOOGLE_CLOUD_LOCATION
               value: {{ . }}
             {{- end }}
             {{- with .azureOpenAi }}
@@ -142,8 +142,6 @@ spec:
                   key: logfire-dex-client-secret
             - name: ON_PREM
               value: "true"
-            - name: FUSIONFIRE_HOST
-              value: http://logfire-ff-query-api
             - name: BROWSER_TELEMETRY_COLLECTOR_OTLP_HTTP_HOST
               value: http://logfire-otel-collector:4318
             - name: COLLECTOR_OTLP_GRPC_HOST
@@ -159,8 +157,14 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
+            - name: FUSIONFIRE_HOST
+              value: http://logfire-ff-query-api
             - name: FUSIONFIRE_PORT
               value: "8011"
+            - name: FUSIONFIRE_INGEST_HOST
+              value: http://logfire-ff-ingest
+            - name: FUSIONFIRE_INGEST_PORT
+              value: "8012"
             - name: MIN_DATE_USAGE_CHART  # TODO: make this optional?
               value: "2025-01-01"
             - name: DEFAULT_SUBSCRIPTION_PLAN
