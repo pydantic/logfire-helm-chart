@@ -77,4 +77,4 @@ postgresql:
 
 minio:
   persistence:
-    size: 1Gi
+    enabled: false
