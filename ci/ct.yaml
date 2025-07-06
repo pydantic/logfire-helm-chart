@@ -11,3 +11,5 @@ helm-tests:
   - run-tests: true
 helm-extra-args: "--timeout 600s"
 print-logs: false
+chart-repos:
+  - bitnami=https://charts.bitnami.com/bitnami

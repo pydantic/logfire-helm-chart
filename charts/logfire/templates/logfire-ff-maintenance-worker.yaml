@@ -103,8 +103,6 @@ spec:
               value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "1" | quote) }} 
             - name: FF_COMPACTION_MAX_DAYS
               value: "3"
-            - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
-              value: "32"
             - name: FF_COMPACTION_LOOP_BACKOFF_DELAY
               value: "1s"
             - name: FF_DELETION_LOOP_DELAY

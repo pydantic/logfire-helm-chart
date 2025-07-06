@@ -594,6 +594,45 @@ dev:
   # -- Do NOT use this in production!
   deployMinio: false
 
-minio:
+postgresql:
+  fullnameOverride: "logfire-postgres"
   auth:
+    postgresPassword: "postgres"
+  postgresqlDataDir: /var/lib/postgresql/data/pgdata
+  primary:
+    initdb:
+      scripts:
+        create_databases.sql: |
+          CREATE DATABASE crud;
+          CREATE DATABASE dex;
+          CREATE DATABASE ff;
+    persistence:
+      size: 10Gi
+      mountPath: /var/lib/postgresql
+
+minio:
+  fullnameOverride: "logfire-minio"
+  auth:
+    rootUser: logfire-minio
     rootPassword: logfire-minio
+  persistence:
+    mountPath: /data
+    size: 32Gi
+  command:
+    - minio
+  args:
+    - server
+    - /data
+  lifecycleHooks:
+    postStart:
+      exec:
+        command:
+          - sh
+          - -c
+          - |
+            # Wait for the server to start
+            sleep 5
+            # Create a bucket
+            mc alias set local http://localhost:9000 logfire-minio logfire-minio
+            mc mb local/logfire
+            mc anonymous set public local/logfire
