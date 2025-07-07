@@ -73,17 +73,17 @@ spec:
             - name: FF_ENABLE_SPILL_TO_DISK
               value: "true"
             - name: FF_ENABLE_INDEX_COMPACTION
-              value: "false"
+              value: "true"
             - name: FF_ENABLE_HISTORICAL_COMPACTION
-              value: "false"
+              value: "true"
             - name: FF_ENABLE_HISTORICAL_INDEX_COMPACTION
-              value: "false"
+              value: "true"
             - name: FF_ENABLE_SCHEMA_UPGRADES
-              value: "false"
+              value: "true"
             - name: FF_UPGRADE_MAX_DAYS
-              value: "30"
+              value: "90"
             - name: FF_HISTORIC_MAX_DAYS
-              value: "30"
+              value: "90"
             - name: FF_TEMP_DIR
               value: /scratch/fusionfire
             {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
