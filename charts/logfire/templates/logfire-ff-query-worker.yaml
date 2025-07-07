@@ -1,4 +1,8 @@
 {{- $serviceName := "logfire-ff-query-worker" }}
+{{- $defaultCpu := "1" -}}
+{{- $serviceValues := get .Values $serviceName | default dict -}}
+{{- $resources := get $serviceValues "resources" | default dict -}}
+{{- $cpu := get $resources "cpu" | default $defaultCpu -}}
 {{- if (index .Values $serviceName | default dict).enabled }}
 apiVersion: apps/v1
 kind: Deployment
@@ -72,6 +76,23 @@ spec:
               value: /scratch/fusionfire
             - name: FF_QUERY_PARALLELISM
               value: {{ (get (get .Values $serviceName | default dict) "queryParallelism" | default "4" | quote) }}
+            - name: FF_USE_PARQUET_STATS_CHANCE
+              value: "0.0"
+            - name: FF_PG_POOL_MAX_CONNECTIONS
+              value: "4"
+            - name: FF_PG_POOL_MIN_CONNECTIONS
+              value: "1"
+            - name: FF_IO_THREADS
+              value: {{ $cpu | quote }}
+            - name: FF_DATAFUSION_THREADS
+              {{- $dataFusionThreads := sub (atoi $cpu) 1 }}
+              value: {{ (gt $dataFusionThreads 0) | ternary $dataFusionThreads "1" | quote }}
+            - name: FF_DATAFUSION_MEMORY_LIMIT
+              value: {{ (get (get .Values $serviceName | default dict) "datafusionMemory" | default "512MB" | quote) }}
+            - name: FF_DATAFUSION_THREAD_STACK_SIZE
+              value: "8MB"
+            - name: FF_IO_THREAD_STACK_SIZE
+              value: "8MB"
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:

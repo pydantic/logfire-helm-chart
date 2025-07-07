@@ -20,7 +20,6 @@ dev:
 
 postgresDsn: postgres://postgres:postgres@logfire-postgres:5432/crud
 postgresFFDsn: postgres://postgres:postgres@logfire-postgres:5432/ff
-postgresIngestDsn: postgres://postgres:postgres@logfire-postgres:5432/ingest
 
 ingress:
   enabled: false

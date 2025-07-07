@@ -228,7 +228,7 @@ objectStore:
 
 ### PostgreSQL
 
-Logfire nominally needs 4 separate PostgreSQL databases: `crud`, `ff`, `ingest` and `dex`.  Each will need a user with owner permissions to allow migrations to run.
+Logfire nominally needs 4 separate PostgreSQL databases: `crud`, `ff`, and `dex`.  Each will need a user with owner permissions to allow migrations to run.
   While they can all be ran on the same instance, they are required to be separate databases to prevent naming/schema collisions.
 
 Here's an example set of values using `postgres.example.com` as the host:
@@ -236,7 +236,6 @@ Here's an example set of values using `postgres.example.com` as the host:
 ```yaml
 postgresDsn: postgres://postgres:postgres@postgres.example.com:5432/crud
 postgresFFDsn: postgres://postgres:postgres@postgres.example.com:5432/ff
-postgresIngestDsn: postgres://postgres:postgres@postgres.example.com:5432/ingest
 
 dex:
   ...
@@ -350,7 +349,6 @@ dev:
 
 postgresDsn: postgres://postgres:postgres@logfire-postgres:5432/crud
 postgresFFDsn: postgres://postgres:postgres@logfire-postgres:5432/ff
-postgresIngestDsn: postgres://postgres:postgres@logfire-postgres:5432/ingest
 
 dex:
   ...

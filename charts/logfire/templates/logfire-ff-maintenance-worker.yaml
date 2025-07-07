@@ -1,4 +1,8 @@
 {{- $serviceName := "logfire-ff-maintenance-worker" }}
+{{- $defaultCpu := "1" -}}
+{{- $serviceValues := get .Values $serviceName | default dict -}}
+{{- $resources := get $serviceValues "resources" | default dict -}}
+{{- $cpu := get $resources "cpu" | default $defaultCpu -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -68,11 +72,26 @@ spec:
               value: x-ff-no-warm-cache=1
             - name: FF_ENABLE_SPILL_TO_DISK
               value: "true"
+            - name: FF_ENABLE_INDEX_COMPACTION
+              value: "true"
+            - name: FF_ENABLE_HISTORICAL_COMPACTION
+              value: "true"
+            - name: FF_ENABLE_HISTORICAL_INDEX_COMPACTION
+              value: "true"
+            - name: FF_ENABLE_SCHEMA_UPGRADES
+              value: "true"
+            - name: FF_UPGRADE_MAX_DAYS
+              value: "90"
+            - name: FF_HISTORIC_MAX_DAYS
+              value: "90"
             - name: FF_TEMP_DIR
               value: /scratch/fusionfire
             {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             - name: FF_DATAFUSION_MEMORY_LIMIT
               value: {{ (get (get .Values $serviceName | default dict) "datafusionMemory" | default "512MB" | quote) }}
+            - name: FF_DATAFUSION_THREADS
+              {{- $dataFusionThreads := sub (atoi $cpu) 1 }}
+              value: {{ (gt $dataFusionThreads 0) | ternary $dataFusionThreads "1" | quote }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
@@ -82,6 +101,16 @@ spec:
               value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "1" | quote) }} 
             - name: FF_COMPACTION_JOB_PARALLELISM
               value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "1" | quote) }} 
+            - name: FF_COMPACTION_MAX_DAYS
+              value: "3"
+            - name: FF_COMPACTION_LOOP_BACKOFF_DELAY
+              value: "1s"
+            - name: FF_DELETION_LOOP_DELAY
+              value: "30s"
+            - name: FF_COMPACTION_GATHER_DELAY
+              value: "30s"
+            - name: FF_IO_THREADS
+              value: {{ $cpu | quote }}
             {{- include "logfire.ffmaxRowPerRowGroup" . | nindent 12 -}}
             {{- include "logfire.ffCompactionTiers" . | nindent 12 -}}
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}

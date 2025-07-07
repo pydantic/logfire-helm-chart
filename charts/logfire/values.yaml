@@ -14,7 +14,7 @@ ingress:
   annotations: {}
 
 # -- User provided postgres credentials
-# containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys
+# containing `postgresDsn` and `postgresFFDsn` keys
 postgresSecret:
   # -- Set to true to use an existing secret. Highly recommended for Argo CD users.
   enabled: false
@@ -22,9 +22,6 @@ postgresSecret:
   name: ""
   # -- Optional annotations for the secret, e.g., for external secret managers.
   annotations: {}
-
-legacyIngest:
-  enabled: true
 
 # -- Custom annotations for migration Jobs
 hooksAnnotations:
@@ -38,9 +35,6 @@ postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 
 # -- Postgres DSN used for `ff` database
 postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
-
-# -- Postgres DSN used for `ingest` database
-postgresIngestDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ingest"
 
 smtp:
   # -- Hostname of the SMTP server
@@ -600,6 +594,45 @@ dev:
   # -- Do NOT use this in production!
   deployMinio: false
 
-minio:
+postgresql:
+  fullnameOverride: "logfire-postgres"
   auth:
+    postgresPassword: "postgres"
+  postgresqlDataDir: /var/lib/postgresql/data/pgdata
+  primary:
+    initdb:
+      scripts:
+        create_databases.sql: |
+          CREATE DATABASE crud;
+          CREATE DATABASE dex;
+          CREATE DATABASE ff;
+    persistence:
+      size: 10Gi
+      mountPath: /var/lib/postgresql
+
+minio:
+  fullnameOverride: "logfire-minio"
+  auth:
+    rootUser: logfire-minio
     rootPassword: logfire-minio
+  persistence:
+    mountPath: /data
+    size: 32Gi
+  command:
+    - minio
+  args:
+    - server
+    - /data
+  lifecycleHooks:
+    postStart:
+      exec:
+        command:
+          - sh
+          - -c
+          - |
+            # Wait for the server to start
+            sleep 5
+            # Create a bucket
+            mc alias set local http://localhost:9000 logfire-minio logfire-minio
+            mc mb local/logfire
+            mc anonymous set public local/logfire

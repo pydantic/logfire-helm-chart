@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.2.12](https://img.shields.io/badge/Version-0.2.12-informational?style=flat-square) ![AppVersion: 2b40212f](https://img.shields.io/badge/AppVersion-2b40212f-informational?style=flat-square)
+![Version: 0.3.0](https://img.shields.io/badge/Version-0.3.0-informational?style=flat-square) ![AppVersion: b53c846d](https://img.shields.io/badge/AppVersion-b53c846d-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
 
@@ -225,7 +225,7 @@ objectStore:
 
 ### PostgreSQL
 
-Logfire nominally needs 4 separate PostgreSQL databases: `crud`, `ff`, `ingest` and `dex`.  Each will need a user with owner permissions to allow migrations to run.
+Logfire nominally needs 4 separate PostgreSQL databases: `crud`, `ff`, and `dex`.  Each will need a user with owner permissions to allow migrations to run.
   While they can all be ran on the same instance, they are required to be separate databases to prevent naming/schema collisions.
 
 Here's an example set of values using `postgres.example.com` as the host:
@@ -233,7 +233,6 @@ Here's an example set of values using `postgres.example.com` as the host:
 ```yaml
 postgresDsn: postgres://postgres:postgres@postgres.example.com:5432/crud
 postgresFFDsn: postgres://postgres:postgres@postgres.example.com:5432/ff
-postgresIngestDsn: postgres://postgres:postgres@postgres.example.com:5432/ingest
 
 dex:
   ...
@@ -306,6 +305,13 @@ Each service has both resources and autoscaling configured in the same way:
 
 See [`values.yaml`](./values.yaml) for some production level values
 
+## Requirements
+
+| Repository | Name | Version |
+|------------|------|---------|
+| https://charts.bitnami.com/bitnami | minio | 17.0.9 |
+| https://charts.bitnami.com/bitnami | postgresql | 16.7.15 |
+
 ## Values
 
 | Key | Type | Default | Description |
@@ -332,7 +338,6 @@ See [`values.yaml`](./values.yaml) for some production level values
 | ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
-| legacyIngest.enabled | bool | `true` |  |
 | logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"podAnnotations":{},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
 | logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
@@ -352,7 +357,17 @@ See [`values.yaml`](./values.yaml) for some production level values
 | logfire-redis.image.pullPolicy | string | `"IfNotPresent"` | Redis image pull policy |
 | logfire-redis.image.repository | string | `"redis"` | Redis image repository |
 | logfire-redis.image.tag | string | `"7.2"` | Redis image tag |
+| minio.args[0] | string | `"server"` |  |
+| minio.args[1] | string | `"/data"` |  |
 | minio.auth.rootPassword | string | `"logfire-minio"` |  |
+| minio.auth.rootUser | string | `"logfire-minio"` |  |
+| minio.command[0] | string | `"minio"` |  |
+| minio.fullnameOverride | string | `"logfire-minio"` |  |
+| minio.lifecycleHooks.postStart.exec.command[0] | string | `"sh"` |  |
+| minio.lifecycleHooks.postStart.exec.command[1] | string | `"-c"` |  |
+| minio.lifecycleHooks.postStart.exec.command[2] | string | `"# Wait for the server to start\nsleep 5\n# Create a bucket\nmc alias set local http://localhost:9000 logfire-minio logfire-minio\nmc mb local/logfire\nmc anonymous set public local/logfire\n"` |  |
+| minio.persistence.mountPath | string | `"/data"` |  |
+| minio.persistence.size | string | `"32Gi"` |  |
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
 | objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
@@ -360,11 +375,16 @@ See [`values.yaml`](./values.yaml) for some production level values
 | podSecurityContext | object | `{}` | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for `ff` database |
-| postgresIngestDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ingest"` | Postgres DSN used for `ingest` database |
-| postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys |
+| postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn` and `postgresFFDsn` keys |
 | postgresSecret.annotations | object | `{}` | Optional annotations for the secret, e.g., for external secret managers. |
 | postgresSecret.enabled | bool | `false` | Set to true to use an existing secret. Highly recommended for Argo CD users. |
 | postgresSecret.name | string | `""` | The name of the Kubernetes Secret resource. |
+| postgresql.auth.postgresPassword | string | `"postgres"` |  |
+| postgresql.fullnameOverride | string | `"logfire-postgres"` |  |
+| postgresql.postgresqlDataDir | string | `"/var/lib/postgresql/data/pgdata"` |  |
+| postgresql.primary.initdb.scripts."create_databases.sql" | string | `"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"` |  |
+| postgresql.primary.persistence.mountPath | string | `"/var/lib/postgresql"` |  |
+| postgresql.primary.persistence.size | string | `"10Gi"` |  |
 | priorityClassName | string | `""` | Specify a priority class name to set [pod priority](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | redisDsn | string | `"redis://logfire-redis:6379"` | The DSN for redis.  Change from default if you have an external redis instance |
 | revisionHistoryLimit | int | `2` | Define the [count of deployment revisions](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) to be kept. May be set to 0 in case of GitOps deployment approach. |
@@ -407,7 +427,6 @@ dev:
 
 postgresDsn: postgres://postgres:postgres@logfire-postgres:5432/crud
 postgresFFDsn: postgres://postgres:postgres@logfire-postgres:5432/ff
-postgresIngestDsn: postgres://postgres:postgres@logfire-postgres:5432/ingest
 
 dex:
   ...
@@ -444,9 +463,16 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.2.12](https://img.shields.io/badge/Version-0.2.12-informational?style=flat-square) ![AppVersion: 2b40212f](https://img.shields.io/badge/AppVersion-2b40212f-informational?style=flat-square)
+![Version: 0.3.0](https://img.shields.io/badge/Version-0.3.0-informational?style=flat-square) ![AppVersion: b53c846d](https://img.shields.io/badge/AppVersion-b53c846d-informational?style=flat-square)
 
 Helm chart for self-hosted Logfire
+
+## Requirements
+
+| Repository | Name | Version |
+|------------|------|---------|
+| https://charts.bitnami.com/bitnami | minio | 17.0.9 |
+| https://charts.bitnami.com/bitnami | postgresql | 16.7.15 |
 
 ## Values
 
@@ -474,7 +500,6 @@ Helm chart for self-hosted Logfire
 | ingress.hostname | string | `"logfire.example.com"` | The hostname used for Logfire |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
-| legacyIngest.enabled | bool | `true` |  |
 | logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"podAnnotations":{},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
 | logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
@@ -494,7 +519,17 @@ Helm chart for self-hosted Logfire
 | logfire-redis.image.pullPolicy | string | `"IfNotPresent"` | Redis image pull policy |
 | logfire-redis.image.repository | string | `"redis"` | Redis image repository |
 | logfire-redis.image.tag | string | `"7.2"` | Redis image tag |
+| minio.args[0] | string | `"server"` |  |
+| minio.args[1] | string | `"/data"` |  |
 | minio.auth.rootPassword | string | `"logfire-minio"` |  |
+| minio.auth.rootUser | string | `"logfire-minio"` |  |
+| minio.command[0] | string | `"minio"` |  |
+| minio.fullnameOverride | string | `"logfire-minio"` |  |
+| minio.lifecycleHooks.postStart.exec.command[0] | string | `"sh"` |  |
+| minio.lifecycleHooks.postStart.exec.command[1] | string | `"-c"` |  |
+| minio.lifecycleHooks.postStart.exec.command[2] | string | `"# Wait for the server to start\nsleep 5\n# Create a bucket\nmc alias set local http://localhost:9000 logfire-minio logfire-minio\nmc mb local/logfire\nmc anonymous set public local/logfire\n"` |  |
+| minio.persistence.mountPath | string | `"/data"` |  |
+| minio.persistence.size | string | `"32Gi"` |  |
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
 | objectStore.env | object | `{}` | additional env vars for the object store connection |
 | objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
@@ -502,11 +537,16 @@ Helm chart for self-hosted Logfire
 | podSecurityContext | object | `{}` | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for `ff` database |
-| postgresIngestDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ingest"` | Postgres DSN used for `ingest` database |
-| postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn`, `postgresFFDsn`, `postgresIngestDsn` keys |
+| postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn` and `postgresFFDsn` keys |
 | postgresSecret.annotations | object | `{}` | Optional annotations for the secret, e.g., for external secret managers. |
 | postgresSecret.enabled | bool | `false` | Set to true to use an existing secret. Highly recommended for Argo CD users. |
 | postgresSecret.name | string | `""` | The name of the Kubernetes Secret resource. |
+| postgresql.auth.postgresPassword | string | `"postgres"` |  |
+| postgresql.fullnameOverride | string | `"logfire-postgres"` |  |
+| postgresql.postgresqlDataDir | string | `"/var/lib/postgresql/data/pgdata"` |  |
+| postgresql.primary.initdb.scripts."create_databases.sql" | string | `"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"` |  |
+| postgresql.primary.persistence.mountPath | string | `"/var/lib/postgresql"` |  |
+| postgresql.primary.persistence.size | string | `"10Gi"` |  |
 | priorityClassName | string | `""` | Specify a priority class name to set [pod priority](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | redisDsn | string | `"redis://logfire-redis:6379"` | The DSN for redis.  Change from default if you have an external redis instance |
 | revisionHistoryLimit | int | `2` | Define the [count of deployment revisions](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) to be kept. May be set to 0 in case of GitOps deployment approach. |

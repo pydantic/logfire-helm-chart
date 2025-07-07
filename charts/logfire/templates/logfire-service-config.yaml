@@ -95,9 +95,6 @@ stringData:
       retries 4
       option redispatch 2
 
-      {{- if .Values.legacyIngest.enabled }}
-      server logfire-ff-ingest-api logfire-ff-ingest-api.{{ .Release.Namespace }}.svc.cluster.local.:8012 check resolvers kubernetes hash-key addr
-      {{- end }}
       {{- $maxCount := (get (get (get .Values "logfire-ff-ingest") "autoscaling" | default dict) "maxReplicas" | default (get (get .Values "logfire-ff-ingest") "replicas" | default 1)) }}
       server-template logfire-ff-ingest 1-{{ $maxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.cluster.local.:8012 check resolvers kubernetes inter 250ms hash-key addr
 

@@ -95,6 +95,8 @@ spec:
               value: {{ (get (get .Values $serviceName | default dict) "queryParallelism" | default "4" | quote) }}
             - name: FF_ENABLE_QUERY_WORKERS
               value: {{ (index .Values "logfire-ff-query-worker" | default dict).enabled | default "false" | quote }}
+            - name: FF_DATAFUSION_THREAD_STACK_SIZE
+              value: "8MB"
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:

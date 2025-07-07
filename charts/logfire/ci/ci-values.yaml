@@ -18,7 +18,6 @@ dev:
   deployPostgres: true
   deployMinio: true
   deployMaildev: true
-  postgresImage: postgres:16-alpine
 
 postgresSecret:
   enabled: true
@@ -41,6 +40,7 @@ logfire-dex:
         ssl:
           mode: disable
     staticClients: []
+
 logfire-backend:
   pdb:
     minUnavailable: 1
@@ -60,9 +60,6 @@ logfire-ff-ingest:
     memAverage: 65
     cpuAverage: 20
 
-legacyIngest:
-  enabled: true
-
 logfire-ff-compaction-worker:
   scratchVolume:
     storageClassName: standard
@@ -72,3 +69,12 @@ logfire-ff-compaction-worker:
     maxReplicas: 2
     memAverage: 65
     cpuAverage: 20
+
+postgresql:
+  primary:
+    persistence:
+      size: 1Gi
+
+minio:
+  persistence:
+    enabled: false
