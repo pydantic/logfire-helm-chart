@@ -347,6 +347,7 @@ See [`values.yaml`](./values.yaml) for some production level values
 | logfire-dex.replicas | int | `1` | Number of replicas |
 | logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
+| logfire-ff-cache-byte.resources.memory | string | `"1Gi"` |  |
 | logfire-ff-ingest.annotations | object | `{}` | Workload annotations |
 | logfire-ff-ingest.podAnnotations | object | `{}` | Pod annotations |
 | logfire-ff-ingest.service.annotations | object | `{}` | Service annotations |
@@ -509,6 +510,7 @@ Helm chart for self-hosted Logfire
 | logfire-dex.replicas | int | `1` | Number of replicas |
 | logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
+| logfire-ff-cache-byte.resources.memory | string | `"1Gi"` |  |
 | logfire-ff-ingest.annotations | object | `{}` | Workload annotations |
 | logfire-ff-ingest.podAnnotations | object | `{}` | Pod annotations |
 | logfire-ff-ingest.service.annotations | object | `{}` | Service annotations |

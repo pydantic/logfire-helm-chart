@@ -1,8 +1,8 @@
-{{- $serviceName := "logfire-ff-conhash-cache" }}
+{{- $serviceName := "logfire-ff-conhash-cache-byte" }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $serviceName }}
+  name: logfire-ff-cache-byte
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
@@ -14,44 +14,9 @@ spec:
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
   - port: 9001
-    targetPort: 9001
+    targetPort: 80
+    name: http
   type: ClusterIP
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: conhash
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: conhash-role
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-rules:
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "watch", "list"]
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: conhash-rolebinding
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: conhash-role
-subjects:
-  - kind: ServiceAccount
-    name: conhash
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -78,6 +43,7 @@ spec:
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
+        checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
       serviceAccountName: conhash
@@ -102,41 +68,24 @@ spec:
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
             - "conhash"
-            - "--port"
-            - "9001"
           ports:
-            - containerPort: 9001
-          env:
-            - name: ORCHESTRATION
-              value: "kubernetes"
+            - containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: logfire-ff-config
+          env: 
+            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
+            {{- include "logfire.objectStoreEnv" . | nindent 12 }}
             - name: DEPLOYMENT_SELECTOR
-              value: "app.kubernetes.io/component=logfire-ff-cache"
+              value: "app.kubernetes.io/component=logfire-ff-cache-byte"
             - name: DEPLOYMENT_PORT
               value: "9001"
-            - name: FF_SEND_TO_LOGFIRE
-              value: "false"
-            - name: RUST_LOG
-              value: "info"
-            - name: RUST_BACKTRACE
-              value: "full"
+            - name: HASH
+              value: "uri"
+            - name: FF_USE_DIRECT_IO
+              value: "true"
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 9001
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 5
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 9001
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 5
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

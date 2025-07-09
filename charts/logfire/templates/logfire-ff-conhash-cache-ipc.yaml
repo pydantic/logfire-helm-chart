@@ -1,4 +1,23 @@
-{{- $serviceName := "logfire-ff-cache" }}
+{{- $serviceName := "logfire-ff-conhash-cache-ipc" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logfire-ff-cache-ipc
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  annotations:
+    {{- include "logfire.serviceAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+  - port: 9001
+    targetPort: 80
+    name: http
+  type: ClusterIP
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -8,7 +27,6 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   annotations:
-    {{- include "logfire.postgresSecret.annotations" . | nindent 4 }}
     {{- include "logfire.annotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
 spec:
   {{- if not (hasKey (index .Values $serviceName | default dict) "autoscaling") }}
@@ -27,14 +45,9 @@ spec:
       annotations:
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
-        {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
-        checksum/logfire-postgres-ff-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresFFDsn" )}}
-        {{- end }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
-      {{- with .Values.serviceAccountName }}
-      serviceAccountName: {{ . }}
-      {{- end}}
+      serviceAccountName: conhash
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
       {{- range . }}
@@ -55,44 +68,25 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
-            - fusionfire
-            - cache
-            - --host=0.0.0.0
-            - --port=9001
+            - "conhash"
+          ports:
+            - containerPort: 80
           envFrom:
             - configMapRef:
                 name: logfire-ff-config
-          env:
-            - name: FF_CACHE_LOCAL_DIR
-              value: /scratch
-            - name: PG_DSN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "logfire.postgresSecretName" . }}
-                  key: postgresFFDsn
+          env: 
             {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
-            {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
+            {{- include "logfire.objectStoreEnv" . | nindent 12 }}
+            - name: DEPLOYMENT_SELECTOR
+              value: "app.kubernetes.io/component=logfire-ff-cache-ipc"
+            - name: DEPLOYMENT_PORT
+              value: "9001"
+            - name: HASH
+              value: "uri"
+            - name: FF_USE_DIRECT_IO
+              value: "true"
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
-            {{- end }}
-          volumeMounts:
-            - name: cache-data
-              mountPath: /scratch
-      volumes:
-        - name: cache-data
-          ephemeral:
-            volumeClaimTemplate:
-              metadata:
-                labels:
-                  type: ephemeral
-              spec:
-                accessModes:
-                - ReadWriteOnce
-                {{- with (index (index .Values $serviceName | default dict) "cacheStorageClassName") }}
-                storageClassName: {{ . }}
-                {{- end }}
-                resources:
-                  requests:
-                    storage: {{ dig "cacheStorage" "10Gi" (index .Values $serviceName | default dict) }}
+            {{- end}}
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

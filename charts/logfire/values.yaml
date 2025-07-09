@@ -291,6 +291,9 @@ logfire-ff-ingest:
 #     maxUnavailable: 1
 #     minAvailable: 1
 #
+logfire-ff-cache-byte:
+  resources:
+    memory: "1Gi"
 # logfire-ff-conhash-cache:
 #   # -- Workload annotations
 #   annotations: {}
