@@ -1,19 +1,4 @@
 {{- $serviceName := "logfire-ff-cache-ipc" }}
-{{- $serviceValues := get .Values $serviceName | default dict -}}
-{{- $resources := get $serviceValues "resources" | default dict}}
-{{- $memory := get $resources "memory" | default "1Gi" -}}
-# Convert memory to Mi
-{{- $memoryMi := hasSuffix "Gi" $memory | ternary
-      (mul (int (trimSuffix "Gi" $memory)) 1024)
-      (int (trimSuffix "Mi" $memory))             
--}}
-# Set cache size as a % of the total memory
-{{- $metadataCacheSizeMi := div (mul $memoryMi 4) 10 }}
-{{- $filterCacheSizeMi := div (mul $memoryMi 2) 10 }}
-{{- $sliceCacheSizeMi := div (mul $memoryMi 3) 10 }}
-{{- $bufferLimitSizeMi := div (mul $memoryMi 1) 10 }}
-# DEBUG: memoryMi={{ $memoryMi }} metadataCacheSizeMi={{ $metadataCacheSizeMi }} filterCacheSizeMi={{ $filterCacheSizeMi }} sliceCacheSizeMi={{ $sliceCacheSizeMi }} bufferLimitSizeMi={{ $bufferLimitSizeMi }}
-
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -70,10 +55,10 @@ spec:
             - cache
             - --host=0.0.0.0
             - --port=9001
-            - --metadata-cache-size={{ $metadataCacheSizeMi }}MB
-            - --filter-cache-size={{ $filterCacheSizeMi }}MB
-            - --slice-cache-size={{ $sliceCacheSizeMi }}MB
-            - --byte-buffer-limit={{ $bufferLimitSizeMi }}MB
+            - --metadata-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 40) }}MB
+            - --filter-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 20) }}MB
+            - --slice-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 30) }}MB
+            - --byte-buffer-limit={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 10) }}MB
             - --disable-byte-cache
           envFrom:
             - configMapRef:

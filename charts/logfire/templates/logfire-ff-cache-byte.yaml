@@ -1,14 +1,4 @@
 {{- $serviceName := "logfire-ff-cache-byte" }}
-{{- $serviceValues := get .Values $serviceName | default dict -}}
-{{- $resources := get $serviceValues "resources" | default dict}}
-{{- $memory := get $resources "memory" | default "1Gi" -}}
-# Convert memory to Mi
-{{- $memoryMi := hasSuffix "Gi" $memory | ternary
-      (mul (int (trimSuffix "Gi" $memory)) 1024)
-      (int (trimSuffix "Mi" $memory))             
--}}
-# Set cache size as a % of the total memory
-{{- $cacheSizeMi := div (mul $memoryMi 7) 10 -}}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -65,7 +55,7 @@ spec:
             - cache
             - --host=0.0.0.0
             - --port=9001
-            - --cache-size={{ $cacheSizeMi }}MB
+            - --cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 70) }}MB
             - --disable-ipc-cache
           envFrom:
             - configMapRef:
