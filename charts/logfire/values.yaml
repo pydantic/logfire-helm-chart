@@ -308,6 +308,9 @@ logfire-ff-ingest:
 #     labels:
 #       type: my-volume
 #
+logfire-ff-cache-byte:
+  resources:
+    memory: "1Gi"
 # logfire-ff-conhash-cache:
 #   # -- Workload annotations
 #   annotations: {}

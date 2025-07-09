@@ -1,0 +1,114 @@
+{{- $serviceName := "logfire-ff-cache-ipc" }}
+{{- $serviceValues := get .Values $serviceName | default dict -}}
+{{- $resources := get $serviceValues "resources" | default dict}}
+{{- $memory := get $resources "memory" | default "1Gi" -}}
+# Convert memory to Mi
+{{- $memoryMi := hasSuffix "Gi" $memory | ternary
+      (mul (int (trimSuffix "Gi" $memory)) 1024)
+      (int (trimSuffix "Mi" $memory))             
+-}}
+# Set cache size as a % of the total memory
+{{- $metadataCacheSizeMi := div (mul $memoryMi 4) 10 }}
+{{- $filterCacheSizeMi := div (mul $memoryMi 2) 10 }}
+{{- $sliceCacheSizeMi := div (mul $memoryMi 3) 10 }}
+{{- $bufferLimitSizeMi := div (mul $memoryMi 1) 10 }}
+# DEBUG: memoryMi={{ $memoryMi }} metadataCacheSizeMi={{ $metadataCacheSizeMi }} filterCacheSizeMi={{ $filterCacheSizeMi }} sliceCacheSizeMi={{ $sliceCacheSizeMi }} bufferLimitSizeMi={{ $bufferLimitSizeMi }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  annotations:
+    {{- include "logfire.annotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
+spec:
+  {{- if not (hasKey (index .Values $serviceName | default dict) "autoscaling") }}
+  replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+      annotations:
+        {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
+        checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
+    spec:
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- with .Values.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end}}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range . }}
+        - name: {{ . | quote }}
+      {{- end }}
+      {{- end }}
+      {{- with (index .Values $serviceName | default dict).initContainers }}
+      initContainers:
+        {{- . | toYaml | nindent 8 }}
+      {{- end}}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $serviceName }}
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ include "logfire.defaultTag" .  }}'
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          command:
+            - fusionfire
+            - cache
+            - --host=0.0.0.0
+            - --port=9001
+            - --metadata-cache-size={{ $metadataCacheSizeMi }}MB
+            - --filter-cache-size={{ $filterCacheSizeMi }}MB
+            - --slice-cache-size={{ $sliceCacheSizeMi }}MB
+            - --byte-buffer-limit={{ $bufferLimitSizeMi }}MB
+            - --disable-byte-cache
+          envFrom:
+            - configMapRef:
+                name: logfire-ff-config
+          env:
+            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
+            {{- include "logfire.objectStoreEnv" . | nindent 12 }}
+            - name: OTEL_TRACES_SAMPLER
+              value: parentbased_traceidratio
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.05"
+            {{- with (index .Values $serviceName | default dict).env }}
+              {{- . | toYaml | nindent 12 }}
+            {{- end }}
+          ports:
+            - containerPort: 9001
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9001
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9001
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 9001
+            failureThreshold: 30
+            periodSeconds: 10
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "sleep"
+                  - "5"
+{{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
+{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
