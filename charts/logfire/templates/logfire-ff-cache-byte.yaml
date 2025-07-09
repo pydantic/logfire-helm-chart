@@ -82,7 +82,7 @@ spec:
             {{- end }}
           volumeMounts:
             - name: {{ include "logfire.scratchVolumeName" . }}
-              mountPath: /
+              mountPath: /scratch
           ports:
             - containerPort: 9001
           livenessProbe:
