@@ -290,6 +290,11 @@ logfire-ff-ingest:
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
+#   scratchVolume:
+#     storageClassName: my-storage-class
+#     storage: 10Gi
+#     labels:
+#       type: my-volume
 #
 # logfire-ff-conhash-cache:
 #   # -- Workload annotations
