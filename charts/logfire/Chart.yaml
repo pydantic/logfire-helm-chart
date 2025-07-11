@@ -1,9 +1,9 @@
 apiVersion: v2
-version: 0.3.0
+version: 0.3.1
 name: logfire
 description: Helm chart for self-hosted Logfire
 
-appVersion: "b53c846d"
+appVersion: "ec5e2c3b"
 
 dependencies:
   - name: postgresql
