@@ -28,6 +28,10 @@ existingSecret:
   name: "logfire-tokens"
 
 logfire-dex:
+  initContainers:
+  - name: check-db-ready
+    image: postgres:17
+    command: ['sh', '-c', 'until pg_isready -h logfire-postgres -p 5432; do echo "Waiting for postgres..."; sleep 2; done']
   config:
     storage:
       type: postgres
@@ -42,6 +46,10 @@ logfire-dex:
     staticClients: []
 
 logfire-backend:
+  initContainers:
+  - name: check-db-ready
+    image: postgres:17
+    command: ['sh', '-c', 'until pg_isready -h logfire-postgres -p 5432; do echo "Waiting for postgres..."; sleep 2; done']
   pdb:
     minUnavailable: 1
 
