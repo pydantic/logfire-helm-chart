@@ -14,7 +14,7 @@ $ helm upgrade --install logfire pydantic/logfire
 
 ## Prerequisites
 
-There are a number of logfire external prerequisites including PostgreSQL, Dex and Object Storage.
+There are a number of Pydantic Logfire external prerequisites including PostgreSQL, Dex and Object Storage.
 
 ### Image Secrets
 
@@ -143,7 +143,7 @@ We recommend you set secrets as Kubernetes secrets and reference them in the `va
 
 ### Object Storage
 
-Logfire requires Object Storage to store data.  There are a number of different integrations that can be used:
+Pydantic Logfire requires Object Storage to store data.  There are a number of different integrations that can be used:
 
 * Amazon S3
 * Google Cloud Storage
@@ -228,7 +228,7 @@ objectStore:
 
 ### PostgreSQL
 
-Logfire nominally needs 4 separate PostgreSQL databases: `crud`, `ff`, and `dex`.  Each will need a user with owner permissions to allow migrations to run.
+Pydantic Logfire nominally needs 4 separate PostgreSQL databases: `crud`, `ff`, and `dex`.  Each will need a user with owner permissions to allow migrations to run.
   While they can all be ran on the same instance, they are required to be separate databases to prevent naming/schema collisions.
 
 Here's an example set of values using `postgres.example.com` as the host:
@@ -255,7 +255,7 @@ dex:
 
 ### Email
 
-Logfire uses SMTP to send emails.  You will need to configure email using the following values:
+Pydantic Logfire uses SMTP to send emails.  You will need to configure email using the following values:
 
 ```yaml
 smtp:
@@ -268,7 +268,7 @@ smtp:
 
 ### AI
 
-Logfire AI features can be enabled by setting the `ai` configuration in `values.yaml`.
+Pydantic Logfire AI features can be enabled by setting the `ai` configuration in `values.yaml`.
 You need to specify the model provider and model name you want to use:
 
 ```yaml

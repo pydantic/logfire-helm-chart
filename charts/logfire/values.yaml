@@ -7,7 +7,7 @@ ingress:
   enabled: false
   # -- Enable TLS/HTTPS connections.  Required for CORS headers
   tls: false
-  # -- The hostname used for Logfire
+  # -- The hostname used for Pydantic Validation Logfire
   hostname: "logfire.example.com"
   ingressClassName: nginx
   # -- Any annotations required.
