@@ -2,7 +2,7 @@
 
 ![Version: 0.4.0](https://img.shields.io/badge/Version-0.4.0-informational?style=flat-square) ![AppVersion: ec5e2c3b](https://img.shields.io/badge/AppVersion-ec5e2c3b-informational?style=flat-square)
 
-Helm chart for self-hosted Pydantic Validation Logfire
+Helm chart for self-hosted Pydantic Logfire
 
 ## Chart installation
 
@@ -13,7 +13,7 @@ $ helm upgrade --install logfire pydantic/logfire
 
 ## Prerequisites
 
-There are a number of Pydantic Validation Logfire external prerequisites including PostgreSQL, Dex and Object Storage.
+There are a number of Pydantic Logfire external prerequisites including PostgreSQL, Dex and Object Storage.
 
 ### Image Secrets
 
