@@ -1,4 +1,4 @@
-# Pydantic Validation Logfire
+# Pydantic Logfire
 
 ![Version: 0.4.0](https://img.shields.io/badge/Version-0.4.0-informational?style=flat-square) ![AppVersion: ec5e2c3b](https://img.shields.io/badge/AppVersion-ec5e2c3b-informational?style=flat-square)
 
@@ -141,7 +141,7 @@ We recommend you set secrets as Kubernetes secrets and reference them in the `va
 
 ### Object Storage
 
-Pydantic Validation Logfire requires Object Storage to store data.  There are a number of different integrations that can be used:
+Pydantic Logfire requires Object Storage to store data.  There are a number of different integrations that can be used:
 
 * Amazon S3
 * Google Cloud Storage
@@ -265,7 +265,7 @@ smtp:
 
 ### AI
 
-Pydantic Validation Logfire AI features can be enabled by setting the `ai` configuration in `values.yaml`.
+Pydantic Logfire AI features can be enabled by setting the `ai` configuration in `values.yaml`.
 You need to specify the model provider and model name you want to use:
 
 ```yaml
