@@ -110,7 +110,7 @@ spec:
             - name: AI_MODEL
               value: {{ . }}
             {{- end }}
-            {{- with .openAi.apyKey }}
+            {{- with .openAi.apiKey }}
             - name: OPENAI_API_KEY
               value: {{ . }}
             {{- end }}
