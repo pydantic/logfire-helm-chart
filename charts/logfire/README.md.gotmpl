@@ -228,7 +228,7 @@ objectStore:
 
 ### PostgreSQL
 
-Pydantic Logfire nominally needs 4 separate PostgreSQL databases: `crud`, `ff`, and `dex`.  Each will need a user with owner permissions to allow migrations to run.
+Pydantic Logfire nominally needs 3 separate PostgreSQL databases: `crud`, `ff`, and `dex`.  Each will need a user with owner permissions to allow migrations to run.
   While they can all be ran on the same instance, they are required to be separate databases to prevent naming/schema collisions.
 
 Here's an example set of values using `postgres.example.com` as the host:
@@ -308,15 +308,6 @@ Each service has both resources and autoscaling configured in the same way:
 
 See [`values.yaml`](./values.yaml) for some production level values
 
-{{ template "chart.homepageLine" . }}
-
-{{ template "chart.maintainersSection" . }}
-
-{{ template "chart.sourcesSection" . }}
-
-{{ template "chart.requirementsSection" . }}
-
-{{ template "chart.valuesSection" . }}
 
 ## Configuring Logfire
 
