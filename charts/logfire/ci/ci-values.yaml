@@ -5,7 +5,6 @@ ingress:
   tls: false
   hostnames:
   - logfire.example.com
-  - bruno.example.com
   maildevHostname: maildev.example.com
 
 objectStore:
