@@ -90,6 +90,8 @@ logfire-dex:
   replicas: 1
   # -- Dex Config
   config:
+    # -- Enables password authentication, set to false if undesired, but must configure another connector first
+    enablePasswordDB: true
     # -- Dex storage configuration, see https://dexidp.io/docs/configuration/storage/
     storage:
       type: postgres

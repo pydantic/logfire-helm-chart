@@ -340,10 +340,11 @@ See [`values.yaml`](./values.yaml) for some production level values
 | ingress.hostnames | list | `["logfire.example.com"]` | The hostname(s) used for Pydantic Logfire Preferred method. Supports one or more hostnames. |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
-| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"podAnnotations":{},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"podAnnotations":{},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
-| logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
+| logfire-dex.config | object | `{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
 | logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
+| logfire-dex.config.enablePasswordDB | bool | `true` | Enables password authentication, set to false if undesired, but must configure another connector first |
 | logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.replicas | int | `1` | Number of replicas |
@@ -504,10 +505,11 @@ Helm chart for self-hosted Pydantic Logfire
 | ingress.hostnames | list | `["logfire.example.com"]` | The hostname(s) used for Pydantic Logfire Preferred method. Supports one or more hostnames. |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
-| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"podAnnotations":{},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"podAnnotations":{},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
-| logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
+| logfire-dex.config | object | `{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
 | logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
+| logfire-dex.config.enablePasswordDB | bool | `true` | Enables password authentication, set to false if undesired, but must configure another connector first |
 | logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.replicas | int | `1` | Number of replicas |
