@@ -316,6 +316,7 @@ See [`values.yaml`](./values.yaml) for some production level values
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| adminEmail | string | `"hello@example.dev"` | Starter admin user |
 | ai.azureOpenAi.apiKey | string | `nil` | The Azure OpenAI API key |
 | ai.azureOpenAi.apiVersion | string | `nil` | The Azure OpenAI API version |
 | ai.azureOpenAi.endpoint | string | `nil` | The Azure OpenAI endpoint |
@@ -479,6 +480,7 @@ Helm chart for self-hosted Pydantic Logfire
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| adminEmail | string | `"hello@example.dev"` | Starter admin user |
 | ai.azureOpenAi.apiKey | string | `nil` | The Azure OpenAI API key |
 | ai.azureOpenAi.apiVersion | string | `nil` | The Azure OpenAI API version |
 | ai.azureOpenAi.endpoint | string | `nil` | The Azure OpenAI endpoint |

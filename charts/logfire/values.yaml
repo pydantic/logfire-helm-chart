@@ -1,6 +1,9 @@
 # -- The secret used to pull down container images for pods
 imagePullSecrets: []
 
+# -- Starter admin user
+adminEmail: hello@example.dev
+
 ingress:
   # -- Enable Ingress Resource.
   # If you're not using an ingress resource, you still need to configure `tls`, `hostname`
