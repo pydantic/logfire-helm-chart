@@ -98,8 +98,48 @@ resources:
 {{- end}}
 {{- end}}
 
+{{- define "logfire.primary_hostname" -}}
+{{- if .Values.ingress.hostnames -}}
+{{- first .Values.ingress.hostnames -}}
+{{- else -}}
+{{- .Values.ingress.hostname -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.all_hostnames_string" -}}
+{{- $hosts := .Values.ingress.hostnames -}}
+{{- if not $hosts -}}
+  {{- if .Values.ingress.hostname -}}
+    {{- $hosts = list .Values.ingress.hostname -}}
+  {{- end -}}
+{{- end -}}
+{{- join " " $hosts -}}
+{{- end -}}
+
 {{- define "logfire.url" -}}
-{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ .Values.ingress.hostname }}
+{{- $primaryHostname := include "logfire.primary_hostname" . | trim -}}
+{{- if $primaryHostname -}}
+{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ $primaryHostname }}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.all_urls" -}}
+{{- $hosts := .Values.ingress.hostnames -}}
+{{- if not $hosts -}}
+  {{- if .Values.ingress.hostname -}}
+    {{- $hosts = list .Values.ingress.hostname -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if $hosts -}}
+  {{- $scheme := .Values.ingress.tls | default false | ternary "https" "http" -}}
+  {{- $urls := list -}}
+  {{- range $host := $hosts -}}
+    {{- $fullUrl := printf "%s://%s" $scheme $host -}}
+    {{- $urls = append $urls $fullUrl -}}
+  {{- end -}}
+  {{- join " " $urls -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

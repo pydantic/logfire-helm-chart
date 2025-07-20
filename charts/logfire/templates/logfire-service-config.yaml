@@ -42,18 +42,20 @@ stringData:
       # Handle WebSocket upgrade headers
       acl is_websocket hdr(Upgrade) -i WebSocket
       http-request set-header Connection Upgrade if is_websocket
-
+      
       acl is_options method OPTIONS
       acl cors_path_ingest path_reg -i ^/v1/(traces|metrics|logs)$
       acl cors_path_api path_reg -i ^/(api|v1)/
+
+      # Capture request origin Header and check against list of valid urls
+      http-request set-var(txn.origin) req.hdr(Origin)
+      acl is_allowed_origin req.hdr(Origin) -i -m beg {{ include "logfire.all_urls" . }}
+      http-request set-var(txn.is_origin_allowed) bool(true) if is_allowed_origin
+
       # Respond to preflight requests directly from HAProxy
-      http-request return status 204 if is_options cors_path_ingest or is_options cors_path_api
-      http-request set-header Access-Control-Allow-Origin "{{ include "logfire.url" . }}" if is_options cors_path_ingest or is_options cors_path_api
-      http-request set-header Access-Control-Allow-Credentials "true" if is_options cors_path_ingest or is_options  cors_path_api
-      http-request set-header Access-Control-Allow-Methods "*" if is_options cors_path_ingest or is_options cors_path_api
-      http-request set-header Access-Control-Allow-Headers "Authorization,Content-type,X-Logfire-Context" if is_options cors_path_ingest or is_options cors_path_api
-      http-request set-header Access-Control-Max-Age "1728000" if is_options cors_path_ingest or is_options cors_path_api
+      http-request return status 204 hdr "Access-Control-Allow-Origin" "%[req.hdr(Origin)]" hdr "Access-Control-Allow-Methods" "*" hdr "Access-Control-Allow-Headers" "Authorization,Content-type,X-Logfire-Context" hdr "Access-Control-Max-Age" "1728000" if is_allowed_origin is_options cors_path_ingest or is_allowed_origin is_options cors_path_api
       
+      http-response set-header Access-Control-Allow-Origin "%[var(txn.origin)]" if { var(txn.is_origin_allowed) -m bool }
       
       acl path_ingest path_reg -i ^/v1/(traces|metrics|logs)$
       acl path_dex path_beg /auth-api

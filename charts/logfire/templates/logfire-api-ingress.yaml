@@ -1,4 +1,10 @@
 {{- if .Values.ingress.enabled -}}
+{{- $hosts := .Values.ingress.hostnames -}}
+{{- if not $hosts -}}
+  {{- if .Values.ingress.hostname -}}
+    {{- $hosts = list .Values.ingress.hostname -}}
+  {{- end -}}
+{{- end -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -14,7 +20,8 @@ spec:
   ingressClassName: {{ . }}
   {{- end }}
   rules:
-    - host: {{ .Values.ingress.hostname }}
+    {{- range $hosts }}
+    - host: {{ . }}
       http:
         paths:
           - path: /
@@ -24,10 +31,11 @@ spec:
                 name: logfire-service
                 port:
                   number: 8080
+    {{- end }}
   {{- if .Values.ingress.tls }}
   tls:
     - secretName: logfire-frontend-cert
       hosts:
-        - {{ .Values.ingress.hostname }}
+        {{- toYaml $hosts | nindent 8 }}
   {{- end }}
 {{- end }}
