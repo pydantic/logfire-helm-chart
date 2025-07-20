@@ -321,6 +321,9 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $_ := set $dexConfig "oauth2" $oauth2 -}}
 {{- $_ := set $dexConfig "web" $web -}}
 {{- $_ := set $dexConfig "grpc" $grpc -}}
+{{- if not (hasKey $dexConfig "enablePasswordDB") -}}
+  {{- $_ := set $dexConfig "enablePasswordDB" true -}}
+{{- end -}}
 {{- $_ := set $dexConfig "connectors" $connectors -}}
 
 {{ toYaml $dexConfig | b64enc | quote }}
