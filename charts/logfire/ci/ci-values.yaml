@@ -3,7 +3,8 @@ adminEmail: hello@example.dev
 ingress:
   enabled: true
   tls: false
-  hostname: logfire.example.com
+  hostnames:
+  - logfire.example.com
   maildevHostname: maildev.example.com
 
 objectStore:

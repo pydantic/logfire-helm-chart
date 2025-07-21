@@ -1,14 +1,24 @@
 # -- The secret used to pull down container images for pods
 imagePullSecrets: []
 
+# -- Starter admin user
+adminEmail: hello@example.dev
+
 ingress:
   # -- Enable Ingress Resource.
   # If you're not using an ingress resource, you still need to configure `tls`, `hostname`
   enabled: false
   # -- Enable TLS/HTTPS connections.  Required for CORS headers
   tls: false
-  # -- The hostname used for Pydantic Logfire
+  # -- The hostname(s) used for Pydantic Logfire
+  # Preferred method. Supports one or more hostnames. Set primary domain as the first item on the list.
+  hostnames:
+  - logfire.example.com
+
+  # -- DEPRECATED: Kept for backwards compatibility.
+  # Use `hostnames` (a list) for all new deployments.
   hostname: "logfire.example.com"
+
   ingressClassName: nginx
   # -- Any annotations required.
   annotations: {}
@@ -80,6 +90,8 @@ logfire-dex:
   replicas: 1
   # -- Dex Config
   config:
+    # -- Enables password authentication, set to false if undesired, but must configure another connector first
+    enablePasswordDB: true
     # -- Dex storage configuration, see https://dexidp.io/docs/configuration/storage/
     storage:
       type: postgres

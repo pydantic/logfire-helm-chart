@@ -82,6 +82,10 @@ spec:
               value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "1" | quote) }} 
             - name: FF_COMPACTION_JOB_PARALLELISM
               value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "1" | quote) }} 
+            - name: FF_COMPACTION_LOOP_BACKOFF_DELAY
+              value: "1s"
+            - name: FF_DELETION_LOOP_DELAY
+              value: "30s"
             {{- include "logfire.ffmaxRowPerRowGroup" . | nindent 12 -}}
             {{- include "logfire.ffCompactionTiers" . | nindent 12 -}}
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}

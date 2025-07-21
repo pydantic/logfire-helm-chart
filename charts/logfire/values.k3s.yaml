@@ -23,7 +23,8 @@ image:
 ingress:
   enabled: true
   tls: true
-  hostname: logfire.k3s.local
+  hostnames:
+  - logfire.k3s.local
   maildevHostname: maildev.k3s.local
   ingressClassName: nginx
   annotations:

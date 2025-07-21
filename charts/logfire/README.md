@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.4.1](https://img.shields.io/badge/Version-0.4.1-informational?style=flat-square) ![AppVersion: ec5e2c3b](https://img.shields.io/badge/AppVersion-ec5e2c3b-informational?style=flat-square)
+![Version: 0.4.2](https://img.shields.io/badge/Version-0.4.2-informational?style=flat-square) ![AppVersion: ec5e2c3b](https://img.shields.io/badge/AppVersion-ec5e2c3b-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -372,7 +372,7 @@ By default we bundle a single-node [MinIO](https://min.io/) instance to allow yo
 This is not intended for production use, but is useful for development.
 # logfire
 
-![Version: 0.4.1](https://img.shields.io/badge/Version-0.4.1-informational?style=flat-square) ![AppVersion: ec5e2c3b](https://img.shields.io/badge/AppVersion-ec5e2c3b-informational?style=flat-square)
+![Version: 0.4.2](https://img.shields.io/badge/Version-0.4.2-informational?style=flat-square) ![AppVersion: ec5e2c3b](https://img.shields.io/badge/AppVersion-ec5e2c3b-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -387,6 +387,7 @@ Helm chart for self-hosted Pydantic Logfire
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| adminEmail | string | `"hello@example.dev"` | Starter admin user |
 | ai.azureOpenAi.apiKey | string | `nil` | The Azure OpenAI API key |
 | ai.azureOpenAi.apiVersion | string | `nil` | The Azure OpenAI API version |
 | ai.azureOpenAi.endpoint | string | `nil` | The Azure OpenAI endpoint |
@@ -406,13 +407,15 @@ Helm chart for self-hosted Pydantic Logfire
 | imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
 | ingress.annotations | object | `{}` | Any annotations required. |
 | ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
-| ingress.hostname | string | `"logfire.example.com"` | The hostname used for Pydantic Logfire |
+| ingress.hostname | string | `"logfire.example.com"` | DEPRECATED: Kept for backwards compatibility. Use `hostnames` (a list) for all new deployments. |
+| ingress.hostnames | list | `["logfire.example.com"]` | The hostname(s) used for Pydantic Logfire Preferred method. Supports one or more hostnames. Set primary domain as the first item on the list. |
 | ingress.ingressClassName | string | `"nginx"` |  |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
-| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"podAnnotations":{},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"podAnnotations":{},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
-| logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
+| logfire-dex.config | object | `{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
 | logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
+| logfire-dex.config.enablePasswordDB | bool | `true` | Enables password authentication, set to false if undesired, but must configure another connector first |
 | logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.replicas | int | `1` | Number of replicas |
