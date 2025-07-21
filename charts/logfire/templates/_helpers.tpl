@@ -98,6 +98,9 @@ resources:
 {{- end}}
 {{- end}}
 
+{{/*
+Primary logfire host for the app. Selects the first item from .Values.ingress.hostnames list
+*/}}
 {{- define "logfire.primary_hostname" -}}
 {{- if .Values.ingress.hostnames -}}
 {{- first .Values.ingress.hostnames -}}
@@ -106,6 +109,9 @@ resources:
 {{- end -}}
 {{- end -}}
 
+{{/*
+Full list of logfire hostnames, primary and alternative domains for ingress.
+*/}}
 {{- define "logfire.all_hostnames_string" -}}
 {{- $hosts := .Values.ingress.hostnames -}}
 {{- if not $hosts -}}
@@ -116,6 +122,9 @@ resources:
 {{- join " " $hosts -}}
 {{- end -}}
 
+{{/*
+Primary logfire host with protocol scheme.
+*/}}
 {{- define "logfire.url" -}}
 {{- $primaryHostname := include "logfire.primary_hostname" . | trim -}}
 {{- if $primaryHostname -}}
@@ -123,6 +132,9 @@ resources:
 {{- end -}}
 {{- end -}}
 
+{{/*
+Full list of logfire urls, primary and alternative domains with scheme.
+*/}}
 {{- define "logfire.all_urls" -}}
 {{- $hosts := .Values.ingress.hostnames -}}
 {{- if not $hosts -}}
@@ -276,6 +288,7 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $dexConfig := dig "config" dict (index .Values "logfire-dex" | default dict) -}}
 {{- $staticClients := list -}}
 {{- $logfireFrontend := (include "logfire.url" .) -}}
+{{- $logfireUrls := include "logfire.all_urls" . | splitList " " }}
 {{- $dexCallback := printf "%s/auth-api/callback" $logfireFrontend -}}
 
 {{- $frontend := dict -}}
@@ -291,7 +304,12 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $_ := set $client "id" (include "logfire.dexClientId" .) -}}
 {{- $_ := set $client "name" "Logfire Backend" -}}
 {{- $_ := set $client "secretEnv" "LOGFIRE_CLIENT_SECRET" -}}
-{{- $_ := set $client "redirectURIs" (list (printf "%s/auth/code-callback" $logfireFrontend) (printf "%s/auth/link-provider-code-callback" $logfireFrontend)) -}}
+{{- $redirects := list -}}
+{{- range $url := $logfireUrls -}}
+  {{- $redirects = append $redirects (printf "%s/auth/code-callback" $url) -}}
+  {{- $redirects = append $redirects (printf "%s/auth/link-provider-code-callback" $url) -}}
+{{- end -}}
+{{- $_ := set $client "redirectURIs" $redirects -}}
 {{- $_ := set $client "public" false -}}
 {{- $_ := set $client "scopes"  (list "openid" "email" "profile") -}}
 {{- $staticClients = append $staticClients $client -}}
