@@ -4,6 +4,16 @@
 
 Helm chart for self-hosted Pydantic Logfire
 
+## Local Quickstart (Evaluation & Testing)
+
+For a fast, local setup to evaluate Logfire, follow our [Local Quickstart Guide](https://logfire.pydantic.dev/docs/reference/self-hosted/local-quickstart/).
+It uses development-grade dependencies like an in-cluster PostgreSQL, MinIO and MailDev to get you up and running in minutes.
+
+## Production installation
+
+For a production-ready deployment, you'll need to connect to your own infrastructure (PostgreSQL, Object Storage, etc.). Our complete guide walks you through every prerequisite and configuration step.
+Check out the full [Self Hosted Installation Guide](https://logfire.pydantic.dev/docs/reference/self-hosted/installation/)
+
 ## Chart installation
 
 ``` sh
@@ -17,7 +27,7 @@ There are a number of Pydantic Logfire external prerequisites including PostgreS
 
 ### Image Secrets
 
-You will require image pull secrets to pull down the docker images from our private repository.  Get in contact with us to get a copy of them.
+You will require image pull secrets to pull down the docker images from our private repository. Contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev) to get a copy of them.
 
 When you have the `key.json` file you can load it in as a secret like so:
 
@@ -38,7 +48,7 @@ imagePullSecrets:
 
 ### Hostnames
 
-There is a hostname that is required to be set: I.e, `logfire.example.com`. Set via the `ingress.hostname` value.
+There is at least a hostname that is required to be set: I.e, `logfire.example.com`. Set via the `ingress.hostnames` value.
 
 We have an ingress configuration that will allow you to set up ingress:
 
@@ -46,7 +56,8 @@ We have an ingress configuration that will allow you to set up ingress:
 ingress:
   enabled: true
   tls: true
-  hostname: logfire.example.com
+  hostnames:
+  - logfire.example.com
   ingressClassName: nginx
 ```
 
@@ -65,7 +76,8 @@ ingress:
   # used to ensure appropriate CORS headers are set.  If your browser is accessing it on https, then needs to be enabled here
   tls: true
   # used to ensure appropriate CORS headers are set.
-  hostname: logfire.example.com
+  hostnames:
+  - logfire.example.com
 ```
 
 If you are *not* using kubernetes ingress, you must still set the hostnames under the `ingress` configuration.
@@ -74,11 +86,15 @@ If you are *not* using kubernetes ingress, you must still set the hostnames unde
 
 Dex is used as the identity service for logfire & can be configured for many different types of connectors.  The full list of connectors can be found here: [https://dexidp.io/docs/connectors/](https://dexidp.io/docs/connectors/)
 
+We have some connector examples at our [Auth Examples](https://logfire.pydantic.dev/docs/reference/self-hosted/examples/#Auth) section
+
 There is some default configuration provided in `values.yaml`.
 
 #### Authentication Configuration
 
 Depending on what [connector you want to use](https://dexidp.io/docs/connectors/), you can configure dex connectors accordingly.
+
+:envelope: Note: when creating an app in a provider, you should set the RedirectURI/Callback URL to ```<logfire_url>/auth-api/callback```, where ```<logfire_url>``` is your hostname with scheme, like ```https://logfire-example.com/auth-api/callback```
 
 Here's an example using `github` as a connector:
 
@@ -95,13 +111,9 @@ logfire-dex:
           # See https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app
           clientID: client_id
           clientSecret: client_secret
-          getUserInfo: true
 ```
 
 To use GitHub as an example, you can find general instructions for creating an OAuth app [in the GitHub docs](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app).
-It should look something like this:
-
-![GitHub OAuth App Example](https://raw.githubusercontent.com/pydantic/logfire-helm-chart/refs/heads/main/docs/images/local-github-oauth-app.png)
 
 Dex allows configuration parameters to reference environment variables.
 This can be done by using the `$` symbol.  For example, the `clientID` and `clientSecret` can be set as environment variables:
@@ -132,12 +144,6 @@ logfire-dex:
 
 You would have to manually (or via IaC, etc.) create `my-github-secret`.
 This allows you to avoid putting any secrets into a `values.yaml` file.
-
-#### Image pull secrets
-
-Remember to add the image pull secrets to dex's service account `logfire-dex` if you're not using `imagePullSecrets`.
-
-We recommend you set secrets as Kubernetes secrets and reference them in the `values.yaml` file instead of hardcoding secrets which is more likely to be exposed and harder to rotate.
 
 ### Object Storage
 
@@ -226,7 +232,7 @@ objectStore:
 ### PostgreSQL
 
 Pydantic Logfire nominally needs 3 separate PostgreSQL databases: `crud`, `ff`, and `dex`.  Each will need a user with owner permissions to allow migrations to run.
-  While they can all be ran on the same instance, they are required to be separate databases to prevent naming/schema collisions.
+While they can all be ran on the same instance, they are required to be separate databases to prevent naming/schema collisions.
 
 Here's an example set of values using `postgres.example.com` as the host:
 
@@ -281,11 +287,25 @@ ai:
     apiVersion: azure-openai-api-version
 ```
 
+## Configuring Logfire
+
+Once your self-hosted instance is running, configure your client SDK to send data to your new endpoint by setting the ```base_url``` to send data to.
+
+```python
+import logfire
+
+logfire.configure(
+    token='<your_logfire_token>',
+    advanced=logfire.AdvancedOptions(base_url="https://logfire.example.com")
+)
+logfire.info('Hello, {place}!', place='World')
+```
+
 ## Scaling
 
-A number of components within logfire allow containers/pods to be horizontally scaled. Also: depending on your setup you may want a number of replicas to run to ensure redundancy if a node fails.
+Logfire is designed to be horizontally scalable. You can adjust the replica counts and resources for each component to handle your specific workload.
 
-Each service has both resources and autoscaling configured in the same way:
+This is how you can configure each service:
 
 ```yaml
 <service_name>:
@@ -303,73 +323,15 @@ Each service has both resources and autoscaling configured in the same way:
     cpuAverage: 20
 ```
 
-See [`values.yaml`](./values.yaml) for some production level values
+See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hosted/scaling/) for some production level values and DB recommended settings.
 
-## Configuring Logfire
+## Troubleshooting & Support
 
-Since this is self-hosted you will need to update your logfire configuration to include a different URL to send data to.  You can do this by specifying the `base_url` in advanced config:
+* Troubleshooting Guide: If you encounter issues, your first stop should be the [Troubleshooting Self Hosted guide](https://logfire.pydantic.dev/docs/reference/self-hosted/troubleshooting/), which includes common issues and steps for accessing internal logs.
 
-```python
-import logfire
+* GitHub Issues: If your issue persists, please open up an issue with details about your deployment (Chart version, Kubernetes version, values file, any relevant error logs).
 
-logfire.configure(
-    token='<your_logfire_token>',
-    advanced=logfire.AdvancedOptions(base_url="https://logfire.example.com")
-)
-logfire.info('Hello, {place}!', place='World')
-```
-
-## Development
-
-There are various development options you can set to test out the helm chart.  We have two flavours: `values.docker-desktop.yaml` and `values.k3s.yaml`.  Both of which are intended for development of the helm chart only and should not be considered production ready.
-
-### Postgres
-
-You can run up a dev instance of PostgreSQL within the chart if you are just starting out.  This deployment will take care of creating all the databases needed
-
-Put the following values in your `values.yaml` file:
-
-```yaml
-# To enable deployment of internal PostgreSQL
-dev:
-  deployPostgres: true
-
-postgresDsn: postgres://postgres:postgres@logfire-postgres:5432/crud
-postgresFFDsn: postgres://postgres:postgres@logfire-postgres:5432/ff
-
-dex:
-  ...
-  config:
-    storage:
-      type: postgres
-      config:
-        host: logfire-postgres
-        port: 5432
-        user: postgres
-        database: dex
-        password: postgres
-        ssl:
-          mode: disable
-```
-
-### MailDev
-
-You can run `maildev` which will allow you to send/receive emails without an external SMTP server.  Add the following to your `values.yaml`:
-
-```yaml
-ingress:
-  ...
-  maildevHostname: maildev.example.com
-
-dev:
-  ...
-  deployMaildev: true
-```
-
-### Object Storage
-
-By default we bundle a single-node [MinIO](https://min.io/) instance to allow you to test out object storage.
-This is not intended for production use, but is useful for development.
+* Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
 ![Version: 0.4.2](https://img.shields.io/badge/Version-0.4.2-informational?style=flat-square) ![AppVersion: ec5e2c3b](https://img.shields.io/badge/AppVersion-ec5e2c3b-informational?style=flat-square)
