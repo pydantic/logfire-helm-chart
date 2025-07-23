@@ -1,57 +1,4 @@
-{{- $serviceName := "logfire-ff-conhash-cache" }}
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ $serviceName }}
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-  annotations:
-    {{- include "logfire.serviceAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
-spec:
-  selector:
-    {{- include "logfire.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-  ports:
-  - port: 9001
-    targetPort: 9001
-  type: ClusterIP
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: conhash
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: conhash-role
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-rules:
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "watch", "list"]
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: conhash-rolebinding
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: conhash-role
-subjects:
-  - kind: ServiceAccount
-    name: conhash
+{{- $serviceName := "logfire-ff-cache-ipc" }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -78,9 +25,12 @@ spec:
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
+        checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
-      serviceAccountName: conhash
+      {{- with .Values.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end}}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
       {{- range . }}
@@ -101,42 +51,49 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
-            - "conhash"
-            - "--port"
-            - "9001"
-          ports:
-            - containerPort: 9001
+            - fusionfire
+            - cache
+            - --host=0.0.0.0
+            - --port=9001
+            - --metadata-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 40) }}MB
+            - --filter-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 20) }}MB
+            - --slice-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 30) }}MB
+            - --byte-buffer-limit={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 10) }}MB
+            - --disable-byte-cache
+          envFrom:
+            - configMapRef:
+                name: logfire-ff-config
           env:
-            - name: ORCHESTRATION
-              value: "kubernetes"
-            - name: DEPLOYMENT_SELECTOR
-              value: "app.kubernetes.io/component=logfire-ff-cache"
-            - name: DEPLOYMENT_PORT
-              value: "9001"
-            - name: FF_SEND_TO_LOGFIRE
-              value: "false"
-            - name: RUST_LOG
-              value: "info"
-            - name: RUST_BACKTRACE
-              value: "full"
+            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
+            {{- include "logfire.objectStoreEnv" . | nindent 12 }}
+            - name: OTEL_TRACES_SAMPLER
+              value: parentbased_traceidratio
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.05"
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
-            {{- end}}
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 9001
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 5
+            {{- end }}
+          ports:
+            - containerPort: 9001
           livenessProbe:
             httpGet:
               path: /health
               port: 9001
-            initialDelaySeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9001
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 9001
+            failureThreshold: 30
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 5
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "sleep"
+                  - "5"
 {{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
