@@ -131,7 +131,7 @@ spec:
             httpGet:
               path: /health
               port: 8012
-            initialDelaySeconds: 30
+            initialDelaySeconds: 0
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
@@ -139,10 +139,18 @@ spec:
             httpGet:
               path: /health
               port: 8012
-            initialDelaySeconds: 30
+            initialDelaySeconds: 0
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8012
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 30
           volumeMounts: 
             - name: {{ include "logfire.ingestVolumeName" . }}
               mountPath: "/fusionfire/ingest-data"
