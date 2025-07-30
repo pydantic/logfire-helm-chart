@@ -281,16 +281,12 @@ logfire-ff-ingest:
 #    minAvailable: 1
 #
 # # -- Autoscaling & resources for the cache pods
-# logfire-ff-cache:
+# logfire-ff-cache-byte:
 #   # -- Workload annotations
 #   annotations: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   replicas: 2
-#   # -- How much disk storage is used for caching
-#   cacheStorage: "10Gi"
-#   # -- Which storage class is used for caching
-#   cacheStorageClassName: "my-storage-class"
 #   resources:
 #     cpu: "4"
 #     memory: "8Gi"
@@ -308,7 +304,25 @@ logfire-ff-ingest:
 #     labels:
 #       type: my-volume
 #
-# logfire-ff-conhash-cache:
+# logfire-ff-cache-ipc:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   replicas: 2
+#   resources:
+#     cpu: "4"
+#     memory: "8Gi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 2
+#     memAverage: 65
+#     cpuAverage: 20
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+#
+# logfire-ff-conhash-cache-byte:
 #   # -- Workload annotations
 #   annotations: {}
 #   # -- Pod annotations
@@ -329,7 +343,7 @@ logfire-ff-ingest:
 #     maxUnavailable: 1
 #     minAvailable: 1
 #
-# logfire-ff-ingest-api:
+# logfire-ff-conhash-cache-ipc:
 #   # -- Workload annotations
 #   annotations: {}
 #   # -- Pod annotations
@@ -337,6 +351,7 @@ logfire-ff-ingest:
 #   service:
 #     # -- Service annotations
 #     annotations: {}
+#   replicas: 2
 #   resources:
 #     cpu: "1"
 #     memory: "1Gi"
@@ -345,24 +360,6 @@ logfire-ff-ingest:
 #     maxReplicas: 2
 #     memAverage: 65
 #     cpuAverage: 20
-#   pdb:
-#     maxUnavailable: 1
-#     minAvailable: 1
-#
-# logfire-ff-ingest-worker:
-#   # -- Workload annotations
-#   annotations: {}
-#   # -- Pod annotations
-#   podAnnotations: {}
-#   replicas: 6
-#   resources:
-#     cpu: "1"
-#     memory: "2Gi"
-#   autoscaling:
-#     minReplicas: 6
-#     maxReplicas: 24
-#     memAverage: 25
-#     cpuAverage: 15
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
