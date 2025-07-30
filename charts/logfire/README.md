@@ -350,6 +350,10 @@ Helm chart for self-hosted Pydantic Logfire
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | adminEmail | string | `"hello@example.dev"` | Starter admin user |
+| adminSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys  logfire-admin-password  logfire-admin-totp-secret  logfire-admin-totp-recovery-codes as string representing a JSON list |
+| adminSecret.annotations | object | `{}` | Optional annotations for the secret, e.g., for external secret managers. |
+| adminSecret.enabled | bool | `false` | Set to true to use an existing secret. Highly recommended for Argo CD users. |
+| adminSecret.name | string | `""` | The name of the Kubernetes Secret resource. |
 | ai.azureOpenAi.apiKey | string | `nil` | The Azure OpenAI API key |
 | ai.azureOpenAi.apiVersion | string | `nil` | The Azure OpenAI API version |
 | ai.azureOpenAi.endpoint | string | `nil` | The Azure OpenAI endpoint |

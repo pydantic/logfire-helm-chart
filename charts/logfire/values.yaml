@@ -597,6 +597,18 @@ existingSecret:
   # -- Optional annotations for the secret, e.g., for external secret managers.
   annotations: {}
 
+# -- Existing Secret with the following keys
+#  logfire-admin-password
+#  logfire-admin-totp-secret
+#  logfire-admin-totp-recovery-codes as string representing a JSON list
+adminSecret:
+  # -- Set to true to use an existing secret. Highly recommended for Argo CD users.
+  enabled: false
+  # -- The name of the Kubernetes Secret resource.
+  name: ""
+  # -- Optional annotations for the secret, e.g., for external secret managers.
+  annotations: {}
+
 # -- Development mode settings
 dev:
   # -- Deploy maildev for testing emails

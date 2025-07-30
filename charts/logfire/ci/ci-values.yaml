@@ -28,6 +28,10 @@ existingSecret:
   enabled: true
   name: "logfire-tokens"
 
+adminSecret:
+  enabled: true
+  name: "logfire-admin"
+
 logfire-dex:
   initContainers:
   - name: check-db-ready

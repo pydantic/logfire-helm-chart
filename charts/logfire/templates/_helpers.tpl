@@ -252,6 +252,19 @@ Logfire secret name
 {{- end }}
 {{- end -}}
 
+{{/*
+Logfire secret name
+*/}}
+{{- define "logfire.adminSecretName" -}}
+{{- $ctx := required "logfire.SecretName: need .ctx" .ctx -}}
+{{- $ex := get $ctx.Values "adminSecret" | default dict -}}
+{{- if and (get $ex "enabled") (get $ex "name") -}}
+    {{ get $ex "name" }}
+{{- else }}
+{{- .secretName }}
+{{- end }}
+{{- end -}}
+
 {{- define "logfire.objectStoreEnv" -}}
 - name: FF_OBJECT_STORE_URI
   value: {{ .Values.objectStore.uri }}
