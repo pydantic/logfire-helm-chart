@@ -52,14 +52,13 @@ spec:
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
             - fusionfire
-            - cache
+            - ipc-cache
             - --host=0.0.0.0
             - --port=9001
             - --metadata-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 40) }}MB
             - --filter-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 20) }}MB
             - --slice-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 30) }}MB
             - --byte-buffer-limit={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 10) }}MB
-            - --disable-byte-cache
           envFrom:
             - configMapRef:
                 name: logfire-ff-config

@@ -52,11 +52,10 @@ spec:
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
             - fusionfire
-            - cache
+            - byte-cache
             - --host=0.0.0.0
             - --port=9001
             - --cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 70) }}MB
-            - --disable-ipc-cache
           envFrom:
             - configMapRef:
                 name: logfire-ff-config
