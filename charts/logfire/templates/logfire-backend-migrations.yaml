@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: logfire-backend-migrations
+  name: logfire-backend-migrations{{- if .Values.dev.deployPostgres }}-{{ .Release.Revision }}{{- end }}
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-backend-migrations
