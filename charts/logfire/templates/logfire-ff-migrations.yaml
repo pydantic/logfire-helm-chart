@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: logfire-ff-migrations
+  name: {{ include "logfire.ffMigrations.name" . }}
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-ff-migrations
