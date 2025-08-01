@@ -539,3 +539,19 @@ Calculate memory assignments based on servicememory request
 
 {{-   $calculatedMemory | int -}}
 {{- end -}}
+
+{{- define "logfire.backendMigrations.name" -}}
+{{- if .Values.dev.deployPostgres -}}
+"logfire-backend-migrations-{{ .Release.Revision }}"
+{{- else -}}
+"logfire-ff-migrations"
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.ffMigrations.name" -}}
+{{- if .Values.dev.deployPostgres -}}
+"logfire-ff-migrations-{{ .Release.Revision }}"
+{{- else -}}
+"logfire-ff-migrations"
+{{- end -}}
+{{- end -}}
