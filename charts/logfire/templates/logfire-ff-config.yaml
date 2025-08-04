@@ -12,9 +12,12 @@ data:
   FF_USAGE_REDIS_DSN: {{ .Values.redisDsn }}
   FF_CACHE_OBJECT_STORE_URI: "http://logfire-ff-cache-byte:9001"
   FF_IPC_CACHE_URI: "http://logfire-ff-cache-ipc:9001"
+  FF_IPC_CACHE_HOT_FILE_AGE_MINUTES: "30"
+  FF_IPC_CACHE_SMALL_FILE_SIZE_MB: "5"
   FF_CACHE_ARROW_IPC_CHANCE: "1.0"
   FF_BACKEND_SERVICE_URL: "http://logfire-backend:8000"
   FF_AUTH_TOKEN_REDIS_DSN: {{ .Values.redisDsn }}
+  FF_ENABLE_FILTER_CACHE: "0"
   RUST_LOG: "info"
   RUST_BACKTRACE: "full"
   FF_SEND_TO_LOGFIRE: "true"
