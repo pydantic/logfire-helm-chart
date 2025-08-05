@@ -36,6 +36,25 @@ spec:
 {{- end}}
 {{- end}}
 
+{{- define "logfire.keda" }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ .serviceName }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: {{ .kind }}
+    name: {{ .serviceName }}
+  minReplicaCount: {{ .minReplicas | default "1" }}
+  maxReplicaCount: {{ .maxReplicas |  default "2" }}
+  {{- with .keda.triggers }}
+  triggers:
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+{{- end}}
+
 {{/*
 Determine if HPA is enabled maintaining backward compatibility with old values format
 */}}
@@ -49,15 +68,26 @@ Determine if HPA is enabled maintaining backward compatibility with old values f
 {{- end -}}
 {{- end -}}
 
+{{- define "logfire.keda.enabled" -}}
+{{- if hasKey . "keda" -}}
+  {{- .keda.enabled  -}}
+{{- else -}}
+  {{- false -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.autoscaler" }}
 {{- if index (index .Values .serviceName | default dict) "autoscaling" }}
 {{- $kind := (not (eq .serviceName "logfire-ff-ingest") | ternary "Deployment" "StatefulSet" ) }}
 {{- with index .Values .serviceName "autoscaling" }}
+  {{- $ctx := deepCopy . -}}
+  {{- $_ := set $ctx "serviceName" $.serviceName -}}
+  {{- $_ := set $ctx "kind" $kind -}}
   {{- if include "logfire.hpa.enabled" . | eq "true" }}
-    {{- $ctx := deepCopy . -}}
-    {{- $_ := set $ctx "serviceName" $.serviceName -}}
-    {{- $_ := set $ctx "kind" $kind -}}
     {{- template "logfire.hpa" $ctx }}
+  {{- end }}
+  {{- if include "logfire.keda.enabled" . | eq "true" }}
+    {{- template "logfire.keda" $ctx }}
   {{- end }}
 {{- end }}
 {{- end }}
