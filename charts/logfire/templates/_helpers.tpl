@@ -1,42 +1,67 @@
 {{- define "logfire.hpa" }}
-{{- if index (index .Values .serviceName | default dict) "autoscaling" }}
-{{- $kind := (not (eq .serviceName "logfire-ff-ingest") | ternary "Deployment" "StatefulSet" ) }}
-{{- with index .Values .serviceName "autoscaling" }}
+{{- $cpuAverage := dig "hpa" "cpuAverage" .cpuAverage . }}
+{{- $memAverage := dig "hpa" "memAverage" .memAverage . }}
+{{- $extraMetrics := dig "hpa" "extraMetrics" .extraMetrics . }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ $.serviceName }}
+  name: {{ .serviceName }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
-    kind: {{ $kind }}
-    name: {{ $.serviceName }}
+    kind: {{ .kind }}
+    name: {{ .serviceName }}
   minReplicas: {{ .minReplicas | default "1" }}
   maxReplicas: {{ .maxReplicas |  default "2" }}
   metrics:
-  {{- if .cpuAverage }}
+  {{- if $cpuAverage }}
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: {{ .cpuAverage | default "75" }}
+        averageUtilization: {{ $cpuAverage | default "75" }}
   {{- end }}
-  {{- if .memAverage }}
+  {{- if $memAverage }}
   - type: Resource
     resource:
       name: memory
       target:
         type: Utilization
-        averageUtilization: {{ .memAverage | default "75" }}
+        averageUtilization: {{ $memAverage | default "75" }}
   {{- end }}
-{{- if .extraMetrics }}
-{{- toYaml .extraMetrics | nindent 2 }}
+{{- if $extraMetrics }}
+{{- toYaml $extraMetrics | nindent 2 }}
 {{- end}}
 {{- end}}
-{{- end}}
-{{- end}}
+
+{{/*
+Determine if HPA is enabled maintaining backward compatibility with old values format
+*/}}
+{{- define "logfire.hpa.enabled" -}}
+{{- if hasKey . "hpa" -}}
+  {{- .hpa.enabled  -}}
+{{- else if or .memAverage .cpuAverage .extraMetrics -}}
+  {{- true -}}
+{{- else -}}
+  {{- false -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.autoscaler" }}
+{{- if index (index .Values .serviceName | default dict) "autoscaling" }}
+{{- $kind := (not (eq .serviceName "logfire-ff-ingest") | ternary "Deployment" "StatefulSet" ) }}
+{{- with index .Values .serviceName "autoscaling" }}
+  {{- if include "logfire.hpa.enabled" . | eq "true" }}
+    {{- $ctx := deepCopy . -}}
+    {{- $_ := set $ctx "serviceName" $.serviceName -}}
+    {{- $_ := set $ctx "kind" $kind -}}
+    {{- template "logfire.hpa" $ctx }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
 
 {{- define "logfire.pdb" }}
 {{- $root := .root -}}
