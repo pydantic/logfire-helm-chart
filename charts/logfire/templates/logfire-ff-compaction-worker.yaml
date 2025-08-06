@@ -113,5 +113,5 @@ spec:
             failureThreshold: 5
       volumes:
       {{- include "logfire.scratchVolume" (get (get .Values $serviceName | default dict) "scratchVolume" | default dict) | nindent 6 }}
-{{- template "logfire.hpa" (dict "Values" .Values "serviceName" $serviceName) }}
+{{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

@@ -114,8 +114,17 @@ logfire-dex:
 #  autoscaling:
 #    minReplicas: 2
 #    maxReplicas: 4
-#    memAverage: 65
-#    cpuAverage: 20
+#    hpa:
+#     enabled: true
+#     memAverage: 65
+#     cpuAverage: 20
+#    keda:
+#     enabled: true
+#     triggers:
+#     - type: cpu
+#       metricType: Utilization
+#       metadata:
+#         value: "50"
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -139,8 +148,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 2
 #     maxReplicas: 24
-#     memAverage: 85
-#     cpuAverage: 50
+#     hpa:
+#       enabled: true
+#       memAverage: 85
+#       cpuAverage: 50
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -164,8 +182,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 2
 #     maxReplicas: 4
-#     memAverage: 65
-#     cpuAverage: 20
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 20
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -187,8 +214,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 2
 #     maxReplicas: 8
-#     memAverage: 65
-#     cpuAverage: 20
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 20
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -209,8 +245,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
-#     memAverage: 65
-#     cpuAverage: 20
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 20
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -228,8 +273,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
-#     memAverage: 65
-#     cpuAverage: 20
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 20
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -247,8 +301,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
-#     memAverage: 65
-#     cpuAverage: 20
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 20
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -269,13 +332,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
-#     memAverage: 65
-#     cpuAverage: 20
-#   autoscaling:
-#     minReplicas: 1
-#     maxReplicas: 2
-#     memAverage: 65
-#     cpuAverage: 20
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 20
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -293,8 +360,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
-#     memAverage: 65
-#     cpuAverage: 20
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 20
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -316,8 +392,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
-#     memAverage: 65
-#     cpuAverage: 20
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 20
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -337,8 +422,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
-#     memAverage: 65
-#     cpuAverage: 20
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 20
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -358,8 +452,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
-#     memAverage: 65
-#     cpuAverage: 20
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 20
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -392,8 +495,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 2
 #     maxReplicas: 4
-#     memAverage: 50
-#     cpuAverage: 50
+#     hpa:
+#       enabled: true
+#       memAverage: 50
+#       cpuAverage: 50
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -431,8 +543,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 2
 #     maxReplicas: 4
-#     memAverage: 50
-#     cpuAverage: 50
+#     hpa:
+#       enabled: true
+#       memAverage: 50
+#       cpuAverage: 50
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -456,8 +577,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
-#     memAverage: 65
-#     cpuAverage: 20
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 20
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -476,8 +606,17 @@ logfire-ff-ingest:
 #   autoscaling:
 #     minReplicas: 8
 #     maxReplicas: 128
-#     memAverage: 20
-#     cpuAverage: 50
+#     hpa:
+#       enabled: true
+#       memAverage: 20
+#       cpuAverage: 50
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "50"
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1

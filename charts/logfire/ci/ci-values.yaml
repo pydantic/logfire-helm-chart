@@ -68,10 +68,12 @@ logfire-ff-ingest:
     storageClassName: standard
     storage: "1Gi"
   autoscaling:
+    hpa:
+      enabled: true
+      memAverage: 65
+      cpuAverage: 20
     minReplicas: 1
     maxReplicas: 2
-    memAverage: 65
-    cpuAverage: 20
 
 logfire-ff-compaction-worker:
   scratchVolume:
@@ -80,6 +82,7 @@ logfire-ff-compaction-worker:
   autoscaling:
     minReplicas: 1
     maxReplicas: 2
+    # -- backward compat
     memAverage: 65
     cpuAverage: 20
 
