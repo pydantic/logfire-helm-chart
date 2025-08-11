@@ -544,7 +544,7 @@ Calculate memory assignments based on servicememory request
 {{- if .Values.dev.deployPostgres -}}
 "logfire-backend-migrations-{{ .Release.Revision }}"
 {{- else -}}
-"logfire-ff-migrations"
+"logfire-backend-migrations"
 {{- end -}}
 {{- end -}}
 
