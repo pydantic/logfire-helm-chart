@@ -1,10 +1,11 @@
 # logfire
 
-![Version: 0.7.1](https://img.shields.io/badge/Version-0.7.1-informational?style=flat-square) ![AppVersion: c983beb0](https://img.shields.io/badge/AppVersion-c983beb0-informational?style=flat-square)
+![Version: 0.7.2](https://img.shields.io/badge/Version-0.7.2-informational?style=flat-square) ![AppVersion: c983beb0](https://img.shields.io/badge/AppVersion-c983beb0-informational?style=flat-square)
 
-Helm chart for self-hosted Pydantic Logfire.
+Helm chart for self-hosted Pydantic Logfire
 
-This chart exists as public documentation of how to set up and run self-hosted Pydantic Logfire but requires an image pull key to actually use. **Self-hosted Logfire is an Enterprise offering that requires a contract and payment, it is not free software**. Please contact sales@pydantic.dev to discuss setting up a contract and pricing. 
+This chart exists as public documentation of how to set up and run self-hosted Pydantic Logfire but requires an image pull key to actually use.
+**Self-hosted Logfire is an Enterprise offering that requires a contract and payment, it is not free software**. Please contact sales@pydantic.dev to discuss setting up a contract and pricing.
 
 ## Local Quickstart (Evaluation & Testing)
 
@@ -336,7 +337,7 @@ See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hoste
 * Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.7.1](https://img.shields.io/badge/Version-0.7.1-informational?style=flat-square) ![AppVersion: c983beb0](https://img.shields.io/badge/AppVersion-c983beb0-informational?style=flat-square)
+![Version: 0.7.2](https://img.shields.io/badge/Version-0.7.2-informational?style=flat-square) ![AppVersion: c983beb0](https://img.shields.io/badge/AppVersion-c983beb0-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
