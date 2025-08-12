@@ -81,7 +81,7 @@ spec:
             - containerPort: 8000
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 8000
           readinessProbe:
             httpGet:
@@ -165,6 +165,10 @@ spec:
               value: http://logfire-ff-ingest
             - name: FUSIONFIRE_INGEST_PORT
               value: "8012"
+            - name: FUSIONFIRE_CRUD_HOST
+              value: http://logfire-ff-crud-api
+            - name: FUSIONFIRE_CRUD_PORT
+              value: "8011"
             - name: MIN_DATE_USAGE_CHART  # TODO: make this optional?
               value: "2025-01-01"
             - name: DEFAULT_SUBSCRIPTION_PLAN

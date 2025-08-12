@@ -592,6 +592,36 @@ logfire-ff-ingest:
 #     maxUnavailable: 1
 #     minAvailable: 1
 #
+# logfire-ff-crud-api:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
+#   replicas: 2
+#   resources:
+#     cpu: "1"
+#     memory: "1Gi"
+#   autoscaling:
+#     minReplicas: 4
+#     maxReplicas: 32
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 20
+#     keda:
+#       enabled: true
+#       triggers:
+#       - type: cpu
+#         metricType: Utilization
+#         metadata:
+#           value: "20"
+#  pdb:
+#    maxUnavailable: 1
+#    minAvailable: 1
+#
 ## Optional query worker deployment
 # logfire-ff-query-worker:
 #   # -- Workload annotations
@@ -765,6 +795,7 @@ postgresql:
     postgresPassword: "postgres"
   postgresqlDataDir: /var/lib/postgresql/data/pgdata
   primary:
+    resourcesPreset: small
     initdb:
       scripts:
         create_databases.sql: |
