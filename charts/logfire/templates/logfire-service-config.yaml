@@ -31,7 +31,7 @@ stringData:
       accepted_payload_size 8192
       resolve_retries 10
       timeout retry 2s
-      hold valid 5s
+      hold valid 1s
 
     frontend http-in
       bind :8080 alpn h2,http/1.1
