@@ -80,14 +80,6 @@ spec:
             - containerPort: 8181 # Stats port
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           env:
-            - name: STRIPE_PUBLISHABLE_KEY
-              value: ""
-            - name: IMAGE_TAG
-              value: local
-            - name: POSTHOG_API_KEY
-              value: ""
-            - name: POSTHOG_API_HOST
-              value: ""
             - name: OTEL_SERVICE_NAME
               value: {{ $serviceName }}
             {{ if eq (.Values.ingress.tls | default false) false }}

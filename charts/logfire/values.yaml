@@ -353,7 +353,7 @@ logfire-ff-ingest:
 #   annotations: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#   replicas: 2
+#  replicas: 2
 #   resources:
 #     cpu: "4"
 #     memory: "8Gi"
@@ -385,7 +385,7 @@ logfire-ff-ingest:
 #   annotations: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#   replicas: 2
+#  replicas: 1
 #   resources:
 #     cpu: "4"
 #     memory: "8Gi"
@@ -407,7 +407,7 @@ logfire-ff-ingest:
 #     maxUnavailable: 1
 #     minAvailable: 1
 #
-# logfire-ff-conhash-cache-byte:
+# logfire-ff-proxy-cache-byte:
 #   # -- Workload annotations
 #   annotations: {}
 #   # -- Pod annotations
@@ -437,7 +437,7 @@ logfire-ff-ingest:
 #     maxUnavailable: 1
 #     minAvailable: 1
 #
-# logfire-ff-conhash-cache-ipc:
+# logfire-ff-proxy-cache-ipc:
 #   # -- Workload annotations
 #   annotations: {}
 #   # -- Pod annotations

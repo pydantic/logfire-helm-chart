@@ -40,6 +40,7 @@ spec:
     matchLabels:
       {{- include "logfire.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: {{ $serviceName }}
+  minReadySeconds: 15
   template:
     metadata:
       labels:
@@ -52,7 +53,6 @@ spec:
         {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
-      minReadySeconds: 15
       priorityClassName: {{ .Values.priorityClassName }}
       {{- with .Values.serviceAccountName }}
       serviceAccountName: {{ . }}

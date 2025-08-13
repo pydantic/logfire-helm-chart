@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: logfire-cache-ipc-haproxy-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-cache-ipc-haproxy-config
+stringData:
+  haproxy.cfg: |
+    global
+      daemon
+      maxconn 15000
+      log stdout sample 1:1000 local0 info
+
+    defaults
+      mode http
+      option forwardfor
+      timeout connect 5000ms
+      timeout client 3600s #30000ms
+      timeout server 3600s #30000ms
+
+    listen stats
+      bind :8181
+      mode http
+      stats enable
+      stats uri /stats
+      stats show-modules
+
+    resolvers kubernetes
+      parse-resolv-conf
+      accepted_payload_size 8192
+      resolve_retries 10
+      timeout retry 2s
+      hold valid 1s
+
+    frontend http-in
+      bind :8080 alpn h2,http/1.1
+      log stdout local0 info
+      option httplog
+      option http-keep-alive
+      no option httpclose
+      timeout http-keep-alive 60s
+      timeout client 80s
+
+      default_backend servers
+
+    backend servers
+      option http-keep-alive
+      timeout http-keep-alive 15s
+      timeout connect 3s
+      timeout server 50s
+      # Create hash from authorization header, path, and query params
+      http-request set-var-fmt(txn.auth_hash) "%[req.hdr(authorization)]"
+      http-request set-var-fmt(txn.path_hash) "%[path]"
+      http-request set-var-fmt(txn.query_hash) "%[query]"
+      http-request set-var-fmt(txn.hash) "%[var(txn.auth_hash)] %[var(txn.path_hash)] %[var(txn.query_hash)]"
+
+      # Use consistent hashing with the combined hash
+      balance hash var(txn.hash)
+      hash-type consistent
+      # Use a hash balance factor to control the distribution of requests and avoid overloading a single pod if a hot hash keeps hitting the same pod
+      hash-balance-factor 150
+      option httpchk GET /health
+      http-check expect status 200
+
+      # Retry a total of 4 times, move to a different server every 2 retries
+      retries 4
+      option redispatch 2
+
+      {{- $values := (index .Values "logfire-ff-cache-ipc" | default dict) -}}
+      {{- $autoscaling := (index $values "autoscaling" | default dict) -}}
+      {{- $maxCount := coalesce (index $autoscaling "maxReplicas") (index $values "replicas") 1 }}
+      server-template logfire-ff-cache-ipc 1-{{ $maxCount }} logfire-ff-cache-ipc-internal.{{ .Release.Namespace }}.svc.cluster.local.:9001 check resolvers kubernetes inter 250ms hash-key addr

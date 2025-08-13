@@ -35,7 +35,12 @@ stringData:
 
     frontend http-in
       bind :8080 alpn h2,http/1.1
-
+      log stdout local0 info
+      option httplog
+      option http-keep-alive
+      no option httpclose
+      timeout http-keep-alive 60s
+      timeout client 80s
       http-request set-header Host %[req.hdr(Host)]
       http-request set-header X-Real-IP %[src]
 
@@ -61,12 +66,6 @@ stringData:
       acl path_dex path_beg /auth-api
       acl path_backend path_reg -i ^/(api|v1)/
 
-      log stdout local0 info
-      option httplog
-      option http-keep-alive
-      no option httpclose
-      timeout http-keep-alive 60s
-      timeout client 80s
 
       use_backend logfire-ingest if path_ingest
       use_backend logfire-dex if path_dex
@@ -90,14 +89,15 @@ stringData:
       option httpchk GET /health
       http-check expect status 200
       option tcp-check
-      option http-server-close
       timeout connect 3s
       timeout server 50s
       # Retry a total of 4 times, move to a different server every 2 retries
       retries 4
       option redispatch 2
-
-      {{- $maxCount := (get (get (get .Values "logfire-ff-ingest") "autoscaling" | default dict) "maxReplicas" | default (get (get .Values "logfire-ff-ingest") "replicas" | default 1)) }}
+      
+      {{- $values := (index .Values "logfire-ff-ingest" | default dict) -}}
+      {{- $autoscaling := (index $values "autoscaling" | default dict) -}}
+      {{- $maxCount := coalesce (index $autoscaling "maxReplicas") (index $values "replicas") 1 }}
       server-template logfire-ff-ingest 1-{{ $maxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.cluster.local.:8012 check resolvers kubernetes inter 250ms hash-key addr
 
     backend logfire-dex
