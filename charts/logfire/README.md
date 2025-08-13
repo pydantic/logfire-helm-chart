@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.7.2](https://img.shields.io/badge/Version-0.7.2-informational?style=flat-square) ![AppVersion: c983beb0](https://img.shields.io/badge/AppVersion-c983beb0-informational?style=flat-square)
+![Version: 0.8.0](https://img.shields.io/badge/Version-0.8.0-informational?style=flat-square) ![AppVersion: 0e772187](https://img.shields.io/badge/AppVersion-0e772187-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -337,7 +337,7 @@ See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hoste
 * Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.7.2](https://img.shields.io/badge/Version-0.7.2-informational?style=flat-square) ![AppVersion: c983beb0](https://img.shields.io/badge/AppVersion-c983beb0-informational?style=flat-square)
+![Version: 0.8.0](https://img.shields.io/badge/Version-0.8.0-informational?style=flat-square) ![AppVersion: 0e772187](https://img.shields.io/badge/AppVersion-0e772187-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -428,6 +428,7 @@ Helm chart for self-hosted Pydantic Logfire
 | postgresql.primary.initdb.scripts."create_databases.sql" | string | `"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"` |  |
 | postgresql.primary.persistence.mountPath | string | `"/var/lib/postgresql"` |  |
 | postgresql.primary.persistence.size | string | `"10Gi"` |  |
+| postgresql.primary.resourcesPreset | string | `"small"` |  |
 | priorityClassName | string | `""` | Specify a priority class name to set [pod priority](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | redisDsn | string | `"redis://logfire-redis:6379"` | The DSN for redis.  Change from default if you have an external redis instance |
 | revisionHistoryLimit | int | `2` | Define the [count of deployment revisions](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) to be kept. May be set to 0 in case of GitOps deployment approach. |

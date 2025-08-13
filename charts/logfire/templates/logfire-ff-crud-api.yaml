@@ -1,8 +1,8 @@
-{{- $serviceName := "logfire-ff-conhash-cache-byte" }}
+{{- $serviceName := "logfire-ff-crud-api" }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: logfire-ff-cache-byte
+  name: {{ $serviceName }}
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
@@ -13,9 +13,8 @@ spec:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
-  - port: 9001
-    targetPort: 80
-    name: http
+  - port: 8011
+    targetPort: 8011
   type: ClusterIP
 ---
 apiVersion: apps/v1
@@ -25,7 +24,8 @@ metadata:
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
-  annotations:
+  annotations: 
+    {{- include "logfire.secretAnnotations" . | nindent 4 }}
     {{- include "logfire.annotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
 spec:
   {{- if not (hasKey (index .Values $serviceName | default dict) "autoscaling") }}
@@ -38,15 +38,20 @@ spec:
       app.kubernetes.io/component: {{ $serviceName }}
   template:
     metadata:
+      annotations:
+        {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
+        checksum/logfire-postgres-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresFFDsn" )}}
+        {{- end }}
+        {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
+        checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
-      annotations:
-        {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
-        checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
-      serviceAccountName: conhash
+      {{- with .Values.serviceAccountName }}
+      serviceAccountName: {{ . }}
+      {{- end}}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
       {{- range . }}
@@ -66,24 +71,39 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
-          command:
-            - "conhash"
+          command: ["fusionfire", "crud", "--host=0.0.0.0", "--port=8011"]
           ports:
-            - containerPort: 80
+            - containerPort: 8011
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8011
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8011
+          startupProbe:
+              httpGet:
+                path: /health
+                port: 8011
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "sleep"
+                  - "5"
           envFrom:
             - configMapRef:
                 name: logfire-ff-config
-          env: 
+          env:
+            - name: PG_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}
+                  key: postgresFFDsn
             {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
-            {{- include "logfire.objectStoreEnv" . | nindent 12 }}
-            - name: DEPLOYMENT_SELECTOR
-              value: "app.kubernetes.io/component=logfire-ff-cache-byte"
-            - name: DEPLOYMENT_PORT
-              value: "9001"
-            - name: HASH
-              value: "uri"
-            - name: FF_USE_DIRECT_IO
-              value: "true"
+            - name: FF_DATAFUSION_THREAD_STACK_SIZE
+              value: "8MB" 
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}

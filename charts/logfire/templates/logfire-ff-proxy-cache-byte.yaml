@@ -1,8 +1,9 @@
-{{- $serviceName := "logfire-service" }}
+{{- $serviceName := "logfire-ff-proxy-cache-byte" }}
+---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $serviceName }}
+  name: logfire-ff-cache-byte
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
@@ -13,8 +14,9 @@ spec:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
-  - port: 8080
+  - port: 9001
     targetPort: 8080
+    name: http
   type: ClusterIP
 ---
 apiVersion: apps/v1
@@ -40,6 +42,7 @@ spec:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
+        checksum/logfire-cache-byte-haproxy-config: {{ include "utils.secretChecksum" (dict "ctx" . "name" "logfire-cache-byte-haproxy-config" "key" "haproxy.cfg") }}
         checksum/service-config: {{ include (print $.Template.BasePath "/logfire-service-config.yaml") . | sha256sum }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
@@ -65,7 +68,7 @@ spec:
           image: haproxy:3.2
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           volumeMounts:
-            - name: logfire-haproxy-config
+            - name: logfire-cache-byte-haproxy-config
               mountPath: /usr/local/etc/haproxy/haproxy.cfg
               subPath: haproxy.cfg
               readOnly: true
@@ -102,9 +105,9 @@ spec:
               path: "/stats"
               port: 8181
       volumes:
-        - name: logfire-haproxy-config
+        - name: logfire-cache-byte-haproxy-config
           secret:
-            secretName: logfire-haproxy-config
+            secretName: logfire-cache-byte-haproxy-config
             items:
               - key: haproxy.cfg
                 path: haproxy.cfg

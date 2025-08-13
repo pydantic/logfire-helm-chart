@@ -1,5 +1,23 @@
 {{- $serviceName := "logfire-ff-cache-ipc" }}
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}-internal
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  annotations:
+    {{- include "logfire.serviceAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+  - port: 9001
+    targetPort: 9001
+  clusterIP: None
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -55,7 +73,7 @@ spec:
             - ipc-cache
             - --host=0.0.0.0
             - --port=9001
-            - --metadata-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 40) }}MB
+            - --arrow-metadata-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 40) }}MB
             - --filter-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 20) }}MB
             - --slice-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 30) }}MB
             - --byte-buffer-limit={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 10) }}MB

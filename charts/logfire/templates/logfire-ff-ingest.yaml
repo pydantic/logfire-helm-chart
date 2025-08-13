@@ -40,6 +40,7 @@ spec:
     matchLabels:
       {{- include "logfire.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: {{ $serviceName }}
+  minReadySeconds: 15
   template:
     metadata:
       labels:
@@ -87,7 +88,7 @@ spec:
               exec:
                 command:
                   - "sleep"
-                  - "5"
+                  - "15"
           envFrom:
             - configMapRef:
                 name: logfire-ff-config
@@ -105,6 +106,10 @@ spec:
               value: "24h"
             - name: FF_INGEST_PATH
               value: "/fusionfire/ingest-data"
+            - name: FF_INGEST_EXTERNAL_FILE_SPILL_SIZE_THRESHOLD_BYTES
+              value: "131072" # 128kb
+            - name: FF_INGEST_VACUUM_TRIGGER_TRESHOLD
+              value: "1000"
             - name: FF_INGEST_NUM_WORKERS
               value: {{ mul (atoi (toString ($cpu))) 8 | quote }}
             - name: FF_IO_THREADS
@@ -132,7 +137,7 @@ spec:
               path: /health
               port: 8012
             initialDelaySeconds: 0
-            periodSeconds: 10
+            periodSeconds: 5
             timeoutSeconds: 5
             failureThreshold: 5
           readinessProbe:
@@ -140,7 +145,7 @@ spec:
               path: /ready
               port: 8012
             initialDelaySeconds: 0
-            periodSeconds: 10
+            periodSeconds: 5
             timeoutSeconds: 5
             failureThreshold: 5
           startupProbe:

@@ -91,6 +91,10 @@ spec:
               value: http://logfire-ff-ingest
             - name: FUSIONFIRE_INGEST_PORT
               value: "8012"
+            - name: FUSIONFIRE_CRUD_HOST
+              value: http://logfire-ff-crud-api
+            - name: FUSIONFIRE_CRUD_PORT
+              value: "8011"
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app
             - name: COLLECTOR_OTLP_GRPC_HOST
