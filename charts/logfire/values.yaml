@@ -1,6 +1,15 @@
 # -- The secret used to pull down container images for pods
 imagePullSecrets: []
 
+# nodeSelector applied to all deployments
+nodeSelector: {}
+
+# Node/Pod Affinity applied to all deployments
+affinity: {}
+
+# Tolerations applied to all deployments
+tolerations: []
+
 # -- Starter admin user
 adminEmail: hello@example.dev
 

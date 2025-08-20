@@ -41,6 +41,12 @@ spec:
       priorityClassName: {{ .Values.priorityClassName }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.tolerations | nindent 8 }}
       containers:
         - name: redis
           image: {{ printf "%s:%s" (get (get (index .Values $serviceName) "image" | default dict) "repository" | default "redis") (get (get (index .Values $serviceName) "image" | default dict) "tag" | default "7.2") }}

@@ -21,6 +21,12 @@ spec:
         app.kubernetes.io/component: logfire-maildev
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.tolerations | nindent 8 }}
       containers:
         - image: maildev/maildev
           name: logfire-maildev
