@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.8.1](https://img.shields.io/badge/Version-0.8.1-informational?style=flat-square) ![AppVersion: b0c84812](https://img.shields.io/badge/AppVersion-b0c84812-informational?style=flat-square)
+![Version: 0.8.2](https://img.shields.io/badge/Version-0.8.2-informational?style=flat-square) ![AppVersion: b0c84812](https://img.shields.io/badge/AppVersion-b0c84812-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -337,7 +337,7 @@ See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hoste
 * Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.8.1](https://img.shields.io/badge/Version-0.8.1-informational?style=flat-square) ![AppVersion: b0c84812](https://img.shields.io/badge/AppVersion-b0c84812-informational?style=flat-square)
+![Version: 0.8.2](https://img.shields.io/badge/Version-0.8.2-informational?style=flat-square) ![AppVersion: b0c84812](https://img.shields.io/badge/AppVersion-b0c84812-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
