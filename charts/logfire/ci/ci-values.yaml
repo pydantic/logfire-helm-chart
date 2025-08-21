@@ -1,5 +1,9 @@
 adminEmail: hello@example.dev
 
+# -- test with security context
+podSecurityContext:
+  fsGroup: 2000
+
 ingress:
   enabled: true
   tls: false
