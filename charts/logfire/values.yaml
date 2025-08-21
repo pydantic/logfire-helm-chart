@@ -26,7 +26,7 @@ ingress:
   # -- Enable the Ingress resource.
   # If you are NOT using an ingress resource, you still need to set `tls` and `hostnames`
   # so the application can generate correct URLs/CORS.
-  enabled: false
+  enabled: true
 
   # -- Enable TLS/HTTPS. Required for correct CORS behavior.
   tls: false
@@ -42,6 +42,9 @@ ingress:
 
   # -- IngressClass to use (e.g., nginx)
   ingressClassName: nginx
+  
+  # -- TLS Secret name if you want to do a custom one
+  secretName: logfire-frontend-cert
 
   # -- Ingress annotations
   annotations: {}
