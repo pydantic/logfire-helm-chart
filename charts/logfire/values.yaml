@@ -134,6 +134,9 @@ logfire-dex:
 #       metricType: Utilization
 #       metadata:
 #         value: "50"
+#  nodeSelector: {}
+#  affinity: {}
+#  tolerations: []
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -168,6 +171,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -202,6 +208,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -234,6 +243,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -265,6 +277,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -293,6 +308,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -321,6 +339,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -352,6 +373,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -380,6 +404,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -412,6 +439,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -442,6 +472,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -472,6 +505,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -515,6 +551,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -563,6 +602,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -597,6 +639,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
@@ -627,6 +672,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "20"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #  pdb:
 #    maxUnavailable: 1
 #    minAvailable: 1
@@ -656,6 +704,9 @@ logfire-ff-ingest:
 #         metricType: Utilization
 #         metadata:
 #           value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1

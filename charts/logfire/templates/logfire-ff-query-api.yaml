@@ -64,12 +64,9 @@ spec:
       {{- end}}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      nodeSelector:
-        {{- toYaml .Values.nodeSelector | nindent 8 }}
-      affinity:
-        {{- toYaml .Values.affinity | nindent 8 }}
-      tolerations:
-        {{- toYaml .Values.tolerations | nindent 8 }}
+      {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.affinity" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       containers:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ include "logfire.defaultTag" .  }}'
