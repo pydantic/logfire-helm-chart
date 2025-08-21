@@ -91,6 +91,12 @@ data:
                 default_type "application/javascript";
             }
 
+            location /genai-prices/data.json {
+              rewrite /genai-prices/data.json /pydantic/genai-prices/main/prices/data.json  break;
+              proxy_pass https://raw.githubusercontent.com;
+              proxy_redirect off;
+            }
+
             # Main location block for the app
             location / {
                 index index.html index.htm;
