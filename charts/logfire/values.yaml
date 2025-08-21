@@ -1,90 +1,126 @@
-# -- The secret used to pull down container images for pods
+# ==============================================================================
+# Global settings
+# ==============================================================================
+
+# -- Image pull secrets used by all pods
 imagePullSecrets: []
 
-# nodeSelector applied to all deployments
+# -- Node selector applied to all workloads
 nodeSelector: {}
 
-# Node/Pod Affinity applied to all deployments
+# -- Node/Pod affinity applied to all workloads
 affinity: {}
 
-# Tolerations applied to all deployments
+# -- Tolerations applied to all workloads
 tolerations: []
 
-# -- Starter admin user
+# -- Starter admin email address
 adminEmail: hello@example.dev
 
-ingress:
-  # -- Enable Ingress Resource.
-  # If you're not using an ingress resource, you still need to configure `tls`, `hostname`
-  enabled: false
-  # -- Enable TLS/HTTPS connections.  Required for CORS headers
-  tls: false
-  # -- The hostname(s) used for Pydantic Logfire
-  # Preferred method. Supports one or more hostnames. Set primary domain as the first item on the list.
-  hostnames:
-  - logfire.example.com
 
-  # -- DEPRECATED: Kept for backwards compatibility.
-  # Use `hostnames` (a list) for all new deployments.
+# ==============================================================================
+# Ingress
+# ==============================================================================
+
+ingress:
+  # -- Enable the Ingress resource.
+  # If you are NOT using an ingress resource, you still need to set `tls` and `hostnames`
+  # so the application can generate correct URLs/CORS.
+  enabled: false
+
+  # -- Enable TLS/HTTPS. Required for correct CORS behavior.
+  tls: false
+
+  # -- Hostname(s) for Pydantic Logfire.
+  # Preferred method. Supports one or more hostnames; put the primary domain first.
+  hostnames:
+    - logfire.example.com
+
+  # -- DEPRECATED (kept for backward compatibility).
+  # Use `hostnames` (list) for all new deployments.
   hostname: "logfire.example.com"
 
+  # -- IngressClass to use (e.g., nginx)
   ingressClassName: nginx
-  # -- Any annotations required.
+
+  # -- Ingress annotations
   annotations: {}
 
-# -- User provided postgres credentials
-# containing `postgresDsn` and `postgresFFDsn` keys
+
+# ==============================================================================
+# Postgres configuration
+# ==============================================================================
+
+# -- User-provided Secret containing database credentials
+# Must include `postgresDsn` and `postgresFFDsn` keys.
 postgresSecret:
-  # -- Set to true to use an existing secret. Highly recommended for Argo CD users.
+  # -- Set to true to use an existing Secret (recommended for Argo CD users).
   enabled: false
-  # -- The name of the Kubernetes Secret resource.
+  # -- Name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for the secret, e.g., for external secret managers.
+  # -- Optional annotations for the Secret (e.g., for external secret managers).
   annotations: {}
 
-# -- Custom annotations for migration Jobs
+# -- Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks)
 hooksAnnotations:
-#  argocd.argoproj.io/hook: PreSync
-#  argocd.argoproj.io/hook-delete-policy: HookSucceeded
+  # argocd.argoproj.io/hook: PreSync
+  # argocd.argoproj.io/hook-delete-policy: HookSucceeded
 
 # -- NOTE: The DSNs below are ignored if `postgresSecret.enabled` is true.
 
-# -- Postgres DSN used for `crud` database
+# -- Postgres DSN used for the `crud` database
 postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 
-# -- Postgres DSN used for `ff` database
+# -- Postgres DSN used for the `ff` database
 postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
 
+
+# ==============================================================================
+# SMTP
+# ==============================================================================
+
 smtp:
-  # -- Hostname of the SMTP server
+  # -- SMTP server hostname
   host:
-  # -- Port of the SMTP server
+  # -- SMTP server port
   port: 25
   # -- SMTP username
   username:
   # -- SMTP password
   password:
-  # -- Whether to use TLS
+  # -- Use TLS for SMTP
   use_tls: false
 
+
+# ==============================================================================
+# AI configuration
+# ==============================================================================
+
 ai:
-  # -- The AI provide and model to use. Prefix with the provider. I.e, For azure use `azure:gpt-4o`
-  #
-  # See https://ai.pydantic.dev/models/ for more info
+  # -- AI provider+model string. Prefix the model with the provider (e.g., `azure:gpt-4o`).
+  # See https://ai.pydantic.dev/models/ for more information.
   model:
+
   openAi:
-    # -- The OpenAI API key
+    # -- OpenAI API key
     apiKey:
+
   vertexAi:
-    # -- The region for Vertex AI
+    # -- Vertex AI region
     region:
+
   azureOpenAi:
-    # -- The Azure OpenAI endpoint
+    # -- Azure OpenAI endpoint
     endpoint:
-    # -- The Azure OpenAI API key
+    # -- Azure OpenAI API key
     apiKey:
-    # -- The Azure OpenAI API version
+    # -- Azure OpenAI API version
     apiVersion:
+
+
+# ==============================================================================
+# Components
+# ==============================================================================
 
 # -- Configuration, autoscaling & resources for `logfire-dex` deployment
 logfire-dex:
@@ -92,16 +128,21 @@ logfire-dex:
   annotations: {}
   # -- Pod annotations
   podAnnotations: {}
+
   service:
     # -- Service annotations
     annotations: {}
+
   # -- Number of replicas
   replicas: 1
-  # -- Dex Config
+
+  # -- Dex configuration (see https://dexidp.io/docs/)
   config:
-    # -- Enables password authentication, set to false if undesired, but must configure another connector first
+    # -- Enable password authentication.
+    # Set to false if undesired, but ensure another connector is configured first.
     enablePasswordDB: true
-    # -- Dex storage configuration, see https://dexidp.io/docs/configuration/storage/
+
+    # -- Dex storage configuration (see https://dexidp.io/docs/configuration/storage/)
     storage:
       type: postgres
       config:
@@ -112,73 +153,81 @@ logfire-dex:
         password: postgres
         ssl:
           mode: disable
-    # -- Dex auth connectors, see https://dexidp.io/docs/connectors/
-    # redirectURI config option can be omitted, as it will be automatically generated
-    # however if specified, the custom value will be honored
+
+    # -- Dex auth connectors (see https://dexidp.io/docs/connectors/)
+    # The redirectURI can be omitted—it will be generated automatically.
+    # If specified, the custom value will be honored.
     connectors: []
-  # -- resources
+
+  # -- Resource requests/limits
   resources:
     cpu: "1"
     memory: "1Gi"
-#  autoscaling:
-#    minReplicas: 2
-#    maxReplicas: 4
-#    hpa:
-#     enabled: true
-#     memAverage: 65
-#     cpuAverage: 20
-#    keda:
-#     enabled: true
-#     triggers:
-#     - type: cpu
-#       metricType: Utilization
-#       metadata:
-#         value: "50"
-#  nodeSelector: {}
-#  affinity: {}
-#  tolerations: []
-#  pdb:
-#    maxUnavailable: 1
-#    minAvailable: 1
-#
-# # -- Autoscaling & resources for the `logfire-ff-ingest` pod
+
+  # autoscaling:
+  #   minReplicas: 2
+  #   maxReplicas: 4
+  #   hpa:
+  #     enabled: true
+  #     memAverage: 65
+  #     cpuAverage: 20
+  #   keda:
+  #     enabled: true
+  #     triggers:
+  #       - type: cpu
+  #         metricType: Utilization
+  #         metadata:
+  #           value: "50"
+  # nodeSelector: {}
+  # affinity: {}
+  # tolerations: []
+  # pdb:
+  #   maxUnavailable: 1
+  #   minAvailable: 1
+
+
+# -- Autoscaling & resources for the `logfire-ff-ingest` pod
 logfire-ff-ingest:
   # -- Workload annotations
   annotations: {}
   # -- Pod annotations
   podAnnotations: {}
+
   service:
     # -- Service annotations
     annotations: {}
-  # -- Configuration for the PersistentVolumeClaim template for the stateful set.
+
+  # -- Configuration for the StatefulSet PersistentVolumeClaim template
   volumeClaimTemplates:
-    # -- The amount of storage to provision for each pod.
+    # -- Storage provisioned for each pod
     storage: 16Gi
+
   # resources:
   #   cpu: "2"
   #   memory: "4Gi"
-#   autoscaling:
-#     minReplicas: 2
-#     maxReplicas: 24
-#     hpa:
-#       enabled: true
-#       memAverage: 85
-#       cpuAverage: 50
-#     keda:
-#       enabled: true
-#       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
-#   nodeSelector: {}
-#   affinity: {}
-#   tolerations: []
-#   pdb:
-#     maxUnavailable: 1
-#     minAvailable: 1
-#
-# # -- Autoscaling & resources for the `logfire-backend` pod
+  # autoscaling:
+  #   minReplicas: 2
+  #   maxReplicas: 24
+  #   hpa:
+  #     enabled: true
+  #     memAverage: 85
+  #     cpuAverage: 50
+  #   keda:
+  #     enabled: true
+  #     triggers:
+  #       - type: cpu
+  #         metricType: Utilization
+  #         metadata:
+  #           value: "50"
+  # nodeSelector: {}
+  # affinity: {}
+  # tolerations: []
+  # pdb:
+  #   maxUnavailable: 1
+  #   minAvailable: 1
+
+
+# -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
 #   # -- Workload annotations
 #   annotations: {}
@@ -187,9 +236,9 @@ logfire-ff-ingest:
 #   service:
 #     # -- Service annotations
 #     annotations: {}
-#   # -- Number of pod replicas
+#   # -- Number of replicas
 #   replicas: 2
-#   # -- Resource limits and allocations
+#   # -- Resource requests/limits
 #   resources:
 #     cpu: "2"
 #     memory: "2Gi"
@@ -204,18 +253,19 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
-#
-# # -- Autoscaling & resources for the query api pods
+
+
+# -- Autoscaling & resources for the query API pods
 # logfire-ff-query-api:
 #   # -- Workload annotations
 #   annotations: {}
@@ -224,7 +274,9 @@ logfire-ff-ingest:
 #   service:
 #     # -- Service annotations
 #     annotations: {}
+#   # -- Parallelism per pod
 #   queryParallelism: 4
+#   # -- Number of replicas
 #   replicas: 2
 #   resources:
 #     cpu: "2"
@@ -239,18 +291,19 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
-#  pdb:
-#    maxUnavailable: 1
-#    minAvailable: 1
-#
-# # -- Autoscaling & resources for the frontend pods
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
+# -- Autoscaling & resources for the frontend pods
 # logfire-frontend-service:
 #   # -- Workload annotations
 #   annotations: {}
@@ -273,18 +326,19 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
-#  pdb:
-#    maxUnavailable: 1
-#    minAvailable: 1
-#
-# # -- Autoscaling & resources for the scheduler pods
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
+# -- Autoscaling & resources for the scheduler pods
 # logfire-scheduler:
 #   # -- Workload annotations
 #   annotations: {}
@@ -304,18 +358,19 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
-#  pdb:
-#    maxUnavailable: 1
-#    minAvailable: 1
-#
-# # -- Autoscaling & resources for the worker pods
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
+# -- Autoscaling & resources for the worker pods
 # logfire-worker:
 #   # -- Workload annotations
 #   annotations: {}
@@ -335,18 +390,19 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
-#  pdb:
-#    maxUnavailable: 1
-#    minAvailable: 1
-#
-# # -- Autoscaling & resources for the proxy pods
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
+# -- Autoscaling & resources for the proxy pods
 # logfire-service:
 #   # -- Workload annotations
 #   annotations: {}
@@ -369,24 +425,26 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
-#  pdb:
-#    maxUnavailable: 1
-#    minAvailable: 1
-#
-# # -- Autoscaling & resources for the cache pods
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
+# -- Autoscaling & resources for the byte cache pods
 # logfire-ff-cache-byte:
 #   # -- Workload annotations
 #   annotations: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#  replicas: 2
+#   # -- Number of replicas
+#   replicas: 2
 #   resources:
 #     cpu: "4"
 #     memory: "8Gi"
@@ -400,10 +458,10 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
@@ -415,13 +473,16 @@ logfire-ff-ingest:
 #     storage: 10Gi
 #     labels:
 #       type: my-volume
-#
+
+
+# -- Autoscaling & resources for the IPC cache pods
 # logfire-ff-cache-ipc:
 #   # -- Workload annotations
 #   annotations: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#  replicas: 1
+#   # -- Number of replicas
+#   replicas: 1
 #   resources:
 #     cpu: "4"
 #     memory: "8Gi"
@@ -435,17 +496,19 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
-#
+
+
+# -- Autoscaling & resources for the byte proxy cache pods
 # logfire-ff-proxy-cache-byte:
 #   # -- Workload annotations
 #   annotations: {}
@@ -468,17 +531,19 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
-#
+
+
+# -- Autoscaling & resources for the IPC proxy cache pods
 # logfire-ff-proxy-cache-ipc:
 #   # -- Workload annotations
 #   annotations: {}
@@ -501,17 +566,19 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
-#
+
+
+# -- Maintenance worker
 # logfire-ff-maintenance-worker:
 #   # -- Workload annotations
 #   annotations: {}
@@ -547,10 +614,10 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
@@ -562,7 +629,9 @@ logfire-ff-ingest:
 #     storage: 1Gi
 #     labels:
 #       type: my-volume
-#
+
+
+# -- Compaction worker
 # logfire-ff-compaction-worker:
 #   # -- Workload annotations
 #   annotations: {}
@@ -598,10 +667,10 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
@@ -613,7 +682,9 @@ logfire-ff-ingest:
 #     storage: 1Gi
 #     labels:
 #       type: my-volume
-#
+
+
+# -- OpenTelemetry collector
 # logfire-otel-collector:
 #   # -- Workload annotations
 #   annotations: {}
@@ -635,17 +706,19 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
-#
+
+
+# -- CRUD API
 # logfire-ff-crud-api:
 #   # -- Workload annotations
 #   annotations: {}
@@ -668,17 +741,18 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "20"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "20"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
-#  pdb:
-#    maxUnavailable: 1
-#    minAvailable: 1
-#
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
 ## Optional query worker deployment
 # logfire-ff-query-worker:
 #   # -- Workload annotations
@@ -700,10 +774,10 @@ logfire-ff-ingest:
 #     keda:
 #       enabled: true
 #       triggers:
-#       - type: cpu
-#         metricType: Utilization
-#         metadata:
-#           value: "50"
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
@@ -712,14 +786,18 @@ logfire-ff-ingest:
 #     minAvailable: 1
 
 
+# ==============================================================================
+# Object storage
+# ==============================================================================
+
 # -- Object storage details
 objectStore:
-  # -- Uri for object storage i.e, `s3://bucket`
+  # -- URI for object storage (e.g., `s3://bucket`)
   uri:
-  # -- additional env vars for the object store connection
+  # -- Additional environment variables for the object store connection
   env: {}
 
-# Azure
+# Azure example:
 # objectStore:
 #   uri: az://<container_name>
 #   env:
@@ -729,7 +807,8 @@ objectStore:
 #         secretKeyRef:
 #           name: my-azure-secret
 #           key: account-key
-# AWS
+#
+# AWS example:
 # objectStore:
 #   uri: s3://<bucket_name>
 #   env:
@@ -741,33 +820,43 @@ objectStore:
 #           key: secret-key
 #     AWS_ACCESS_KEY_ID: <access_key>
 
-# -- the Kubernetes Service Account that is used by the pods
+
+# ==============================================================================
+# Service account / priority / rollout policy / security
+# ==============================================================================
+
+# -- ServiceAccount used by pods
 serviceAccountName: default
 
-# -- Specify a priority class name to set [pod priority](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority).
+# -- Pod priority class (see Kubernetes pod priority/preemption docs)
 priorityClassName: ""
 
-# -- Define the [count of deployment revisions](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) to be kept.
-# May be set to 0 in case of GitOps deployment approach.
+# -- Number of deployment revisions to keep.
+# May be set to 0 when using a GitOps workflow.
 revisionHistoryLimit: 2
 
-# -- Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod).
-# See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details.
+# -- Pod SecurityContext
+# See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context
 podSecurityContext: {}
   # fsGroup: 2000
 
-# -- Container [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container).
-# See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1) for details.
+# -- Container SecurityContext
+# See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1
 securityContext: {}
   # capabilities:
   #   drop:
-  #   - ALL
+  #     - ALL
   # runAsNonRoot: true
   # runAsUser: 1000
   # readOnlyRootFilesystem: true
 
+
+# ==============================================================================
+# Images
+# ==============================================================================
+
 image:
-  # -- The pull policy for docker images
+  # -- Image pull policy
   pullPolicy: IfNotPresent
   # @ignored
   repository: us-docker.pkg.dev/pydantic-public-registries/logfire/
@@ -784,10 +873,16 @@ image:
   # @ignored
   dexImage: dex
 
+
+# ==============================================================================
+# Redis
+# ==============================================================================
+
 logfire-redis:
-  # -- Enable redis as part of this helm chart.
-  # Disable this if you want to provide your own redis instance.
+  # -- Deploy Redis as part of this chart.
+  # Disable to use an external Redis instance.
   enabled: true
+
   # -- Redis image configuration
   image:
     # -- Redis image repository
@@ -797,7 +892,15 @@ logfire-redis:
     # -- Redis image pull policy
     pullPolicy: IfNotPresent
 
-# -- Config for otel-collector
+# -- Redis DSN. Change if using an external Redis instance.
+redisDsn: redis://logfire-redis:6379
+
+
+# ==============================================================================
+# OpenTelemetry Collector
+# ==============================================================================
+
+# -- otel-collector configuration
 otel_collector:
   prometheus:
     enabled: false
@@ -810,44 +913,53 @@ otel_collector:
     resource_to_telemetry_conversion:
       enabled: true
 
-# -- The DSN for redis.  Change from default if you have an external redis instance
-redisDsn: redis://logfire-redis:6379
 
-# -- Existing Secret with the following keys
-#  logfire-dex-client-secret
-#  logfire-meta-write-token
-#  logfire-meta-frontend-token
-#  logfire-jwt-secret
+# ==============================================================================
+# Secrets (JWT/tokens and admin credentials)
+# ==============================================================================
+
+# -- Existing Secret with the following keys:
+#  - logfire-dex-client-secret
+#  - logfire-meta-write-token
+#  - logfire-meta-frontend-token
+#  - logfire-jwt-secret
 existingSecret:
-  # -- Set to true to use an existing secret. Highly recommended for Argo CD users.
+  # -- Use an existing Secret (recommended for Argo CD users).
   enabled: false
-  # -- The name of the Kubernetes Secret resource.
+  # -- Name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for the secret, e.g., for external secret managers.
+  # -- Optional annotations for the Secret (e.g., for external secret managers).
   annotations: {}
 
-# -- Existing Secret with the following keys
-#  logfire-admin-password
-#  logfire-admin-totp-secret
-#  logfire-admin-totp-recovery-codes as string representing a JSON list
+# -- Existing Secret with the following keys:
+#  - logfire-admin-password
+#  - logfire-admin-totp-secret
+#  - logfire-admin-totp-recovery-codes (string containing a JSON list)
 adminSecret:
-  # -- Set to true to use an existing secret. Highly recommended for Argo CD users.
+  # -- Use an existing Secret (recommended for Argo CD users).
   enabled: false
-  # -- The name of the Kubernetes Secret resource.
+  # -- Name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for the secret, e.g., for external secret managers.
+  # -- Optional annotations for the Secret (e.g., for external secret managers).
   annotations: {}
 
-# -- Development mode settings
+
+# ==============================================================================
+# Development conveniences (NOT for production)
+# ==============================================================================
+
 dev:
-  # -- Deploy maildev for testing emails
+  # -- Deploy MailDev to test emails
   deployMaildev: false
-  # -- Deploy internal postgres
-  # -- Do NOT use this in production!
+  # -- Deploy internal Postgres (NOT for production)
   deployPostgres: false
-  # -- Use a local MinIO instance as object storage
-  # -- Do NOT use this in production!
+  # -- Use a local MinIO instance as object storage (NOT for production)
   deployMinio: false
+
+
+# ==============================================================================
+# Embedded Postgres & MinIO defaults (dev/test)
+# ==============================================================================
 
 postgresql:
   fullnameOverride: "logfire-postgres"
