@@ -418,7 +418,7 @@ Helm chart for self-hosted Pydantic Logfire
 | objectStore.env | object | `{}` | Additional environment variables for the object store connection |
 | objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`) |
 | otel_collector | object | `{"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | otel-collector configuration |
-| podSecurityContext | object | `{}` | Pod SecurityContext See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context |
+| podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
 | postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
@@ -432,10 +432,10 @@ Helm chart for self-hosted Pydantic Logfire
 | postgresql.primary.persistence.mountPath | string | `"/var/lib/postgresql"` |  |
 | postgresql.primary.persistence.size | string | `"10Gi"` |  |
 | postgresql.primary.resourcesPreset | string | `"small"` |  |
-| priorityClassName | string | `""` | Pod priority class (see Kubernetes pod priority/preemption docs) |
+| priorityClassName | string | `""` | Pod priority class See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN. Change if using an external Redis instance. |
-| revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. May be set to 0 when using a GitOps workflow. |
-| securityContext | object | `{}` | Container SecurityContext See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 |
+| revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
+| securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details |
 | serviceAccountName | string | `"default"` | ServiceAccount used by pods |
 | smtp.host | string | `nil` | SMTP server hostname |
 | smtp.password | string | `nil` | SMTP password |
