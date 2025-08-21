@@ -610,3 +610,33 @@ Calculate memory assignments based on servicememory request
 "logfire-ff-migrations"
 {{- end -}}
 {{- end -}}
+
+{{- define "logfire.nodeSelector" -}}
+{{- $serviceValues := index .Values .serviceName | default dict -}}
+{{- $serviceSelector := $serviceValues.nodeSelector | default dict -}}
+{{- $merged := merge $serviceSelector (.Values.nodeSelector | default dict) -}}
+{{- if $merged -}}
+nodeSelector:
+{{- toYaml $merged | nindent 2 }}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.affinity" -}}
+{{- $serviceValues := index .Values .serviceName | default dict -}}
+{{- $serviceAffinity := $serviceValues.affinity | default dict -}}
+{{- $merged := merge $serviceAffinity (.Values.affinity | default dict) -}}
+{{- if $merged -}}
+affinity:
+{{- toYaml $merged | nindent 2 }}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.tolerations" -}}
+{{- $serviceValues := index .Values .serviceName | default dict -}}
+{{- $serviceTolerations := $serviceValues.tolerations | default list -}}
+{{- $merged := concat $serviceTolerations (.Values.tolerations | default list) -}}
+{{- if $merged -}}
+tolerations:
+{{- toYaml $merged | nindent 2 }}
+{{- end -}}
+{{- end -}}

@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.8.2](https://img.shields.io/badge/Version-0.8.2-informational?style=flat-square) ![AppVersion: b0c84812](https://img.shields.io/badge/AppVersion-b0c84812-informational?style=flat-square)
+![Version: 0.8.3](https://img.shields.io/badge/Version-0.8.3-informational?style=flat-square) ![AppVersion: b0c84812](https://img.shields.io/badge/AppVersion-b0c84812-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -337,7 +337,7 @@ See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hoste
 * Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.8.2](https://img.shields.io/badge/Version-0.8.2-informational?style=flat-square) ![AppVersion: b0c84812](https://img.shields.io/badge/AppVersion-b0c84812-informational?style=flat-square)
+![Version: 0.8.3](https://img.shields.io/badge/Version-0.8.3-informational?style=flat-square) ![AppVersion: b0c84812](https://img.shields.io/badge/AppVersion-b0c84812-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -352,50 +352,52 @@ Helm chart for self-hosted Pydantic Logfire
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| adminEmail | string | `"hello@example.dev"` | Starter admin user |
-| adminSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys  logfire-admin-password  logfire-admin-totp-secret  logfire-admin-totp-recovery-codes as string representing a JSON list |
-| adminSecret.annotations | object | `{}` | Optional annotations for the secret, e.g., for external secret managers. |
-| adminSecret.enabled | bool | `false` | Set to true to use an existing secret. Highly recommended for Argo CD users. |
-| adminSecret.name | string | `""` | The name of the Kubernetes Secret resource. |
-| ai.azureOpenAi.apiKey | string | `nil` | The Azure OpenAI API key |
-| ai.azureOpenAi.apiVersion | string | `nil` | The Azure OpenAI API version |
-| ai.azureOpenAi.endpoint | string | `nil` | The Azure OpenAI endpoint |
-| ai.model | string | `nil` | The AI provide and model to use. Prefix with the provider. I.e, For azure use `azure:gpt-4o`  See https://ai.pydantic.dev/models/ for more info |
-| ai.openAi.apiKey | string | `nil` | The OpenAI API key |
-| ai.vertexAi.region | string | `nil` | The region for Vertex AI |
-| dev | object | `{"deployMaildev":false,"deployMinio":false,"deployPostgres":false}` | Development mode settings |
-| dev.deployMaildev | bool | `false` | Deploy maildev for testing emails |
-| dev.deployMinio | bool | `false` | Do NOT use this in production! |
-| dev.deployPostgres | bool | `false` | Do NOT use this in production! |
-| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys  logfire-dex-client-secret  logfire-meta-write-token  logfire-meta-frontend-token  logfire-jwt-secret |
-| existingSecret.annotations | object | `{}` | Optional annotations for the secret, e.g., for external secret managers. |
-| existingSecret.enabled | bool | `false` | Set to true to use an existing secret. Highly recommended for Argo CD users. |
-| existingSecret.name | string | `""` | The name of the Kubernetes Secret resource. |
-| hooksAnnotations | string | `nil` | Custom annotations for migration Jobs |
-| image.pullPolicy | string | `"IfNotPresent"` | The pull policy for docker images |
-| imagePullSecrets | list | `[]` | The secret used to pull down container images for pods |
-| ingress.annotations | object | `{}` | Any annotations required. |
-| ingress.enabled | bool | `false` | Enable Ingress Resource. If you're not using an ingress resource, you still need to configure `tls`, `hostname` |
-| ingress.hostname | string | `"logfire.example.com"` | DEPRECATED: Kept for backwards compatibility. Use `hostnames` (a list) for all new deployments. |
-| ingress.hostnames | list | `["logfire.example.com"]` | The hostname(s) used for Pydantic Logfire Preferred method. Supports one or more hostnames. Set primary domain as the first item on the list. |
-| ingress.ingressClassName | string | `"nginx"` |  |
-| ingress.tls | bool | `false` | Enable TLS/HTTPS connections.  Required for CORS headers |
+| adminEmail | string | `"hello@example.dev"` | Starter admin email address |
+| adminSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-admin-password  - logfire-admin-totp-secret  - logfire-admin-totp-recovery-codes (string containing a JSON list) |
+| adminSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| adminSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
+| adminSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
+| affinity | object | `{}` | Node/Pod affinity applied to all workloads |
+| ai.azureOpenAi.apiKey | string | `nil` | Azure OpenAI API key |
+| ai.azureOpenAi.apiVersion | string | `nil` | Azure OpenAI API version |
+| ai.azureOpenAi.endpoint | string | `nil` | Azure OpenAI endpoint |
+| ai.model | string | `nil` | AI provider+model string. Prefix the model with the provider (e.g., `azure:gpt-4o`). See https://ai.pydantic.dev/models/ for more information. |
+| ai.openAi.apiKey | string | `nil` | OpenAI API key |
+| ai.vertexAi.region | string | `nil` | Vertex AI region |
+| dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
+| dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |
+| dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
+| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret |
+| existingSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
+| existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
+| hooksAnnotations | string | `nil` | Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks) |
+| image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
+| imagePullSecrets | list | `[]` | Image pull secrets used by all pods |
+| ingress.annotations | object | `{}` | Ingress annotations |
+| ingress.enabled | bool | `true` | Enable the Ingress resource. If you are NOT using an ingress resource, you still need to set `tls` and `hostnames` so the application can generate correct URLs/CORS. |
+| ingress.hostname | string | `"logfire.example.com"` | DEPRECATED (kept for backward compatibility). Use `hostnames` (list) for all new deployments. |
+| ingress.hostnames | list | `["logfire.example.com"]` | Hostname(s) for Pydantic Logfire. Preferred method. Supports one or more hostnames; put the primary domain first. |
+| ingress.ingressClassName | string | `"nginx"` | IngressClass to use (e.g., nginx) |
+| ingress.secretName | string | `"logfire-frontend-cert"` | TLS Secret name if you want to do a custom one |
+| ingress.tls | bool | `false` | Enable TLS/HTTPS. Required for correct CORS behavior. |
 | logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"podAnnotations":{},"replicas":1,"resources":{"cpu":"1","memory":"1Gi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
-| logfire-dex.config | object | `{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex Config |
-| logfire-dex.config.connectors | list | `[]` | Dex auth connectors, see https://dexidp.io/docs/connectors/ redirectURI config option can be omitted, as it will be automatically generated however if specified, the custom value will be honored |
-| logfire-dex.config.enablePasswordDB | bool | `true` | Enables password authentication, set to false if undesired, but must configure another connector first |
-| logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration, see https://dexidp.io/docs/configuration/storage/ |
+| logfire-dex.config | object | `{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex configuration (see https://dexidp.io/docs/) |
+| logfire-dex.config.connectors | list | `[]` | Dex auth connectors (see https://dexidp.io/docs/connectors/) The redirectURI can be omitted—it will be generated automatically. If specified, the custom value will be honored. |
+| logfire-dex.config.enablePasswordDB | bool | `true` | Enable password authentication. Set to false if undesired, but ensure another connector is configured first. |
+| logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration (see https://dexidp.io/docs/configuration/storage/) |
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.replicas | int | `1` | Number of replicas |
-| logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | resources |
+| logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | Resource requests/limits |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
+| logfire-ff-ingest | object | `{"annotations":{},"podAnnotations":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest.annotations | object | `{}` | Workload annotations |
 | logfire-ff-ingest.podAnnotations | object | `{}` | Pod annotations |
 | logfire-ff-ingest.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-ingest.volumeClaimTemplates | object | `{"storage":"16Gi"}` | Configuration for the PersistentVolumeClaim template for the stateful set. |
-| logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` | The amount of storage to provision for each pod. |
-| logfire-redis.enabled | bool | `true` | Enable redis as part of this helm chart. Disable this if you want to provide your own redis instance. |
+| logfire-ff-ingest.volumeClaimTemplates | object | `{"storage":"16Gi"}` | Configuration for the StatefulSet PersistentVolumeClaim template |
+| logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` | Storage provisioned for each pod |
+| logfire-redis.enabled | bool | `true` | Deploy Redis as part of this chart. Disable to use an external Redis instance. |
 | logfire-redis.image | object | `{"pullPolicy":"IfNotPresent","repository":"redis","tag":"7.2"}` | Redis image configuration |
 | logfire-redis.image.pullPolicy | string | `"IfNotPresent"` | Redis image pull policy |
 | logfire-redis.image.repository | string | `"redis"` | Redis image repository |
@@ -411,17 +413,18 @@ Helm chart for self-hosted Pydantic Logfire
 | minio.lifecycleHooks.postStart.exec.command[2] | string | `"# Wait for the server to start\nsleep 5\n# Create a bucket\nmc alias set local http://localhost:9000 logfire-minio logfire-minio\nmc mb local/logfire\nmc anonymous set public local/logfire\n"` |  |
 | minio.persistence.mountPath | string | `"/data"` |  |
 | minio.persistence.size | string | `"32Gi"` |  |
+| nodeSelector | object | `{}` | Node selector applied to all workloads |
 | objectStore | object | `{"env":{},"uri":null}` | Object storage details |
-| objectStore.env | object | `{}` | additional env vars for the object store connection |
-| objectStore.uri | string | `nil` | Uri for object storage i.e, `s3://bucket` |
-| otel_collector | object | `{"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | Config for otel-collector |
-| podSecurityContext | object | `{}` | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context) for details. |
-| postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for `crud` database |
-| postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for `ff` database |
-| postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User provided postgres credentials containing `postgresDsn` and `postgresFFDsn` keys |
-| postgresSecret.annotations | object | `{}` | Optional annotations for the secret, e.g., for external secret managers. |
-| postgresSecret.enabled | bool | `false` | Set to true to use an existing secret. Highly recommended for Argo CD users. |
-| postgresSecret.name | string | `""` | The name of the Kubernetes Secret resource. |
+| objectStore.env | object | `{}` | Additional environment variables for the object store connection |
+| objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`) |
+| otel_collector | object | `{"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | otel-collector configuration |
+| podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details |
+| postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
+| postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
+| postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
+| postgresSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| postgresSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
+| postgresSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | postgresql.auth.postgresPassword | string | `"postgres"` |  |
 | postgresql.fullnameOverride | string | `"logfire-postgres"` |  |
 | postgresql.postgresqlDataDir | string | `"/var/lib/postgresql/data/pgdata"` |  |
@@ -429,16 +432,17 @@ Helm chart for self-hosted Pydantic Logfire
 | postgresql.primary.persistence.mountPath | string | `"/var/lib/postgresql"` |  |
 | postgresql.primary.persistence.size | string | `"10Gi"` |  |
 | postgresql.primary.resourcesPreset | string | `"small"` |  |
-| priorityClassName | string | `""` | Specify a priority class name to set [pod priority](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
-| redisDsn | string | `"redis://logfire-redis:6379"` | The DSN for redis.  Change from default if you have an external redis instance |
-| revisionHistoryLimit | int | `2` | Define the [count of deployment revisions](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) to be kept. May be set to 0 in case of GitOps deployment approach. |
-| securityContext | object | `{}` | Container [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container). See the [API reference](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1) for details. |
-| serviceAccountName | string | `"default"` | the Kubernetes Service Account that is used by the pods |
-| smtp.host | string | `nil` | Hostname of the SMTP server |
+| priorityClassName | string | `""` | Pod priority class See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
+| redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN. Change if using an external Redis instance. |
+| revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
+| securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details |
+| serviceAccountName | string | `"default"` | ServiceAccount used by pods |
+| smtp.host | string | `nil` | SMTP server hostname |
 | smtp.password | string | `nil` | SMTP password |
-| smtp.port | int | `25` | Port of the SMTP server |
-| smtp.use_tls | bool | `false` | Whether to use TLS |
+| smtp.port | int | `25` | SMTP server port |
+| smtp.use_tls | bool | `false` | Use TLS for SMTP |
 | smtp.username | string | `nil` | SMTP username |
+| tolerations | list | `[]` | Tolerations applied to all workloads |
 
 ----------------------------------------------
 Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)

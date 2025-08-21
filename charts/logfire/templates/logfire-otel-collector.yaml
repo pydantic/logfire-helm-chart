@@ -124,6 +124,9 @@ spec:
       {{- end}}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.affinity" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       containers:
         - name: otel-collector
           image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.121.0
