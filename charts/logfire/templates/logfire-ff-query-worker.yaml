@@ -80,7 +80,7 @@ spec:
             - name: FF_QUERY_PARALLELISM
               value: {{ (get (get .Values $serviceName | default dict) "queryParallelism" | default "4" | quote) }}
             - name: FF_USE_PARQUET_STATS_CHANCE
-              value: "0.0"
+              value: "1.0"
             - name: FF_PG_POOL_MAX_CONNECTIONS
               value: "4"
             - name: FF_PG_POOL_MIN_CONNECTIONS
