@@ -40,8 +40,8 @@ ingress:
   # Use `hostnames` (list) for all new deployments.
   hostname: "logfire.example.com"
 
-  # -- IngressClass to use (e.g., nginx)
-  ingressClassName: nginx
+  # -- IngressClass to use (e.g., nginx), if not specified, default ingress class will be used (https://kubernetes.io/docs/concepts/services-networking/ingress/#default-ingress-class)
+  ingressClassName: ""
 
   # -- TLS Secret name if you want to do a custom one
   secretName: logfire-frontend-cert
@@ -222,6 +222,41 @@ logfire-ff-ingest:
   #         metricType: Utilization
   #         metadata:
   #           value: "50"
+  # nodeSelector: {}
+  # affinity: {}
+  # tolerations: []
+  # pdb:
+  #   maxUnavailable: 1
+  #   minAvailable: 1
+
+# -- Autoscaling & resources for the `logfire-ff-ingest-processor` pod
+logfire-ff-ingest-processor:
+  # -- Workload annotations
+  annotations: {}
+  # -- Pod annotations
+  podAnnotations: {}
+
+  service:
+    # -- Service annotations
+    annotations: {}
+
+  # resources:
+  #   cpu: "2"
+  #   memory: "4Gi"
+  # autoscaling:
+  #   minReplicas: 2
+  #   maxReplicas: 24
+  #   hpa:
+  #     enabled: true
+  #     memAverage: 40
+  #     cpuAverage: 60
+  #   keda:
+  #     enabled: true
+  #     triggers:
+  #       - type: cpu
+  #         metricType: Utilization
+  #         metadata:
+  #           value: "60"
   # nodeSelector: {}
   # affinity: {}
   # tolerations: []

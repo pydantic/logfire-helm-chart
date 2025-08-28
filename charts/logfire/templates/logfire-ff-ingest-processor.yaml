@@ -1,4 +1,4 @@
-{{- $serviceName := "logfire-ff-ingest" }}
+{{- $serviceName := "logfire-ff-ingest-processor" }}
 {{- $defaultCpu := "1" -}}
 {{- $serviceValues := get .Values $serviceName | default dict -}}
 {{- $resources := get $serviceValues "resources" | default dict -}}
@@ -26,10 +26,10 @@ spec:
   ports:
   - port: 8012
     targetPort: 8012
-  clusterIP: None
+  type: ClusterIP
 ---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: {{ $serviceName }}
   labels:
@@ -109,13 +109,11 @@ spec:
               value: "parentbased_traceidratio"
             {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             - name: FF_INGEST_PATH
-              value: "/fusionfire/ingest-data"
+              value: "/tmp/ingest-data"
             - name: FF_INGEST_NUM_WORKERS
-              value: {{ mul (atoi (toString ($cpu))) 8 | quote }}
-            - name: FF_INGEST_DOWNSTREAM_URL
-              value: "http://logfire-ff-ingest-processor:8012"
-            - name: FF_INGEST_REMOTE_CHANCE
-              value: "1"
+              value: "0"
+            - name: FF_INGEST_NUM_CLEANUP_WORKERS
+              value: "0"
             - name: FF_IO_THREADS
               value: {{ $cpuInt | float64 | floor | int | quote }}
             - name: FF_DATAFUSION_THREADS
@@ -158,12 +156,5 @@ spec:
             timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 30
-          volumeMounts: 
-            - name: {{ include "logfire.ingestVolumeName" . }}
-              mountPath: "/fusionfire/ingest-data"
-  volumeClaimTemplates:    
-  {{- include "logfire.ingestVolume" (get (get .Values $serviceName | default dict) "volumeClaimTemplates" | default dict) | nindent 4 }}
-
-
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

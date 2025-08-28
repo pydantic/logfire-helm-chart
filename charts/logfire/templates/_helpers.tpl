@@ -139,6 +139,19 @@ spec:
   value: "20000"
 {{- end -}}
 
+{{- define "logfire.ffIngestShared" -}}
+- name: FF_INGEST_MAX_FUTURE_TIME_DRIFT
+  value: "1h"
+- name: FF_INGEST_MAX_PAST_TIME_DRIFT
+  value: "24h"
+- name: FF_INGEST_EXTERNAL_FILE_SPILL_SIZE_THRESHOLD_BYTES
+  value: "131072" # 128kb
+- name: FF_INGEST_VACUUM_TRIGGER_TRESHOLD
+  value: "1000"
+- name: RUST_BACKTRACE
+  value: "1"
+{{- end -}}
+
 {{- define "logfire.resources"}}
 {{- if index (index .Values .serviceName | default dict) "resources" }}
 {{- with index .Values .serviceName "resources" }}
