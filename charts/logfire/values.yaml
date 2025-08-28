@@ -40,8 +40,8 @@ ingress:
   # Use `hostnames` (list) for all new deployments.
   hostname: "logfire.example.com"
 
-  # -- IngressClass to use (e.g., nginx)
-  ingressClassName: nginx
+  # -- IngressClass to use (e.g., nginx), if not specified, default ingress class will be used (https://kubernetes.io/docs/concepts/services-networking/ingress/#default-ingress-class)
+  ingressClassName: ""
 
   # -- TLS Secret name if you want to do a custom one
   secretName: logfire-frontend-cert
