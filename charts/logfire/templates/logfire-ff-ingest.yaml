@@ -128,7 +128,7 @@ spec:
                   key: postgresFFDsn
             - name: FF_SHARED_REDIS_DSN
               value: {{ .Values.redisDsn }}
-            {{- include "logfire.ffIngestShared" | nindent 12 -}}
+            {{- include "logfire.ffIngestShared" . | nindent 12 -}}
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- include "logfire.ffmaxRowPerRowGroup" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}
