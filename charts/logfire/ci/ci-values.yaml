@@ -1,5 +1,10 @@
 adminEmail: hello@example.dev
 
+# -- test with security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 100000
+
 ingress:
   enabled: true
   tls: false
