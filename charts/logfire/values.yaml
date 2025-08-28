@@ -229,6 +229,41 @@ logfire-ff-ingest:
   #   maxUnavailable: 1
   #   minAvailable: 1
 
+# -- Autoscaling & resources for the `logfire-ff-ingest-processor` pod
+logfire-ff-ingest-processor:
+  # -- Workload annotations
+  annotations: {}
+  # -- Pod annotations
+  podAnnotations: {}
+
+  service:
+    # -- Service annotations
+    annotations: {}
+
+  # resources:
+  #   cpu: "2"
+  #   memory: "4Gi"
+  # autoscaling:
+  #   minReplicas: 2
+  #   maxReplicas: 24
+  #   hpa:
+  #     enabled: true
+  #     memAverage: 40
+  #     cpuAverage: 60
+  #   keda:
+  #     enabled: true
+  #     triggers:
+  #       - type: cpu
+  #         metricType: Utilization
+  #         metadata:
+  #           value: "60"
+  # nodeSelector: {}
+  # affinity: {}
+  # tolerations: []
+  # pdb:
+  #   maxUnavailable: 1
+  #   minAvailable: 1
+
 
 # -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
