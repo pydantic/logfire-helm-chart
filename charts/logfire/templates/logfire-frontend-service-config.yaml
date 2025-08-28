@@ -16,6 +16,12 @@ data:
       appVersion: '{{ .Chart.AppVersion }}',
       selfHosted: true
     }
+  01-replace-vars.sh: |
+    NJS_MODULE_FILE="/etc/nginx/og_tags.js"
+    envsubst '${BACKEND_SERVICE_HOST}' < $NJS_MODULE_FILE > /tmp/og_tags.js
+
+    export NGINX_LOCAL_RESOLVERS=$(awk 'BEGIN{ORS=" "} $1=="nameserver" {print $2}' /etc/resolv.conf)
+    envsubst '${NGINX_LOCAL_RESOLVERS}' < /usr/local/nginx/nginx.conf > /tmp/nginx.conf
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -34,6 +40,9 @@ data:
     pid /tmp/nginx.pid;
     daemon off;
 
+    # Load njs module for dynamic meta tags
+    load_module modules/ngx_http_js_module.so;
+
     events {
         multi_accept        on;
         worker_connections  1024;
@@ -41,6 +50,8 @@ data:
     }
 
     http {
+        js_import og_tags from /tmp/og_tags.js;
+
         # from nginx unprivileged: https://github.com/nginxinc/docker-nginx-unprivileged/blob/3dd602719a37ff9b6095c44d4fd7f35b3c07b012/Dockerfile-debian.template#L129-L132
         proxy_temp_path /tmp/proxy_temp;
         client_body_temp_path /tmp/client_temp;
@@ -62,6 +73,7 @@ data:
         server {
             server_name {{ include "logfire.all_hostnames_string" . }};
             listen 8080 reuseport backlog=4096;
+            subrequest_output_buffer_size 32k;
             http2 on;
             access_log /dev/stdout;
 
@@ -75,6 +87,29 @@ data:
             location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
                 expires 30d;
                 add_header Cache-Control "public, max-age=2592000";
+            }
+
+            location ~ "^/public-trace/[^\/]+$" {
+              resolver ${NGINX_LOCAL_RESOLVERS} valid=60s;
+
+              js_content og_tags.handlePublicTrace;
+              try_files $uri @index;
+            }
+
+            location /image-iframe.html {
+                try_files /image-iframe.html =404;
+
+                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
+
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+            }
+
+            location /audio-iframe.html {
+                try_files /audio-iframe.html =404;
+
+                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
+
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self; media-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
             }
 
             # custom panels iframe

@@ -65,7 +65,11 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.frontendImage }}:{{ include "logfire.defaultTag" .  }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
-          command: ["nginx", "-c", "/usr/local/nginx/nginx.conf"]
+          command: [
+            "/bin/sh",
+            "-c",
+            "/opt/nginx/01-replace-vars.sh && nginx -c /tmp/nginx.conf",
+            ]
           volumeMounts:
             - name: logfire-frontend-nginx-config
               mountPath: /usr/local/nginx
@@ -101,6 +105,12 @@ spec:
         - name: logfire-frontend-service-config
           configMap:
             name: logfire-frontend-service-config
+            items:
+              - key: config.1.js
+                path: config.1.js
+              - key: 01-replace-vars.sh
+                path: 01-replace-vars.sh
+                mode: 0777
         - name: tmp
           emptyDir: {}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
