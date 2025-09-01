@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.8.3](https://img.shields.io/badge/Version-0.8.3-informational?style=flat-square) ![AppVersion: b0c84812](https://img.shields.io/badge/AppVersion-b0c84812-informational?style=flat-square)
+![Version: 0.8.4](https://img.shields.io/badge/Version-0.8.4-informational?style=flat-square) ![AppVersion: 7bf789fe](https://img.shields.io/badge/AppVersion-7bf789fe-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -337,7 +337,7 @@ See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hoste
 * Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.8.3](https://img.shields.io/badge/Version-0.8.3-informational?style=flat-square) ![AppVersion: b0c84812](https://img.shields.io/badge/AppVersion-b0c84812-informational?style=flat-square)
+![Version: 0.8.4](https://img.shields.io/badge/Version-0.8.4-informational?style=flat-square) ![AppVersion: 7bf789fe](https://img.shields.io/badge/AppVersion-7bf789fe-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -392,6 +392,10 @@ Helm chart for self-hosted Pydantic Logfire
 | logfire-dex.resources | object | `{"cpu":"1","memory":"1Gi"}` | Resource requests/limits |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-ingest | object | `{"annotations":{},"podAnnotations":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
+| logfire-ff-ingest-processor | object | `{"annotations":{},"podAnnotations":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
+| logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
+| logfire-ff-ingest-processor.podAnnotations | object | `{}` | Pod annotations |
+| logfire-ff-ingest-processor.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-ingest.annotations | object | `{}` | Workload annotations |
 | logfire-ff-ingest.podAnnotations | object | `{}` | Pod annotations |
 | logfire-ff-ingest.service.annotations | object | `{}` | Service annotations |
