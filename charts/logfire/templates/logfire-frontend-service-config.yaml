@@ -77,6 +77,22 @@ data:
                 add_header Cache-Control "public, max-age=2592000";
             }
 
+            location /image-iframe.html {
+                try_files /image-iframe.html =404;
+
+                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
+
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+            }
+
+            location /audio-iframe.html {
+                try_files /audio-iframe.html =404;
+
+                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
+
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self; media-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+            }
+
             # custom panels iframe
             location /custom-components-iframe.html {
                 try_files /custom-components-iframe.html =404;
