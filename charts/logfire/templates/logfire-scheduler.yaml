@@ -80,8 +80,6 @@ spec:
               value: {{ .Values.redisDsn }}
             - name: SHARED_REDIS_DSN
               value: {{ .Values.redisDsn }}
-            - name: USAGE_REDIS_DSN
-              value: {{ .Values.redisDsn }}
             - name: BACKEND_REDIS_DSN
               value: {{ .Values.redisDsn }}
             - name: SEND_USAGE_TO_STRIPE

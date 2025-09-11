@@ -80,8 +80,6 @@ spec:
               value: {{ .Values.redisDsn }}
             - name: REDIS_DSN
               value: {{ .Values.redisDsn }}
-            - name: USAGE_REDIS_DSN
-              value: {{ .Values.usageRedisDsn }}
             - name: OTEL_TRACES_SAMPLER
               value: parentbased_traceidratio
             - name: OTEL_TRACES_SAMPLER_ARG

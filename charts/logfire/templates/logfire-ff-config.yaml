@@ -7,7 +7,6 @@ metadata:
     app.kubernetes.io/component: logfire-ff-config
 data:
   FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
-  FF_USAGE_REDIS_DSN: {{ .Values.redisDsn }}
   FF_CACHE_OBJECT_STORE_URI: "http://logfire-ff-cache-byte:9001"
   FF_IPC_CACHE_URI: "http://logfire-ff-cache-ipc:9001"
   FF_FILTER_CACHE_URI: "http://logfire-ff-cache-filter:9001"
