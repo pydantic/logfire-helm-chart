@@ -1,15 +1,15 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: logfire-cache-byte-haproxy-config
+  name: logfire-cache-filter-haproxy-config
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
-    app.kubernetes.io/component: logfire-cache-byte-haproxy-config
+    app.kubernetes.io/component: logfire-cache-filter-haproxy-config
 stringData:
   haproxy.cfg: |
     global
       daemon
-      maxconn 150000
+      maxconn 125000
       log stdout sample 1:1000 local0 info
 
     defaults
@@ -67,7 +67,7 @@ stringData:
       retries 4
       option redispatch 2
 
-      {{- $values := (index .Values "logfire-ff-cache-byte" | default dict) -}}
+      {{- $values := (index .Values "logfire-ff-cache-filter" | default dict) -}}
       {{- $autoscaling := (index $values "autoscaling" | default dict) -}}
       {{- $maxCount := coalesce (index $autoscaling "maxReplicas") (index $values "replicas") 1 }}
-      server-template logfire-ff-cache-byte 1-{{ $maxCount }} logfire-ff-cache-byte-internal.{{ .Release.Namespace }}.svc.cluster.local.:9001 check resolvers kubernetes inter 250ms hash-key addr
+      server-template logfire-ff-cache-filter 1-{{ $maxCount }} logfire-ff-cache-filter-internal.{{ .Release.Namespace }}.svc.cluster.local.:9001 check resolvers kubernetes inter 250ms hash-key addr

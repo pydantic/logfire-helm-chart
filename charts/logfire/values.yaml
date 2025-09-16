@@ -168,12 +168,12 @@ logfire-dex:
     memory: "1Gi"
 
   # autoscaling:
-  #   minReplicas: 2
-  #   maxReplicas: 4
+  #   minReplicas: 1
+  #   maxReplicas: 3
   #   hpa:
   #     enabled: true
   #     memAverage: 65
-  #     cpuAverage: 20
+  #     cpuAverage: 60
   #   keda:
   #     enabled: true
   #     triggers:
@@ -213,15 +213,15 @@ logfire-ff-ingest:
   #   maxReplicas: 24
   #   hpa:
   #     enabled: true
-  #     memAverage: 85
-  #     cpuAverage: 50
+  #     memAverage: 40
+  #     cpuAverage: 60
   #   keda:
   #     enabled: true
   #     triggers:
   #       - type: cpu
   #         metricType: Utilization
   #         metadata:
-  #           value: "50"
+  #           value: "60"
   # nodeSelector: {}
   # affinity: {}
   # tolerations: []
@@ -248,15 +248,15 @@ logfire-ff-ingest-processor:
   #   maxReplicas: 24
   #   hpa:
   #     enabled: true
-  #     memAverage: 40
-  #     cpuAverage: 60
+  #     memAverage: 50
+  #     cpuAverage: 80
   #   keda:
   #     enabled: true
   #     triggers:
   #       - type: cpu
   #         metricType: Utilization
   #         metadata:
-  #           value: "60"
+  #           value: "70"
   # nodeSelector: {}
   # affinity: {}
   # tolerations: []
@@ -278,8 +278,8 @@ logfire-ff-ingest-processor:
 #   replicas: 2
 #   # -- Resource requests/limits
 #   resources:
-#     cpu: "2"
-#     memory: "2Gi"
+#     cpu: "600m"
+#     memory: "1Gi"
 #   # -- Autoscaler settings
 #   autoscaling:
 #     minReplicas: 2
@@ -287,7 +287,7 @@ logfire-ff-ingest-processor:
 #     hpa:
 #       enabled: true
 #       memAverage: 65
-#       cpuAverage: 20
+#       cpuAverage: 40
 #     keda:
 #       enabled: true
 #       triggers:
@@ -317,15 +317,15 @@ logfire-ff-ingest-processor:
 #   # -- Number of replicas
 #   replicas: 2
 #   resources:
-#     cpu: "2"
+#     cpu: "500m"
 #     memory: "2Gi"
 #   autoscaling:
 #     minReplicas: 2
 #     maxReplicas: 8
 #     hpa:
 #       enabled: true
-#       memAverage: 65
-#       cpuAverage: 20
+#       memAverage: 70
+#       cpuAverage: 60
 #     keda:
 #       enabled: true
 #       triggers:
@@ -352,15 +352,15 @@ logfire-ff-ingest-processor:
 #     annotations: {}
 #   replicas: 1
 #   resources:
-#     cpu: "1"
-#     memory: "1Gi"
+#     cpu: "100m"
+#     memory: "128Mi"
 #   autoscaling:
 #     minReplicas: 1
-#     maxReplicas: 2
+#     maxReplicas: 3
 #     hpa:
 #       enabled: true
-#       memAverage: 65
-#       cpuAverage: 20
+#       memAverage: 70
+#       cpuAverage: 60
 #     keda:
 #       enabled: true
 #       triggers:
@@ -384,8 +384,8 @@ logfire-ff-ingest-processor:
 #   podAnnotations: {}
 #   replicas: 1
 #   resources:
-#     cpu: "1"
-#     memory: "1Gi"
+#     cpu: "100m"
+#     memory: "256Mi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
@@ -416,15 +416,15 @@ logfire-ff-ingest-processor:
 #   podAnnotations: {}
 #   replicas: 1
 #   resources:
-#     cpu: "1"
-#     memory: "1Gi"
+#     cpu: "120m"
+#     memory: "512Mi"
 #   autoscaling:
 #     minReplicas: 1
-#     maxReplicas: 2
+#     maxReplicas: 3
 #     hpa:
 #       enabled: true
 #       memAverage: 65
-#       cpuAverage: 20
+#       cpuAverage: 70
 #     keda:
 #       enabled: true
 #       triggers:
@@ -455,7 +455,7 @@ logfire-ff-ingest-processor:
 #     memory: "1Gi"
 #   autoscaling:
 #     minReplicas: 1
-#     maxReplicas: 2
+#     maxReplicas: 3
 #     hpa:
 #       enabled: true
 #       memAverage: 65
@@ -484,7 +484,7 @@ logfire-ff-ingest-processor:
 #   # -- Number of replicas
 #   replicas: 2
 #   resources:
-#     cpu: "4"
+#     cpu: "2"
 #     memory: "8Gi"
 #   autoscaling:
 #     minReplicas: 1
@@ -508,7 +508,7 @@ logfire-ff-ingest-processor:
 #     minAvailable: 1
 #   scratchVolume:
 #     storageClassName: my-storage-class
-#     storage: 10Gi
+#     storage: 128Gi
 #     labels:
 #       type: my-volume
 
@@ -522,15 +522,48 @@ logfire-ff-ingest-processor:
 #   # -- Number of replicas
 #   replicas: 1
 #   resources:
-#     cpu: "4"
+#     cpu: "2"
 #     memory: "8Gi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 3
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 40
+#     keda:
+#       enabled: true
+#       triggers:
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
+# -- Autoscaling & resources for the Filter cache pods
+# logfire-ff-cache-filter:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   # -- Number of replicas
+#   replicas: 1
+#   resources:
+#     cpu: "500m"
+#     memory: "2Gi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
 #     hpa:
 #       enabled: true
 #       memAverage: 65
-#       cpuAverage: 20
+#       cpuAverage: 40
 #     keda:
 #       enabled: true
 #       triggers:
@@ -557,15 +590,15 @@ logfire-ff-ingest-processor:
 #     annotations: {}
 #   replicas: 2
 #   resources:
-#     cpu: "1"
-#     memory: "1Gi"
+#     cpu: "750m"
+#     memory: "768Mi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
 #     hpa:
 #       enabled: true
 #       memAverage: 65
-#       cpuAverage: 20
+#       cpuAverage: 40
 #     keda:
 #       enabled: true
 #       triggers:
@@ -592,15 +625,50 @@ logfire-ff-ingest-processor:
 #     annotations: {}
 #   replicas: 2
 #   resources:
-#     cpu: "1"
-#     memory: "1Gi"
+#     cpu: "250m"
+#     memory: "256Mi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
 #     hpa:
 #       enabled: true
 #       memAverage: 65
-#       cpuAverage: 20
+#       cpuAverage: 40
+#     keda:
+#       enabled: true
+#       triggers:
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
+# -- Autoscaling & resources for the filter proxy cache pods
+# logfire-ff-proxy-cache-filter:
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
+#   replicas: 2
+#   resources:
+#     cpu: "250m"
+#     memory: "256Mi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 2
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 40
 #     keda:
 #       enabled: true
 #       triggers:
@@ -640,10 +708,10 @@ logfire-ff-ingest-processor:
 #     - size_threshold_bytes: "100MB"
 #       count_threshold: 10
 #   resources:
-#     cpu: "4"
+#     cpu: "2"
 #     memory: "8Gi"
 #   autoscaling:
-#     minReplicas: 2
+#     minReplicas: 1
 #     maxReplicas: 4
 #     hpa:
 #       enabled: true
@@ -693,15 +761,15 @@ logfire-ff-ingest-processor:
 #     - size_threshold_bytes: "100MB"
 #       count_threshold: 10
 #   resources:
-#     cpu: "4"
+#     cpu: "2"
 #     memory: "8Gi"
 #   autoscaling:
-#     minReplicas: 2
-#     maxReplicas: 4
+#     minReplicas: 1
+#     maxReplicas: 5
 #     hpa:
 #       enabled: true
 #       memAverage: 50
-#       cpuAverage: 50
+#       cpuAverage: 85
 #     keda:
 #       enabled: true
 #       triggers:
@@ -739,8 +807,8 @@ logfire-ff-ingest-processor:
 #     maxReplicas: 2
 #     hpa:
 #       enabled: true
-#       memAverage: 65
-#       cpuAverage: 20
+#       memAverage: 70
+#       cpuAverage: 60
 #     keda:
 #       enabled: true
 #       triggers:

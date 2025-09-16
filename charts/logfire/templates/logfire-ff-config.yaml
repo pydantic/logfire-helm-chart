@@ -6,20 +6,21 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-ff-config
 data:
-  OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://logfire-otel-collector:4317"
   FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
-  FF_USAGE_REDIS_DSN: {{ .Values.redisDsn }}
   FF_CACHE_OBJECT_STORE_URI: "http://logfire-ff-cache-byte:9001"
   FF_IPC_CACHE_URI: "http://logfire-ff-cache-ipc:9001"
+  FF_FILTER_CACHE_URI: "http://logfire-ff-cache-filter:9001"
+  FF_IPC_FILTER_CACHE_URI: "http://logfire-ff-cache-filter:9001"
+  FF_ENABLE_FILTER_CACHE: "1"
   FF_IPC_CACHE_HOT_FILE_AGE_MINUTES: "30"
+  FF_WRITE_INDEX_THRESHOLD_BYTES: "1048576"
   FF_IPC_CACHE_SMALL_FILE_SIZE_MB: "5"
   FF_CACHE_ARROW_IPC_CHANCE: "1.0"
   FF_BACKEND_SERVICE_URL: "http://logfire-backend:8000"
   FF_AUTH_TOKEN_REDIS_DSN: {{ .Values.redisDsn }}
-  FF_ENABLE_FILTER_CACHE: "0"
-  RUST_LOG: "info"
+  FF_EXTERNAL_TABLES_PG_ENABLED_TABLES: "logfire.annotations"
   RUST_BACKTRACE: "full"
+  RUST_LOG: "info"
   FF_SEND_TO_LOGFIRE: "true"
   FF_FORCE_CONSOLE_LOGGING: "true"
   OTEL_RESOURCE_ATTRIBUTES: "vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app"

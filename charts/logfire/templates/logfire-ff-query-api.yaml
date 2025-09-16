@@ -102,11 +102,18 @@ spec:
               value: "8MB"
             - name: FF_USE_PARQUET_STATS_CHANCE
               value: "1.0"
+            - name: FF_USE_PHYSICAL_PLAN_ENDPOINT_CHANCE
+              value: "0.05"
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
+            - name: FF_EXTERNAL_TABLES_PG_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}
+                  key: postgresDsn
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}

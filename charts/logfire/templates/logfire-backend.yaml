@@ -106,8 +106,6 @@ spec:
               value: {{ .Values.redisDsn }}
             - name: WORKER_REDIS_DSN
               value: {{ .Values.redisDsn }}
-            - name: USAGE_REDIS_DSN
-              value: {{ .Values.redisDsn }}
             - name: DEX_INTERNAL_URL
               value: http://logfire-dex:5556
             {{- with .Values.ai }}
