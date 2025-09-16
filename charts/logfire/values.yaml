@@ -278,7 +278,7 @@ logfire-ff-ingest-processor:
 #   replicas: 2
 #   # -- Resource requests/limits
 #   resources:
-#     cpu: "1"
+#     cpu: "600m"
 #     memory: "1Gi"
 #   # -- Autoscaler settings
 #   autoscaling:
@@ -318,7 +318,7 @@ logfire-ff-ingest-processor:
 #   replicas: 2
 #   resources:
 #     cpu: "500m"
-#     memory: "1Gi"
+#     memory: "2Gi"
 #   autoscaling:
 #     minReplicas: 2
 #     maxReplicas: 8
@@ -508,7 +508,7 @@ logfire-ff-ingest-processor:
 #     minAvailable: 1
 #   scratchVolume:
 #     storageClassName: my-storage-class
-#     storage: 10Gi
+#     storage: 128Gi
 #     labels:
 #       type: my-volume
 
@@ -526,7 +526,7 @@ logfire-ff-ingest-processor:
 #     memory: "8Gi"
 #   autoscaling:
 #     minReplicas: 1
-#     maxReplicas: 2
+#     maxReplicas: 3
 #     hpa:
 #       enabled: true
 #       memAverage: 65
@@ -660,8 +660,8 @@ logfire-ff-ingest-processor:
 #     annotations: {}
 #   replicas: 2
 #   resources:
-#     cpu: "2"
-#     memory: "2Gi"
+#     cpu: "250m"
+#     memory: "256Mi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
@@ -764,8 +764,8 @@ logfire-ff-ingest-processor:
 #     cpu: "2"
 #     memory: "8Gi"
 #   autoscaling:
-#     minReplicas: 2
-#     maxReplicas: 6
+#     minReplicas: 1
+#     maxReplicas: 5
 #     hpa:
 #       enabled: true
 #       memAverage: 50
