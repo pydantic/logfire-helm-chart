@@ -1070,6 +1070,9 @@ dev:
 # ==============================================================================
 
 postgresql:
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/postgresql
   fullnameOverride: "logfire-postgres"
   auth:
     postgresPassword: "postgres"
@@ -1087,6 +1090,9 @@ postgresql:
       mountPath: /var/lib/postgresql
 
 minio:
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/minio
   fullnameOverride: "logfire-minio"
   auth:
     rootUser: logfire-minio

@@ -1,5 +1,5 @@
 apiVersion: v2
-version: 0.8.5
+version: 0.8.6
 name: logfire
 description: Helm chart for self-hosted Pydantic Logfire
 
@@ -7,10 +7,10 @@ appVersion: "98adb0ff"
 
 dependencies:
   - name: postgresql
-    version: "16.7.21"
+    version: "16.7.27"
     repository: "https://charts.bitnami.com/bitnami"
     condition: dev.deployPostgres
   - name: minio
-    version: "17.0.16"
+    version: "17.0.21"
     repository: "https://charts.bitnami.com/bitnami"
     condition: dev.deployMinio

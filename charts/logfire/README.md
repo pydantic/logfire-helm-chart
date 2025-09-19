@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.8.5](https://img.shields.io/badge/Version-0.8.5-informational?style=flat-square) ![AppVersion: 98adb0ff](https://img.shields.io/badge/AppVersion-98adb0ff-informational?style=flat-square)
+![Version: 0.8.6](https://img.shields.io/badge/Version-0.8.6-informational?style=flat-square) ![AppVersion: 98adb0ff](https://img.shields.io/badge/AppVersion-98adb0ff-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -337,7 +337,7 @@ See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hoste
 * Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.8.5](https://img.shields.io/badge/Version-0.8.5-informational?style=flat-square) ![AppVersion: 98adb0ff](https://img.shields.io/badge/AppVersion-98adb0ff-informational?style=flat-square)
+![Version: 0.8.6](https://img.shields.io/badge/Version-0.8.6-informational?style=flat-square) ![AppVersion: 98adb0ff](https://img.shields.io/badge/AppVersion-98adb0ff-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -345,8 +345,8 @@ Helm chart for self-hosted Pydantic Logfire
 
 | Repository | Name | Version |
 |------------|------|---------|
-| https://charts.bitnami.com/bitnami | minio | 17.0.16 |
-| https://charts.bitnami.com/bitnami | postgresql | 16.7.21 |
+| https://charts.bitnami.com/bitnami | minio | 17.0.21 |
+| https://charts.bitnami.com/bitnami | postgresql | 16.7.27 |
 
 ## Values
 
@@ -412,6 +412,8 @@ Helm chart for self-hosted Pydantic Logfire
 | minio.auth.rootUser | string | `"logfire-minio"` |  |
 | minio.command[0] | string | `"minio"` |  |
 | minio.fullnameOverride | string | `"logfire-minio"` |  |
+| minio.image.registry | string | `"docker.io"` |  |
+| minio.image.repository | string | `"bitnamilegacy/minio"` |  |
 | minio.lifecycleHooks.postStart.exec.command[0] | string | `"sh"` |  |
 | minio.lifecycleHooks.postStart.exec.command[1] | string | `"-c"` |  |
 | minio.lifecycleHooks.postStart.exec.command[2] | string | `"# Wait for the server to start\nsleep 5\n# Create a bucket\nmc alias set local http://localhost:9000 logfire-minio logfire-minio\nmc mb local/logfire\nmc anonymous set public local/logfire\n"` |  |
@@ -431,6 +433,8 @@ Helm chart for self-hosted Pydantic Logfire
 | postgresSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | postgresql.auth.postgresPassword | string | `"postgres"` |  |
 | postgresql.fullnameOverride | string | `"logfire-postgres"` |  |
+| postgresql.image.registry | string | `"docker.io"` |  |
+| postgresql.image.repository | string | `"bitnamilegacy/postgresql"` |  |
 | postgresql.postgresqlDataDir | string | `"/var/lib/postgresql/data/pgdata"` |  |
 | postgresql.primary.initdb.scripts."create_databases.sql" | string | `"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"` |  |
 | postgresql.primary.persistence.mountPath | string | `"/var/lib/postgresql"` |  |
