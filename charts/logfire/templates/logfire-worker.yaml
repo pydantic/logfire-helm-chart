@@ -84,9 +84,9 @@ spec:
               value: parentbased_traceidratio
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.05"
-            - name: FUSIONFIRE_HOST
+            - name: FUSIONFIRE_QUERY_HOST
               value: http://logfire-ff-query-api
-            - name: FUSIONFIRE_PORT
+            - name: FUSIONFIRE_QUERY_PORT
               value: "8011"
             - name: FUSIONFIRE_INGEST_HOST
               value: http://logfire-ff-ingest
