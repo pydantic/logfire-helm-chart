@@ -1,9 +1,9 @@
 apiVersion: v2
-version: 0.8.6
+version: 0.8.7
 name: logfire
 description: Helm chart for self-hosted Pydantic Logfire
 
-appVersion: "98adb0ff"
+appVersion: "c15514fd"
 
 dependencies:
   - name: postgresql
