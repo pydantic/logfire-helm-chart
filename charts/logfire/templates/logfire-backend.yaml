@@ -160,9 +160,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
-            - name: FUSIONFIRE_HOST
+            - name: FUSIONFIRE_QUERY_HOST
               value: http://logfire-ff-query-api
-            - name: FUSIONFIRE_PORT
+            - name: FUSIONFIRE_QUERY_PORT
               value: "8011"
             - name: FUSIONFIRE_INGEST_HOST
               value: http://logfire-ff-ingest

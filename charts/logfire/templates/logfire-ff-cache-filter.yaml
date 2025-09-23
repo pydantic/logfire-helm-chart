@@ -76,8 +76,7 @@ spec:
             - filter-cache
             - --host=0.0.0.0
             - --port=9001
-            - --filter-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 100) }}MB
-            - --byte-buffer-limit={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 50) }}MB
+            - --v2-filter-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 100) }}MB
           envFrom:
             - configMapRef:
                 name: logfire-ff-config
