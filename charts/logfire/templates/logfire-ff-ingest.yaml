@@ -116,6 +116,8 @@ spec:
               value: "http://logfire-ff-ingest-processor:8012"
             - name: FF_INGEST_REMOTE_CHANCE
               value: "1"
+            - name: FF_INGEST_DIRECT_WRITE_CHANCE
+              value: "1"
             - name: FF_INGEST_WRITE_BATCH_FILE_FORMAT
               value: "true"
             - name: FF_IO_THREADS
