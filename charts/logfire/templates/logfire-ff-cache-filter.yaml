@@ -76,7 +76,6 @@ spec:
             - filter-cache
             - --host=0.0.0.0
             - --port=9001
-            - --v2-filter-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 100) }}MB
           envFrom:
             - configMapRef:
                 name: logfire-ff-config
@@ -89,6 +88,8 @@ spec:
               value: "0.05"
             - name: FF_CACHE_LOCAL_DIR
               value: /scratch
+            - name: FF_FILTER_CACHE_SIZE
+              value: {{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 70) }}MB
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end }}
