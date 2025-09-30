@@ -18,7 +18,7 @@ data:
   FF_CACHE_ARROW_IPC_CHANCE: "1.0"
   FF_BACKEND_SERVICE_URL: "http://logfire-backend:8000"
   FF_AUTH_TOKEN_REDIS_DSN: {{ .Values.redisDsn }}
-  FF_EXTERNAL_TABLES_PG_ENABLED_TABLES: "logfire.annotations"
+  FF_EXTERNAL_TABLES_PG_ENABLED_TABLES: "logfire.annotations,logfire.experiments"
   RUST_BACKTRACE: "full"
   RUST_LOG: "info"
   FF_SEND_TO_LOGFIRE: "true"
