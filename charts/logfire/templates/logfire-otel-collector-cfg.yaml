@@ -15,6 +15,9 @@ data:
             endpoint: "0.0.0.0:4317"
           http:
             endpoint: "0.0.0.0:4318"
+{{- with .Values.otel_collector.extraReceivers }}
+{{ toYaml . | indent 6 }}
+{{- end }}
 
     exporters:
       debug:
@@ -38,7 +41,9 @@ data:
         {{- end }}
       {{- end }}
       {{- end }}
-
+{{- with .Values.otel_collector.extraExporters }}
+{{ toYaml . | indent 6 }}
+{{- end }}
 
     processors:
       memory_limiter:
@@ -93,26 +98,104 @@ data:
             - tag_name: kube_app_managed_by
               key: app.kubernetes.io/managed-by
               from: pod
+{{- with .Values.otel_collector.extraProcessors }}
+{{ toYaml . | indent 6 }}
+{{- end }}
+
     extensions:
       health_check:
         endpoint: "0.0.0.0:13133"
+{{- with .Values.otel_collector.extraExtensions }}
+{{ toYaml . | indent 6 }}
+{{- end }}
 
     service:
-      extensions: [health_check]
+      extensions:
+        - health_check
+        {{- with .Values.otel_collector.extraServiceExtensions }}
+        {{- range . }}
+        - {{ . }}
+        {{- end }}
+        {{- end }}
+
       pipelines:
         traces:
-          receivers: [otlp]
-          processors: [k8sattributes, batch]
-          exporters: [debug, otlphttp]
+          receivers:
+            - otlp
+            {{- with .Values.otel_collector.extraTraceReceivers }}
+            {{- range . }}
+            - {{ . }}
+            {{- end }}
+            {{- end }}
+          processors:
+            - k8sattributes
+            - batch
+            {{- with .Values.otel_collector.extraTraceProcessors }}
+            {{- range . }}
+            - {{ . }}
+            {{- end }}
+            {{- end }}
+          exporters:
+            - debug
+            - otlphttp
+            {{- with .Values.otel_collector.extraTraceExporters }}
+            {{- range . }}
+            - {{ . }}
+            {{- end }}
+            {{- end }}
+
         metrics:
-          receivers: [otlp]
-          processors: [k8sattributes, batch]
-          {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
-          exporters: [debug, otlphttp, prometheus]
-          {{- else }}
-          exporters: [debug, otlphttp]
-          {{- end }}
+          receivers:
+            - otlp
+            {{- with .Values.otel_collector.extraMetricsReceivers }}
+            {{- range . }}
+            - {{ . }}
+            {{- end }}
+            {{- end }}
+          processors:
+            - k8sattributes
+            - batch
+            {{- with .Values.otel_collector.extraMetricsProcessors }}
+            {{- range . }}
+            - {{ . }}
+            {{- end }}
+            {{- end }}
+          exporters:
+            - debug
+            - otlphttp
+            {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
+            - prometheus
+            {{- end }}
+            {{- with .Values.otel_collector.extraMetricsExporters }}
+            {{- range . }}
+            - {{ . }}
+            {{- end }}
+            {{- end }}
+
         logs:
-          receivers: [otlp]
-          processors: [k8sattributes, batch]
-          exporters: [otlphttp]
+          receivers:
+            - otlp
+            {{- with .Values.otel_collector.extraLogsReceivers }}
+            {{- range . }}
+            - {{ . }}
+            {{- end }}
+            {{- end }}
+          processors:
+            - k8sattributes
+            - batch
+            {{- with .Values.otel_collector.extraLogsProcessors }}
+            {{- range . }}
+            - {{ . }}
+            {{- end }}
+            {{- end }}
+          exporters:
+            - otlphttp
+            {{- with .Values.otel_collector.extraLogsExporters }}
+            {{- range . }}
+            - {{ . }}
+            {{- end }}
+            {{- end }}
+
+{{- with .Values.otel_collector.extraPipelines }}
+{{ toYaml . | indent 8 }}
+{{- end }}

@@ -1020,6 +1020,29 @@ otel_collector:
     add_metric_suffixes: false
     resource_to_telemetry_conversion:
       enabled: true
+  extraReceivers: {}
+  extraExporters: {}
+  extraProcessors: {}
+  extraExtensions: {}
+  # service-level
+  extraServiceExtensions: []
+
+  # traces
+  extraTraceReceivers: []
+  extraTraceProcessors: []
+  extraTraceExporters: []
+
+  # metrics
+  extraMetricsReceivers: []
+  extraMetricsProcessors: []
+  extraMetricsExporters: []
+
+  # logs
+  extraLogsReceivers: []
+  extraLogsProcessors: []
+  extraLogsExporters: []
+
+  extraPipelines: {}
 
 
 # ==============================================================================
