@@ -411,6 +411,8 @@ Helm chart for self-hosted Pydantic Logfire
 | minio.auth.rootPassword | string | `"logfire-minio"` |  |
 | minio.auth.rootUser | string | `"logfire-minio"` |  |
 | minio.command[0] | string | `"minio"` |  |
+| minio.console.image.registry | string | `"docker.io"` |  |
+| minio.console.image.repository | string | `"bitnamilegacy/minio-object-browser"` |  |
 | minio.fullnameOverride | string | `"logfire-minio"` |  |
 | minio.image.registry | string | `"docker.io"` |  |
 | minio.image.repository | string | `"bitnamilegacy/minio"` |  |
