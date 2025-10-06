@@ -1096,7 +1096,7 @@ minio:
   console:
     image:
       registry: docker.io
-      repository: bitnamilegacy/minio-object-browser 
+      repository: bitnamilegacy/minio-object-browser
   fullnameOverride: "logfire-minio"
   auth:
     rootUser: logfire-minio

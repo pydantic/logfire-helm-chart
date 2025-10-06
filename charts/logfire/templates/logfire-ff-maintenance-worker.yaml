@@ -112,8 +112,6 @@ spec:
               value: "30s"
             - name: FF_COMPACTION_GATHER_DELAY
               value: "1s"
-            - name: FF_INGEST_EXTERNAL_FILE_SPILL_SIZE_THRESHOLD_BYTES
-              value: "131072" # 128kb
             - name: FF_MAINTENANCE_SCHEDULING_CONCURRENCY
               value: "8"
             - name: FF_MAX_FILES_PER_COMPACTION_JOB
