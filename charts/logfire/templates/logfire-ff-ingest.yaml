@@ -88,7 +88,7 @@ spec:
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
             - fusionfire
-            - ingester
+            - ingest-queue
             - --host=0.0.0.0
             - --port=8012
           ports:
@@ -114,12 +114,6 @@ spec:
               value: {{ mul (atoi (toString ($cpu))) 8 | quote }}
             - name: FF_INGEST_DOWNSTREAM_URL
               value: "http://logfire-ff-ingest-processor:8012"
-            - name: FF_INGEST_REMOTE_CHANCE
-              value: "1"
-            - name: FF_INGEST_DIRECT_WRITE_CHANCE
-              value: "1"
-            - name: FF_INGEST_WRITE_BATCH_FILE_FORMAT
-              value: "true"
             - name: FF_IO_THREADS
               value: {{ $cpuInt | float64 | floor | int | quote }}
             - name: FF_DATAFUSION_THREADS

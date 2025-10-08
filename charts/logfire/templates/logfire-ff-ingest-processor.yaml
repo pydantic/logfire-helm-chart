@@ -88,7 +88,7 @@ spec:
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
             - fusionfire
-            - ingester
+            - ingest-processor
             - --host=0.0.0.0
             - --port=8012
           ports:
