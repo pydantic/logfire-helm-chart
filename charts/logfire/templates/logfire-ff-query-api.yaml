@@ -87,7 +87,9 @@ spec:
             - containerPort: 8011
           envFrom:
             - configMapRef:
-                name: logfire-ff-config
+                name: logfire-ff-base-config
+            - configMapRef:
+                name: logfire-ff-query-config
           env:
             {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             - name: FF_ENABLE_SPILL_TO_DISK
@@ -100,10 +102,12 @@ spec:
               value: {{ (index .Values "logfire-ff-query-worker" | default dict).enabled | default "false" | quote }}
             - name: FF_DATAFUSION_THREAD_STACK_SIZE
               value: "8MB"
-            - name: FF_USE_PARQUET_STATS_CHANCE
-              value: "1.0"
             - name: FF_USE_PHYSICAL_PLAN_ENDPOINT_CHANCE
               value: "0.05"
+            - name: FF_CACHE_ARROW_IPC_CHANCE
+              value: "1.0"
+            - name: FF_REDIS_TAIL_DSN
+              value: {{ .Values.redisDsn }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:

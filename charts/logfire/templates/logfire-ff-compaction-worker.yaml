@@ -65,7 +65,9 @@ spec:
             - containerPort: 8015
           envFrom:
             - configMapRef:
-                name: logfire-ff-config
+                name: logfire-ff-base-config
+            - configMapRef:
+                name: logfire-ff-write-config
           env:
             - name: FF_CACHE_OBJECT_STORE_HTTP_HEADERS
               value: x-ff-no-warm-cache=1
@@ -89,7 +91,6 @@ spec:
               value: "1s"
             - name: FF_DELETION_LOOP_DELAY
               value: "30s"
-            {{- include "logfire.ffmaxRowPerRowGroup" . | nindent 12 -}}
             {{- include "logfire.ffCompactionTiers" . | nindent 12 -}}
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}

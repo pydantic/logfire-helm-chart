@@ -78,7 +78,7 @@ spec:
             - --port=9001
           envFrom:
             - configMapRef:
-                name: logfire-ff-config
+                name: logfire-ff-base-config
           env:
             {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             {{- include "logfire.objectStoreEnv" . | nindent 12 }}

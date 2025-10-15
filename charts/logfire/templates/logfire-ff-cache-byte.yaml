@@ -79,7 +79,7 @@ spec:
             - --cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 70) }}MB
           envFrom:
             - configMapRef:
-                name: logfire-ff-config
+                name: logfire-ff-base-config
           env:
             {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             {{- include "logfire.objectStoreEnv" . | nindent 12 }}

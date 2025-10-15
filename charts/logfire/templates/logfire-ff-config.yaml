@@ -1,26 +1,66 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: logfire-ff-config
+  name: logfire-ff-base-config
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-ff-config
 data:
-  FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
+  RUST_BACKTRACE: "full"
+  RUST_LOG: "info"
+  FF_SEND_TO_LOGFIRE: "true"
+  FF_FORCE_CONSOLE_LOGGING: "true"
+  OTEL_RESOURCE_ATTRIBUTES: "vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app"
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logfire-ff-query-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-ff-config
+data:
+  FF_FUSIONFIRE_COLLECT_STATISTICS: "0.0"
   FF_CACHE_OBJECT_STORE_URI: "http://logfire-ff-cache-byte:9001"
   FF_IPC_CACHE_URI: "http://logfire-ff-cache-ipc:9001"
   FF_FILTER_CACHE_URI: "http://logfire-ff-cache-filter:9001"
   FF_IPC_FILTER_CACHE_URI: "http://logfire-ff-cache-filter:9001"
   FF_ENABLE_FILTER_CACHE: "1"
   FF_IPC_CACHE_HOT_FILE_AGE_MINUTES: "30"
-  FF_WRITE_INDEX_THRESHOLD_BYTES: "1048576"
   FF_IPC_CACHE_SMALL_FILE_SIZE_MB: "5"
-  FF_CACHE_ARROW_IPC_CHANCE: "1.0"
-  FF_BACKEND_SERVICE_URL: "http://logfire-backend:8000"
-  FF_AUTH_TOKEN_REDIS_DSN: {{ .Values.redisDsn }}
   FF_EXTERNAL_TABLES_PG_ENABLED_TABLES: "logfire.annotations,logfire.experiments"
-  RUST_BACKTRACE: "full"
-  RUST_LOG: "info"
-  FF_SEND_TO_LOGFIRE: "true"
-  FF_FORCE_CONSOLE_LOGGING: "true"
-  OTEL_RESOURCE_ATTRIBUTES: "vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app"
+  FF_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logfire-ff-write-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-ff-config
+data:
+  FF_WRITE_INDEX_THRESHOLD_BYTES: "1048576"
+  FF_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}
+  FF_PARQUET_WRITER_MAX_ROWS_PER_ROW_GROUP: "100000"
+  FF_PARQUET_WRITER_MAX_ROWS_PER_PAGE: "15000"
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logfire-ff-ingest-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-ff-config
+data:
+  FF_SHARED_REDIS_DSN: {{ .Values.redisDsn }}
+  FF_BACKEND_SERVICE_URL: "http://logfire-backend:8000"
+  FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
+  FF_FAILOVER_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}/_ingest_failover
+  FF_INGEST_MAX_FUTURE_TIME_DRIFT: "1h"
+  FF_INGEST_MAX_PAST_TIME_DRIFT: "24h"

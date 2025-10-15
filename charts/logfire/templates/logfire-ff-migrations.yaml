@@ -52,6 +52,9 @@ spec:
           command:
             - "fusionfire"
             - "migrate"
+          envFrom:
+            - configMapRef:
+                name: logfire-ff-base-config
           env:
             - name: PG_DSN
               valueFrom:
