@@ -132,22 +132,6 @@ spec:
 {{- end -}}
 {{- end -}}
 
-{{- define "logfire.ffmaxRowPerRowGroup" -}}
-- name: "FF_PARQUET_WRITER_MAX_ROWS_PER_ROW_GROUP"
-  value: "125000"
-- name: "FF_PARQUET_WRITER_MAX_ROWS_PER_PAGE"
-  value: "20000"
-{{- end -}}
-
-{{- define "logfire.ffIngestShared" -}}
-- name: FF_INGEST_MAX_FUTURE_TIME_DRIFT
-  value: "1h"
-- name: FF_INGEST_MAX_PAST_TIME_DRIFT
-  value: "24h"
-- name: RUST_BACKTRACE
-  value: "1"
-{{- end -}}
-
 {{- define "logfire.resources"}}
 {{- if index (index .Values .serviceName | default dict) "resources" }}
 {{- with index .Values .serviceName "resources" }}
@@ -332,8 +316,6 @@ Logfire secret name
 {{- define "logfire.objectStoreEnv" -}}
 - name: FF_OBJECT_STORE_URI
   value: {{ .Values.objectStore.uri }}
-- name: FF_FAILOVER_OBJECT_STORE_URI
-  value: {{ .Values.objectStore.uri }}/_ingest_failover
 {{- range $key, $value := .Values.objectStore.env }}
 {{- if kindIs "map" $value }}
 - name: {{ $key }}

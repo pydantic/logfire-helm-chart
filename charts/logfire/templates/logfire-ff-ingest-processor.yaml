@@ -101,7 +101,11 @@ spec:
                   - "15"
           envFrom:
             - configMapRef:
-                name: logfire-ff-config
+                name: logfire-ff-base-config
+            - configMapRef:
+                name: logfire-ff-ingest-config
+            - configMapRef:
+                name: logfire-ff-write-config
           env:
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.05"
@@ -124,11 +128,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
-            - name: FF_SHARED_REDIS_DSN
-              value: {{ .Values.redisDsn }}
-            {{- include "logfire.ffIngestShared" . | nindent 12 -}}
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
-            {{- include "logfire.ffmaxRowPerRowGroup" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end }}

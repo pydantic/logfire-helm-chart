@@ -97,7 +97,7 @@ spec:
                   - "5"
           envFrom:
             - configMapRef:
-                name: logfire-ff-config
+                name: logfire-ff-base-config
           env:
             - name: PG_DSN
               valueFrom:

@@ -81,7 +81,9 @@ spec:
             - --byte-buffer-limit={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 10) }}MB
           envFrom:
             - configMapRef:
-                name: logfire-ff-config
+                name: logfire-ff-base-config
+            - configMapRef:
+                name: logfire-ff-query-config
           env:
             {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             {{- include "logfire.objectStoreEnv" . | nindent 12 }}

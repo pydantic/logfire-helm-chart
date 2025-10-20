@@ -70,6 +70,12 @@ data:
             gzip on;
             gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 
+            # Custom panels static assets - must come before general static assets
+            # to ensure this more specific rule takes precedence
+            location ~ "^/custom-panels/.+\.(js|css|png|jpg|jpeg|gif|ico|svg)$" {
+                add_header Access-Control-Allow-Origin "null" always;
+            }
+            
             # Location block for static assets (JS, CSS, images)
             # These can be cached for longer as they have hashed names
             location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
