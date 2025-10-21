@@ -10,7 +10,7 @@ spec:
     - name: test-backend
       image: curlimages/curl
       imagePullPolicy: IfNotPresent
-      command: ['curl', '--fail', 'http://logfire-service:8080/api/platform-config/']
+      command: ['curl', '--fail', 'http://logfire-service:8080/ui-api/platform-config/']
   restartPolicy: Never
 ---
 apiVersion: v1
