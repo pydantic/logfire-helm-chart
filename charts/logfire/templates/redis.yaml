@@ -22,6 +22,7 @@ metadata:
   name: {{ $serviceName }}-instance
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
+    {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
 spec:
   replicas: 1
@@ -36,6 +37,7 @@ spec:
     metadata:
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
+        {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}

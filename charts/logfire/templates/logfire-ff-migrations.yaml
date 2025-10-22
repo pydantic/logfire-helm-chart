@@ -1,9 +1,11 @@
+{{- $serviceName := "logfire-ff-migrations" }}
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ include "logfire.ffMigrations.name" . }}
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
+    {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
     app.kubernetes.io/component: logfire-ff-migrations
   annotations:
     {{- if not .Values.dev.deployPostgres }}
@@ -16,8 +18,11 @@ spec:
   backoffLimit: 5
   template:
     metadata:
+      annotations:
+        {{- include "logfire.hooksAnnotations" . | nindent 8 }}
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
+        {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: logfire-ff-migrations
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
