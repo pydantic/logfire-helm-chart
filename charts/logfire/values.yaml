@@ -400,42 +400,6 @@ logfire-ff-ingest-processor:
 #     minAvailable: 1
 
 
-# -- Autoscaling & resources for the scheduler pods
-# logfire-scheduler:
-#   # -- Workload labels
-#   labels: {}
-#   # -- Workload annotations
-#   annotations: {}
-#   # -- Pod labels
-#   podLabels: {}
-#   # -- Pod annotations
-#   podAnnotations: {}
-#   replicas: 1
-#   resources:
-#     cpu: "100m"
-#     memory: "256Mi"
-#   autoscaling:
-#     minReplicas: 1
-#     maxReplicas: 2
-#     hpa:
-#       enabled: true
-#       memAverage: 65
-#       cpuAverage: 20
-#     keda:
-#       enabled: true
-#       triggers:
-#         - type: cpu
-#           metricType: Utilization
-#           metadata:
-#             value: "50"
-#   nodeSelector: {}
-#   affinity: {}
-#   tolerations: []
-#   pdb:
-#     maxUnavailable: 1
-#     minAvailable: 1
-
-
 # -- Autoscaling & resources for the worker pods
 # logfire-worker:
 #   # -- Workload labels
