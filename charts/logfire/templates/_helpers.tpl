@@ -532,6 +532,26 @@ Custom annotations for workloads pods
 {{- end -}}
 
 {{/*
+Custom labels for workloads
+*/}}
+{{- define "logfire.workloadLabels" -}}
+{{- $serviceValues := index .Values .serviceName -}}
+{{- if and $serviceValues $serviceValues.labels -}}
+{{- toYaml $serviceValues.labels -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Custom labels for workloads pods
+*/}}
+{{- define "logfire.podLabels" -}}
+{{- $serviceValues := index .Values .serviceName -}}
+{{- if and $serviceValues $serviceValues.podLabels -}}
+{{- toYaml $serviceValues.podLabels -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Custom annotations for workloads services
 */}}
 {{- define "logfire.serviceAnnotations" -}}

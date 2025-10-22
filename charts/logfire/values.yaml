@@ -127,8 +127,12 @@ ai:
 
 # -- Configuration, autoscaling & resources for `logfire-dex` deployment
 logfire-dex:
+  # -- Workload labels
+  labels: {}
   # -- Workload annotations
   annotations: {}
+  # -- Pod labels
+  podLabels: {}
   # -- Pod annotations
   podAnnotations: {}
 
@@ -191,8 +195,12 @@ logfire-dex:
 
 # -- Autoscaling & resources for the `logfire-ff-ingest` pod
 logfire-ff-ingest:
+  # -- Workload labels
+  labels: {}
   # -- Workload annotations
   annotations: {}
+  # -- Pod labels
+  podLabels: {}
   # -- Pod annotations
   podAnnotations: {}
 
@@ -231,8 +239,12 @@ logfire-ff-ingest:
 
 # -- Autoscaling & resources for the `logfire-ff-ingest-processor` pod
 logfire-ff-ingest-processor:
+  # -- Workload labels
+  labels: {}
   # -- Workload annotations
   annotations: {}
+  # -- Pod labels
+  podLabels: {}
   # -- Pod annotations
   podAnnotations: {}
 
@@ -267,8 +279,12 @@ logfire-ff-ingest-processor:
 
 # -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   service:
@@ -305,8 +321,12 @@ logfire-ff-ingest-processor:
 
 # -- Autoscaling & resources for the query API pods
 # logfire-ff-query-api:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   service:
@@ -343,8 +363,12 @@ logfire-ff-ingest-processor:
 
 # -- Autoscaling & resources for the frontend pods
 # logfire-frontend-service:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   service:
@@ -378,8 +402,12 @@ logfire-ff-ingest-processor:
 
 # -- Autoscaling & resources for the scheduler pods
 # logfire-scheduler:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   replicas: 1
@@ -410,8 +438,12 @@ logfire-ff-ingest-processor:
 
 # -- Autoscaling & resources for the worker pods
 # logfire-worker:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   replicas: 1
@@ -442,8 +474,12 @@ logfire-ff-ingest-processor:
 
 # -- Autoscaling & resources for the proxy pods
 # logfire-service:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   service:
@@ -477,8 +513,12 @@ logfire-ff-ingest-processor:
 
 # -- Autoscaling & resources for the byte cache pods
 # logfire-ff-cache-byte:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   # -- Number of replicas
@@ -515,8 +555,12 @@ logfire-ff-ingest-processor:
 
 # -- Autoscaling & resources for the IPC cache pods
 # logfire-ff-cache-ipc:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   # -- Number of replicas
@@ -548,8 +592,12 @@ logfire-ff-ingest-processor:
 
 # -- Autoscaling & resources for the Filter cache pods
 # logfire-ff-cache-filter:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   # -- Number of replicas
@@ -581,8 +629,12 @@ logfire-ff-ingest-processor:
 
 # -- Autoscaling & resources for the byte proxy cache pods
 # logfire-ff-proxy-cache-byte:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   service:
@@ -616,8 +668,12 @@ logfire-ff-ingest-processor:
 
 # -- Autoscaling & resources for the IPC proxy cache pods
 # logfire-ff-proxy-cache-ipc:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   service:
@@ -651,8 +707,12 @@ logfire-ff-ingest-processor:
 
 # -- Autoscaling & resources for the filter proxy cache pods
 # logfire-ff-proxy-cache-filter:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   service:
@@ -686,8 +746,12 @@ logfire-ff-ingest-processor:
 
 # -- Maintenance worker
 # logfire-ff-maintenance-worker:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   jobParallelism: 1
@@ -739,8 +803,12 @@ logfire-ff-ingest-processor:
 
 # -- Compaction worker
 # logfire-ff-compaction-worker:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   jobParallelism: 1
@@ -792,8 +860,12 @@ logfire-ff-ingest-processor:
 
 # -- OpenTelemetry collector
 # logfire-otel-collector:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   service:
@@ -826,8 +898,12 @@ logfire-ff-ingest-processor:
 
 # -- CRUD API
 # logfire-ff-crud-api:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   service:
@@ -861,8 +937,12 @@ logfire-ff-ingest-processor:
 
 ## Optional query worker deployment
 # logfire-ff-query-worker:
+#   # -- Workload labels
+#   labels: {}
 #   # -- Workload annotations
 #   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
 #   enabled: true
