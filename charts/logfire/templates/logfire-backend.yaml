@@ -209,6 +209,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.adminSecretName" (dict "ctx" . "secretName" "logfire-admin-totp-recovery-codes") }}
                   key: logfire-admin-totp-recovery-codes
+            {{- include "logfire.groupRoleMappings" . | nindent 12 }}
             - name: BOOTSTRAPPED_ORGANIZATIONS
               # This will make it possible to log-in sans-credentials by visiting a URL like:
               # http://localhost:8080/logfire-meta/logfire-meta#token=U8TO1taNdD7YwgBMcfeQVU7RB6Hgtrwd

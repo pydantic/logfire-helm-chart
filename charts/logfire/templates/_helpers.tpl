@@ -651,3 +651,14 @@ tolerations:
 {{- toYaml $merged | nindent 2 }}
 {{- end -}}
 {{- end -}}
+
+{{- define "logfire.groupRoleMappings" -}}
+{{- if .Values.groupRoleMappings -}}
+{{- $mapping := dict -}}
+{{- range .Values.groupRoleMappings -}}
+{{- $_ := set $mapping .id .role -}}
+{{- end -}}
+- name: GROUP_ROLE_MAPPING
+  value: {{ $mapping | toJson | quote }}
+{{- end -}}
+{{- end -}}
