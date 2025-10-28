@@ -213,6 +213,9 @@ logfire-ff-ingest:
     # -- Storage provisioned for each pod
     storage: 16Gi
 
+  # //// Enables serviceName for older K8s versions
+  # serviceName: true
+
   # resources:
   #   cpu: "2"
   #   memory: "4Gi"
