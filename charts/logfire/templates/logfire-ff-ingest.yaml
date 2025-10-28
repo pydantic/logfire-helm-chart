@@ -161,12 +161,14 @@ spec:
             timeoutSeconds: 5
             periodSeconds: 10
             failureThreshold: 30
-          volumeMounts: 
+          volumeMounts:
             - name: {{ include "logfire.ingestVolumeName" . }}
               mountPath: "/fusionfire/ingest-data"
-  volumeClaimTemplates:    
-  {{- include "logfire.ingestVolume" (get (get .Values $serviceName | default dict) "volumeClaimTemplates" | default dict) | nindent 4 }}
-
+            {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
+      volumes:
+      {{- include "logfire.objectStoreVolumes" . | nindent 6 }}
+  volumeClaimTemplates:
+      {{- include "logfire.ingestVolume" (get (get .Values $serviceName | default dict) "volumeClaimTemplates" | default dict) | nindent 4 }}
 
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

@@ -333,6 +333,18 @@ Logfire secret name
 {{- end }}
 {{- end -}}
 
+{{- define "logfire.objectStoreVolumeMounts" -}}
+{{- if .Values.objectStore.volumeMounts }}
+{{- .Values.objectStore.volumeMounts | toYaml }}
+{{- end }}
+{{- end -}}
+
+{{- define "logfire.objectStoreVolumes" -}}
+{{- if .Values.objectStore.volumes }}
+{{- .Values.objectStore.volumes | toYaml }}
+{{- end }}
+{{- end -}}
+
 {{/*
 Create dex config secret name
 */}}
