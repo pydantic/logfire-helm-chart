@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.9.3](https://img.shields.io/badge/Version-0.9.3-informational?style=flat-square) ![AppVersion: b6372198](https://img.shields.io/badge/AppVersion-b6372198-informational?style=flat-square)
+![Version: 0.9.4](https://img.shields.io/badge/Version-0.9.4-informational?style=flat-square) ![AppVersion: b6372198](https://img.shields.io/badge/AppVersion-b6372198-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -337,7 +337,7 @@ See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hoste
 * Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.9.3](https://img.shields.io/badge/Version-0.9.3-informational?style=flat-square) ![AppVersion: b6372198](https://img.shields.io/badge/AppVersion-b6372198-informational?style=flat-square)
+![Version: 0.9.4](https://img.shields.io/badge/Version-0.9.4-informational?style=flat-square) ![AppVersion: b6372198](https://img.shields.io/badge/AppVersion-b6372198-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -428,9 +428,11 @@ Helm chart for self-hosted Pydantic Logfire
 | minio.persistence.mountPath | string | `"/data"` |  |
 | minio.persistence.size | string | `"32Gi"` |  |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
-| objectStore | object | `{"env":{},"uri":null}` | Object storage details |
+| objectStore | object | `{"env":{},"uri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
 | objectStore.env | object | `{}` | Additional environment variables for the object store connection |
 | objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`) |
+| objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials |
+| objectStore.volumes | list | `[]` | Volumes for object store credentials |
 | otel_collector | object | `{"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | otel-collector configuration |
 | podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |

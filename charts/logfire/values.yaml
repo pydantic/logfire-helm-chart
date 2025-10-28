@@ -949,6 +949,10 @@ objectStore:
   uri:
   # -- Additional environment variables for the object store connection
   env: {}
+  # -- Volume mounts for object store credentials
+  volumeMounts: []
+  # -- Volumes for object store credentials
+  volumes: []
 
 # Azure example:
 # objectStore:
