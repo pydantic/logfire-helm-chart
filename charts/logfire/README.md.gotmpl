@@ -198,14 +198,33 @@ Variables extracted from environment:
  * `GOOGLE_BUCKET`: bucket name
  * `GOOGLE_BUCKET_NAME`: (alias) bucket name
 
-Example:
-
+Volume mounts example:
 ```yaml
 objectStore:
   uri: gs://<bucket>
   # Note: not needed if the service account specified by `serviceAccountName` itself has credentials
   env:
-    GOOGLE_SERVICE_ACCOUNT_PATH: /path/to/service/account
+    GOOGLE_SERVICE_ACCOUNT_PATH: /etc/gcp/key.json
+  volumeMounts:
+    - name: gcp-credentials
+      mountPath: /etc/gcp
+      readOnly: true
+  volumes:
+    - name: gcp-credentials
+      secret:
+        secretName: gcs-credentials
+```
+
+JSON key example:
+```yaml
+objectStore:
+ uri: gs://<bucket>
+ env:
+  GOOGLE_SERVICE_ACCOUNT_KEY:
+   valueFrom:
+    secretKeyRef:
+     name: gcs-credentials
+     key: key.json
 ```
 
 #### Azure Storage
