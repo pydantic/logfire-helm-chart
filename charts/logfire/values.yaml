@@ -17,6 +17,14 @@ tolerations: []
 # -- Starter admin email address
 adminEmail: hello@example.dev
 
+# -- List of mapping to automatically assign members of OIDC group to logfire roles
+groupOrganizationMapping: []
+#  - group_id: "example-group-id"
+#    organization_roles:
+#      - organization_name: "org-1"
+#        role: "admin"
+#      - organization_name: "org-2"
+#        role: "member"
 
 # ==============================================================================
 # Ingress
