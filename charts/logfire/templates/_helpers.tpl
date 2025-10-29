@@ -663,3 +663,55 @@ tolerations:
 {{- toYaml $merged | nindent 2 }}
 {{- end -}}
 {{- end -}}
+
+{{- define "logfire.groupOrganizationMapping" -}}
+{{- if .Values.groupOrganizationMapping -}}
+{{- $mappings := list -}}
+
+{{- range $idx, $group := .Values.groupOrganizationMapping -}}
+  {{- if not $group.group_id -}}
+    {{- fail (printf "groupOrganizationMapping[%d]: 'group_id' is required" $idx) -}}
+  {{- end -}}
+
+  {{- if not $group.organization_roles -}}
+    {{- fail (printf "groupOrganizationMapping[%d]: 'organization_roles' is required for group_id '%s'" $idx $group.group_id) -}}
+  {{- end -}}
+
+  {{- if not (kindIs "slice" $group.organization_roles) -}}
+    {{- fail (printf "groupOrganizationMapping[%d]: 'organization_roles' must be a list for group_id '%s'" $idx $group.group_id) -}}
+  {{- end -}}
+
+  {{- $orgRoles := list -}}
+  {{- range $orgIdx, $org := $group.organization_roles -}}
+    {{- if not $org.organization_name -}}
+      {{- fail (printf "groupOrganizationMapping[%d].organization_roles[%d]: 'organization_name' is required" $idx $orgIdx) -}}
+    {{- end -}}
+
+    {{- if not $org.role -}}
+      {{- fail (printf "groupOrganizationMapping[%d].organization_roles[%d]: 'role' is required for organization '%s'" $idx $orgIdx $org.organization_name) -}}
+    {{- end -}}
+
+    {{- $orgRoles = append $orgRoles (dict "organization_name" $org.organization_name "role" $org.role) -}}
+  {{- end -}}
+
+  {{- $mappings = append $mappings (dict "group_id" $group.group_id "organization_roles" $orgRoles) -}}
+{{- end -}}
+
+- name: GROUP_ORGANIZATION_MAPPING
+  value: {{ $mappings | toJson | quote }}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.rateLimits" -}}
+{{- if .Values.rateLimits -}}
+- name: SDK_V1_QUERY_RATE_LIMIT__PER_MINUTE
+  value: {{ (get (get .Values.rateLimits "queries"| default dict) "perMinute" | default 99999) | quote }}
+- name: SDK_V1_QUERY_RATE_LIMIT__PER_HOUR
+  value: {{ (get (get .Values.rateLimits "queries"| default dict) "perHour" | default 99999) | quote }}
+{{- else -}}
+- name: SDK_V1_QUERY_RATE_LIMIT__PER_MINUTE
+  value: "99999"
+- name: SDK_V1_QUERY_RATE_LIMIT__PER_HOUR
+  value: "99999"
+{{- end -}}
+{{- end -}}
