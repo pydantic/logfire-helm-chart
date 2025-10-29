@@ -701,3 +701,17 @@ tolerations:
   value: {{ $mappings | toJson | quote }}
 {{- end -}}
 {{- end -}}
+
+{{- define "logfire.rateLimits" -}}
+{{- if .Values.rateLimits -}}
+- name: SDK_V1_QUERY_RATE_LIMIT__PER_MINUTE
+  value: {{ (get (get .Values.rateLimits "queries"| default dict) "perMinute" | default 99999) | quote }}
+- name: SDK_V1_QUERY_RATE_LIMIT__PER_HOUR
+  value: {{ (get (get .Values.rateLimits "queries"| default dict) "perHour" | default 99999) | quote }}
+{{- else -}}
+- name: SDK_V1_QUERY_RATE_LIMIT__PER_MINUTE
+  value: "99999"
+- name: SDK_V1_QUERY_RATE_LIMIT__PER_HOUR
+  value: "99999"
+{{- end -}}
+{{- end -}}

@@ -184,6 +184,7 @@ spec:
               value: '[{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}]'
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
+            {{- include "logfire.rateLimits" . | nindent 12 }}
             - name: META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:

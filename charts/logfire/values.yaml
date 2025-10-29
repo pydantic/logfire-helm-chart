@@ -26,6 +26,12 @@ groupOrganizationMapping: []
 #      - organization_name: "org-2"
 #        role: "member"
 
+# -- Configure Rate Limiting rules for Logfire endpoints
+rateLimits: {}
+#  queries:
+#    perHour: 60
+#    perMinute: 10
+
 # ==============================================================================
 # Ingress
 # ==============================================================================
