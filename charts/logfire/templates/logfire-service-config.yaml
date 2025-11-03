@@ -6,7 +6,7 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-haproxy-config
 stringData:
-  haproxy.cfg: |
+  haproxy.cfg: |+
     global
       daemon
       maxconn 10000
@@ -131,3 +131,4 @@ stringData:
       timeout server 50s
       http-check expect status 200
       server logfire-frontend logfire-frontend-service.{{ .Release.Namespace }}.svc.cluster.local.:8080 check resolvers kubernetes
+
