@@ -6,7 +6,7 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-cache-filter-haproxy-config
 stringData:
-  haproxy.cfg: |
+  haproxy.cfg: |+
     global
       daemon
       maxconn 125000
@@ -71,3 +71,4 @@ stringData:
       {{- $autoscaling := (index $values "autoscaling" | default dict) -}}
       {{- $maxCount := coalesce (index $autoscaling "maxReplicas") (index $values "replicas") 1 }}
       server-template logfire-ff-cache-filter 1-{{ $maxCount }} logfire-ff-cache-filter-internal.{{ .Release.Namespace }}.svc.cluster.local.:9001 check resolvers kubernetes inter 250ms hash-key addr
+
