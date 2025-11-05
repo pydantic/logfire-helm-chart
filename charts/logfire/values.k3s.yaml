@@ -14,8 +14,6 @@ image:
   # @ignored
   frontendImage: logfire-frontend-prod
   # @ignored
-  schedulerImage: logfire-python-prod
-  # @ignored
   fusionfireImage: fusionfire
   # @ignored
   dexImage: dex
