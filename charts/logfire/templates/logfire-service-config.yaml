@@ -98,7 +98,7 @@ stringData:
       {{- $values := (index .Values "logfire-ff-ingest" | default dict) -}}
       {{- $autoscaling := (index $values "autoscaling" | default dict) -}}
       {{- $maxCount := coalesce (index $autoscaling "maxReplicas") (index $values "replicas") 1 }}
-      server-template logfire-ff-ingest 1-{{ $maxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.cluster.local.:8012 check resolvers kubernetes inter 250ms hash-key addr
+      server-template logfire-ff-ingest 1-{{ $maxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8012 check resolvers kubernetes inter 250ms hash-key addr
 
     backend logfire-dex
       balance roundrobin
@@ -109,7 +109,7 @@ stringData:
       timeout server 50s
       http-check expect status 200
 
-      server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.cluster.local.:5556 check port 5558 resolvers kubernetes
+      server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:5556 check port 5558 resolvers kubernetes
 
     backend logfire-backend
       balance roundrobin
@@ -120,7 +120,7 @@ stringData:
       timeout server 50s
       http-check expect status 200
 
-      server logfire-backend logfire-backend.{{ .Release.Namespace }}.svc.cluster.local.:8000 check resolvers kubernetes
+      server logfire-backend logfire-backend.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8000 check resolvers kubernetes
 
     backend logfire-frontend
       balance roundrobin
@@ -130,5 +130,5 @@ stringData:
       timeout connect 3s
       timeout server 50s
       http-check expect status 200
-      server logfire-frontend logfire-frontend-service.{{ .Release.Namespace }}.svc.cluster.local.:8080 check resolvers kubernetes
+      server logfire-frontend logfire-frontend-service.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8080 check resolvers kubernetes
 
