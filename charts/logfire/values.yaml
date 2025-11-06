@@ -14,6 +14,9 @@ affinity: {}
 # -- Tolerations applied to all workloads
 tolerations: []
 
+# -- Kubernetes cluster domain for service discovery
+# clusterDomain: cluster.local
+
 # -- Starter admin email address
 adminEmail: hello@example.dev
 
@@ -182,8 +185,8 @@ logfire-dex:
 
   # -- Resource requests/limits
   resources:
-    cpu: "1"
-    memory: "1Gi"
+    cpu: "250m"
+    memory: "256Mi"
 
   # autoscaling:
   #   minReplicas: 1
@@ -429,11 +432,11 @@ logfire-ff-ingest-processor:
 #   podAnnotations: {}
 #   replicas: 1
 #   resources:
-#     cpu: "120m"
+#     cpu: "125m"
 #     memory: "512Mi"
 #   autoscaling:
 #     minReplicas: 1
-#     maxReplicas: 3
+#     maxReplicas: 5
 #     hpa:
 #       enabled: true
 #       memAverage: 65
@@ -505,11 +508,11 @@ logfire-ff-ingest-processor:
 #   # -- Number of replicas
 #   replicas: 2
 #   resources:
-#     cpu: "2"
-#     memory: "8Gi"
+#     cpu: "1"
+#     memory: "6Gi"
 #   autoscaling:
 #     minReplicas: 1
-#     maxReplicas: 2
+#     maxReplicas: 6
 #     hpa:
 #       enabled: true
 #       memAverage: 65
@@ -735,7 +738,7 @@ logfire-ff-ingest-processor:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#   jobParallelism: 1
+#   jobParallelism: 3
 #   downloadParallelism: 10
 #   replicas: 2
 #   datafusionMemory: "3072MB"
@@ -757,7 +760,7 @@ logfire-ff-ingest-processor:
 #     memory: "8Gi"
 #   autoscaling:
 #     minReplicas: 1
-#     maxReplicas: 4
+#     maxReplicas: 3
 #     hpa:
 #       enabled: true
 #       memAverage: 50
@@ -792,7 +795,7 @@ logfire-ff-ingest-processor:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#   jobParallelism: 1
+#   jobParallelism: 4
 #   downloadParallelism: 10
 #   replicas: 2
 #   datafusionMemory: "3072MB"
@@ -814,7 +817,7 @@ logfire-ff-ingest-processor:
 #     memory: "8Gi"
 #   autoscaling:
 #     minReplicas: 1
-#     maxReplicas: 5
+#     maxReplicas: 6
 #     hpa:
 #       enabled: true
 #       memAverage: 50
@@ -892,11 +895,11 @@ logfire-ff-ingest-processor:
 #     annotations: {}
 #   replicas: 2
 #   resources:
-#     cpu: "1"
+#     cpu: "500m"
 #     memory: "1Gi"
 #   autoscaling:
-#     minReplicas: 4
-#     maxReplicas: 32
+#     minReplicas: 1
+#     maxReplicas: 6
 #     hpa:
 #       enabled: true
 #       memAverage: 65
@@ -929,8 +932,8 @@ logfire-ff-ingest-processor:
 #   enabled: true
 #   replicas: 8
 #   resources:
-#     cpu: "2"
-#     memory: "2Gi"
+#     cpu: "500m"
+#     memory: "4Gi"
 #   autoscaling:
 #     minReplicas: 8
 #     maxReplicas: 128
@@ -1039,8 +1042,6 @@ image:
   backendImage: python-prod
   # @ignored
   frontendImage: frontend
-  # @ignored
-  schedulerImage: python-prod
   # @ignored
   fusionfireImage: fusionfire
   # @ignored

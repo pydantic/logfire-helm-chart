@@ -70,5 +70,5 @@ stringData:
       {{- $values := (index .Values "logfire-ff-cache-filter" | default dict) -}}
       {{- $autoscaling := (index $values "autoscaling" | default dict) -}}
       {{- $maxCount := coalesce (index $autoscaling "maxReplicas") (index $values "replicas") 1 }}
-      server-template logfire-ff-cache-filter 1-{{ $maxCount }} logfire-ff-cache-filter-internal.{{ .Release.Namespace }}.svc.cluster.local.:9001 check resolvers kubernetes inter 250ms hash-key addr
+      server-template logfire-ff-cache-filter 1-{{ $maxCount }} logfire-ff-cache-filter-internal.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:9001 check resolvers kubernetes inter 250ms hash-key addr
 

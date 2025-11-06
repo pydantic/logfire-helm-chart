@@ -73,8 +73,14 @@ spec:
           env:
             - name: FF_CACHE_OBJECT_STORE_HTTP_HEADERS
               value: x-ff-no-warm-cache=1
+            - name: FF_INDEX_COMPACTION_CHANCE
+              value: "1.0"
             - name: FF_ENABLE_SPILL_TO_DISK
               value: "true"
+            - name: FF_ENABLE_SCHEMA_UPGRADES
+              value: "true"
+            - name: FF_UPGRADE_MAX_DAYS
+              value: "90"
             - name: FF_TEMP_DIR
               value: /scratch/fusionfire
             {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
@@ -86,9 +92,9 @@ spec:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
             - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
-              value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "1" | quote) }} 
+              value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "10" | quote) }} 
             - name: FF_COMPACTION_JOB_PARALLELISM
-              value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "1" | quote) }} 
+              value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "3" | quote) }} 
             - name: FF_COMPACTION_LOOP_BACKOFF_DELAY
               value: "1s"
             - name: FF_DELETION_LOOP_DELAY

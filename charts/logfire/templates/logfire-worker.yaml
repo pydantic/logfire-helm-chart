@@ -82,6 +82,8 @@ spec:
               value: {{ .Values.redisDsn }}
             - name: REDIS_DSN
               value: {{ .Values.redisDsn }}
+            - name: BACKEND_REDIS_DSN
+              value: {{ .Values.redisDsn }}
             - name: OTEL_TRACES_SAMPLER
               value: parentbased_traceidratio
             - name: OTEL_TRACES_SAMPLER_ARG
@@ -91,7 +93,7 @@ spec:
             - name: FUSIONFIRE_QUERY_PORT
               value: "8011"
             - name: FUSIONFIRE_INGEST_HOST
-              value: http://logfire-ff-ingest
+              value: http://logfire-ff-ingest-processor
             - name: FUSIONFIRE_INGEST_PORT
               value: "8012"
             - name: FUSIONFIRE_CRUD_HOST

@@ -75,37 +75,19 @@ spec:
             - configMapRef:
                 name: logfire-ff-write-config
           env:
-            - name: FF_CACHE_OBJECT_STORE_HTTP_HEADERS
-              value: x-ff-no-warm-cache=1
-            - name: FF_ENABLE_SPILL_TO_DISK
-              value: "true"
-            - name: FF_ENABLE_INDEX_COMPACTION
-              value: "false"
-            - name: FF_ENABLE_HISTORICAL_COMPACTION
-              value: "false"
-            - name: FF_ENABLE_HISTORICAL_INDEX_COMPACTION
-              value: "false"
+            - name: FF_IO_THREADS
+              value: {{ $cpu | quote }}
+            - name: FF_DATAFUSION_THREADS
+              {{- $dataFusionThreads := sub (atoi $cpu) 1 }}
+              value: {{ (gt $dataFusionThreads 0) | ternary $dataFusionThreads "1" | quote }}
+            - name: FF_INDEX_COMPACTION_CHANCE
+              value: "1.0"
             - name: FF_ENABLE_SCHEMA_UPGRADES
               value: "true"
             - name: FF_UPGRADE_MAX_DAYS
               value: "90"
-            - name: FF_TEMP_DIR
-              value: /scratch/fusionfire
-            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
-            - name: FF_DATAFUSION_MEMORY_LIMIT
-              value: {{ (get (get .Values $serviceName | default dict) "datafusionMemory" | default "512MB" | quote) }}
-            - name: FF_DATAFUSION_THREADS
-              {{- $dataFusionThreads := sub (atoi $cpu) 1 }}
-              value: {{ (gt $dataFusionThreads 0) | ternary $dataFusionThreads "1" | quote }}
-            - name: PG_DSN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "logfire.postgresSecretName" . }}
-                  key: postgresFFDsn
-            - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
-              value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "1" | quote) }} 
-            - name: FF_COMPACTION_JOB_PARALLELISM
-              value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "1" | quote) }} 
+            - name: FF_CACHE_OBJECT_STORE_HTTP_HEADERS
+              value: x-ff-no-warm-cache=1
             - name: FF_COMPACTION_MAX_DAYS
               value: "3"
             - name: FF_MAX_PARTITIONS_PER_COMPACTION_SCAN
@@ -118,10 +100,24 @@ spec:
               value: "1s"
             - name: FF_MAINTENANCE_SCHEDULING_CONCURRENCY
               value: "8"
+            - name: FF_DATAFUSION_MEMORY_LIMIT
+              value: {{ (get (get .Values $serviceName | default dict) "datafusionMemory" | default "512MB" | quote) }}
             - name: FF_MAX_FILES_PER_COMPACTION_JOB
               value: "10000"
-            - name: FF_IO_THREADS
-              value: {{ $cpu | quote }}
+            - name: FF_ENABLE_SPILL_TO_DISK
+              value: "true"
+            - name: FF_TEMP_DIR
+              value: /scratch/fusionfire
+            - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
+              value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "10" | quote) }}
+            - name: FF_COMPACTION_JOB_PARALLELISM
+              value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "3" | quote) }} 
+            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
+            - name: PG_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}
+                  key: postgresFFDsn
             {{- include "logfire.ffCompactionTiers" . | nindent 12 -}}
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}
