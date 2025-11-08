@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.9.7](https://img.shields.io/badge/Version-0.9.7-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
+![Version: 0.9.8](https://img.shields.io/badge/Version-0.9.8-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -356,7 +356,7 @@ See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hoste
 * Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.9.7](https://img.shields.io/badge/Version-0.9.7-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
+![Version: 0.9.8](https://img.shields.io/badge/Version-0.9.8-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -391,6 +391,7 @@ Helm chart for self-hosted Pydantic Logfire
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | groupOrganizationMapping | list | `[]` | List of mapping to automatically assign members of OIDC group to logfire roles |
+| haproxy | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.2"}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks) |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | imagePullSecrets | list | `[]` | Image pull secrets used by all pods |
@@ -432,6 +433,7 @@ Helm chart for self-hosted Pydantic Logfire
 | logfire-redis.image.pullPolicy | string | `"IfNotPresent"` | Redis image pull policy |
 | logfire-redis.image.repository | string | `"redis"` | Redis image repository |
 | logfire-redis.image.tag | string | `"7.2"` | Redis image tag |
+| maildev | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"maildev/maildev","tag":"latest"}}` | MailDev image configuration (only used when `dev.deployMaildev` is true) |
 | minio.args[0] | string | `"server"` |  |
 | minio.args[1] | string | `"/data"` |  |
 | minio.auth.rootPassword | string | `"logfire-minio"` |  |
@@ -453,7 +455,7 @@ Helm chart for self-hosted Pydantic Logfire
 | objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`) |
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials |
-| otel_collector | object | `{"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | otel-collector configuration |
+| otel_collector | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.139.0"},"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | otel-collector configuration |
 | podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |

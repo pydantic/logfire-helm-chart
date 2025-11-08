@@ -27,9 +27,12 @@ spec:
         {{- toYaml .Values.affinity | nindent 8 }}
       tolerations:
         {{- toYaml .Values.tolerations | nindent 8 }}
+      {{- $maildev := default (dict) .Values.maildev }}
+      {{- $maildevImage := get $maildev "image" | default dict }}
       containers:
-        - image: maildev/maildev
-          name: logfire-maildev
+        - name: logfire-maildev
+          image: {{ include "logfire.imageRef" (dict "image" $maildevImage "defaultRepository" "maildev/maildev" "defaultTag" "latest") }}
+          imagePullPolicy: {{ default .Values.image.pullPolicy (get $maildevImage "pullPolicy") | quote }}
           ports:
             - containerPort: 1080
             - containerPort: 1025

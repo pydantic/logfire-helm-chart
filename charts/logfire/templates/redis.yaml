@@ -1,5 +1,6 @@
 {{- $serviceName := "logfire-redis" }}
-{{- if (index .Values $serviceName | default dict).enabled }}
+{{- $redisValues := index .Values $serviceName | default dict }}
+{{- if $redisValues.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -46,10 +47,12 @@ spec:
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.affinity" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- $redisImage := get $redisValues "image" | default dict }}
+      {{- $redisImagePullPolicy := default "IfNotPresent" (default .Values.image.pullPolicy $redisImage.pullPolicy) }}
       containers:
         - name: redis
-          image: {{ printf "%s:%s" (get (get (index .Values $serviceName) "image" | default dict) "repository" | default "redis") (get (get (index .Values $serviceName) "image" | default dict) "tag" | default "7.2") }}
-          imagePullPolicy: {{ get (get (index .Values $serviceName) "image" | default dict) "pullPolicy" | default "IfNotPresent" }}
+          image: {{ include "logfire.imageRef" (dict "image" $redisImage "defaultRepository" "redis" "defaultTag" "7.2") }}
+          imagePullPolicy: {{ $redisImagePullPolicy | quote }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           ports:

@@ -1047,6 +1047,13 @@ image:
   # @ignored
   dexImage: dex
 
+# -- HAProxy image configuration (used by the service and feature-flag proxies)
+haproxy:
+  image:
+    repository: haproxy
+    tag: "3.2"
+    pullPolicy: IfNotPresent
+
 
 # ==============================================================================
 # Redis
@@ -1076,6 +1083,10 @@ redisDsn: redis://logfire-redis:6379
 
 # -- otel-collector configuration
 otel_collector:
+  image:
+    repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
+    tag: "0.139.0"
+    pullPolicy: IfNotPresent
   prometheus:
     enabled: false
     port: 9090
@@ -1129,6 +1140,13 @@ dev:
   deployPostgres: false
   # -- Use a local MinIO instance as object storage (NOT for production)
   deployMinio: false
+
+# -- MailDev image configuration (only used when `dev.deployMaildev` is true)
+maildev:
+  image:
+    repository: maildev/maildev
+    tag: latest
+    pullPolicy: IfNotPresent
 
 
 # ==============================================================================
