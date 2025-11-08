@@ -129,9 +129,12 @@ spec:
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.affinity" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- $otelCollector := default (dict) .Values.otel_collector }}
+      {{- $otelImage := get $otelCollector "image" | default dict }}
       containers:
         - name: otel-collector
-          image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.121.0
+          image: {{ include "logfire.imageRef" (dict "image" $otelImage "defaultRepository" "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib" "defaultTag" "0.139.0") }}
+          imagePullPolicy: {{ default .Values.image.pullPolicy (get $otelImage "pullPolicy") | quote }}
           command:
           - /otelcol-contrib
           - --config=/etc/otel-collector/otel-collector-config.yaml

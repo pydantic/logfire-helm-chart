@@ -66,12 +66,14 @@ spec:
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.affinity" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- $haproxy := default (dict) .Values.haproxy }}
+      {{- $haproxyImage := get $haproxy "image" | default dict }}
       containers:
         - name: {{ $serviceName }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: haproxy:3.2
-          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          image: {{ include "logfire.imageRef" (dict "image" $haproxyImage "defaultRepository" "haproxy" "defaultTag" "3.2") }}
+          imagePullPolicy: {{ default .Values.image.pullPolicy (get $haproxyImage "pullPolicy") | quote }}
           volumeMounts:
             - name: logfire-cache-byte-haproxy-config
               mountPath: /usr/local/etc/haproxy/haproxy.cfg

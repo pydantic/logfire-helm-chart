@@ -430,6 +430,27 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- end }}
 {{- end }}
 
+{{/*
+Render a fully-qualified container image reference using chart defaults when
+overrides are not provided.
+*/}}
+{{- define "logfire.imageRef" -}}
+{{- $image := .image | default dict -}}
+{{- $repository := $image.repository | default .defaultRepository -}}
+{{- $tag := $image.tag -}}
+{{- $hasTag := hasKey $image "tag" -}}
+{{- if not $hasTag }}
+  {{- $tag = .defaultTag -}}
+{{- end }}
+{{- if and $hasTag (eq $tag "") }}
+  {{- printf "%s" $repository -}}
+{{- else if $tag }}
+  {{- printf "%s:%s" $repository $tag -}}
+{{- else }}
+  {{- printf "%s" $repository -}}
+{{- end }}
+{{- end }}
+
 {{- define "logfire.otlpExporterEnv" }}
 - name: "OTEL_EXPORTER_OTLP_PROTOCOL"
   value: "grpc"
