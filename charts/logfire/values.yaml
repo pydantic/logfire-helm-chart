@@ -122,7 +122,7 @@ ai:
   model:
 
   openAi:
-    # -- OpenAI API key
+    # -- OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
     apiKey:
 
   vertexAi:
@@ -132,7 +132,7 @@ ai:
   azureOpenAi:
     # -- Azure OpenAI endpoint
     endpoint:
-    # -- Azure OpenAI API key
+    # -- Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
     apiKey:
     # -- Azure OpenAI API version
     apiVersion:
