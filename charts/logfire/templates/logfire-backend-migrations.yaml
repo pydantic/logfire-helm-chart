@@ -39,18 +39,15 @@ spec:
       {{- with (index .Values "logfire-backend-migrations" | default dict).initContainers }}
       initContainers:
         {{- . | toYaml | nindent 8 }}
-      nodeSelector:
-        {{- toYaml .Values.nodeSelector | nindent 8 }}
-      affinity:
-        {{- toYaml .Values.affinity | nindent 8 }}
-      tolerations:
-        {{- toYaml .Values.tolerations | nindent 8 }}
       {{- end}}
+      {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.affinity" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: logfire-backend-migrations
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.defaultTag" .  }}'
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}

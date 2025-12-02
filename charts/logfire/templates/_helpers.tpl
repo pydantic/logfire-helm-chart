@@ -1,3 +1,26 @@
+{{/*
+Validate required values for production deployment
+*/}}
+{{- define "logfire.validateRequired" -}}
+{{- if and (not .Values.dev.deployPostgres) (not .Values.postgresSecret.enabled) -}}
+  {{- if not .Values.postgresDsn -}}
+    {{- fail "postgresDsn is required when not using dev.deployPostgres or postgresSecret" -}}
+  {{- end -}}
+  {{- if not .Values.postgresFFDsn -}}
+    {{- fail "postgresFFDsn is required when not using dev.deployPostgres or postgresSecret" -}}
+  {{- end -}}
+{{- end -}}
+{{- if and (not .Values.dev.deployMinio) (not .Values.objectStore.uri) -}}
+  {{- fail "objectStore.uri is required when not using dev.deployMinio" -}}
+{{- end -}}
+{{- $hosts := .Values.ingress.hostnames -}}
+{{- if not $hosts -}}
+  {{- if not .Values.ingress.hostname -}}
+    {{- fail "ingress.hostnames (or ingress.hostname) is required" -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.hpa" }}
 {{- $cpuAverage := dig "hpa" "cpuAverage" .cpuAverage . }}
 {{- $memAverage := dig "hpa" "memAverage" .memAverage . }}
@@ -255,10 +278,25 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Create default tag 
+Create default tag
 */}}
 {{- define "logfire.defaultTag" -}}
-{{- default .Chart.AppVersion .Values.image.tag }}
+{{- default .Chart.AppVersion }}
+{{- end -}}
+
+{{/*
+Get service-specific image tag, falling back to global tag
+Usage: {{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" "logfire-backend" "Chart" .Chart) }}
+*/}}
+{{- define "logfire.serviceTag" -}}
+{{- $serviceValues := index .Values .serviceName | default dict -}}
+{{- $serviceImage := $serviceValues.image | default dict -}}
+{{- $serviceTag := $serviceImage.tag -}}
+{{- if $serviceTag -}}
+{{- $serviceTag -}}
+{{- else -}}
+{{- default .Chart.AppVersion -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
