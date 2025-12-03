@@ -450,9 +450,9 @@ Helm chart for self-hosted Pydantic Logfire
 | minio.persistence.mountPath | string | `"/data"` |  |
 | minio.persistence.size | string | `"32Gi"` |  |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
-| objectStore | object | `{"env":{},"uri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
+| objectStore | object | `{"env":{},"uri":"s3://logfire","volumeMounts":[],"volumes":[]}` | Object storage details |
 | objectStore.env | object | `{}` | Additional environment variables for the object store connection |
-| objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`) |
+| objectStore.uri | string | `"s3://logfire"` | URI for object storage (e.g., `s3://bucket`) |
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials |
 | otel_collector | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.139.0"},"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | otel-collector configuration |
@@ -479,10 +479,10 @@ Helm chart for self-hosted Pydantic Logfire
 | securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details |
 | serviceAccountName | string | `"default"` | ServiceAccount used by pods |
 | smtp.host | string | `nil` | SMTP server hostname |
-| smtp.password | string | `nil` | SMTP password |
+| smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | smtp.port | int | `25` | SMTP server port |
 | smtp.use_tls | bool | `false` | Use TLS for SMTP |
-| smtp.username | string | `nil` | SMTP username |
+| smtp.username | string | `nil` | SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | tolerations | list | `[]` | Tolerations applied to all workloads |
 
 ----------------------------------------------

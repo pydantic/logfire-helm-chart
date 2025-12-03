@@ -104,12 +104,28 @@ smtp:
   host:
   # -- SMTP server port
   port: 25
-  # -- SMTP username
+  # -- SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
   username:
-  # -- SMTP password
+  # -- SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
   password:
   # -- Use TLS for SMTP
   use_tls: false
+
+# SMTP example using secrets:
+# smtp:
+#   host: smtp.example.com
+#   port: 587
+#   username:
+#     valueFrom:
+#       secretKeyRef:
+#         name: smtp
+#         key: username
+#   password:
+#     valueFrom:
+#       secretKeyRef:
+#         name: smtp
+#         key: password
+#   use_tls: true
 
 
 # ==============================================================================
@@ -136,6 +152,24 @@ ai:
     apiKey:
     # -- Azure OpenAI API version
     apiVersion:
+
+# AI example using secrets:
+# ai:
+#   model: "openai:gpt-4o"
+#   openAi:
+#     apiKey:
+#       valueFrom:
+#         secretKeyRef:
+#           name: openai
+#           key: api-key
+#   azureOpenAi:
+#     endpoint: https://your-endpoint.openai.azure.com
+#     apiKey:
+#       valueFrom:
+#         secretKeyRef:
+#           name: azure-openai
+#           key: api-key
+#     apiVersion: "2024-05-01-preview"
 
 
 # ==============================================================================
@@ -963,7 +997,7 @@ logfire-ff-ingest-processor:
 # -- Object storage details
 objectStore:
   # -- URI for object storage (e.g., `s3://bucket`)
-  uri:
+  uri: s3://logfire
   # -- Additional environment variables for the object store connection
   env: {}
   # -- Volume mounts for object store credentials

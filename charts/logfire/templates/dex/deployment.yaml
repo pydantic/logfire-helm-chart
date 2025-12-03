@@ -77,7 +77,7 @@ spec:
         - name: {{ $serviceName }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.dexImage }}:{{ include "logfire.defaultTag"  . }}'
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.dexImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           args:
