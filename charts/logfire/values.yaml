@@ -997,7 +997,7 @@ logfire-ff-ingest-processor:
 # -- Object storage details
 objectStore:
   # -- URI for object storage (e.g., `s3://bucket`)
-  uri: s3://logfire
+  uri:
   # -- Additional environment variables for the object store connection
   env: {}
   # -- Volume mounts for object store credentials
