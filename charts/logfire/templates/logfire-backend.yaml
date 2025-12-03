@@ -1,4 +1,7 @@
 {{- $serviceName := "logfire-backend" }}
+{{- include "logfire.validateConfig" . -}}
+{{- include "logfire.validate.autoscaling" (dict "Values" .Values "serviceName" $serviceName) -}}
+{{- include "logfire.validate.pdb" (dict "Values" .Values "serviceName" $serviceName) -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -74,11 +77,9 @@ spec:
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.affinity" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
-      tolerations:
-        {{- toYaml .Values.tolerations | nindent 8 }}
       containers:
         - name: {{ $serviceName }}
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.defaultTag" .  }}'
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -115,9 +116,18 @@ spec:
             - name: AI_MODEL
               value: {{ . }}
             {{- end }}
-            {{- with .openAi.apiKey }}
+            {{- with .openAi }}
+            {{- with .apiKey }}
             - name: OPENAI_API_KEY
+              {{- if kindIs "map" . }}
+              {{- if hasKey . "valueFrom" }}
+              valueFrom:
+                {{- toYaml .valueFrom | nindent 16 }}
+              {{- end }}
+              {{- else }}
               value: {{ . }}
+              {{- end }}
+            {{- end }}
             {{- end }}
             {{- with .vertexAi.region }}
             - name: GOOGLE_CLOUD_LOCATION
@@ -130,7 +140,14 @@ spec:
             {{- end }}
             {{- with .apiKey}}
             - name: AZURE_OPENAI_API_KEY
+              {{- if kindIs "map" . }}
+              {{- if hasKey . "valueFrom" }}
+              valueFrom:
+                {{- toYaml .valueFrom | nindent 16 }}
+              {{- end }}
+              {{- else }}
               value: {{ . }}
+              {{- end }}
             {{- end }}
             {{- with .apiVersion}}
             - name: OPENAI_API_VERSION

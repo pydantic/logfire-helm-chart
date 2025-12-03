@@ -52,7 +52,7 @@ spec:
       {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       containers:
         - name: {{ $serviceName }}
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.workerImage }}:{{ include "logfire.defaultTag" .  }}'
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.workerImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           securityContext:
@@ -64,6 +64,10 @@ spec:
             httpGet:
               path: /health
               port: 8003
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8003
           startupProbe:
             httpGet:
               path: /health
@@ -72,7 +76,7 @@ spec:
             - name: LOGFIRE_SERVICE_NAME
               value: {{ $serviceName }}
             - name: LOGFIRE_SERVICE_VERSION
-              value: .Values.appVersion
+              value: {{ .Chart.AppVersion | quote }}
             - name: CRUD_PG_DSN
               valueFrom:
                 secretKeyRef:
@@ -107,7 +111,7 @@ spec:
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
             - name: USAGE_TO_BUCKET_BUCKET_NAME
-              value: {{ .Values.usageObjectStoreUri }}/usage
+              value: {{ .Values.objectStore.uri }}/usage
             {{ if .Values.dev.deployMaildev }}
             - name: SMTP_SERVER
               value: logfire-maildev
@@ -125,9 +129,23 @@ spec:
             - name: SMTP_PORT
               value: {{ .Values.smtp.port | quote }}
             - name: SMTP_USERNAME
+              {{- if kindIs "map" .Values.smtp.username }}
+              {{- if hasKey .Values.smtp.username "valueFrom" }}
+              valueFrom:
+                {{- toYaml .Values.smtp.username.valueFrom | nindent 16 }}
+              {{- end }}
+              {{- else }}
               value: {{ .Values.smtp.username }}
+              {{- end }}
             - name: SMTP_PASSWORD
+              {{- if kindIs "map" .Values.smtp.password }}
+              {{- if hasKey .Values.smtp.password "valueFrom" }}
+              valueFrom:
+                {{- toYaml .Values.smtp.password.valueFrom | nindent 16 }}
+              {{- end }}
+              {{- else }}
               value: {{ .Values.smtp.password }}
+              {{- end }}
             - name: SMTP_USE_TLS
               value: {{ .Values.smtp.use_tls | quote }}
             {{ end }}

@@ -254,11 +254,20 @@ app.kubernetes.io/name: {{ include "logfire.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+
 {{/*
-Create default tag 
+Get service-specific image tag, falling back to global tag
+Usage: {{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" "logfire-backend" "Chart" .Chart) }}
 */}}
-{{- define "logfire.defaultTag" -}}
-{{- default .Chart.AppVersion .Values.image.tag }}
+{{- define "logfire.serviceTag" -}}
+{{- $serviceValues := index .Values .serviceName | default dict -}}
+{{- $serviceImage := $serviceValues.image | default dict -}}
+{{- $serviceTag := $serviceImage.tag -}}
+{{- if $serviceTag -}}
+{{- $serviceTag -}}
+{{- else -}}
+{{- default .Chart.AppVersion .Values.image.tag -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -735,4 +744,192 @@ tolerations:
 - name: SDK_V1_QUERY_RATE_LIMIT__PER_HOUR
   value: "99999"
 {{- end -}}
+{{- end -}}
+
+{{/*
+================================================================================
+Configuration Validation Helpers
+================================================================================
+These helpers validate chart configuration and fail with clear error messages
+when required values are missing or incorrectly configured.
+*/}}
+
+{{/*
+Validate that objectStore.uri is configured (required for production)
+*/}}
+{{- define "logfire.validate.objectStore" -}}
+{{- if not .Values.dev.deployMinio -}}
+  {{- if not .Values.objectStore.uri -}}
+    {{- fail "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead." -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate ingress hostnames configuration
+*/}}
+{{- define "logfire.validate.ingress" -}}
+{{- $hasHostnames := and .Values.ingress.hostnames (gt (len .Values.ingress.hostnames) 0) -}}
+{{- $hasHostname := .Values.ingress.hostname -}}
+{{- if not (or $hasHostnames $hasHostname) -}}
+  {{- fail "ingress.hostnames (or ingress.hostname) is required. Specify at least one hostname for Logfire (e.g., hostnames: ['logfire.example.com']). This is needed for CORS and URL generation even if ingress.enabled is false." -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate postgres configuration - either external secret or DSN must be provided
+*/}}
+{{- define "logfire.validate.postgres" -}}
+{{- if not .Values.dev.deployPostgres -}}
+  {{- if .Values.postgresSecret.enabled -}}
+    {{- if not .Values.postgresSecret.name -}}
+      {{- fail "postgresSecret.name is required when postgresSecret.enabled is true. Provide the name of your Kubernetes Secret containing 'postgresDsn' and 'postgresFFDsn' keys." -}}
+    {{- end -}}
+  {{- else -}}
+    {{- if not .Values.postgresDsn -}}
+      {{- fail "postgresDsn is required when not using dev.deployPostgres or postgresSecret. Provide a PostgreSQL DSN for the crud database." -}}
+    {{- end -}}
+    {{- if not .Values.postgresFFDsn -}}
+      {{- fail "postgresFFDsn is required when not using dev.deployPostgres or postgresSecret. Provide a PostgreSQL DSN for the ff database." -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate dex storage configuration when using external postgres
+*/}}
+{{- define "logfire.validate.dexStorage" -}}
+{{- $dexConfig := dig "config" dict (index .Values "logfire-dex" | default dict) -}}
+{{- $storage := dig "storage" dict $dexConfig -}}
+{{- $storageType := dig "type" "" $storage -}}
+{{- if and (not .Values.dev.deployPostgres) (eq $storageType "postgres") -}}
+  {{- $storageConfig := dig "config" dict $storage -}}
+  {{- if not $storageConfig.host -}}
+    {{- fail "logfire-dex.config.storage.config.host is required when using postgres storage type. Configure the Dex storage to point to your PostgreSQL instance." -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate AI configuration consistency - if model is set, required provider config must exist
+*/}}
+{{- define "logfire.validate.ai" -}}
+{{- if .Values.ai.model -}}
+  {{- $model := .Values.ai.model -}}
+  {{- if hasPrefix "openai:" $model -}}
+    {{- if not .Values.ai.openAi.apiKey -}}
+      {{- fail (printf "ai.openAi.apiKey is required when using OpenAI model '%s'. Provide your OpenAI API key." $model) -}}
+    {{- end -}}
+  {{- else if hasPrefix "azure:" $model -}}
+    {{- if not .Values.ai.azureOpenAi.endpoint -}}
+      {{- fail (printf "ai.azureOpenAi.endpoint is required when using Azure OpenAI model '%s'." $model) -}}
+    {{- end -}}
+    {{- if not .Values.ai.azureOpenAi.apiKey -}}
+      {{- fail (printf "ai.azureOpenAi.apiKey is required when using Azure OpenAI model '%s'." $model) -}}
+    {{- end -}}
+  {{- else if hasPrefix "google-vertex:" $model -}}
+    {{- if not .Values.ai.vertexAi.region -}}
+      {{- fail (printf "ai.vertexAi.region is required when using Google Vertex AI model '%s'." $model) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate existing secret configuration
+*/}}
+{{- define "logfire.validate.existingSecret" -}}
+{{- if .Values.existingSecret.enabled -}}
+  {{- if not .Values.existingSecret.name -}}
+    {{- fail "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-meta-write-token, logfire-meta-frontend-token, and logfire-jwt-secret keys." -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate admin secret configuration
+*/}}
+{{- define "logfire.validate.adminSecret" -}}
+{{- if .Values.adminSecret.enabled -}}
+  {{- if not .Values.adminSecret.name -}}
+    {{- fail "adminSecret.name is required when adminSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-admin-password, logfire-admin-totp-secret, and logfire-admin-totp-recovery-codes keys." -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate autoscaling configuration - warn if both HPA and KEDA are enabled
+*/}}
+{{- define "logfire.validate.autoscaling" -}}
+{{- $serviceName := .serviceName -}}
+{{- $serviceValues := index .Values $serviceName | default dict -}}
+{{- $autoscaling := $serviceValues.autoscaling | default dict -}}
+{{- if $autoscaling -}}
+  {{- $hpaEnabled := include "logfire.hpa.enabled" $autoscaling | eq "true" -}}
+  {{- $kedaEnabled := include "logfire.keda.enabled" $autoscaling | eq "true" -}}
+  {{- if and $hpaEnabled $kedaEnabled -}}
+    {{- fail (printf "Both HPA and KEDA are enabled for '%s'. Only one autoscaler should be enabled at a time to avoid conflicts." $serviceName) -}}
+  {{- end -}}
+  {{- if $autoscaling.minReplicas -}}
+    {{- if $autoscaling.maxReplicas -}}
+      {{- if gt (int $autoscaling.minReplicas) (int $autoscaling.maxReplicas) -}}
+        {{- fail (printf "autoscaling.minReplicas (%d) cannot be greater than autoscaling.maxReplicas (%d) for '%s'." (int $autoscaling.minReplicas) (int $autoscaling.maxReplicas) $serviceName) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate PDB configuration - minAvailable and maxUnavailable are mutually exclusive
+*/}}
+{{- define "logfire.validate.pdb" -}}
+{{- $serviceName := .serviceName -}}
+{{- $serviceValues := index .Values $serviceName | default dict -}}
+{{- $pdb := $serviceValues.pdb | default dict -}}
+{{- if and $pdb.minAvailable $pdb.maxUnavailable -}}
+  {{- fail (printf "pdb.minAvailable and pdb.maxUnavailable are mutually exclusive for '%s'. Specify only one." $serviceName) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate email/admin configuration
+*/}}
+{{- define "logfire.validate.admin" -}}
+{{- if not .Values.adminEmail -}}
+  {{- fail "adminEmail is required. Provide an email address for the initial admin user." -}}
+{{- end -}}
+{{- $emailRegex := "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$" -}}
+{{- if not (regexMatch $emailRegex .Values.adminEmail) -}}
+  {{- fail (printf "adminEmail '%s' does not appear to be a valid email address." .Values.adminEmail) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate Redis configuration
+*/}}
+{{- define "logfire.validate.redis" -}}
+{{- $redisEnabled := dig "enabled" true (index .Values "logfire-redis" | default dict) -}}
+{{- if not $redisEnabled -}}
+  {{- if not .Values.redisDsn -}}
+    {{- fail "redisDsn is required when logfire-redis.enabled is false. Provide a Redis DSN for your external Redis instance." -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Master validation template - runs all validations
+Call this from templates that need to ensure configuration is valid.
+*/}}
+{{- define "logfire.validateConfig" -}}
+{{- include "logfire.validate.objectStore" . -}}
+{{- include "logfire.validate.ingress" . -}}
+{{- include "logfire.validate.postgres" . -}}
+{{- include "logfire.validate.dexStorage" . -}}
+{{- include "logfire.validate.ai" . -}}
+{{- include "logfire.validate.existingSecret" . -}}
+{{- include "logfire.validate.adminSecret" . -}}
+{{- include "logfire.validate.admin" . -}}
+{{- include "logfire.validate.redis" . -}}
 {{- end -}}

@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.9.8](https://img.shields.io/badge/Version-0.9.8-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
+![Version: 0.9.9](https://img.shields.io/badge/Version-0.9.9-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -356,7 +356,7 @@ See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hoste
 * Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.9.8](https://img.shields.io/badge/Version-0.9.8-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
+![Version: 0.9.9](https://img.shields.io/badge/Version-0.9.9-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -377,11 +377,11 @@ Helm chart for self-hosted Pydantic Logfire
 | adminSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | adminSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | affinity | object | `{}` | Node/Pod affinity applied to all workloads |
-| ai.azureOpenAi.apiKey | string | `nil` | Azure OpenAI API key |
+| ai.azureOpenAi.apiKey | string | `nil` | Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | ai.azureOpenAi.apiVersion | string | `nil` | Azure OpenAI API version |
 | ai.azureOpenAi.endpoint | string | `nil` | Azure OpenAI endpoint |
 | ai.model | string | `nil` | AI provider+model string. Prefix the model with the provider (e.g., `azure:gpt-4o`). See https://ai.pydantic.dev/models/ for more information. |
-| ai.openAi.apiKey | string | `nil` | OpenAI API key |
+| ai.openAi.apiKey | string | `nil` | OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | ai.vertexAi.region | string | `nil` | Vertex AI region |
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
 | dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |
@@ -479,10 +479,10 @@ Helm chart for self-hosted Pydantic Logfire
 | securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details |
 | serviceAccountName | string | `"default"` | ServiceAccount used by pods |
 | smtp.host | string | `nil` | SMTP server hostname |
-| smtp.password | string | `nil` | SMTP password |
+| smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | smtp.port | int | `25` | SMTP server port |
 | smtp.use_tls | bool | `false` | Use TLS for SMTP |
-| smtp.username | string | `nil` | SMTP username |
+| smtp.username | string | `nil` | SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | tolerations | list | `[]` | Tolerations applied to all workloads |
 
 ----------------------------------------------
