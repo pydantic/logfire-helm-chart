@@ -1,0 +1,52 @@
+{{- if .Values.gateway.enabled -}}
+{{- $result := include "logfire.effective_hostnames" . | fromJson -}}
+{{- $hosts := $result.hosts -}}
+{{- $hasHosts := gt (len $hosts) 0 -}}
+{{- $gatewayName := .Values.gateway.name | default "logfire-gateway" -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: logfire-httproute
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    {{- with .Values.gateway.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      {{- if and (not .Values.gateway.create) .Values.gateway.namespace }}
+      namespace: {{ .Values.gateway.namespace }}
+      {{- end }}
+      {{- with .Values.gateway.sectionName }}
+      sectionName: {{ . }}
+      {{- end }}
+  {{- if $hasHosts }}
+  hostnames:
+    {{- toYaml $hosts | nindent 4 }}
+  {{- end }}
+  rules:
+    - matches:
+        {{- if .Values.gateway.matches }}
+        {{- toYaml .Values.gateway.matches | nindent 8 }}
+        {{- else }}
+        - path:
+            type: PathPrefix
+            value: /
+        {{- end }}
+      {{- with .Values.gateway.filters }}
+      filters:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      backendRefs:
+        - name: logfire-service
+          port: 8080
+      {{- with .Values.gateway.timeouts }}
+      timeouts:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -61,6 +61,7 @@ spec:
   selector:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-maildev
+{{- if .Values.ingress.enabled }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -94,4 +95,44 @@ spec:
       hosts:
         - {{ .Values.ingress.maildevHostname }}
   {{- end }}
+{{- end }}
+{{- if .Values.gateway.enabled }}
+---
+{{- $gatewayName := .Values.gateway.name | default "logfire-gateway" -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: logfire-maildev-httproute
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-maildev
+    {{- with .Values.gateway.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    - name: {{ $gatewayName }}
+      {{- if and (not .Values.gateway.create) .Values.gateway.namespace }}
+      namespace: {{ .Values.gateway.namespace }}
+      {{- end }}
+      {{- with .Values.gateway.sectionName }}
+      sectionName: {{ . }}
+      {{- end }}
+  {{- with .Values.gateway.maildevHostname }}
+  hostnames:
+    - {{ . }}
+  {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: logfire-maildev
+          port: 1080
+{{- end }}
 {{ end }}

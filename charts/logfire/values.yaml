@@ -68,6 +68,105 @@ ingress:
 
 
 # ==============================================================================
+# Gateway API
+# ==============================================================================
+
+gateway:
+  # -- Enable the Gateway API resources (Gateway and/or HTTPRoute).
+  # Use this as an alternative to Ingress for environments using Gateway API.
+  enabled: false
+
+  # -- Create a Gateway resource. Set to false to use an existing Gateway.
+  create: true
+
+  # -- Name of the Gateway. Used for both created Gateway and HTTPRoute parentRef.
+  # If not set, defaults to "logfire-gateway".
+  name: ""
+
+  # -- Namespace of an existing Gateway (only used when create is false).
+  # Leave empty to use the same namespace as the HTTPRoute.
+  namespace: ""
+
+  # -- GatewayClass name to use (required when create is true).
+  # Common values: istio, cilium, nginx, envoy-gateway, gke-l7-rilb, gke-l7-global-external-managed
+  gatewayClassName: ""
+
+  # -- Hostname(s) for the Gateway listener and HTTPRoute.
+  # If not set, falls back to ingress.hostnames for backward compatibility.
+  # These hostnames are also used for CORS/URL generation when gateway is enabled.
+  hostnames: []
+  #   - logfire.example.com
+
+  # -- Enable TLS/HTTPS for the Gateway listener.
+  # If not set, falls back to ingress.tls for backward compatibility.
+  # Also affects CORS behavior (http vs https URLs).
+  # @default -- nil (uses ingress.tls)
+  tls:
+
+  # -- TLS Secret name for the Gateway listener certificate.
+  # If not set, falls back to ingress.secretName for backward compatibility.
+  # @default -- nil (uses ingress.secretName)
+  tlsSecretName:
+
+  # -- Gateway annotations (only used when create is true)
+  gatewayAnnotations: {}
+
+  # -- Gateway labels (only used when create is true)
+  gatewayLabels: {}
+
+  # -- Gateway listeners configuration.
+  # If not specified, a default HTTP/HTTPS listener will be auto-generated based on tls setting.
+  listeners: []
+  #   - name: https
+  #     protocol: HTTPS
+  #     port: 443
+  #     tls:
+  #       mode: Terminate
+  #       certificateRefs:
+  #         - name: logfire-tls-cert
+
+  # -- Section name within the Gateway to attach the HTTPRoute to (optional).
+  # Use this when the Gateway has multiple listeners.
+  sectionName: ""
+
+  # -- Gateway addresses (optional, only used when create is true).
+  # Used to request specific addresses for the Gateway.
+  addresses: []
+  #   - type: IPAddress
+  #     value: "192.168.1.100"
+
+  # -- HTTPRoute annotations
+  annotations: {}
+
+  # -- HTTPRoute labels (in addition to standard labels)
+  labels: {}
+
+  # -- Path matches for the HTTPRoute rules.
+  # Defaults to a single prefix match on "/" if not specified.
+  matches: []
+  #   - path:
+  #       type: PathPrefix
+  #       value: /
+
+  # -- Additional HTTPRoute filters (e.g., request/response header modification).
+  filters: []
+  #   - type: RequestHeaderModifier
+  #     requestHeaderModifier:
+  #       add:
+  #         - name: X-Custom-Header
+  #           value: custom-value
+
+  # -- Timeout settings for the HTTPRoute backend.
+  timeouts: {}
+  #   request: 60s
+  #   backendRequest: 30s
+
+  # -- Hostname for the maildev HTTPRoute (only used when dev.deployMaildev is true).
+  # If not set, no hostname filter is applied to the maildev HTTPRoute.
+  maildevHostname: ""
+
+
+# ==============================================================================
 # Postgres configuration
 # ==============================================================================
 

@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.9.9](https://img.shields.io/badge/Version-0.9.9-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
+![Version: 0.9.10](https://img.shields.io/badge/Version-0.9.10-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -84,6 +84,111 @@ ingress:
 ```
 
 If you are *not* using kubernetes ingress, you must still set the hostnames under the `ingress` configuration.
+
+#### Using Gateway API
+
+As an alternative to Ingress, you can use the [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/) to expose Logfire.
+This is useful if you're using a Gateway controller like Istio, Envoy Gateway, Cilium, or any other Gateway API implementation.
+
+##### Option 1: Create a new Gateway
+
+The chart can create both a Gateway and HTTPRoute resource for you:
+
+```yaml
+ingress:
+  # Disable the Ingress resource
+  enabled: false
+  # Still required for CORS headers and Gateway listener hostname
+  tls: true
+  hostnames:
+    - logfire.example.com
+  # TLS secret for the Gateway listener
+  secretName: logfire-tls-cert
+
+gateway:
+  enabled: true
+  # Create the Gateway resource (default: true)
+  create: true
+  # GatewayClass name (required when create is true)
+  # Common values: istio, cilium, nginx, envoy-gateway, gke-l7-rilb
+  gatewayClassName: istio
+  # Custom Gateway name (optional, defaults to "logfire-gateway")
+  name: logfire-gateway
+  # Additional Gateway annotations
+  gatewayAnnotations:
+    external-dns.alpha.kubernetes.io/hostname: logfire.example.com
+```
+
+When `ingress.tls` is true, the Gateway will be configured with an HTTPS listener on port 443. Otherwise, an HTTP listener on port 80 will be created.
+
+##### Option 2: Use an existing Gateway
+
+If you already have a Gateway resource in your cluster, you can attach the HTTPRoute to it:
+
+```yaml
+ingress:
+  enabled: false
+  tls: true
+  hostnames:
+    - logfire.example.com
+
+gateway:
+  enabled: true
+  # Don't create the Gateway resource
+  create: false
+  # Name of the existing Gateway (required when create is false)
+  name: my-existing-gateway
+  # Namespace of the existing Gateway (optional, defaults to release namespace)
+  namespace: istio-system
+  # Section/listener name within the Gateway (optional)
+  sectionName: https
+```
+
+##### Advanced Gateway Configuration
+
+You can customize the Gateway listeners and HTTPRoute settings:
+
+```yaml
+gateway:
+  enabled: true
+  create: true
+  gatewayClassName: istio
+  # Custom listeners configuration
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: logfire-tls-cert
+      allowedRoutes:
+        namespaces:
+          from: Same
+  # Request specific IP addresses for the Gateway
+  addresses:
+    - type: IPAddress
+      value: "192.168.1.100"
+  # HTTPRoute path matches (defaults to PathPrefix "/")
+  matches:
+    - path:
+        type: PathPrefix
+        value: /
+  # HTTPRoute filters for request/response modification
+  filters:
+    - type: RequestHeaderModifier
+      requestHeaderModifier:
+        add:
+          - name: X-Custom-Header
+            value: custom-value
+  # HTTPRoute timeout settings
+  timeouts:
+    request: 60s
+    backendRequest: 30s
+  # HTTPRoute annotations
+  annotations:
+    app.kubernetes.io/part-of: logfire
+```
 
 ### Dex
 
@@ -356,7 +461,7 @@ See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hoste
 * Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.9.9](https://img.shields.io/badge/Version-0.9.9-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
+![Version: 0.9.10](https://img.shields.io/badge/Version-0.9.10-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -390,6 +495,25 @@ Helm chart for self-hosted Pydantic Logfire
 | existingSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
+| gateway.addresses | list | `[]` | Gateway addresses (optional, only used when create is true). Used to request specific addresses for the Gateway. |
+| gateway.annotations | object | `{}` | HTTPRoute annotations |
+| gateway.create | bool | `true` | Create a Gateway resource. Set to false to use an existing Gateway. |
+| gateway.enabled | bool | `false` | Enable the Gateway API resources (Gateway and/or HTTPRoute). Use this as an alternative to Ingress for environments using Gateway API. |
+| gateway.filters | list | `[]` | Additional HTTPRoute filters (e.g., request/response header modification). |
+| gateway.gatewayAnnotations | object | `{}` | Gateway annotations (only used when create is true) |
+| gateway.gatewayClassName | string | `""` | GatewayClass name to use (required when create is true). Common values: istio, cilium, nginx, envoy-gateway, gke-l7-rilb, gke-l7-global-external-managed |
+| gateway.gatewayLabels | object | `{}` | Gateway labels (only used when create is true) |
+| gateway.hostnames | list | `[]` | Hostname(s) for the Gateway listener and HTTPRoute. If not set, falls back to ingress.hostnames for backward compatibility. These hostnames are also used for CORS/URL generation when gateway is enabled. |
+| gateway.labels | object | `{}` | HTTPRoute labels (in addition to standard labels) |
+| gateway.listeners | list | `[]` | Gateway listeners configuration. If not specified, a default HTTP/HTTPS listener will be auto-generated based on tls setting. |
+| gateway.maildevHostname | string | `""` | Hostname for the maildev HTTPRoute (only used when dev.deployMaildev is true). If not set, no hostname filter is applied to the maildev HTTPRoute. |
+| gateway.matches | list | `[]` | Path matches for the HTTPRoute rules. Defaults to a single prefix match on "/" if not specified. |
+| gateway.name | string | `""` | Name of the Gateway. Used for both created Gateway and HTTPRoute parentRef. If not set, defaults to "logfire-gateway". |
+| gateway.namespace | string | `""` | Namespace of an existing Gateway (only used when create is false). Leave empty to use the same namespace as the HTTPRoute. |
+| gateway.sectionName | string | `""` | Section name within the Gateway to attach the HTTPRoute to (optional). Use this when the Gateway has multiple listeners. |
+| gateway.timeouts | object | `{}` | Timeout settings for the HTTPRoute backend. |
+| gateway.tls | string | nil (uses ingress.tls) | Enable TLS/HTTPS for the Gateway listener. If not set, falls back to ingress.tls for backward compatibility. Also affects CORS behavior (http vs https URLs). |
+| gateway.tlsSecretName | string | nil (uses ingress.secretName) | TLS Secret name for the Gateway listener certificate. If not set, falls back to ingress.secretName for backward compatibility. |
 | groupOrganizationMapping | list | `[]` | List of mapping to automatically assign members of OIDC group to logfire roles |
 | haproxy | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.2"}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks) |
