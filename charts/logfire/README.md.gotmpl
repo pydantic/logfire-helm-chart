@@ -86,6 +86,111 @@ ingress:
 
 If you are *not* using kubernetes ingress, you must still set the hostnames under the `ingress` configuration.
 
+#### Using Gateway API
+
+As an alternative to Ingress, you can use the [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/) to expose Logfire.
+This is useful if you're using a Gateway controller like Istio, Envoy Gateway, Cilium, or any other Gateway API implementation.
+
+##### Option 1: Create a new Gateway
+
+The chart can create both a Gateway and HTTPRoute resource for you:
+
+```yaml
+ingress:
+  # Disable the Ingress resource
+  enabled: false
+  # Still required for CORS headers and Gateway listener hostname
+  tls: true
+  hostnames:
+    - logfire.example.com
+  # TLS secret for the Gateway listener
+  secretName: logfire-tls-cert
+
+gateway:
+  enabled: true
+  # Create the Gateway resource (default: true)
+  create: true
+  # GatewayClass name (required when create is true)
+  # Common values: istio, cilium, nginx, envoy-gateway, gke-l7-rilb
+  gatewayClassName: istio
+  # Custom Gateway name (optional, defaults to "logfire-gateway")
+  name: logfire-gateway
+  # Additional Gateway annotations
+  gatewayAnnotations:
+    external-dns.alpha.kubernetes.io/hostname: logfire.example.com
+```
+
+When `ingress.tls` is true, the Gateway will be configured with an HTTPS listener on port 443. Otherwise, an HTTP listener on port 80 will be created.
+
+##### Option 2: Use an existing Gateway
+
+If you already have a Gateway resource in your cluster, you can attach the HTTPRoute to it:
+
+```yaml
+ingress:
+  enabled: false
+  tls: true
+  hostnames:
+    - logfire.example.com
+
+gateway:
+  enabled: true
+  # Don't create the Gateway resource
+  create: false
+  # Name of the existing Gateway (required when create is false)
+  name: my-existing-gateway
+  # Namespace of the existing Gateway (optional, defaults to release namespace)
+  namespace: istio-system
+  # Section/listener name within the Gateway (optional)
+  sectionName: https
+```
+
+##### Advanced Gateway Configuration
+
+You can customize the Gateway listeners and HTTPRoute settings:
+
+```yaml
+gateway:
+  enabled: true
+  create: true
+  gatewayClassName: istio
+  # Custom listeners configuration
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: logfire-tls-cert
+      allowedRoutes:
+        namespaces:
+          from: Same
+  # Request specific IP addresses for the Gateway
+  addresses:
+    - type: IPAddress
+      value: "192.168.1.100"
+  # HTTPRoute path matches (defaults to PathPrefix "/")
+  matches:
+    - path:
+        type: PathPrefix
+        value: /
+  # HTTPRoute filters for request/response modification
+  filters:
+    - type: RequestHeaderModifier
+      requestHeaderModifier:
+        add:
+          - name: X-Custom-Header
+            value: custom-value
+  # HTTPRoute timeout settings
+  timeouts:
+    request: 60s
+    backendRequest: 30s
+  # HTTPRoute annotations
+  annotations:
+    app.kubernetes.io/part-of: logfire
+```
+
 ### Dex
 
 Dex is used as the identity service for logfire & can be configured for many different types of connectors.  The full list of connectors can be found here: [https://dexidp.io/docs/connectors/](https://dexidp.io/docs/connectors/)

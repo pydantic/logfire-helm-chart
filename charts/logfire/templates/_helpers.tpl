@@ -147,27 +147,63 @@ resources:
 {{- end}}
 
 {{/*
-Primary logfire host for the app. Selects the first item from .Values.ingress.hostnames list
+Get effective hostnames - prefers gateway.hostnames when gateway is enabled, falls back to ingress.hostnames
+Returns a wrapped object {"hosts": [...]} to work around fromJson limitation with top-level arrays.
 */}}
-{{- define "logfire.primary_hostname" -}}
-{{- if .Values.ingress.hostnames -}}
-{{- first .Values.ingress.hostnames -}}
+{{- define "logfire.effective_hostnames" -}}
+{{- $hosts := list -}}
+{{- if and .Values.gateway.enabled .Values.gateway.hostnames -}}
+  {{- $hosts = .Values.gateway.hostnames -}}
+{{- else if .Values.ingress.hostnames -}}
+  {{- $hosts = .Values.ingress.hostnames -}}
+{{- else if .Values.ingress.hostname -}}
+  {{- $hosts = list .Values.ingress.hostname -}}
+{{- end -}}
+{{- dict "hosts" $hosts | toJson -}}
+{{- end -}}
+
+{{/*
+Get effective TLS setting - prefers gateway.tls when gateway is enabled and set, falls back to ingress.tls
+*/}}
+{{- define "logfire.effective_tls" -}}
+{{- if and .Values.gateway.enabled (not (kindIs "invalid" .Values.gateway.tls)) -}}
+  {{- .Values.gateway.tls -}}
 {{- else -}}
-{{- .Values.ingress.hostname -}}
+  {{- .Values.ingress.tls | default false -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-Full list of logfire hostnames, primary and alternative domains for ingress.
+Get effective TLS secret name - prefers gateway.tlsSecretName when gateway is enabled and set, falls back to ingress.secretName
+*/}}
+{{- define "logfire.effective_tls_secret" -}}
+{{- if and .Values.gateway.enabled .Values.gateway.tlsSecretName -}}
+  {{- .Values.gateway.tlsSecretName -}}
+{{- else -}}
+  {{- .Values.ingress.secretName | default "logfire-frontend-cert" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Primary logfire host for the app. Selects the first item from effective hostnames list
+*/}}
+{{- define "logfire.primary_hostname" -}}
+{{- $result := include "logfire.effective_hostnames" . | fromJson -}}
+{{- $hosts := $result.hosts -}}
+{{- if $hosts -}}
+{{- first $hosts -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Full list of logfire hostnames, primary and alternative domains.
 */}}
 {{- define "logfire.all_hostnames_string" -}}
-{{- $hosts := .Values.ingress.hostnames -}}
-{{- if not $hosts -}}
-  {{- if .Values.ingress.hostname -}}
-    {{- $hosts = list .Values.ingress.hostname -}}
-  {{- end -}}
-{{- end -}}
+{{- $result := include "logfire.effective_hostnames" . | fromJson -}}
+{{- $hosts := $result.hosts -}}
+{{- if $hosts -}}
 {{- join " " $hosts -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -175,8 +211,9 @@ Primary logfire host with protocol scheme.
 */}}
 {{- define "logfire.url" -}}
 {{- $primaryHostname := include "logfire.primary_hostname" . | trim -}}
+{{- $tls := include "logfire.effective_tls" . -}}
 {{- if $primaryHostname -}}
-{{ .Values.ingress.tls | default false | ternary "https" "http" }}://{{ $primaryHostname }}
+{{ eq $tls "true" | ternary "https" "http" }}://{{ $primaryHostname }}
 {{- end -}}
 {{- end -}}
 
@@ -184,15 +221,12 @@ Primary logfire host with protocol scheme.
 Full list of logfire urls, primary and alternative domains with scheme.
 */}}
 {{- define "logfire.all_urls" -}}
-{{- $hosts := .Values.ingress.hostnames -}}
-{{- if not $hosts -}}
-  {{- if .Values.ingress.hostname -}}
-    {{- $hosts = list .Values.ingress.hostname -}}
-  {{- end -}}
-{{- end -}}
+{{- $result := include "logfire.effective_hostnames" . | fromJson -}}
+{{- $hosts := $result.hosts -}}
+{{- $tls := include "logfire.effective_tls" . -}}
 
 {{- if $hosts -}}
-  {{- $scheme := .Values.ingress.tls | default false | ternary "https" "http" -}}
+  {{- $scheme := eq $tls "true" | ternary "https" "http" -}}
   {{- $urls := list -}}
   {{- range $host := $hosts -}}
     {{- $fullUrl := printf "%s://%s" $scheme $host -}}
@@ -919,12 +953,40 @@ Validate Redis configuration
 {{- end -}}
 
 {{/*
+Validate Gateway API configuration
+*/}}
+{{- define "logfire.validate.gateway" -}}
+{{- if .Values.gateway.enabled -}}
+  {{- if .Values.gateway.create -}}
+    {{- if not .Values.gateway.gatewayClassName -}}
+      {{- fail "gateway.gatewayClassName is required when gateway.create is true. Specify the GatewayClass name (e.g., 'istio', 'cilium', 'nginx', 'envoy-gateway')." -}}
+    {{- end -}}
+  {{- else -}}
+    {{- if not .Values.gateway.name -}}
+      {{- fail "gateway.name is required when gateway.enabled is true and gateway.create is false. Provide the name of the existing Gateway resource to attach the HTTPRoute to." -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate that both Ingress and Gateway are not enabled simultaneously
+*/}}
+{{- define "logfire.validate.ingressGatewayConflict" -}}
+{{- if and .Values.ingress.enabled .Values.gateway.enabled -}}
+  {{- fail "Both ingress.enabled and gateway.enabled are true. Enable only one of Ingress or Gateway API to avoid routing conflicts. Set ingress.enabled=false to use Gateway API, or gateway.enabled=false to use Ingress." -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Master validation template - runs all validations
 Call this from templates that need to ensure configuration is valid.
 */}}
 {{- define "logfire.validateConfig" -}}
 {{- include "logfire.validate.objectStore" . -}}
 {{- include "logfire.validate.ingress" . -}}
+{{- include "logfire.validate.gateway" . -}}
+{{- include "logfire.validate.ingressGatewayConflict" . -}}
 {{- include "logfire.validate.postgres" . -}}
 {{- include "logfire.validate.dexStorage" . -}}
 {{- include "logfire.validate.ai" . -}}
