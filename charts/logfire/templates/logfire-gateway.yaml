@@ -22,31 +22,45 @@ spec:
   gatewayClassName: {{ required "gateway.gatewayClassName is required when gateway.create is true" .Values.gateway.gatewayClassName }}
   {{- if .Values.gateway.listeners }}
   listeners:
-    {{- range .Values.gateway.listeners }}
-    - name: {{ .name }}
-      protocol: {{ .protocol }}
-      port: {{ .port }}
-      {{- if $hasHosts }}
-      hostname: {{ first $hosts | quote }}
-      {{- end }}
-      {{- with .tls }}
+    {{- range $listener := .Values.gateway.listeners }}
+    {{- if $hasHosts }}
+    {{- range $idx, $host := $hosts }}
+    - name: {{ $listener.name }}{{ if gt $idx 0 }}-{{ $idx }}{{ end }}
+      protocol: {{ $listener.protocol }}
+      port: {{ $listener.port }}
+      hostname: {{ $host | quote }}
+      {{- with $listener.tls }}
       tls:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .allowedRoutes }}
+      {{- with $listener.allowedRoutes }}
       allowedRoutes:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     {{- end }}
+    {{- else }}
+    - name: {{ $listener.name }}
+      protocol: {{ $listener.protocol }}
+      port: {{ $listener.port }}
+      {{- with $listener.tls }}
+      tls:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $listener.allowedRoutes }}
+      allowedRoutes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
   {{- else }}
   listeners:
     {{- if $tls }}
-    - name: https
+    {{- if $hasHosts }}
+    {{- range $idx, $host := $hosts }}
+    - name: https{{ if gt $idx 0 }}-{{ $idx }}{{ end }}
       protocol: HTTPS
       port: 443
-      {{- if $hasHosts }}
-      hostname: {{ first $hosts | quote }}
-      {{- end }}
+      hostname: {{ $host | quote }}
       tls:
         mode: Terminate
         certificateRefs:
@@ -54,16 +68,38 @@ spec:
       allowedRoutes:
         namespaces:
           from: Same
+    {{- end }}
+    {{- else }}
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: {{ $tlsSecret }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+    {{- else }}
+    {{- if $hasHosts }}
+    {{- range $idx, $host := $hosts }}
+    - name: http{{ if gt $idx 0 }}-{{ $idx }}{{ end }}
+      protocol: HTTP
+      port: 80
+      hostname: {{ $host | quote }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
     {{- else }}
     - name: http
       protocol: HTTP
       port: 80
-      {{- if $hasHosts }}
-      hostname: {{ first $hosts | quote }}
-      {{- end }}
       allowedRoutes:
         namespaces:
           from: Same
+    {{- end }}
     {{- end }}
   {{- end }}
   {{- with .Values.gateway.addresses }}
