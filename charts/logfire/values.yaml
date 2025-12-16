@@ -1339,3 +1339,17 @@ minio:
             mc alias set local http://localhost:9000 logfire-minio logfire-minio
             mc mb local/logfire
             mc anonymous set public local/logfire
+
+# ==============================================================================
+# Extra Kubernetes manifests
+# ==============================================================================
+
+# -- Additional Kubernetes objects to render with this release. Templating is supported.
+extraObjects: []
+#  - apiVersion: v1
+#    kind: ConfigMap
+#    metadata:
+#      name: additional-config
+#      namespace: "{{ .Release.Namespace }}"
+#    data:
+#      key: value

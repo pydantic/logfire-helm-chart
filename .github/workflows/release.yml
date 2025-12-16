@@ -39,3 +39,24 @@ jobs:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         with:
           skip_existing: true
+
+      - name: Update gh-pages README
+        run: |
+          # Store the current README content
+          README_CONTENT=$(cat charts/logfire/README.md)
+          
+          # Switch to gh-pages branch
+          git fetch origin gh-pages
+          git checkout gh-pages
+          
+          # Update the chart README (this is what GitHub Pages displays)
+          echo "$README_CONTENT" > chart/README.md
+          
+          # Only commit if there are changes
+          if git diff --quiet chart/README.md; then
+            echo "No changes to README"
+          else
+            git add chart/README.md
+            git commit -m "Update chart documentation"
+            git push origin gh-pages
+          fi

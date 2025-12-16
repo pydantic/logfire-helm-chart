@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.9.10](https://img.shields.io/badge/Version-0.9.10-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
+![Version: 0.9.11](https://img.shields.io/badge/Version-0.9.11-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -461,7 +461,7 @@ See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hoste
 * Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.9.10](https://img.shields.io/badge/Version-0.9.10-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
+![Version: 0.9.11](https://img.shields.io/badge/Version-0.9.11-informational?style=flat-square) ![AppVersion: d7fd41e4](https://img.shields.io/badge/AppVersion-d7fd41e4-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -495,6 +495,7 @@ Helm chart for self-hosted Pydantic Logfire
 | existingSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
+| extraObjects | list | `[]` | Additional Kubernetes objects to render with this release. Templating is supported. |
 | gateway.addresses | list | `[]` | Gateway addresses (optional, only used when create is true). Used to request specific addresses for the Gateway. |
 | gateway.annotations | object | `{}` | HTTPRoute annotations |
 | gateway.create | bool | `true` | Create a Gateway resource. Set to false to use an existing Gateway. |
