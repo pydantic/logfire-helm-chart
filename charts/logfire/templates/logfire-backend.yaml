@@ -48,6 +48,7 @@ spec:
         checksum/logfire-jwt-client-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret" )) "key" "logfire-jwt-secret" )}}
         checksum/logfire-meta-frontend-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-frontend-token" )) "key" "logfire-meta-frontend-token" )}}
         checksum/logfire-meta-write-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token" )) "key" "logfire-meta-write-token" )}}
+        checksum/logfire-unsubscribe-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-unsubscribe-secret" )) "key" "logfire-unsubscribe-secret" )}}
         {{- end }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         checksum/logfire-postgres-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresDsn" )}}
@@ -212,6 +213,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-frontend-token") }}
                   key: logfire-meta-frontend-token
+            - name: UNSUBSCRIBE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-unsubscribe-secret") }}
+                  key: logfire-unsubscribe-secret
             - name: ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:

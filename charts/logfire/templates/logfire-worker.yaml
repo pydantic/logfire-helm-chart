@@ -25,6 +25,9 @@ spec:
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         checksum/logfire-postgres-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresDsn" )}}
         {{- end }}
+        {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
+        checksum/logfire-unsubscribe-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-unsubscribe-secret" )) "key" "logfire-unsubscribe-secret" )}}
+        {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
@@ -112,6 +115,15 @@ spec:
               value: {{ include "logfire.url" . | quote }}
             - name: USAGE_TO_BUCKET_BUCKET_NAME
               value: {{ .Values.objectStore.uri }}/usage
+            - name: UNSUBSCRIBE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-unsubscribe-secret") }}
+                  key: logfire-unsubscribe-secret
+            - name: LOGFIRE_REGION
+              value: {{ .Values.logfireRegion | default "local" }}
+            - name: KNOWN_LOGFIRE_REGIONS
+              value: '[{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}]'
             {{ if .Values.dev.deployMaildev }}
             - name: SMTP_SERVER
               value: logfire-maildev

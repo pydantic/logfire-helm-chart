@@ -28,6 +28,11 @@ groupOrganizationMapping: []
 #        role: "admin"
 #      - organization_name: "org-2"
 #        role: "member"
+#      - organization_name: "org-3"
+#        role: "guest"
+#        project_roles:
+#          - project_name: "admin-project"
+#            role: "admin"
 
 # -- Configure Rate Limiting rules for Logfire endpoints
 rateLimits: {}
@@ -1241,6 +1246,7 @@ otel_collector:
 #  - logfire-meta-write-token
 #  - logfire-meta-frontend-token
 #  - logfire-jwt-secret
+#  - logfire-unsubscribe-secret
 existingSecret:
   # -- Use an existing Secret (recommended for Argo CD users).
   enabled: false
