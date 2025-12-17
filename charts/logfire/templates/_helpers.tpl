@@ -731,7 +731,6 @@ tolerations:
 {{- define "logfire.groupOrganizationMapping" -}}
 {{- if .Values.groupOrganizationMapping -}}
 {{- $mappings := list -}}
-
 {{- range $idx, $group := .Values.groupOrganizationMapping -}}
   {{- if not $group.group_id -}}
     {{- fail (printf "groupOrganizationMapping[%d]: 'group_id' is required" $idx) -}}
@@ -755,7 +754,30 @@ tolerations:
       {{- fail (printf "groupOrganizationMapping[%d].organization_roles[%d]: 'role' is required for organization '%s'" $idx $orgIdx $org.organization_name) -}}
     {{- end -}}
 
-    {{- $orgRoles = append $orgRoles (dict "organization_name" $org.organization_name "role" $org.role) -}}
+    {{- $projectRoles := list -}}
+    {{- if $org.project_roles -}}
+      {{- if not (kindIs "slice" $org.project_roles) -}}
+        {{- fail (printf "groupOrganizationMapping[%d].organization_roles[%d]: 'project_roles' must be a list for organization '%s'" $idx $orgIdx $org.organization_name) -}}
+      {{- end -}}
+
+      {{- range $projIdx, $proj := $org.project_roles -}}
+        {{- if not $proj.project_name -}}
+          {{- fail (printf "groupOrganizationMapping[%d].organization_roles[%d].project_roles[%d]: 'project_name' is required" $idx $orgIdx $projIdx) -}}
+        {{- end -}}
+
+        {{- if not $proj.role -}}
+          {{- fail (printf "groupOrganizationMapping[%d].organization_roles[%d].project_roles[%d]: 'role' is required for project '%s'" $idx $orgIdx $projIdx $proj.project_name) -}}
+        {{- end -}}
+
+        {{- $projectRoles = append $projectRoles (dict "project_name" $proj.project_name "role" $proj.role) -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{- if $projectRoles -}}
+      {{- $orgRoles = append $orgRoles (dict "organization_name" $org.organization_name "role" $org.role "project_roles" $projectRoles) -}}
+    {{- else -}}
+      {{- $orgRoles = append $orgRoles (dict "organization_name" $org.organization_name "role" $org.role) -}}
+    {{- end -}}
   {{- end -}}
 
   {{- $mappings = append $mappings (dict "group_id" $group.group_id "organization_roles" $orgRoles) -}}
