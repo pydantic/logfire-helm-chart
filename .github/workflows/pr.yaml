@@ -85,7 +85,8 @@ jobs:
             --from-literal="logfire-dex-client-secret=$(date +%s%N | sha256sum | head -c 32)" \
             --from-literal="logfire-meta-write-token=$(date +%s%N | sha256sum | head -c 32)" \
             --from-literal="logfire-meta-frontend-token=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)"
+            --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)" \
+            --from-literal="logfire-unsubscribe-secret=$(date +%s%N | sha256sum | head -c 32)"
 
           kubectl create secret generic logfire-admin \
             --from-literal="logfire-admin-password=$(date +%s%N | sha256sum | head -c 32)" \
