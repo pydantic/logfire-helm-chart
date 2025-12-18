@@ -7,6 +7,8 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {{ .serviceName }}
+  labels:
+    app.kubernetes.io/component: {{ .serviceName }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -42,6 +44,8 @@ apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: {{ .serviceName }}
+  labels:
+    app.kubernetes.io/component: {{ .serviceName }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -104,6 +108,9 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
 spec:
   {{- with .maxUnavailable }}
   maxUnavailable: {{ . }}
