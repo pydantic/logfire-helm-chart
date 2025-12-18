@@ -1140,7 +1140,7 @@ objectStore:
 # -- ServiceAccount configuration
 serviceAccount:
   # -- Create a ServiceAccount
-  create: true
+  create: false
   # -- Annotations to add to the ServiceAccount (e.g., for IAM roles)
   # Example for AWS IRSA:
   #   annotations:
@@ -1150,12 +1150,12 @@ serviceAccount:
   #     iam.gke.io/gcp-service-account: my-sa@my-project.iam.gserviceaccount.com
   annotations: {}
   # -- Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template.
-  # If create is false, this must be set to an existing ServiceAccount name.
+  # If create is false and this is not set, the default ServiceAccount is used.
   name: ""
 
 # -- DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility.
 # @deprecated
-serviceAccountName: ""
+serviceAccountName: default
 
 # -- Pod priority class
 # See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority).

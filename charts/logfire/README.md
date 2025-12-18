@@ -12,16 +12,43 @@ This chart exists as public documentation of how to set up and run self-hosted P
 For a fast, local setup to evaluate Logfire, follow our [Local Quickstart Guide](https://logfire.pydantic.dev/docs/reference/self-hosted/local-quickstart/).
 It uses development-grade dependencies like an in-cluster PostgreSQL, MinIO and MailDev to get you up and running in minutes.
 
-## Production installation
+## Production Installation
 
 For a production-ready deployment, you'll need to connect to your own infrastructure (PostgreSQL, Object Storage, etc.). Our complete guide walks you through every prerequisite and configuration step.
 Check out the full [Self Hosted Installation Guide](https://logfire.pydantic.dev/docs/reference/self-hosted/installation/)
 
-## Chart installation
+## Installing the Chart
+
+### Add the Helm Repository
 
 ``` sh
 $ helm repo add pydantic https://charts.pydantic.dev/
-$ helm upgrade --install logfire pydantic/logfire
+$ helm repo update
+```
+
+### Local Evaluation (values.dev.yaml)
+
+For quick local testing, the chart includes a `values.dev.yaml` file that enables in-cluster Postgres, MinIO, and MailDev.
+
+> **Warning**: Do not use this for production deployments.
+
+From the chart repository:
+
+``` sh
+$ helm pull pydantic/logfire --untar
+$ helm upgrade --install logfire ./logfire -f ./logfire/values.dev.yaml --create-namespace --namespace logfire
+```
+
+Or from this repo:
+
+``` sh
+$ helm upgrade --install logfire charts/logfire -f charts/logfire/values.dev.yaml --create-namespace --namespace logfire
+```
+
+Then port-forward the service:
+
+``` sh
+$ kubectl -n logfire port-forward svc/logfire-service 8080:80
 ```
 
 ## Prerequisites
@@ -454,11 +481,27 @@ See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hoste
 
 ## Troubleshooting & Support
 
-* Troubleshooting Guide: If you encounter issues, your first stop should be the [Troubleshooting Self Hosted guide](https://logfire.pydantic.dev/docs/reference/self-hosted/troubleshooting/), which includes common issues and steps for accessing internal logs.
+### Quick Checks
 
-* GitHub Issues: If your issue persists, please open up an issue with details about your deployment (Chart version, Kubernetes version, values file, any relevant error logs).
+Before diving deeper, verify these common configuration issues:
 
-* Enterprise Support: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
+* **Object Storage Permissions**: Ensure the ServiceAccount (configured via `serviceAccount.annotations`) has read/write access to your object storage bucket. For AWS, this means the IAM role needs `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket` permissions. For GCP, the service account needs the `Storage Object Admin` role on the bucket.
+
+* **StorageClass Exists**: If you specify a `storageClassName` for scratch or ingest volumes, verify the StorageClass exists in your cluster:
+  ```bash
+  kubectl get storageclass
+  ```
+  If omitted, Kubernetes uses the cluster's default StorageClass.
+
+* **Image Pull Secrets**: Ensure the secret exists in the same namespace as the release and is correctly referenced in `imagePullSecrets`.
+
+### Additional Resources
+
+* **Troubleshooting Guide**: If you encounter issues, your first stop should be the [Troubleshooting Self Hosted guide](https://logfire.pydantic.dev/docs/reference/self-hosted/troubleshooting/), which includes common issues and steps for accessing internal logs.
+
+* **GitHub Issues**: If your issue persists, please open up an issue with details about your deployment (Chart version, Kubernetes version, values file, any relevant error logs).
+
+* **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
 ![Version: 0.10.1](https://img.shields.io/badge/Version-0.10.1-informational?style=flat-square) ![AppVersion: bef6921a](https://img.shields.io/badge/AppVersion-bef6921a-informational?style=flat-square)
@@ -602,11 +645,11 @@ Helm chart for self-hosted Pydantic Logfire
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN. Change if using an external Redis instance. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details |
-| serviceAccount | object | `{"annotations":{},"create":true,"name":""}` | ServiceAccount configuration |
+| serviceAccount | object | `{"annotations":{},"create":false,"name":""}` | ServiceAccount configuration |
 | serviceAccount.annotations | object | `{}` | Annotations to add to the ServiceAccount (e.g., for IAM roles) Example for AWS IRSA:   annotations:     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/my-role Example for GCP Workload Identity:   annotations:     iam.gke.io/gcp-service-account: my-sa@my-project.iam.gserviceaccount.com |
-| serviceAccount.create | bool | `true` | Create a ServiceAccount |
-| serviceAccount.name | string | `""` | Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template. If create is false, this must be set to an existing ServiceAccount name. |
-| serviceAccountName | string | `""` | DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility. @deprecated |
+| serviceAccount.create | bool | `false` | Create a ServiceAccount |
+| serviceAccount.name | string | `""` | Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template. If create is false and this is not set, the default ServiceAccount is used. |
+| serviceAccountName | string | `"default"` | DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility. @deprecated |
 | smtp.host | string | `nil` | SMTP server hostname |
 | smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | smtp.port | int | `25` | SMTP server port |
