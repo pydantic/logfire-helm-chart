@@ -602,7 +602,11 @@ Helm chart for self-hosted Pydantic Logfire
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN. Change if using an external Redis instance. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details |
-| serviceAccountName | string | `"default"` | ServiceAccount used by pods |
+| serviceAccount | object | `{"annotations":{},"create":true,"name":""}` | ServiceAccount configuration |
+| serviceAccount.annotations | object | `{}` | Annotations to add to the ServiceAccount (e.g., for IAM roles) Example for AWS IRSA:   annotations:     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/my-role Example for GCP Workload Identity:   annotations:     iam.gke.io/gcp-service-account: my-sa@my-project.iam.gserviceaccount.com |
+| serviceAccount.create | bool | `true` | Create a ServiceAccount |
+| serviceAccount.name | string | `""` | Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template. If create is false, this must be set to an existing ServiceAccount name. |
+| serviceAccountName | string | `""` | DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility. @deprecated |
 | smtp.host | string | `nil` | SMTP server hostname |
 | smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | smtp.port | int | `25` | SMTP server port |

@@ -295,6 +295,23 @@ app.kubernetes.io/name: {{ include "logfire.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+{{/*
+Create the name of the service account to use.
+Supports both new serviceAccount.name and deprecated serviceAccountName for backward compatibility.
+*/}}
+{{- define "logfire.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create }}
+  {{- default (include "logfire.fullname" .) .Values.serviceAccount.name }}
+{{- else }}
+  {{- if .Values.serviceAccount.name }}
+    {{- .Values.serviceAccount.name }}
+  {{- else if .Values.serviceAccountName }}
+    {{- .Values.serviceAccountName }}
+  {{- else }}
+    {{- "default" }}
+  {{- end }}
+{{- end }}
+{{- end }}
 
 {{/*
 Get service-specific image tag, falling back to global tag

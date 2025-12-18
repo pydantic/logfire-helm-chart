@@ -1137,8 +1137,25 @@ objectStore:
 # Service account / priority / rollout policy / security
 # ==============================================================================
 
-# -- ServiceAccount used by pods
-serviceAccountName: default
+# -- ServiceAccount configuration
+serviceAccount:
+  # -- Create a ServiceAccount
+  create: true
+  # -- Annotations to add to the ServiceAccount (e.g., for IAM roles)
+  # Example for AWS IRSA:
+  #   annotations:
+  #     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/my-role
+  # Example for GCP Workload Identity:
+  #   annotations:
+  #     iam.gke.io/gcp-service-account: my-sa@my-project.iam.gserviceaccount.com
+  annotations: {}
+  # -- Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template.
+  # If create is false, this must be set to an existing ServiceAccount name.
+  name: ""
+
+# -- DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility.
+# @deprecated
+serviceAccountName: ""
 
 # -- Pod priority class
 # See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority).
