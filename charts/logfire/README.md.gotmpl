@@ -49,7 +49,7 @@ $ helm upgrade --install logfire charts/logfire -f charts/logfire/values.dev.yam
 Then port-forward the service:
 
 ``` sh
-$ kubectl -n logfire port-forward svc/logfire-service 8080:80
+$ kubectl -n logfire port-forward svc/logfire-service 8080:8080
 ```
 
 ## Prerequisites
