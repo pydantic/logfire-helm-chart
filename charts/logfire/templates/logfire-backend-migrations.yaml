@@ -26,9 +26,7 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: logfire-backend-migrations
     spec:
-      {{- with .Values.serviceAccountName }}
-      serviceAccountName: {{ . }}
-      {{- end}}
+      serviceAccountName: {{ include "logfire.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
       {{- range . }}

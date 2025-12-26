@@ -1,0 +1,33 @@
+# Development values for local evaluation/testing.
+# Uses in-cluster Postgres/MinIO/MailDev and expects you to port-forward `logfire-service`.
+
+# -- Image pull secrets used by all pods (required for Logfire images)
+imagePullSecrets:
+  - logfire-image-key
+
+adminEmail: hello@example.dev
+
+ingress:
+  enabled: false
+  tls: false
+  # Used for URL generation/CORS; port-forward `logfire-service` to match this.
+  hostnames:
+    - localhost:8080
+  ingressClassName: ""
+  annotations: {}
+
+objectStore:
+  uri: s3://logfire
+  env:
+    # Defaults we configure for MinIO
+    # Do NOT use this in production!
+    AWS_ACCESS_KEY_ID: logfire-minio
+    AWS_SECRET_ACCESS_KEY: logfire-minio
+    AWS_ENDPOINT: http://logfire-minio:9000
+    AWS_ALLOW_HTTP: "true"
+
+dev:
+  deployPostgres: true
+  deployMinio: true
+  deployMaildev: true
+

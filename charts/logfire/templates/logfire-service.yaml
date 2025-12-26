@@ -45,9 +45,7 @@ spec:
         checksum/service-config: {{ include (print $.Template.BasePath "/logfire-service-config.yaml") . | sha256sum }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
-      {{- with .Values.serviceAccountName }}
-      serviceAccountName: {{ . }}
-      {{- end}}
+      serviceAccountName: {{ include "logfire.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
       {{- range . }}

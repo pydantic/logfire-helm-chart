@@ -33,9 +33,7 @@ spec:
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
-      {{- with .Values.serviceAccountName }}
-      serviceAccountName: {{ . }}
-      {{- end}}
+      serviceAccountName: {{ include "logfire.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
       {{- range . }}
