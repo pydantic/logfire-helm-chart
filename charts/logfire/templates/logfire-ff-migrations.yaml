@@ -28,7 +28,7 @@ spec:
       priorityClassName: {{ .Values.priorityClassName }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      serviceAccountName: {{ include "logfire.serviceAccountName" . }}
+      serviceAccountName: {{ include "logfire.hookServiceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
       {{- range . }}

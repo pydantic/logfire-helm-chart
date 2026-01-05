@@ -314,6 +314,18 @@ Supports both new serviceAccount.name and deprecated serviceAccountName for back
 {{- end }}
 
 {{/*
+ServiceAccount to use for Helm hooks. On first install with create=true,
+the ServiceAccount isn't created yet, so fall back to default.
+*/}}
+{{- define "logfire.hookServiceAccountName" -}}
+{{- if and .Release.IsInstall .Values.serviceAccount.create }}
+  {{- "default" }}
+{{- else }}
+  {{- include "logfire.serviceAccountName" . }}
+{{- end }}
+{{- end }}
+
+{{/*
 Get service-specific image tag, falling back to global tag
 Usage: {{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" "logfire-backend" "Chart" .Chart) }}
 */}}
