@@ -125,11 +125,17 @@ spec:
               readOnly: true
             - name: temp
               mountPath: /tmp
+            {{- if (get .Values $serviceName).volumeMounts }}
+            {{- (get .Values $serviceName).volumeMounts  | toYaml | nindent 12 }}
+            {{- end }}
       volumes:
         - name: config
           secret:
             secretName: {{ include "logfire.dexSecretName" . }}
         - name: temp
           emptyDir: {}
+        {{- if (get .Values $serviceName).volumes }}
+        {{- (get .Values $serviceName).volumes  | toYaml | nindent 8 }}
+        {{- end }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
