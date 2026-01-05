@@ -346,6 +346,18 @@ logfire-dex:
   # pdb:
   #   maxUnavailable: 1
   #   minAvailable: 1
+  # volumes:
+  # - configMap:
+  #     defaultMode: 420
+  #     items:
+  #     - key: ca-bundle.pem
+  #       path: ca.crt
+  #     name: ca-bundle
+  #   name: ca-bundle
+  # volumeMounts:
+  # - mountPath: /etc/ssl/certs
+  #   name: ca-bundle
+  #   readOnly: true
 
 
 # -- Autoscaling & resources for the `logfire-ff-ingest` pod
