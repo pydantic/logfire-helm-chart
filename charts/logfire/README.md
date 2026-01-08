@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.10.2](https://img.shields.io/badge/Version-0.10.2-informational?style=flat-square) ![AppVersion: pr-98d26ba6](https://img.shields.io/badge/AppVersion-pr--98d26ba6-informational?style=flat-square)
+![Version: 0.10.3](https://img.shields.io/badge/Version-0.10.3-informational?style=flat-square) ![AppVersion: pr-98d26ba6](https://img.shields.io/badge/AppVersion-pr--98d26ba6-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -504,7 +504,7 @@ Before diving deeper, verify these common configuration issues:
 * **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.10.2](https://img.shields.io/badge/Version-0.10.2-informational?style=flat-square) ![AppVersion: pr-98d26ba6](https://img.shields.io/badge/AppVersion-pr--98d26ba6-informational?style=flat-square)
+![Version: 0.10.3](https://img.shields.io/badge/Version-0.10.3-informational?style=flat-square) ![AppVersion: pr-98d26ba6](https://img.shields.io/badge/AppVersion-pr--98d26ba6-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -530,6 +530,7 @@ Helm chart for self-hosted Pydantic Logfire
 | ai.azureOpenAi.endpoint | string | `nil` | Azure OpenAI endpoint |
 | ai.model | string | `nil` | AI provider+model string. Prefix the model with the provider (e.g., `azure:gpt-4o`). See https://ai.pydantic.dev/models/ for more information. |
 | ai.openAi.apiKey | string | `nil` | OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
+| ai.openAi.baseUrl | string | `nil` | OpenAI base URL for custom endpoints (e.g., Azure OpenAI proxy, local models). |
 | ai.vertexAi.region | string | `nil` | Vertex AI region |
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
 | dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |

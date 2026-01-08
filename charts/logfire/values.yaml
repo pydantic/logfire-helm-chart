@@ -244,6 +244,8 @@ ai:
   openAi:
     # -- OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
     apiKey:
+    # -- OpenAI base URL for custom endpoints (e.g., Azure OpenAI proxy, local models).
+    baseUrl:
 
   vertexAi:
     # -- Vertex AI region
@@ -266,6 +268,7 @@ ai:
 #         secretKeyRef:
 #           name: openai
 #           key: api-key
+#     baseUrl: https://your-proxy.example.com/v1
 #   azureOpenAi:
 #     endpoint: https://your-endpoint.openai.azure.com
 #     apiKey:

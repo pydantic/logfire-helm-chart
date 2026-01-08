@@ -127,6 +127,17 @@ spec:
               value: {{ . }}
               {{- end }}
             {{- end }}
+            {{- with .baseUrl }}
+            - name: OPENAI_BASE_URL
+              {{- if kindIs "map" . }}
+              {{- if hasKey . "valueFrom" }}
+              valueFrom:
+                {{- toYaml .valueFrom | nindent 16 }}
+              {{- end }}
+              {{- else }}
+              value: {{ . }}
+              {{- end }}
+            {{- end }}
             {{- end }}
             {{- with .vertexAi.region }}
             - name: GOOGLE_CLOUD_LOCATION
