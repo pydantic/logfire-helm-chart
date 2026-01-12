@@ -59,6 +59,8 @@ spec:
               value: "false"
             - name: ON_PREM
               value: "true"
+            - name: CRUD_MIGRATIONS_RESPECT_AUTO_RUN_FLAG
+              value: "true"
             - name: CRUD_PG_DSN
               valueFrom:
                 secretKeyRef:
