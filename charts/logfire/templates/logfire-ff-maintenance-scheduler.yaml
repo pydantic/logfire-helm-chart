@@ -83,7 +83,7 @@ spec:
             - name: FF_ENABLE_SCHEMA_UPGRADES
               value: "true"
             - name: FF_UPGRADE_MAX_DAYS
-              value: "90"
+              value: "7"
             - name: FF_CACHE_OBJECT_STORE_HTTP_HEADERS
               value: x-ff-no-warm-cache=1
             - name: FF_COMPACTION_MAX_DAYS
