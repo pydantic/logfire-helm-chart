@@ -290,6 +290,8 @@ Pydantic Logfire requires Object Storage to store data.  There are a number of d
 
 Each has their own set of environment variables that can be used to configure them. However if your kubernetes service account has the appropriate credentials, that be used by setting `serviceAccountName`.
 
+**Important**: Do not enable versioning on your object storage bucket. Logfire manages its own data lifecycle and versioning will interfere with this process and increase storage costs unnecessarily.
+
 #### Amazon S3
 
 Variables extracted from environment:
