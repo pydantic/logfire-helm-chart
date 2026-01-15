@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.10.3](https://img.shields.io/badge/Version-0.10.3-informational?style=flat-square) ![AppVersion: pr-98d26ba6](https://img.shields.io/badge/AppVersion-pr--98d26ba6-informational?style=flat-square)
+![Version: 0.11.0](https://img.shields.io/badge/Version-0.11.0-informational?style=flat-square) ![AppVersion: d647de4e](https://img.shields.io/badge/AppVersion-d647de4e-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -290,6 +290,8 @@ Pydantic Logfire requires Object Storage to store data.  There are a number of d
 
 Each has their own set of environment variables that can be used to configure them. However if your kubernetes service account has the appropriate credentials, that be used by setting `serviceAccountName`.
 
+**Important**: Do not enable versioning on your object storage bucket. Logfire manages its own data lifecycle and versioning will interfere with this process and increase storage costs unnecessarily.
+
 #### Amazon S3
 
 Variables extracted from environment:
@@ -504,7 +506,7 @@ Before diving deeper, verify these common configuration issues:
 * **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.10.3](https://img.shields.io/badge/Version-0.10.3-informational?style=flat-square) ![AppVersion: pr-98d26ba6](https://img.shields.io/badge/AppVersion-pr--98d26ba6-informational?style=flat-square)
+![Version: 0.11.0](https://img.shields.io/badge/Version-0.11.0-informational?style=flat-square) ![AppVersion: d647de4e](https://img.shields.io/badge/AppVersion-d647de4e-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 

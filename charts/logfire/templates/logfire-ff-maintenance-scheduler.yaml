@@ -1,4 +1,8 @@
-{{- $serviceName := "logfire-ff-compaction-worker" }}
+{{- $serviceName := "logfire-ff-maintenance-scheduler" }}
+{{- $defaultCpu := "1" -}}
+{{- $serviceValues := get .Values $serviceName | default dict -}}
+{{- $resources := get $serviceValues "resources" | default dict -}}
+{{- $cpu := get $resources "cpu" | default $defaultCpu -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -58,58 +62,69 @@ spec:
 {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | indent 10 }}
           command:
             - fusionfire
-            - compaction-worker
+            - maintenance-scheduler
             - --host=0.0.0.0
-            - --port=8015
+            - --port=8013
           ports:
-            - containerPort: 8015
+            - containerPort: 8013
           envFrom:
             - configMapRef:
                 name: logfire-ff-base-config
             - configMapRef:
                 name: logfire-ff-write-config
           env:
-            - name: FF_CACHE_OBJECT_STORE_HTTP_HEADERS
-              value: x-ff-no-warm-cache=1
+            - name: FF_IO_THREADS
+              value: {{ $cpu | quote }}
+            - name: FF_DATAFUSION_THREADS
+              {{- $dataFusionThreads := sub (atoi $cpu) 1 }}
+              value: {{ (gt $dataFusionThreads 0) | ternary $dataFusionThreads "1" | quote }}
             - name: FF_INDEX_COMPACTION_CHANCE
               value: "1.0"
-            - name: FF_ENABLE_SPILL_TO_DISK
-              value: "true"
             - name: FF_ENABLE_SCHEMA_UPGRADES
               value: "true"
             - name: FF_UPGRADE_MAX_DAYS
-              value: "90"
-            - name: FF_TEMP_DIR
-              value: /scratch/fusionfire
-            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
+              value: "7"
+            - name: FF_CACHE_OBJECT_STORE_HTTP_HEADERS
+              value: x-ff-no-warm-cache=1
+            - name: FF_COMPACTION_MAX_DAYS
+              value: "3"
+            - name: FF_MAX_PARTITIONS_PER_COMPACTION_SCAN
+              value: "5000"
+            - name: FF_COMPACTION_LOOP_BACKOFF_DELAY
+              value: "1s"
+            - name: FF_DELETION_LOOP_DELAY
+              value: "30s"
+            - name: FF_COMPACTION_GATHER_DELAY
+              value: "1s"
+            - name: FF_MAINTENANCE_SCHEDULING_CONCURRENCY
+              value: "8"
             - name: FF_DATAFUSION_MEMORY_LIMIT
               value: {{ (get (get .Values $serviceName | default dict) "datafusionMemory" | default "512MB" | quote) }}
+            - name: FF_MAX_FILES_PER_COMPACTION_JOB
+              value: "10000"
+            - name: FF_ENABLE_SPILL_TO_DISK
+              value: "true"
+            - name: FF_TEMP_DIR
+              value: /scratch/fusionfire
+            - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
+              value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "10" | quote) }}
+            - name: FF_COMPACTION_JOB_PARALLELISM
+              value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "3" | quote) }}
+            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
-            - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
-              value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "10" | quote) }} 
-            - name: FF_COMPACTION_JOB_PARALLELISM
-              value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "3" | quote) }} 
-            - name: FF_COMPACTION_LOOP_BACKOFF_DELAY
-              value: "1s"
-            - name: FF_DELETION_LOOP_DELAY
-              value: "30s"
             {{- include "logfire.ffCompactionTiers" . | nindent 12 -}}
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end }}
-          volumeMounts:
-            - name: {{ include "logfire.scratchVolumeName" . }}
-              mountPath: /scratch
-            {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
           livenessProbe:
             httpGet:
               path: /health
-              port: 8015
+              port: 8013
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -117,13 +132,10 @@ spec:
           readinessProbe:
             httpGet:
               path: /health
-              port: 8015
+              port: 8013
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
-      volumes:
-      {{- include "logfire.scratchVolume" (get (get .Values $serviceName | default dict) "scratchVolume" | default dict) | nindent 6 }}
-      {{- include "logfire.objectStoreVolumes" . | nindent 6 }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

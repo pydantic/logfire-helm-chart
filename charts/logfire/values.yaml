@@ -937,9 +937,8 @@ logfire-ff-ingest-processor:
 #     labels:
 #       type: my-volume
 
-
-# -- Compaction worker
-# logfire-ff-compaction-worker:
+# -- Maintenance scheduler
+# logfire-ff-maintenance-scheduler:
 #   # -- Workload labels
 #   labels: {}
 #   # -- Workload annotations
@@ -948,7 +947,7 @@ logfire-ff-ingest-processor:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#   jobParallelism: 4
+#   jobParallelism: 3
 #   downloadParallelism: 10
 #   replicas: 2
 #   datafusionMemory: "3072MB"
@@ -970,11 +969,11 @@ logfire-ff-ingest-processor:
 #     memory: "8Gi"
 #   autoscaling:
 #     minReplicas: 1
-#     maxReplicas: 6
+#     maxReplicas: 3
 #     hpa:
 #       enabled: true
 #       memAverage: 50
-#       cpuAverage: 85
+#       cpuAverage: 50
 #     keda:
 #       enabled: true
 #       triggers:
@@ -988,12 +987,6 @@ logfire-ff-ingest-processor:
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
-#   scratchVolume:
-#     storageClassName: my-storage-class
-#     storage: 1Gi
-#     labels:
-#       type: my-volume
-
 
 # -- OpenTelemetry collector
 # logfire-otel-collector:

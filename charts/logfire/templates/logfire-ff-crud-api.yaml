@@ -98,17 +98,26 @@ spec:
           envFrom:
             - configMapRef:
                 name: logfire-ff-base-config
+            - configMapRef:
+                name: logfire-ff-query-config
+            - configMapRef:
+                name: logfire-ff-write-config
           env:
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
+            {{- include "logfire.objectStoreEnv" . | nindent 12 }}
             {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             - name: FF_DATAFUSION_THREAD_STACK_SIZE
               value: "8MB" 
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}
+          volumeMounts:
+          {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
+      volumes:
+      {{- include "logfire.objectStoreVolumes" . | nindent 6 }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
