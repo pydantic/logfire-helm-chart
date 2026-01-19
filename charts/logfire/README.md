@@ -585,6 +585,8 @@ Helm chart for self-hosted Pydantic Logfire
 | logfire-dex.replicas | int | `1` | Number of replicas |
 | logfire-dex.resources | object | `{"cpu":"250m","memory":"256Mi"}` | Resource requests/limits |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
+| logfire-ff-cache-byte | object | `{"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
+| logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume |
 | logfire-ff-ingest | object | `{"annotations":{},"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
