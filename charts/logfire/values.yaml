@@ -649,7 +649,7 @@ logfire-ff-ingest-processor:
 
 
 # -- Autoscaling & resources for the byte cache pods
-# logfire-ff-cache-byte:
+logfire-ff-cache-byte:
 #   # -- Workload labels
 #   labels: {}
 #   # -- Workload annotations
@@ -683,9 +683,11 @@ logfire-ff-ingest-processor:
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
-#   scratchVolume:
-#     storageClassName: my-storage-class
-#     storage: 128Gi
+# -- Cache byte ephemeral volume
+  scratchVolume:
+    storage: 32Gi
+    #  storageClassName: my-storage-class
+
 #     labels:
 #       type: my-volume
 
