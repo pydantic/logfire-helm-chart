@@ -102,10 +102,6 @@ spec:
               value: {{ (get (get .Values $serviceName | default dict) "datafusionMemory" | default "512MB" | quote) }}
             - name: FF_MAX_FILES_PER_COMPACTION_JOB
               value: "10000"
-            - name: FF_ENABLE_SPILL_TO_DISK
-              value: "true"
-            - name: FF_TEMP_DIR
-              value: /scratch/fusionfire
             - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
               value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "10" | quote) }}
             - name: FF_COMPACTION_JOB_PARALLELISM
