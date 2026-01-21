@@ -54,7 +54,7 @@ $ kubectl -n logfire port-forward svc/logfire-service 8080:8080
 
 ## In-cluster HTTPS (service-to-service)
 
-When enabled, the chart switches in-cluster service traffic to HTTPS (incremental rollout; currently HAProxy -> frontend).
+When enabled, the chart switches in-cluster service traffic to HTTPS (incremental rollout; currently HAProxy -> frontend, HAProxy -> fusionfire ingest, and the fusionfire cache HAProxies -> their cache backends).
 For certificate verification, HAProxy uses `inClusterTls.caBundle.*`, or (when using cert-manager auto-Issuer) the chart-created CA Secret.
 
 

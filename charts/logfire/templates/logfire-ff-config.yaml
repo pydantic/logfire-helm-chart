@@ -11,6 +11,12 @@ data:
   FF_SEND_TO_LOGFIRE: "true"
   FF_FORCE_CONSOLE_LOGGING: "true"
   OTEL_RESOURCE_ATTRIBUTES: "vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app"
+{{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+  FF_TLS_MODE: "allow"
+  FF_HTTPS_PORT: {{ .Values.inClusterTls.httpsPort | quote }}
+  FF_TLS_CERT_PATH: "/etc/tls/tls.crt"
+  FF_TLS_KEY_PATH: "/etc/tls/tls.key"
+{{- end }}
 
 ---
 

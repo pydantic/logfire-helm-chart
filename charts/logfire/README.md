@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.11.2](https://img.shields.io/badge/Version-0.11.2-informational?style=flat-square) ![AppVersion: d647de4e](https://img.shields.io/badge/AppVersion-d647de4e-informational?style=flat-square)
+![Version: 0.11.3](https://img.shields.io/badge/Version-0.11.3-informational?style=flat-square) ![AppVersion: 2e16dce7](https://img.shields.io/badge/AppVersion-2e16dce7-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -53,7 +53,7 @@ $ kubectl -n logfire port-forward svc/logfire-service 8080:8080
 
 ## In-cluster HTTPS (service-to-service)
 
-When enabled, the chart switches in-cluster service traffic to HTTPS (incremental rollout; currently HAProxy -> frontend).
+When enabled, the chart switches in-cluster service traffic to HTTPS (incremental rollout; currently HAProxy -> frontend, HAProxy -> fusionfire ingest, and the fusionfire cache HAProxies -> their cache backends).
 For certificate verification, HAProxy uses `inClusterTls.caBundle.*`, or (when using cert-manager auto-Issuer) the chart-created CA Secret.
 
 The chart includes an `inClusterTls.enabled` switch intended to enable HTTPS between in-cluster services (e.g. HAProxy to upstream services). See `IN_CLUSTER_TLS_PLAN.md` for rollout status and Kind testing guidance.
@@ -517,7 +517,7 @@ Before diving deeper, verify these common configuration issues:
 * **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.11.2](https://img.shields.io/badge/Version-0.11.2-informational?style=flat-square) ![AppVersion: d647de4e](https://img.shields.io/badge/AppVersion-d647de4e-informational?style=flat-square)
+![Version: 0.11.3](https://img.shields.io/badge/Version-0.11.3-informational?style=flat-square) ![AppVersion: 2e16dce7](https://img.shields.io/badge/AppVersion-2e16dce7-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 

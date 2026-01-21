@@ -98,7 +98,12 @@ stringData:
       {{- $values := (index .Values "logfire-ff-ingest" | default dict) -}}
       {{- $autoscaling := (index $values "autoscaling" | default dict) -}}
       {{- $maxCount := coalesce (index $autoscaling "maxReplicas") (index $values "replicas") 1 }}
+      {{- $ingestSni := printf "logfire-ff-ingest.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      server-template logfire-ff-ingest 1-{{ $maxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check resolvers kubernetes inter 250ms hash-key addr ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $ingestSni }}) verifyhost {{ $ingestSni }} check-ssl
+      {{- else }}
       server-template logfire-ff-ingest 1-{{ $maxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8012 check resolvers kubernetes inter 250ms hash-key addr
+      {{- end }}
 
     backend logfire-dex
       balance roundrobin

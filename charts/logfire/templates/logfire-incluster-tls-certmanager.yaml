@@ -6,8 +6,20 @@
 {{- $selfSignedIssuerName := printf "%s-incluster-selfsigned" .Release.Name -}}
 {{- $caIssuerName := printf "%s-incluster-ca" .Release.Name -}}
 {{- $caSecretName := include "logfire.inClusterTls.certs.certManager.autoCaSecretName" . -}}
-{{- $frontendServiceName := "logfire-frontend-service" -}}
-{{- $frontendCertSecretName := include "logfire.inClusterTls.secretName" (dict "ctx" . "serviceName" $frontendServiceName) -}}
+
+{{- $certServices := list
+  (dict "serviceName" "logfire-frontend-service")
+  (dict "serviceName" "logfire-ff-ingest")
+  (dict "serviceName" "logfire-ff-ingest-processor")
+  (dict "serviceName" "logfire-ff-cache-byte")
+  (dict "serviceName" "logfire-ff-cache-filter")
+  (dict "serviceName" "logfire-ff-cache-ipc")
+  (dict "serviceName" "logfire-ff-crud-api")
+  (dict "serviceName" "logfire-ff-maintenance-scheduler")
+  (dict "serviceName" "logfire-ff-maintenance-worker")
+  (dict "serviceName" "logfire-ff-query-api")
+  (dict "serviceName" "logfire-ff-query-worker")
+-}}
 
 {{- if $autoIssuer }}
 apiVersion: cert-manager.io/v1
@@ -66,14 +78,17 @@ spec:
   ca:
     secretName: {{ $caSecretName }}
 ---
-{{- end }}
+{{ end }}
 
+{{- range $svc := $certServices }}
+{{- $serviceName := required "in-cluster certManager: serviceName is required" (get $svc "serviceName") -}}
+{{- $certSecretName := include "logfire.inClusterTls.secretName" (dict "ctx" $ "serviceName" $serviceName) -}}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: {{ printf "%s-incluster-tls" $frontendServiceName }}
+  name: {{ printf "%s-incluster-tls" $serviceName }}
   labels:
-    {{- include "logfire.labels" . | nindent 4 }}
+    {{- include "logfire.labels" $ | nindent 4 }}
   {{- if $useHooks }}
   annotations:
     helm.sh/hook: post-install,post-upgrade
@@ -81,26 +96,34 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation
   {{- end }}
 spec:
-  secretName: {{ $frontendCertSecretName }}
+  secretName: {{ $certSecretName }}
   duration: 2160h # 90d
   renewBefore: 360h # 15d
   privateKey:
     algorithm: RSA
     size: 2048
   dnsNames:
-    - {{ $frontendServiceName }}
-    - {{ printf "%s.%s" $frontendServiceName $namespace }}
-    - {{ printf "%s.%s.svc" $frontendServiceName $namespace }}
-    - {{ printf "%s.%s.svc.%s" $frontendServiceName $namespace $clusterDomain }}
+    - {{ $serviceName }}
+    - {{ printf "%s.%s" $serviceName $namespace }}
+    - {{ printf "%s.%s.svc" $serviceName $namespace }}
+    - {{ printf "%s.%s.svc.%s" $serviceName $namespace $clusterDomain }}
+    {{- range $extraServiceName := (get $svc "extraServiceNames" | default list) }}
+    - {{ $extraServiceName }}
+    - {{ printf "%s.%s" $extraServiceName $namespace }}
+    - {{ printf "%s.%s.svc" $extraServiceName $namespace }}
+    - {{ printf "%s.%s.svc.%s" $extraServiceName $namespace $clusterDomain }}
+    {{- end }}
   issuerRef:
     {{- if $autoIssuer }}
     name: {{ $caIssuerName }}
     kind: Issuer
     group: cert-manager.io
     {{- else }}
-    name: {{ include "logfire.inClusterTls.certs.certManager.issuerRef.name" . }}
-    kind: {{ include "logfire.inClusterTls.certs.certManager.issuerRef.kind" . }}
-    group: {{ include "logfire.inClusterTls.certs.certManager.issuerRef.group" . }}
+    name: {{ include "logfire.inClusterTls.certs.certManager.issuerRef.name" $ }}
+    kind: {{ include "logfire.inClusterTls.certs.certManager.issuerRef.kind" $ }}
+    group: {{ include "logfire.inClusterTls.certs.certManager.issuerRef.group" $ }}
     {{- end }}
+---
+{{ end }}
 
 {{- end }}
