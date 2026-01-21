@@ -846,6 +846,65 @@ tolerations:
 
 {{/*
 ================================================================================
+In-cluster TLS helpers
+================================================================================
+*/}}
+
+{{- define "logfire.inClusterTls.enabled" -}}
+{{- .Values.inClusterTls.enabled | default false -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.secretNamePrefix" -}}
+{{- if .Values.inClusterTls.secretNamePrefix -}}
+{{- .Values.inClusterTls.secretNamePrefix -}}
+{{- else -}}
+{{- .Release.Name -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.secretName" -}}
+{{- $prefix := include "logfire.inClusterTls.secretNamePrefix" .ctx -}}
+{{- printf "%s-%s-tls" $prefix .serviceName -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.caBundle.isConfigMap" -}}
+{{- and (include "logfire.inClusterTls.enabled" . | eq "true") (.Values.inClusterTls.caBundle.existingConfigMap.name) -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.caBundle.isSecret" -}}
+{{- and (include "logfire.inClusterTls.enabled" . | eq "true") (dig "existingSecret" "name" "" .Values.inClusterTls.caBundle) -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.mode" -}}
+{{- dig "certs" "mode" "existingSecrets" .Values.inClusterTls -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.isCertManager" -}}
+{{- eq (include "logfire.inClusterTls.certs.mode" .) "certManager" -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.certManager.issuerRef.kind" -}}
+{{- dig "certs" "certManager" "issuerRef" "kind" "Issuer" .Values.inClusterTls -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.certManager.issuerRef.name" -}}
+{{- dig "certs" "certManager" "issuerRef" "name" "" .Values.inClusterTls -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.certManager.issuerRef.group" -}}
+{{- dig "certs" "certManager" "issuerRef" "group" "cert-manager.io" .Values.inClusterTls -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.certManager.autoIssuer" -}}
+{{- and (include "logfire.inClusterTls.certs.isCertManager" . | eq "true") (not (include "logfire.inClusterTls.certs.certManager.issuerRef.name" .)) -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.certManager.autoCaSecretName" -}}
+{{- printf "%s-incluster-ca" .Release.Name -}}
+{{- end -}}
+
+{{/*
+================================================================================
 Configuration Validation Helpers
 ================================================================================
 These helpers validate chart configuration and fail with clear error messages
@@ -1005,6 +1064,52 @@ Validate email/admin configuration
 {{- end -}}
 
 {{/*
+Validate in-cluster TLS configuration
+*/}}
+{{- define "logfire.validate.inClusterTls" -}}
+{{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+  {{- $mode := include "logfire.inClusterTls.certs.mode" . -}}
+  {{- if not (or (eq $mode "existingSecrets") (eq $mode "certManager")) -}}
+    {{- fail (printf "inClusterTls.certs.mode must be one of 'existingSecrets' or 'certManager' (got %q)" $mode) -}}
+  {{- end -}}
+
+  {{- $cm := .Values.inClusterTls.caBundle.existingConfigMap.name -}}
+  {{- $secret := dig "existingSecret" "name" "" .Values.inClusterTls.caBundle -}}
+  {{- if and $cm $secret -}}
+    {{- fail "inClusterTls.caBundle: specify only one of existingConfigMap.name or existingSecret.name" -}}
+  {{- end -}}
+
+  {{- if eq $mode "certManager" -}}
+    {{- $issuerKind := include "logfire.inClusterTls.certs.certManager.issuerRef.kind" . -}}
+    {{- $issuerName := include "logfire.inClusterTls.certs.certManager.issuerRef.name" . -}}
+    {{- if not (or (eq $issuerKind "Issuer") (eq $issuerKind "ClusterIssuer")) -}}
+      {{- fail (printf "inClusterTls.certs.certManager.issuerRef.kind must be 'Issuer' or 'ClusterIssuer' (got %q)" $issuerKind) -}}
+    {{- end -}}
+
+    {{- /* Auto-Issuer only supports creating a namespaced Issuer */ -}}
+    {{- if and (not $issuerName) (ne $issuerKind "Issuer") -}}
+      {{- fail "inClusterTls.certs.mode=certManager with an empty issuerRef.name uses the chart-managed *namespaced* Issuer. Set issuerRef.kind=Issuer, or provide a non-empty issuerRef.name (Issuer/ClusterIssuer)." -}}
+    {{- end -}}
+
+    {{- $autoIssuer := include "logfire.inClusterTls.certs.certManager.autoIssuer" . | eq "true" -}}
+    {{- if and (not $cm) (not $secret) (not $autoIssuer) -}}
+      {{- fail "inClusterTls.enabled is true and certs.mode=certManager, but no CA bundle was provided. Set inClusterTls.caBundle.existingConfigMap.name (recommended) or inClusterTls.caBundle.existingSecret.name, or leave issuerRef.name empty to use the chart-managed CA." -}}
+    {{- end -}}
+
+    {{- if and (not (dig "deployCertManager" false .Values.dev)) (not (.Capabilities.APIVersions.Has "cert-manager.io/v1")) -}}
+      {{- fail "inClusterTls.certs.mode=certManager requires cert-manager CRDs (cert-manager.io/v1). Either install cert-manager separately, or set dev.deployCertManager=true for Kind/dev." -}}
+    {{- end -}}
+
+  {{- else -}}
+    {{- /* existingSecrets */ -}}
+    {{- if and (not $cm) (not $secret) -}}
+      {{- fail "inClusterTls.enabled is true and certs.mode=existingSecrets, but no CA bundle was provided. Set inClusterTls.caBundle.existingConfigMap.name (recommended) or inClusterTls.caBundle.existingSecret.name." -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Validate Redis configuration
 */}}
 {{- define "logfire.validate.redis" -}}
@@ -1058,4 +1163,5 @@ Call this from templates that need to ensure configuration is valid.
 {{- include "logfire.validate.adminSecret" . -}}
 {{- include "logfire.validate.admin" . -}}
 {{- include "logfire.validate.redis" . -}}
+{{- include "logfire.validate.inClusterTls" . -}}
 {{- end -}}

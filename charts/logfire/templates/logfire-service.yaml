@@ -74,6 +74,11 @@ spec:
               mountPath: /usr/local/etc/haproxy/haproxy.cfg
               subPath: haproxy.cfg
               readOnly: true
+            {{ if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+            - name: logfire-incluster-ca-bundle
+              mountPath: /usr/local/etc/haproxy/ca
+              readOnly: true
+            {{ end }}
           lifecycle:
             preStop:
               exec:
@@ -107,6 +112,30 @@ spec:
               path: "/stats"
               port: 8181
       volumes:
+        {{ if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+        {{ $caBundleSecretName := dig "existingSecret" "name" "" .Values.inClusterTls.caBundle }}
+        {{ $autoIssuer := include "logfire.inClusterTls.certs.certManager.autoIssuer" . | eq "true" }}
+        - name: logfire-incluster-ca-bundle
+          {{ if (include "logfire.inClusterTls.caBundle.isConfigMap" . | eq "true") }}
+          configMap:
+            name: {{ .Values.inClusterTls.caBundle.existingConfigMap.name }}
+            items:
+              - key: {{ .Values.inClusterTls.caBundle.existingConfigMap.key | default "ca.crt" }}
+                path: ca.crt
+          {{ else if $caBundleSecretName }}
+          secret:
+            secretName: {{ dig "existingSecret" "name" "" .Values.inClusterTls.caBundle }}
+            items:
+              - key: {{ dig "existingSecret" "key" "ca.crt" .Values.inClusterTls.caBundle }}
+                path: ca.crt
+          {{ else if $autoIssuer }}
+          secret:
+            secretName: {{ include "logfire.inClusterTls.certs.certManager.autoCaSecretName" . }}
+            items:
+              - key: tls.crt
+                path: ca.crt
+          {{ end }}
+        {{ end }}
         - name: logfire-haproxy-config
           secret:
             secretName: logfire-haproxy-config

@@ -1,4 +1,5 @@
 {{- $serviceName := "logfire-frontend-service" }}
+{{- $inClusterTlsEnabled := (include "logfire.inClusterTls.enabled" . | eq "true") }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -14,8 +15,15 @@ spec:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
-  - port: 8080
-    targetPort: 8080
+  {{- if $inClusterTlsEnabled }}
+  - name: https
+    port: {{ .Values.inClusterTls.httpsPort }}
+    targetPort: https
+  {{- else }}
+  - name: http
+    port: 8080
+    targetPort: http
+  {{- end }}
   type: ClusterIP
 ---
 apiVersion: apps/v1
@@ -41,6 +49,9 @@ spec:
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
         checksum/service-config: {{ include (print $.Template.BasePath "/logfire-frontend-service-config.yaml") . | sha256sum }}
+        {{- if $inClusterTlsEnabled }}
+        checksum/incluster-tls-frontend-cert: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.inClusterTls.secretName" (dict "ctx" . "serviceName" $serviceName)) "key" "tls.crt") }}
+        {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       serviceAccountName: {{ include "logfire.serviceAccountName" . }}
@@ -73,9 +84,31 @@ spec:
               mountPath: /opt/nginx
             - name: tmp
               mountPath: /tmp
+            {{- if $inClusterTlsEnabled }}
+            - name: logfire-frontend-tls
+              mountPath: /etc/nginx/tls
+              readOnly: true
+            {{- end }}
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
+            {{- if $inClusterTlsEnabled }}
+            - name: https
+              containerPort: {{ .Values.inClusterTls.httpsPort }}
+            {{- end }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
           env:
             - name: STRIPE_PUBLISHABLE_KEY
               value: ""
@@ -103,5 +136,15 @@ spec:
             name: logfire-frontend-service-config
         - name: tmp
           emptyDir: {}
+        {{- if $inClusterTlsEnabled }}
+        - name: logfire-frontend-tls
+          secret:
+            secretName: {{ include "logfire.inClusterTls.secretName" (dict "ctx" . "serviceName" $serviceName) }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+        {{- end }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

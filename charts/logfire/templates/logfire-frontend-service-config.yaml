@@ -25,6 +25,7 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-frontend-nginx-config
 data:
+  {{- $inClusterTlsEnabled := (include "logfire.inClusterTls.enabled" . | eq "true") }}
   nginx.conf: |
     worker_processes auto;
     error_log stderr notice;
@@ -59,16 +60,41 @@ data:
         server_names_hash_bucket_size 128;
 
 
+        {{- if $inClusterTlsEnabled }}
+        server {
+            listen 8080 reuseport backlog=4096;
+            server_name _;
+            access_log /dev/stdout;
+
+            location = /health {
+                add_header Content-Type text/plain;
+                return 200 "ok\n";
+            }
+
+            location / {
+                return 404;
+            }
+        }
+
         server {
             server_name {{ include "logfire.all_hostnames_string" . }};
-            listen 8080 reuseport backlog=4096;
+            listen {{ .Values.inClusterTls.httpsPort }} ssl reuseport backlog=4096;
             http2 on;
             access_log /dev/stdout;
+
+            ssl_certificate /etc/nginx/tls/tls.crt;
+            ssl_certificate_key /etc/nginx/tls/tls.key;
+            ssl_protocols TLSv1.2 TLSv1.3;
 
             root /usr/share/nginx/html; # Root directory for the static files
 
             gzip on;
             gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+            location = /health {
+                add_header Content-Type text/plain;
+                return 200 "ok\n";
+            }
 
             # Custom panels static assets - must come before general static assets
             # to ensure this more specific rule takes precedence
@@ -139,4 +165,91 @@ data:
             add_header X-Content-Type-Options "nosniff";
 
         }
+        {{- else }}
+        server {
+            server_name {{ include "logfire.all_hostnames_string" . }};
+            listen 8080 reuseport backlog=4096;
+            http2 on;
+            access_log /dev/stdout;
+
+            root /usr/share/nginx/html; # Root directory for the static files
+
+            gzip on;
+            gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+            location = /health {
+                add_header Content-Type text/plain;
+                return 200 "ok\n";
+            }
+
+            # Custom panels static assets - must come before general static assets
+            # to ensure this more specific rule takes precedence
+            location ~ "^/custom-panels/.+\.(js|css|png|jpg|jpeg|gif|ico|svg)$" {
+                add_header Access-Control-Allow-Origin "null" always;
+            }
+            
+            # Location block for static assets (JS, CSS, images)
+            # These can be cached for longer as they have hashed names
+            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+                expires 30d;
+                add_header Cache-Control "public, max-age=2592000";
+            }
+
+            location /image-iframe.html {
+                try_files /image-iframe.html =404;
+
+                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
+
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+            }
+
+            location /audio-iframe.html {
+                try_files /audio-iframe.html =404;
+
+                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
+
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self; media-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+            }
+
+            # custom panels iframe
+            location /custom-components-iframe.html {
+                try_files /custom-components-iframe.html =404;
+
+                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+            }
+
+            # Serve the generated config file from the ephemeral directory:
+            location = /config.1.js {
+                alias /opt/nginx/config.1.js;
+                default_type "application/javascript";
+            }
+
+            location /genai-prices/data.json {
+              rewrite /genai-prices/data.json /pydantic/genai-prices/main/prices/data.json  break;
+              proxy_pass https://raw.githubusercontent.com;
+              proxy_redirect off;
+            }
+
+            # Main location block for the app
+            location / {
+                index index.html index.htm;
+                try_files $uri $uri/ @index;
+            }
+
+            # Fallback location for SPA routing
+            location @index {
+                add_header "Cache-Control" "no-cache"; # No cache for index.html
+                try_files /index.html =404;
+                
+                {{- $hostnames := include "logfire.all_hostnames_string" . | splitList " " -}}
+                add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }} {{- range $hostnames }} {{ $.Values.ingress.tls | default false | ternary "wss" "ws" }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https https://github.com https://avatars.githubusercontent.com data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
+            }
+
+            # Security Headers
+            add_header X-Content-Type-Options "nosniff";
+
+        }
+        {{- end }}
     }

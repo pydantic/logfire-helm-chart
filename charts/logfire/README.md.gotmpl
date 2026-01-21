@@ -52,6 +52,18 @@ Then port-forward the service:
 $ kubectl -n logfire port-forward svc/logfire-service 8080:8080
 ```
 
+## In-cluster HTTPS (service-to-service)
+
+When enabled, the chart switches in-cluster service traffic to HTTPS (incremental rollout; currently HAProxy -> frontend).
+For certificate verification, HAProxy uses `inClusterTls.caBundle.*`, or (when using cert-manager auto-Issuer) the chart-created CA Secret.
+
+
+The chart includes an `inClusterTls.enabled` switch intended to enable HTTPS between in-cluster services (e.g. HAProxy to upstream services). See `IN_CLUSTER_TLS_PLAN.md` for rollout status and Kind testing guidance.
+
+For Kind/dev, you can optionally deploy cert-manager as a Helm dependency (`dev.deployCertManager`). When working from this repo, run `helm dependency update charts/logfire` to fetch the dependency charts.
+
+When `dev.deployCertManager=true` and `inClusterTls.certs.mode=certManager`, the chart uses a Helm hook Job to wait for the cert-manager webhook before creating `Issuer`/`Certificate` resources, so a single `helm upgrade --install` works.
+
 ## Prerequisites
 
 There are a number of Pydantic Logfire external prerequisites including PostgreSQL, Dex and Object Storage.

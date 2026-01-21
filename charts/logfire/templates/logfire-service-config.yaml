@@ -130,5 +130,10 @@ stringData:
       timeout connect 3s
       timeout server 50s
       http-check expect status 200
+      {{- $frontendSni := printf "logfire-frontend-service.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      server logfire-frontend logfire-frontend-service.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check resolvers kubernetes ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $frontendSni }}) verifyhost {{ $frontendSni }} check-ssl
+      {{- else }}
       server logfire-frontend logfire-frontend-service.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8080 check resolvers kubernetes
+      {{- end }}
 
