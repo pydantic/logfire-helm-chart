@@ -25,6 +25,10 @@ spec:
       {{- with .Values.gateway.sectionName }}
       sectionName: {{ . }}
       {{- end }}
+  {{- $backendPort := 8080 -}}
+  {{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+  {{- $backendPort = .Values.inClusterTls.httpsPort -}}
+  {{- end -}}
   {{- if $hasHosts }}
   hostnames:
     {{- toYaml $hosts | nindent 4 }}
@@ -44,7 +48,7 @@ spec:
       {{- end }}
       backendRefs:
         - name: logfire-service
-          port: 8080
+          port: {{ $backendPort }}
       {{- with .Values.gateway.timeouts }}
       timeouts:
         {{- toYaml . | nindent 8 }}

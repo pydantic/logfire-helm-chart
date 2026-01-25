@@ -14,8 +14,15 @@ spec:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
-  - port: 8080
+  - name: http
+    port: 8080
     targetPort: 8080
+  {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+  - name: https
+    port: {{ .Values.inClusterTls.httpsPort }}
+    targetPort: {{ .Values.inClusterTls.httpsPort }}
+    appProtocol: HTTPS
+  {{- end }}
   type: ClusterIP
 ---
 apiVersion: apps/v1
@@ -75,6 +82,9 @@ spec:
               subPath: haproxy.cfg
               readOnly: true
             {{ if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+            - name: logfire-incluster-tls
+              mountPath: /usr/local/etc/haproxy/tls
+              readOnly: true
             - name: logfire-incluster-ca-bundle
               mountPath: /usr/local/etc/haproxy/ca
               readOnly: true
@@ -87,6 +97,9 @@ spec:
                   - "5"
           ports:
             - containerPort: 8080
+            {{ if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+            - containerPort: {{ .Values.inClusterTls.httpsPort }}
+            {{ end }}
             - containerPort: 8181 # Stats port
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           env:
@@ -115,6 +128,15 @@ spec:
         {{ if (include "logfire.inClusterTls.enabled" . | eq "true") }}
         {{ $caBundleSecretName := dig "existingSecret" "name" "" .Values.inClusterTls.caBundle }}
         {{ $autoIssuer := include "logfire.inClusterTls.certs.certManager.autoIssuer" . | eq "true" }}
+        {{- $tlsSecretName := include "logfire.inClusterTls.secretName" (dict "ctx" $ "serviceName" $serviceName) }}
+        - name: logfire-incluster-tls
+          secret:
+            secretName: {{ $tlsSecretName }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.crt.key
         - name: logfire-incluster-ca-bundle
           {{ if (include "logfire.inClusterTls.caBundle.isConfigMap" . | eq "true") }}
           configMap:

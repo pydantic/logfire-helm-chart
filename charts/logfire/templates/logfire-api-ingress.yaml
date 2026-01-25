@@ -5,13 +5,22 @@
     {{- $hosts = list .Values.ingress.hostname -}}
   {{- end -}}
 {{- end -}}
+{{- $backendPort := 8080 -}}
+{{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+  {{- $backendPort = .Values.inClusterTls.httpsPort -}}
+{{- end -}}
+{{- $annotations := deepCopy (.Values.ingress.annotations | default dict) -}}
+{{- $ingressClassName := .Values.ingress.ingressClassName | default "" -}}
+{{- if and (include "logfire.inClusterTls.enabled" . | eq "true") (or (eq $ingressClassName "") (contains "nginx" $ingressClassName)) (not (hasKey $annotations "nginx.ingress.kubernetes.io/backend-protocol")) -}}
+  {{- $_ := set $annotations "nginx.ingress.kubernetes.io/backend-protocol" "HTTPS" -}}
+{{- end -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
+  {{- if $annotations }}
   annotations:
-    {{- with .Values.ingress.annotations }}
-      {{- toYaml . | nindent 4 }}
-    {{- end }}
+    {{- toYaml $annotations | nindent 4 }}
+  {{- end }}
   name: logfire-ingress
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
@@ -30,7 +39,7 @@ spec:
               service:
                 name: logfire-service
                 port:
-                  number: 8080
+                  number: {{ $backendPort }}
     {{- end }}
   {{- if .Values.ingress.tls }}
   tls:

@@ -355,6 +355,16 @@ Create dex config secret name
 {{- end }}
 {{- end -}}
 
+{{- define "logfire.hooksAnnotationsWithoutArgoDeletePolicy" -}}
+{{- with .Values.hooksAnnotations }}
+{{- range $key, $value := . }}
+{{- if ne $key "argocd.argoproj.io/hook-delete-policy" }}
+{{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
 {{/*
 Create Postgres secret name
 */}}

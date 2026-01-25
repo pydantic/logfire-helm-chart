@@ -54,9 +54,10 @@ $ kubectl -n logfire port-forward svc/logfire-service 8080:8080
 
 ## In-cluster HTTPS (service-to-service)
 
-When enabled, the chart switches in-cluster service traffic to HTTPS (incremental rollout; currently HAProxy -> frontend, HAProxy -> fusionfire ingest, and the fusionfire cache HAProxies -> their cache backends).
+When enabled, the chart switches in-cluster traffic to HTTPS (incremental rollout; currently HAProxy -> frontend, HAProxy -> fusionfire ingest, the fusionfire cache HAProxies -> their cache backends, and (when using Gateway API) Gateway -> HAProxy).
 For certificate verification, HAProxy uses `inClusterTls.caBundle.*`, or (when using cert-manager auto-Issuer) the chart-created CA Secret.
 
+When using Kubernetes Ingress instead of Gateway API, the chart points the Ingress at the `logfire-service` HTTPS port when `inClusterTls.enabled` is true. For ingress-nginx, the chart also sets `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"` automatically (unless you override it). For other ingress controllers, you may need to set a controller-specific annotation to enable HTTPS to upstream services.
 
 The chart includes an `inClusterTls.enabled` switch intended to enable HTTPS between in-cluster services (e.g. HAProxy to upstream services). See `IN_CLUSTER_TLS_PLAN.md` for rollout status and Kind testing guidance.
 
