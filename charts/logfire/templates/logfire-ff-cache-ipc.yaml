@@ -1,5 +1,4 @@
 {{- $serviceName := "logfire-ff-cache-ipc" }}
-{{- $inClusterTlsEnabled := (include "logfire.inClusterTls.enabled" . | eq "true") }}
 ---
 apiVersion: v1
 kind: Service
@@ -18,11 +17,7 @@ spec:
   - name: http
     port: 9001
     targetPort: http
-  {{- if $inClusterTlsEnabled }}
-  - name: https
-    port: {{ .Values.inClusterTls.httpsPort }}
-    targetPort: https
-  {{- end }}
+  {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
   clusterIP: None
 ---
 apiVersion: apps/v1
@@ -53,9 +48,7 @@ spec:
       annotations:
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
-        {{- if $inClusterTlsEnabled }}
-        checksum/incluster-tls-cert: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.inClusterTls.secretName" (dict "ctx" . "serviceName" $serviceName)) "key" "tls.crt") }}
-        {{- end }}
+        {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
       serviceAccountName: {{ include "logfire.serviceAccountName" . }}
@@ -107,10 +100,7 @@ spec:
           ports:
             - name: http
               containerPort: 9001
-            {{- if $inClusterTlsEnabled }}
-            - name: https
-              containerPort: {{ .Values.inClusterTls.httpsPort }}
-            {{- end }}
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
           livenessProbe:
             httpGet:
               path: /health
@@ -133,22 +123,9 @@ spec:
                  - "5"
           volumeMounts:
             {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
-            {{- if $inClusterTlsEnabled }}
-            - name: logfire-incluster-tls
-              mountPath: /etc/tls
-              readOnly: true
-            {{- end }}
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
       volumes:
-      {{- if $inClusterTlsEnabled }}
-      - name: logfire-incluster-tls
-        secret:
-          secretName: {{ include "logfire.inClusterTls.secretName" (dict "ctx" . "serviceName" $serviceName) }}
-          items:
-            - key: tls.crt
-              path: tls.crt
-            - key: tls.key
-              path: tls.key
-      {{- end }}
+      {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       {{- include "logfire.objectStoreVolumes" . | nindent 6 }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

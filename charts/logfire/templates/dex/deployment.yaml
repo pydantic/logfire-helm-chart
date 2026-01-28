@@ -18,13 +18,7 @@ spec:
     port: 5556
     targetPort: http
     protocol: TCP
-  {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-  - name: https
-    port: {{ .Values.inClusterTls.httpsPort }}
-    targetPort: https
-    appProtocol: HTTPS
-    protocol: TCP
-  {{- end }}
+  {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
   - name: grpc
     port: 5557
     targetPort: grpc
@@ -57,6 +51,7 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/dex/secret.yaml") . | sha256sum }}
+        {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
@@ -116,11 +111,7 @@ spec:
             - name: http
               containerPort: 5556
               protocol: TCP
-            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-            - name: https
-              containerPort: {{ .Values.inClusterTls.httpsPort }}
-              protocol: TCP
-            {{- end }}
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
             - name: grpc
               containerPort: 5557
               protocol: TCP
@@ -139,11 +130,7 @@ spec:
             - name: config
               mountPath: /etc/dex
               readOnly: true
-            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-            - name: logfire-incluster-tls
-              mountPath: /etc/dex/tls
-              readOnly: true
-            {{- end }}
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "volumeName" "logfire-incluster-tls" "mountPath" "/etc/dex/tls") | nindent 12 }}
             - name: temp
               mountPath: /tmp
             {{- if (get .Values $serviceName).volumeMounts }}
@@ -153,17 +140,7 @@ spec:
         - name: config
           secret:
             secretName: {{ include "logfire.dexSecretName" . }}
-        {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-        {{- $tlsSecretName := include "logfire.inClusterTls.secretName" (dict "ctx" $ "serviceName" $serviceName) }}
-        - name: logfire-incluster-tls
-          secret:
-            secretName: {{ $tlsSecretName }}
-            items:
-              - key: tls.crt
-                path: tls.crt
-              - key: tls.key
-                path: tls.key
-        {{- end }}
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName "volumeName" "logfire-incluster-tls" "crtPath" "tls.crt" "keyPath" "tls.key") | nindent 8 }}
         - name: temp
           emptyDir: {}
         {{- if (get .Values $serviceName).volumes }}

@@ -269,34 +269,11 @@ spec:
             {{- end}}
           {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
           volumeMounts:
-            - name: logfire-incluster-ca-bundle
-              mountPath: /etc/logfire/incluster-ca
-              readOnly: true
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
           {{- end }}
       {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-      {{ $caBundleSecretName := dig "existingSecret" "name" "" .Values.inClusterTls.caBundle }}
-      {{ $autoIssuer := include "logfire.inClusterTls.certs.certManager.autoIssuer" . | eq "true" }}
       volumes:
-        - name: logfire-incluster-ca-bundle
-          {{ if (include "logfire.inClusterTls.caBundle.isConfigMap" . | eq "true") }}
-          configMap:
-            name: {{ .Values.inClusterTls.caBundle.existingConfigMap.name }}
-            items:
-              - key: {{ .Values.inClusterTls.caBundle.existingConfigMap.key | default "ca.crt" }}
-                path: ca.crt
-          {{ else if $caBundleSecretName }}
-          secret:
-            secretName: {{ dig "existingSecret" "name" "" .Values.inClusterTls.caBundle }}
-            items:
-              - key: {{ dig "existingSecret" "key" "ca.crt" .Values.inClusterTls.caBundle }}
-                path: ca.crt
-          {{ else if $autoIssuer }}
-          secret:
-            secretName: {{ include "logfire.inClusterTls.certs.certManager.autoCaSecretName" . }}
-            items:
-              - key: tls.crt
-                path: ca.crt
-          {{ end }}
+        {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
       {{- end }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

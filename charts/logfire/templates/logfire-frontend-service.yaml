@@ -1,5 +1,4 @@
 {{- $serviceName := "logfire-frontend-service" }}
-{{- $inClusterTlsEnabled := (include "logfire.inClusterTls.enabled" . | eq "true") }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -15,10 +14,8 @@ spec:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
-  {{- if $inClusterTlsEnabled }}
-  - name: https
-    port: {{ .Values.inClusterTls.httpsPort }}
-    targetPort: https
+  {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+  {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
   {{- else }}
   - name: http
     port: 8080
@@ -49,9 +46,7 @@ spec:
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
         checksum/service-config: {{ include (print $.Template.BasePath "/logfire-frontend-service-config.yaml") . | sha256sum }}
-        {{- if $inClusterTlsEnabled }}
-        checksum/incluster-tls-frontend-cert: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.inClusterTls.secretName" (dict "ctx" . "serviceName" $serviceName)) "key" "tls.crt") }}
-        {{- end }}
+        {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       serviceAccountName: {{ include "logfire.serviceAccountName" . }}
@@ -84,18 +79,11 @@ spec:
               mountPath: /opt/nginx
             - name: tmp
               mountPath: /tmp
-            {{- if $inClusterTlsEnabled }}
-            - name: logfire-frontend-tls
-              mountPath: /etc/nginx/tls
-              readOnly: true
-            {{- end }}
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "volumeName" "logfire-frontend-tls" "mountPath" "/etc/nginx/tls") | nindent 12 }}
           ports:
             - name: http
               containerPort: 8080
-            {{- if $inClusterTlsEnabled }}
-            - name: https
-              containerPort: {{ .Values.inClusterTls.httpsPort }}
-            {{- end }}
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           livenessProbe:
             httpGet:
@@ -136,15 +124,6 @@ spec:
             name: logfire-frontend-service-config
         - name: tmp
           emptyDir: {}
-        {{- if $inClusterTlsEnabled }}
-        - name: logfire-frontend-tls
-          secret:
-            secretName: {{ include "logfire.inClusterTls.secretName" (dict "ctx" . "serviceName" $serviceName) }}
-            items:
-              - key: tls.crt
-                path: tls.crt
-              - key: tls.key
-                path: tls.key
-        {{- end }}
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName "volumeName" "logfire-frontend-tls") | nindent 8 }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

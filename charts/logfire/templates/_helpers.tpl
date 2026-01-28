@@ -922,6 +922,101 @@ In-cluster TLS helpers
 {{- printf "%s-incluster-ca" .Release.Name -}}
 {{- end -}}
 
+{{- define "logfire.inClusterTls.https.servicePort" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+- name: {{ .name | default "https" }}
+  port: {{ $ctx.Values.inClusterTls.httpsPort }}
+  targetPort: {{ .targetPort | default "https" }}
+  appProtocol: HTTPS
+  protocol: TCP
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.https.containerPort" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+- name: {{ .name | default "https" }}
+  containerPort: {{ $ctx.Values.inClusterTls.httpsPort }}
+  protocol: TCP
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.server.checksumAnnotation" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+{{- $serviceName := required "inClusterTls.server.checksumAnnotation: serviceName is required" .serviceName -}}
+{{- $annotationKey := .annotationKey | default "checksum/incluster-tls-cert" -}}
+{{- $secretKey := .secretKey | default "tls.crt" -}}
+{{- $secretName := include "logfire.inClusterTls.secretName" (dict "ctx" $ctx "serviceName" $serviceName) -}}
+{{ $annotationKey }}: {{ include "utils.secretChecksum" (dict "ctx" $ctx "name" $secretName "key" $secretKey) }}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.server.volumeMount" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+- name: {{ .volumeName | default "logfire-incluster-tls" }}
+  mountPath: {{ .mountPath | default "/etc/tls" }}
+  readOnly: true
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.server.volume" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+{{- $serviceName := required "inClusterTls.server.volume: serviceName is required" .serviceName -}}
+{{- $volumeName := .volumeName | default "logfire-incluster-tls" -}}
+{{- $secretName := include "logfire.inClusterTls.secretName" (dict "ctx" $ctx "serviceName" $serviceName) -}}
+- name: {{ $volumeName }}
+  secret:
+    secretName: {{ $secretName }}
+    items:
+      - key: tls.crt
+        path: {{ .crtPath | default "tls.crt" }}
+      - key: tls.key
+        path: {{ .keyPath | default "tls.key" }}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.caBundle.volumeMount" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+- name: {{ .volumeName | default "logfire-incluster-ca-bundle" }}
+  mountPath: {{ required "inClusterTls.caBundle.volumeMount: mountPath is required" .mountPath }}
+  readOnly: true
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.caBundle.volume" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+{{- $volumeName := .volumeName | default "logfire-incluster-ca-bundle" -}}
+{{- $caBundleSecretName := dig "existingSecret" "name" "" $ctx.Values.inClusterTls.caBundle -}}
+{{- $autoIssuer := include "logfire.inClusterTls.certs.certManager.autoIssuer" $ctx | eq "true" -}}
+- name: {{ $volumeName }}
+  {{- if (include "logfire.inClusterTls.caBundle.isConfigMap" $ctx | eq "true") }}
+  configMap:
+    name: {{ $ctx.Values.inClusterTls.caBundle.existingConfigMap.name }}
+    items:
+      - key: {{ $ctx.Values.inClusterTls.caBundle.existingConfigMap.key | default "ca.crt" }}
+        path: ca.crt
+  {{- else if $caBundleSecretName }}
+  secret:
+    secretName: {{ $caBundleSecretName }}
+    items:
+      - key: {{ dig "existingSecret" "key" "ca.crt" $ctx.Values.inClusterTls.caBundle }}
+        path: ca.crt
+  {{- else if $autoIssuer }}
+  secret:
+    secretName: {{ include "logfire.inClusterTls.certs.certManager.autoCaSecretName" $ctx }}
+    items:
+      - key: tls.crt
+        path: ca.crt
+  {{- end }}
+{{- end -}}
+{{- end -}}
+
 {{/*
 ================================================================================
 Configuration Validation Helpers

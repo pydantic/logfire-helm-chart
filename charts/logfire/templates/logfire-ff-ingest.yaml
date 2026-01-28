@@ -1,5 +1,4 @@
 {{- $serviceName := "logfire-ff-ingest" }}
-{{- $inClusterTlsEnabled := (include "logfire.inClusterTls.enabled" . | eq "true") }}
 {{- $defaultCpu := "1" -}}
 {{- $serviceValues := get .Values $serviceName | default dict -}}
 {{- $resources := get $serviceValues "resources" | default dict -}}
@@ -29,11 +28,7 @@ spec:
   - name: http
     port: 8012
     targetPort: http
-  {{- if $inClusterTlsEnabled }}
-  - name: https
-    port: {{ .Values.inClusterTls.httpsPort }}
-    targetPort: https
-  {{- end }}
+  {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
   clusterIP: None
 ---
 apiVersion: apps/v1
@@ -67,9 +62,7 @@ spec:
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
         checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
-        {{- if $inClusterTlsEnabled }}
-        checksum/incluster-tls-cert: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.inClusterTls.secretName" (dict "ctx" . "serviceName" $serviceName)) "key" "tls.crt") }}
-        {{- end }}
+        {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         checksum/logfire-postgres-ff-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresFFDsn" )}}
         {{- end }}
@@ -107,10 +100,7 @@ spec:
           ports:
             - name: http
               containerPort: 8012
-            {{- if $inClusterTlsEnabled }}
-            - name: https
-              containerPort: {{ .Values.inClusterTls.httpsPort }}
-            {{- end }}
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
           lifecycle:
             preStop:
               exec:
@@ -178,22 +168,9 @@ spec:
             - name: {{ include "logfire.ingestVolumeName" . }}
               mountPath: "/fusionfire/ingest-data"
             {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
-            {{- if $inClusterTlsEnabled }}
-            - name: logfire-incluster-tls
-              mountPath: /etc/tls
-              readOnly: true
-            {{- end }}
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
       volumes:
-        {{- if $inClusterTlsEnabled }}
-        - name: logfire-incluster-tls
-          secret:
-            secretName: {{ include "logfire.inClusterTls.secretName" (dict "ctx" . "serviceName" $serviceName) }}
-            items:
-              - key: tls.crt
-                path: tls.crt
-              - key: tls.key
-                path: tls.key
-        {{- end }}
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.objectStoreVolumes" . | nindent 8 }}
   volumeClaimTemplates:
       {{- include "logfire.ingestVolume" (get (get .Values $serviceName | default dict) "volumeClaimTemplates" | default dict) | nindent 4 }}
