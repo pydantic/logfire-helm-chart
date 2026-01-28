@@ -94,17 +94,45 @@ spec:
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.05"
             - name: FUSIONFIRE_QUERY_HOST
+              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+              value: https://logfire-ff-query-api
+              {{- else }}
               value: http://logfire-ff-query-api
+              {{- end }}
             - name: FUSIONFIRE_QUERY_PORT
+              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+              value: {{ .Values.inClusterTls.httpsPort | quote }}
+              {{- else }}
               value: "8011"
+              {{- end }}
             - name: FUSIONFIRE_INGEST_HOST
+              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+              value: https://logfire-ff-ingest-processor
+              {{- else }}
               value: http://logfire-ff-ingest-processor
+              {{- end }}
             - name: FUSIONFIRE_INGEST_PORT
+              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+              value: {{ .Values.inClusterTls.httpsPort | quote }}
+              {{- else }}
               value: "8012"
+              {{- end }}
             - name: FUSIONFIRE_CRUD_HOST
+              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+              value: https://logfire-ff-crud-api
+              {{- else }}
               value: http://logfire-ff-crud-api
+              {{- end }}
             - name: FUSIONFIRE_CRUD_PORT
+              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+              value: {{ .Values.inClusterTls.httpsPort | quote }}
+              {{- else }}
               value: "8011"
+              {{- end }}
+            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+            - name: LOGFIRE_CA_PATH
+              value: /etc/logfire/incluster-ca/ca.crt
+            {{- end }}
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app
             - name: COLLECTOR_OTLP_GRPC_HOST
@@ -166,5 +194,13 @@ spec:
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}
+          {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+          volumeMounts:
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+          {{- end }}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      volumes:
+        {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
+      {{- end }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
