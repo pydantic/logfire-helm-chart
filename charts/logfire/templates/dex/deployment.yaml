@@ -18,6 +18,13 @@ spec:
     port: 5556
     targetPort: http
     protocol: TCP
+  {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+  - name: https
+    port: {{ .Values.inClusterTls.httpsPort }}
+    targetPort: https
+    appProtocol: HTTPS
+    protocol: TCP
+  {{- end }}
   - name: grpc
     port: 5557
     targetPort: grpc
@@ -85,6 +92,10 @@ spec:
             - serve
             - --web-http-addr
             - 0.0.0.0:5556
+            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+            - --web-https-addr
+            - 0.0.0.0:{{ .Values.inClusterTls.httpsPort }}
+            {{- end }}
             - --grpc-addr
             - 0.0.0.0:5557
             - --telemetry-addr
@@ -105,6 +116,11 @@ spec:
             - name: http
               containerPort: 5556
               protocol: TCP
+            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+            - name: https
+              containerPort: {{ .Values.inClusterTls.httpsPort }}
+              protocol: TCP
+            {{- end }}
             - name: grpc
               containerPort: 5557
               protocol: TCP
@@ -123,6 +139,11 @@ spec:
             - name: config
               mountPath: /etc/dex
               readOnly: true
+            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+            - name: logfire-incluster-tls
+              mountPath: /etc/dex/tls
+              readOnly: true
+            {{- end }}
             - name: temp
               mountPath: /tmp
             {{- if (get .Values $serviceName).volumeMounts }}
@@ -132,6 +153,17 @@ spec:
         - name: config
           secret:
             secretName: {{ include "logfire.dexSecretName" . }}
+        {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+        {{- $tlsSecretName := include "logfire.inClusterTls.secretName" (dict "ctx" $ "serviceName" $serviceName) }}
+        - name: logfire-incluster-tls
+          secret:
+            secretName: {{ $tlsSecretName }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+        {{- end }}
         - name: temp
           emptyDir: {}
         {{- if (get .Values $serviceName).volumes }}

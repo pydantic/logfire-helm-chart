@@ -10,6 +10,7 @@
 {{- $certServices := list
   (dict "serviceName" "logfire-service")
   (dict "serviceName" "logfire-frontend-service")
+  (dict "serviceName" "logfire-dex")
   (dict "serviceName" "logfire-ff-ingest")
   (dict "serviceName" "logfire-ff-ingest-processor")
   (dict "serviceName" "logfire-ff-cache-byte")
@@ -98,8 +99,8 @@ metadata:
   {{- end }}
 spec:
   secretName: {{ $certSecretName }}
-  duration: 2160h # 90d
-  renewBefore: 360h # 15d
+  duration: 87600h # 10y
+  renewBefore: 720h # 30d
   privateKey:
     algorithm: RSA
     size: 2048

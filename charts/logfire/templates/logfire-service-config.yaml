@@ -117,7 +117,12 @@ stringData:
       timeout server 50s
       http-check expect status 200
 
+      {{- $dexSni := printf "logfire-dex.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check port 5558 resolvers kubernetes ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $dexSni }}) verifyhost {{ $dexSni }}
+      {{- else }}
       server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:5556 check port 5558 resolvers kubernetes
+      {{- end }}
 
     backend logfire-backend
       balance roundrobin

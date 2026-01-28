@@ -1322,6 +1322,7 @@ otel_collector:
 
 # -- Existing Secret with the following keys:
 #  - logfire-dex-client-secret
+#  - logfire-encryption-key
 #  - logfire-meta-write-token
 #  - logfire-meta-frontend-token
 #  - logfire-jwt-secret

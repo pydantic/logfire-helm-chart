@@ -458,7 +458,16 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $oauth2 := dict "skipApprovalScreen" true "passwordConnector" "local" -}}
 
 {{- $web := dict "http" "0.0.0.0:5556" -}}
+{{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+  {{- $_ := set $web "https" (printf "0.0.0.0:%v" .Values.inClusterTls.httpsPort) -}}
+  {{- $_ := set $web "tlsCert" "/etc/dex/tls/tls.crt" -}}
+  {{- $_ := set $web "tlsKey" "/etc/dex/tls/tls.key" -}}
+{{- end -}}
 {{- $grpc := dict "addr" "0.0.0.0:5557" -}}
+{{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+  {{- $_ := set $grpc "tlsCert" "/etc/dex/tls/tls.crt" -}}
+  {{- $_ := set $grpc "tlsKey" "/etc/dex/tls/tls.key" -}}
+{{- end -}}
 
 {{- $client := dict -}}
 {{- $_ := set $client "id" (include "logfire.dexClientId" .) -}}
@@ -1009,7 +1018,7 @@ Validate existing secret configuration
 {{- define "logfire.validate.existingSecret" -}}
 {{- if .Values.existingSecret.enabled -}}
   {{- if not .Values.existingSecret.name -}}
-    {{- fail "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys." -}}
+    {{- fail "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-encryption-key, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys." -}}
   {{- end -}}
 {{- end -}}
 {{- end -}}
