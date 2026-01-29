@@ -53,12 +53,17 @@ $ kubectl -n logfire port-forward svc/logfire-service 8080:8080
 
 ## In-cluster HTTPS (service-to-service)
 
-When enabled, the chart switches in-cluster traffic to HTTPS (incremental rollout; currently HAProxy -> frontend, HAProxy -> fusionfire ingest, the fusionfire cache HAProxies -> their cache backends, and (when using Gateway API) Gateway -> HAProxy).
+When enabled, the chart switches selected in-cluster traffic to HTTPS (TLS + certificate verification). Today this covers:
+
+* Gateway API / Ingress -> `logfire-service` (controller support varies; see notes below).
+* `logfire-service` (HAProxy) -> `logfire-frontend-service`, `logfire-dex`, and Fusionfire ingest.
+* Fusionfire cache HAProxies -> their `*-internal` cache backends.
+* `logfire-dex` serves HTTPS on `inClusterTls.httpsPort` and serves gRPC over TLS on port `5557`.
+* `logfire-backend` and `logfire-worker` mount the in-cluster CA bundle for outbound HTTPS calls.
+
 For certificate verification, HAProxy uses `inClusterTls.caBundle.*`, or (when using cert-manager auto-Issuer) the chart-created CA Secret.
 
 When using Kubernetes Ingress instead of Gateway API, the chart points the Ingress at the `logfire-service` HTTPS port when `inClusterTls.enabled` is true. For ingress-nginx, the chart also sets `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"` automatically (unless you override it). For other ingress controllers, you may need to set a controller-specific annotation to enable HTTPS to upstream services.
-
-The chart includes an `inClusterTls.enabled` switch intended to enable HTTPS between in-cluster services (e.g. HAProxy to upstream services). See `IN_CLUSTER_TLS_PLAN.md` for rollout status and Kind testing guidance.
 
 For Kind/dev, you can optionally deploy cert-manager as a Helm dependency (`dev.deployCertManager`). When working from this repo, run `helm dependency update charts/logfire` to fetch the dependency charts.
 
@@ -582,7 +587,7 @@ Helm chart for self-hosted Pydantic Logfire
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks) |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | imagePullSecrets | list | `[]` | Image pull secrets used by all pods |
-| inClusterTls | object | `{"caBundle":{"existingConfigMap":{"key":"ca.crt","name":""}},"certs":{"certManager":{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}},"mode":"existingSecrets"},"enabled":false,"httpsPort":8443,"secretNamePrefix":""}` | Enable full in-cluster HTTPS with certificate verification. This is independent from `ingress.tls` / `gateway.tls`.  NOTE: Implementation is incremental; see IN_CLUSTER_TLS_PLAN.md for rollout phases. |
+| inClusterTls | object | `{"caBundle":{"existingConfigMap":{"key":"ca.crt","name":""}},"certs":{"certManager":{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}},"mode":"existingSecrets"},"enabled":false,"httpsPort":8443,"secretNamePrefix":""}` | Enable full in-cluster HTTPS with certificate verification. This is independent from `ingress.tls` / `gateway.tls`.  NOTE: Implementation is incremental; see the "In-cluster HTTPS (service-to-service)" section in the README for current coverage and testing guidance. |
 | inClusterTls.caBundle | object | `{"existingConfigMap":{"key":"ca.crt","name":""}}` | CA bundle used by clients (HAProxy and other workloads) to verify service certificates. If certs.mode=certManager and inClusterTls.certs.certManager.issuerRef.name is empty, the chart creates a namespaced CA and HAProxy mounts it automatically. Otherwise, you must provide a CA bundle here. Provide either an existing ConfigMap or Secret containing a CA certificate. |
 | inClusterTls.certs | object | `{"certManager":{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}},"mode":"existingSecrets"}` | Certificate provisioning for in-cluster TLS. certs.mode=certManager requires cert-manager CRDs to be installed in the cluster. (Helm will fail fast if cert-manager.io/v1 is not available, unless dev.deployCertManager=true.) |
 | inClusterTls.certs.certManager | object | `{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}}` | Settings only used when certs.mode=certManager |

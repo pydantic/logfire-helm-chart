@@ -890,10 +890,6 @@ In-cluster TLS helpers
 {{- and (include "logfire.inClusterTls.enabled" . | eq "true") (.Values.inClusterTls.caBundle.existingConfigMap.name) -}}
 {{- end -}}
 
-{{- define "logfire.inClusterTls.caBundle.isSecret" -}}
-{{- and (include "logfire.inClusterTls.enabled" . | eq "true") (dig "existingSecret" "name" "" .Values.inClusterTls.caBundle) -}}
-{{- end -}}
-
 {{- define "logfire.inClusterTls.certs.mode" -}}
 {{- dig "certs" "mode" "existingSecrets" .Values.inClusterTls -}}
 {{- end -}}

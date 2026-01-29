@@ -35,6 +35,9 @@ stringData:
 
     frontend http-in
       bind :8080 alpn h2,http/1.1
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      bind :{{ .Values.inClusterTls.httpsPort }} ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2,http/1.1
+      {{- end }}
       log stdout local0 info
       option httplog
       option http-keep-alive
