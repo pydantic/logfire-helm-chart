@@ -59,6 +59,7 @@ spec:
   privateKey:
     algorithm: RSA
     size: 2048
+    rotationPolicy: Never
   issuerRef:
     name: {{ $selfSignedIssuerName }}
     kind: Issuer
@@ -104,6 +105,7 @@ spec:
   privateKey:
     algorithm: RSA
     size: 2048
+    rotationPolicy: Never
   dnsNames:
     - {{ $serviceName }}
     - {{ printf "%s.%s" $serviceName $namespace }}

@@ -1019,6 +1019,65 @@ In-cluster TLS helpers
 
 {{/*
 ================================================================================
+Dev Postgres helpers
+================================================================================
+*/}}
+
+{{- define "logfire.dev.waitForPostgres.initContainers" -}}
+{{- $ctx := .ctx -}}
+{{- $serviceName := .serviceName -}}
+{{- if and $ctx.Values.dev.deployPostgres (has $serviceName (list
+  "logfire-backend"
+  "logfire-worker"
+  "logfire-dex"
+  "logfire-backend-migrations"
+  "logfire-ff-migrations"
+  "logfire-ff-crud-api"
+  "logfire-ff-maintenance-scheduler"
+  "logfire-ff-maintenance-worker"
+  "logfire-ff-query-api"
+  "logfire-ff-query-worker"
+  "logfire-ff-ingest"
+  "logfire-ff-ingest-processor"
+)) -}}
+- name: check-db-ready
+  image: postgres:17
+  command:
+    - sh
+    - -c
+    - >-
+      until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432; do echo "Waiting for postgres..."; sleep 2; done
+{{- end -}}
+{{- end -}}
+
+{{/*
+Merge initContainers from values with dev Postgres wait initContainer.
+*/}}
+{{- define "logfire.initContainers" -}}
+{{- $ctx := .ctx -}}
+{{- $serviceName := required "logfire.initContainers: serviceName is required" .serviceName -}}
+{{- $userInit := (index $ctx.Values $serviceName | default dict).initContainers -}}
+{{- $devInit := include "logfire.dev.waitForPostgres.initContainers" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
+{{- $userHasCheckDbReady := dict "value" false -}}
+{{- range $userInit }}
+  {{- if eq .name "check-db-ready" }}
+    {{- $_ := set $userHasCheckDbReady "value" true -}}
+  {{- end -}}
+{{- end -}}
+{{- $includeDevInit := and $devInit (not $userHasCheckDbReady.value) -}}
+{{- if or $includeDevInit $userInit -}}
+initContainers:
+{{- if $includeDevInit }}
+{{ $devInit | nindent 2 }}
+{{- end }}
+{{- with $userInit }}
+{{ toYaml . | nindent 2 }}
+{{- end }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+================================================================================
 Configuration Validation Helpers
 ================================================================================
 These helpers validate chart configuration and fail with clear error messages
