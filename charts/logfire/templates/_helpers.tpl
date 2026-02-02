@@ -1031,6 +1031,7 @@ Dev Postgres helpers
   "logfire-ff-crud-api"
   "logfire-ff-maintenance-scheduler"
   "logfire-ff-maintenance-worker"
+  "logfire-ff-compaction-worker"
   "logfire-ff-query-api"
   "logfire-ff-query-worker"
   "logfire-ff-ingest"

@@ -19,6 +19,7 @@
   (dict "serviceName" "logfire-ff-crud-api")
   (dict "serviceName" "logfire-ff-maintenance-scheduler")
   (dict "serviceName" "logfire-ff-maintenance-worker")
+  (dict "serviceName" "logfire-ff-compaction-worker")
   (dict "serviceName" "logfire-ff-query-api")
   (dict "serviceName" "logfire-ff-query-worker")
 -}}

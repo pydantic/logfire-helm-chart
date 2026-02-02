@@ -991,6 +991,62 @@ logfire-ff-cache-byte:
 #     labels:
 #       type: my-volume
 
+# -- Compaction worker
+# logfire-ff-compaction-worker:
+#   # -- Workload labels
+#   labels: {}
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   jobParallelism: 3
+#   downloadParallelism: 10
+#   replicas: 2
+#   datafusionMemory: "3072MB"
+#   compactionTiers:
+#     - size_threshold_bytes: "1KB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "10KB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "100KB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "1MB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "10MB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "100MB"
+#       count_threshold: 10
+#   resources:
+#     cpu: "2"
+#     memory: "8Gi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 3
+#     hpa:
+#       enabled: true
+#       memAverage: 50
+#       cpuAverage: 50
+#     keda:
+#       enabled: true
+#       triggers:
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+#   scratchVolume:
+#     storageClassName: my-storage-class
+#     storage: 1Gi
+#     labels:
+#       type: my-volume
+
 # -- Maintenance scheduler
 # logfire-ff-maintenance-scheduler:
 #   # -- Workload labels
