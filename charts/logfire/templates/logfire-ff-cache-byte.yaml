@@ -95,6 +95,7 @@ spec:
           volumeMounts:
             - name: {{ include "logfire.scratchVolumeName" . }}
               mountPath: /scratch
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
             {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
             {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
           ports:
@@ -122,6 +123,7 @@ spec:
                   - "sleep"
                   - "5"
       volumes:
+      {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 6 }}
       {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       {{- include "logfire.scratchVolume" (get (get .Values $serviceName | default dict) "scratchVolume" | default dict) | nindent 6 }}
       {{- include "logfire.objectStoreVolumes" . | nindent 6 }}

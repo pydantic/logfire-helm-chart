@@ -119,6 +119,7 @@ spec:
             {{- end }}
           {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
           volumeMounts:
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
             {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
           {{- end }}
           livenessProbe:
@@ -139,6 +140,7 @@ spec:
             failureThreshold: 5
       {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
       volumes:
+        {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
         {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
       {{- end }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
