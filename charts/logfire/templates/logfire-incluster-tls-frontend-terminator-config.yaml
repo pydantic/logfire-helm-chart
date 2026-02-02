@@ -1,7 +1,0 @@
-{{/*
-DEPRECATED: in-cluster TLS should be handled natively by services (nginx/HAProxy/app),
-not via a per-service TLS terminator sidecar.
-
-This template is kept as a no-op to avoid breaking existing branches that still
-reference it, and will be removed in a future chart release.
-*/}}
