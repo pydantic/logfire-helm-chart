@@ -16,6 +16,10 @@ data:
   FF_HTTPS_PORT: {{ .Values.inClusterTls.httpsPort | quote }}
   FF_TLS_CERT_PATH: "/etc/tls/tls.crt"
   FF_TLS_KEY_PATH: "/etc/tls/tls.key"
+  FF_TLS_CLIENT_ENABLE: "true"
+  FF_TLS_CLIENT_CA_PATH: "/etc/logfire/incluster-ca/ca.crt"
+  FF_TLS_CLIENT_SNI_HOSTNAME: "logfire-ff-query-worker"
+  FF_TLS_CLIENT_PORT: {{ .Values.inClusterTls.httpsPort | quote }}
 {{- end }}
 
 ---
