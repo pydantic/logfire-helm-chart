@@ -8,6 +8,7 @@
 {{- $caSecretName := include "logfire.inClusterTls.certs.certManager.autoCaSecretName" . -}}
 
 {{- $certServices := list
+  (dict "serviceName" "logfire-backend")
   (dict "serviceName" "logfire-service")
   (dict "serviceName" "logfire-frontend-service")
   (dict "serviceName" "logfire-dex")

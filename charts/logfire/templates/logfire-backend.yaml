@@ -18,6 +18,8 @@ spec:
   ports:
   - port: 8000
     targetPort: 8000
+    name: "http"
+  {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
   type: ClusterIP
 ---
 apiVersion: apps/v1
@@ -84,6 +86,7 @@ spec:
           command: ["python", "-m", "logfire_backend"]
           ports:
             - containerPort: 8000
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
           livenessProbe:
             httpGet:
               path: /health/live
@@ -115,6 +118,12 @@ spec:
             {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
             - name: LOGFIRE_CA_PATH
               value: /etc/logfire/incluster-ca/ca.crt
+            - name: HTTPS_PORT
+              value: "{{ .Values.inClusterTls.httpsPort }}"
+            - name: TLS_CERT_PATH
+              value: "/etc/tls/tls.crt"
+            - name: "TLS_KEY_PATH"
+              value: "/etc/tls/tls.key"
             {{- end }}
             {{- with .Values.ai }}
             {{- with .model }}
@@ -267,10 +276,12 @@ spec:
           {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
           volumeMounts:
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
           {{- end }}
       {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
       volumes:
         {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
       {{- end }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
