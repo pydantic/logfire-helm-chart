@@ -110,11 +110,7 @@ spec:
             - name: WORKER_REDIS_DSN
               value: {{ .Values.redisDsn }}
             - name: DEX_INTERNAL_URL
-              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-              value: https://logfire-dex:{{ .Values.inClusterTls.httpsPort }}
-              {{- else }}
-              value: http://logfire-dex:5556
-              {{- end }}
+              value: "{{ include "logfire.scheme" . }}://logfire-dex:{{ include "logfire.port" (dict "port" 5556 "root" .) }}"
             {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
             - name: LOGFIRE_CA_PATH
               value: /etc/logfire/incluster-ca/ca.crt
@@ -210,17 +206,17 @@ spec:
                   name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-encryption-key") }}
                   key: logfire-encryption-key
             - name: FUSIONFIRE_QUERY_HOST
-              value: http://logfire-ff-query-api
+              value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
             - name: FUSIONFIRE_QUERY_PORT
-              value: "8011"
+              value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
             - name: FUSIONFIRE_INGEST_HOST
-              value: http://logfire-ff-ingest-processor
+              value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor"
             - name: FUSIONFIRE_INGEST_PORT
-              value: "8012"
+              value: "{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
             - name: FUSIONFIRE_CRUD_HOST
-              value: http://logfire-ff-crud-api
+              value: "{{ include "logfire.scheme" . }}://logfire-ff-crud-api"
             - name: FUSIONFIRE_CRUD_PORT
-              value: "8011"
+              value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
             - name: MIN_DATE_USAGE_CHART  # TODO: make this optional?
               value: "2025-01-01"
             - name: DEFAULT_SUBSCRIPTION_PLAN

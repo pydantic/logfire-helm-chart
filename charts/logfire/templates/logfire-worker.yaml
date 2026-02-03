@@ -91,41 +91,17 @@ spec:
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.05"
             - name: FUSIONFIRE_QUERY_HOST
-              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-              value: https://logfire-ff-query-api
-              {{- else }}
-              value: http://logfire-ff-query-api
-              {{- end }}
+              value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
             - name: FUSIONFIRE_QUERY_PORT
-              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-              value: {{ .Values.inClusterTls.httpsPort | quote }}
-              {{- else }}
-              value: "8011"
-              {{- end }}
+              value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
             - name: FUSIONFIRE_INGEST_HOST
-              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-              value: https://logfire-ff-ingest-processor
-              {{- else }}
-              value: http://logfire-ff-ingest-processor
-              {{- end }}
+              value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor"
             - name: FUSIONFIRE_INGEST_PORT
-              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-              value: {{ .Values.inClusterTls.httpsPort | quote }}
-              {{- else }}
-              value: "8012"
-              {{- end }}
+              value: "{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
             - name: FUSIONFIRE_CRUD_HOST
-              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-              value: https://logfire-ff-crud-api
-              {{- else }}
-              value: http://logfire-ff-crud-api
-              {{- end }}
+              value: "{{ include "logfire.scheme" . }}://logfire-ff-crud-api"
             - name: FUSIONFIRE_CRUD_PORT
-              {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-              value: {{ .Values.inClusterTls.httpsPort | quote }}
-              {{- else }}
-              value: "8011"
-              {{- end }}
+              value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
             {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
             - name: LOGFIRE_CA_PATH
               value: /etc/logfire/incluster-ca/ca.crt

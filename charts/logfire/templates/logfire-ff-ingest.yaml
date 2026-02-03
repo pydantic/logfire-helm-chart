@@ -122,7 +122,7 @@ spec:
             - name: FF_INGEST_NUM_WORKERS
               value: {{ mul (atoi (toString ($cpu))) 8 | quote }}
             - name: FF_INGEST_DOWNSTREAM_URL
-              value: "http://logfire-ff-ingest-processor:8012"
+              value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor:{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
             - name: FF_IO_THREADS
               value: {{ $cpuInt | float64 | floor | int | quote }}
             - name: FF_DATAFUSION_THREADS

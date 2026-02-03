@@ -1014,6 +1014,32 @@ In-cluster TLS helpers
 {{- end -}}
 
 {{/*
+Get the scheme (http/https) based on in-cluster TLS setting.
+Usage: {{ include "logfire.scheme" . }}
+*/}}
+{{- define "logfire.scheme" -}}
+{{- if and .Values.inClusterTls .Values.inClusterTls.enabled -}}
+https
+{{- else -}}
+http
+{{- end -}}
+{{- end -}}
+
+{{/*
+Get the port based on in-cluster TLS setting.
+Usage: {{ include "logfire.port" (dict "port" 9001 "root" .) }}
+*/}}
+{{- define "logfire.port" -}}
+{{- $port := .port -}}
+{{- $root := .root -}}
+{{- if and $root.Values.inClusterTls $root.Values.inClusterTls.enabled -}}
+{{- $root.Values.inClusterTls.httpsPort -}}
+{{- else -}}
+{{- $port -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 ================================================================================
 Dev Postgres helpers
 ================================================================================
