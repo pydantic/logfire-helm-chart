@@ -51,6 +51,7 @@ spec:
         {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
+      terminationGracePeriodSeconds: 75
       serviceAccountName: {{ include "logfire.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -121,7 +122,7 @@ spec:
               exec:
                 command:
                   - "sleep"
-                  - "5"
+                  - "45"
       volumes:
       {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 6 }}
       {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}

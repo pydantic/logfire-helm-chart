@@ -107,10 +107,14 @@ spec:
             httpGet:
               path: /health
               port: 9001
+            initialDelaySeconds: 15
+            periodSeconds: 5
           readinessProbe:
             httpGet:
               path: /health
               port: 9001
+            initialDelaySeconds: 5
+            periodSeconds: 5
           startupProbe:
             httpGet:
               path: /health
