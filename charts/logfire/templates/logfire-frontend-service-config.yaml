@@ -1,3 +1,4 @@
+{{- $tls := include "logfire.effective_tls" . | eq "true" -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -158,7 +159,7 @@ data:
                 
                 {{- $hostnames := include "logfire.all_hostnames_string" . | splitList " " -}}
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
-                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }} {{- range $hostnames }} {{ $.Values.ingress.tls | default false | ternary "wss" "ws" }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https https://github.com https://avatars.githubusercontent.com data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }} {{- range $hostnames }} {{ $tls  | default false | ternary "wss" "ws" }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https https://github.com https://avatars.githubusercontent.com data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
             # Security Headers
@@ -244,7 +245,7 @@ data:
                 
                 {{- $hostnames := include "logfire.all_hostnames_string" . | splitList " " -}}
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
-                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }} {{- range $hostnames }} {{ $.Values.ingress.tls | default false | ternary "wss" "ws" }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https https://github.com https://avatars.githubusercontent.com data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }} {{- range $hostnames }} {{ $tls | default false | ternary "wss" "ws" }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https https://github.com https://avatars.githubusercontent.com data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
             # Security Headers
