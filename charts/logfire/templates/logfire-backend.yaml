@@ -87,14 +87,27 @@ spec:
           ports:
             - containerPort: 8000
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            failureThreshold: 10
           livenessProbe:
             httpGet:
               path: /health/live
               port: 8000
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health
               port: 8000
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 2
           env:
             - name: APP_PORT
               value: "8000"
