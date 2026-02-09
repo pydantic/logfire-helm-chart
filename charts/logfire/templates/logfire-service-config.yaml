@@ -35,6 +35,9 @@ stringData:
 
     frontend http-in
       bind :8080 alpn h2,http/1.1
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      bind :{{ .Values.inClusterTls.httpsPort }} ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2,http/1.1
+      {{- end }}
       log stdout local0 info
       option httplog
       option http-keep-alive
@@ -50,7 +53,7 @@ stringData:
       
       acl is_options method OPTIONS
       acl cors_path_ingest path_reg -i ^/v1/(traces|metrics|logs)$
-      acl cors_path_api path_reg -i ^/(ui-api|v1)/
+      acl cors_path_api path_reg -i ^/(ui-api|v1|api)/
 
       # Capture request origin Header and check against list of valid urls
       http-request set-var(txn.origin) req.hdr(Origin)
@@ -64,7 +67,7 @@ stringData:
       
       acl path_ingest path_reg -i ^/v1/(traces|metrics|logs)$
       acl path_dex path_beg /auth-api
-      acl path_backend path_reg -i ^/(ui-api|v1)/
+      acl path_backend path_reg -i ^/(ui-api|v1|api)/
 
 
       use_backend logfire-ingest if path_ingest
@@ -98,7 +101,12 @@ stringData:
       {{- $values := (index .Values "logfire-ff-ingest" | default dict) -}}
       {{- $autoscaling := (index $values "autoscaling" | default dict) -}}
       {{- $maxCount := coalesce (index $autoscaling "maxReplicas") (index $values "replicas") 1 }}
+      {{- $ingestSni := printf "logfire-ff-ingest.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      server-template logfire-ff-ingest 1-{{ $maxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check resolvers kubernetes inter 250ms hash-key addr ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $ingestSni }}) verifyhost {{ $ingestSni }} check-ssl
+      {{- else }}
       server-template logfire-ff-ingest 1-{{ $maxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8012 check resolvers kubernetes inter 250ms hash-key addr
+      {{- end }}
 
     backend logfire-dex
       balance roundrobin
@@ -109,7 +117,12 @@ stringData:
       timeout server 50s
       http-check expect status 200
 
+      {{- $dexSni := printf "logfire-dex.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check port 5558 resolvers kubernetes ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $dexSni }}) verifyhost {{ $dexSni }}
+      {{- else }}
       server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:5556 check port 5558 resolvers kubernetes
+      {{- end }}
 
     backend logfire-backend
       balance roundrobin
@@ -130,5 +143,9 @@ stringData:
       timeout connect 3s
       timeout server 50s
       http-check expect status 200
+      {{- $frontendSni := printf "logfire-frontend-service.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      server logfire-frontend logfire-frontend-service.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check resolvers kubernetes ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $frontendSni }}) verifyhost {{ $frontendSni }} check-ssl
+      {{- else }}
       server logfire-frontend logfire-frontend-service.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8080 check resolvers kubernetes
-
+      {{- end }}

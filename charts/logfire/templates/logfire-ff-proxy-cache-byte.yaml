@@ -1,9 +1,10 @@
 {{- $serviceName := "logfire-ff-proxy-cache-byte" }}
+{{- $proxyServiceName := "logfire-ff-cache-byte" }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: logfire-ff-cache-byte
+  name: {{ $proxyServiceName }}
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
@@ -17,6 +18,7 @@ spec:
   - port: 9001
     targetPort: 8080
     name: http
+  {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
   type: ClusterIP
 ---
 apiVersion: apps/v1
@@ -33,6 +35,12 @@ spec:
   {{- if not (hasKey (index .Values $serviceName | default dict) "autoscaling") }}
   replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
   {{- end }}
+  minReadySeconds: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: "50%"
   selector:
     matchLabels:
       {{- include "logfire.selectorLabels" . | nindent 6 }}
@@ -46,8 +54,10 @@ spec:
       annotations:
         checksum/logfire-cache-byte-haproxy-config: {{ include "utils.secretChecksum" (dict "ctx" . "name" "logfire-cache-byte-haproxy-config" "key" "haproxy.cfg") }}
         checksum/service-config: {{ include (print $.Template.BasePath "/logfire-service-config.yaml") . | sha256sum }}
+        {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $proxyServiceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
+      terminationGracePeriodSeconds: 120
       serviceAccountName: {{ include "logfire.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -55,10 +65,7 @@ spec:
         - name: {{ . | quote }}
       {{- end }}
       {{- end }}
-      {{- with (index .Values $serviceName | default dict).initContainers }}
-      initContainers:
-        {{- . | toYaml | nindent 8 }}
-      {{- end}}
+      {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
@@ -77,14 +84,17 @@ spec:
               mountPath: /usr/local/etc/haproxy/haproxy.cfg
               subPath: haproxy.cfg
               readOnly: true
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/usr/local/etc/haproxy/tls") | nindent 12 }}
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/usr/local/etc/haproxy/ca") | nindent 12 }}
           lifecycle:
             preStop:
               exec:
                 command:
                   - "sleep"
-                  - "5"
+                  - "20"
           ports:
             - containerPort: 8080
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
             - containerPort: 8181 # Stats port
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           env:
@@ -101,15 +111,24 @@ spec:
             httpGet:
               path: "/stats"
               port: 8181
+            initialDelaySeconds: 10
+            periodSeconds: 10
           startupProbe:
             httpGet:
               path: "/stats"
               port: 8181
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            failureThreshold: 12
           readinessProbe:
             httpGet:
               path: "/stats"
               port: 8181
+            initialDelaySeconds: 20
+            periodSeconds: 5
       volumes:
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $proxyServiceName "keyPath" "tls.crt.key") | nindent 8 }}
+        {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
         - name: logfire-cache-byte-haproxy-config
           secret:
             secretName: logfire-cache-byte-haproxy-config

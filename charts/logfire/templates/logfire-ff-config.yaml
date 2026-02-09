@@ -11,6 +11,16 @@ data:
   FF_SEND_TO_LOGFIRE: "true"
   FF_FORCE_CONSOLE_LOGGING: "true"
   OTEL_RESOURCE_ATTRIBUTES: "vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app"
+{{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+  FF_TLS_MODE: "allow"
+  FF_HTTPS_PORT: {{ .Values.inClusterTls.httpsPort | quote }}
+  FF_TLS_CERT_PATH: "/etc/tls/tls.crt"
+  FF_TLS_KEY_PATH: "/etc/tls/tls.key"
+  FF_TLS_CLIENT_ENABLE: "true"
+  FF_TLS_CLIENT_CA_PATH: "/etc/logfire/incluster-ca/ca.crt"
+  FF_TLS_CLIENT_SNI_HOSTNAME: "logfire-ff-query-worker"
+  FF_TLS_CLIENT_PORT: {{ .Values.inClusterTls.httpsPort | quote }}
+{{- end }}
 
 ---
 
@@ -23,10 +33,10 @@ metadata:
     app.kubernetes.io/component: logfire-ff-config
 data:
   FF_FUSIONFIRE_COLLECT_STATISTICS: "0.0"
-  FF_CACHE_OBJECT_STORE_URI: "http://logfire-ff-cache-byte:9001"
-  FF_IPC_CACHE_URI: "http://logfire-ff-cache-ipc:9001"
-  FF_FILTER_CACHE_URI: "http://logfire-ff-cache-filter:9001"
-  FF_IPC_FILTER_CACHE_URI: "http://logfire-ff-cache-filter:9001"
+  FF_CACHE_OBJECT_STORE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-byte:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
+  FF_IPC_CACHE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-ipc:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
+  FF_FILTER_CACHE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-filter:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
+  FF_IPC_FILTER_CACHE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-filter:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
   FF_ENABLE_FILTER_CACHE: "1"
   FF_IPC_CACHE_HOT_FILE_AGE_MINUTES: "30"
   FF_IPC_CACHE_SMALL_FILE_SIZE_MB: "5"
@@ -59,7 +69,7 @@ metadata:
     app.kubernetes.io/component: logfire-ff-config
 data:
   FF_SHARED_REDIS_DSN: {{ .Values.redisDsn }}
-  FF_BACKEND_SERVICE_URL: "http://logfire-backend:8000"
+  FF_BACKEND_SERVICE_URL: "{{ include "logfire.scheme" . }}://logfire-backend:{{ include "logfire.port" (dict "port" 8000 "root" .) }}"
   FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
   FF_FAILOVER_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}/_ingest_failover
   FF_INGEST_MAX_FUTURE_TIME_DRIFT: "1h"

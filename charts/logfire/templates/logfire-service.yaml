@@ -14,8 +14,10 @@ spec:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
-  - port: 8080
+  - name: http
+    port: 8080
     targetPort: 8080
+  {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" .Values.inClusterTls.httpsPort) | nindent 2 }}
   type: ClusterIP
 ---
 apiVersion: apps/v1
@@ -43,6 +45,7 @@ spec:
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
         checksum/service-config: {{ include (print $.Template.BasePath "/logfire-service-config.yaml") . | sha256sum }}
+        {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       serviceAccountName: {{ include "logfire.serviceAccountName" . }}
@@ -52,10 +55,7 @@ spec:
         - name: {{ . | quote }}
       {{- end }}
       {{- end }}
-      {{- with (index .Values $serviceName | default dict).initContainers }}
-      initContainers:
-        {{- . | toYaml | nindent 8 }}
-      {{- end}}
+      {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
@@ -74,6 +74,8 @@ spec:
               mountPath: /usr/local/etc/haproxy/haproxy.cfg
               subPath: haproxy.cfg
               readOnly: true
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/usr/local/etc/haproxy/tls") | nindent 12 }}
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/usr/local/etc/haproxy/ca") | nindent 12 }}
           lifecycle:
             preStop:
               exec:
@@ -82,6 +84,7 @@ spec:
                   - "5"
           ports:
             - containerPort: 8080
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
             - containerPort: 8181 # Stats port
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           env:
@@ -107,6 +110,8 @@ spec:
               path: "/stats"
               port: 8181
       volumes:
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName "keyPath" "tls.crt.key") | nindent 8 }}
+        {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
         - name: logfire-haproxy-config
           secret:
             secretName: logfire-haproxy-config

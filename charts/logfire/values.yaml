@@ -172,6 +172,56 @@ gateway:
 
 
 # ==============================================================================
+# In-cluster TLS (service-to-service)
+# ==============================================================================
+
+# -- Enable full in-cluster HTTPS with certificate verification.
+# This is independent from `ingress.tls` / `gateway.tls`.
+#
+# NOTE: Implementation is incremental; see the "In-cluster HTTPS (service-to-service)" section in the README for current coverage and testing guidance.
+inClusterTls:
+  enabled: false
+
+  # -- Port used for in-cluster HTTPS on Services.
+  # Use a non-privileged port to avoid securityContext constraints.
+  httpsPort: 8443
+
+  # -- CA bundle used by clients (HAProxy and other workloads) to verify service certificates.
+  # If certs.mode=certManager and inClusterTls.certs.certManager.issuerRef.name is empty, the chart creates a
+  # namespaced CA and HAProxy mounts it automatically. Otherwise, you must provide a CA bundle here.
+  # Provide either an existing ConfigMap or Secret containing a CA certificate.
+  caBundle:
+    existingConfigMap:
+      name: ""
+      key: "ca.crt"
+    # existingSecret:
+    #   name: ""
+    #   key: "ca.crt"
+
+  # -- Convention-based certificate secret naming.
+  # When enabled, the chart expects a kubernetes.io/tls Secret per service:
+  #   <release>-<service>-tls
+  # If secretNamePrefix is empty, the prefix defaults to the Helm release name.
+  secretNamePrefix: ""
+
+  # -- Certificate provisioning for in-cluster TLS.
+  # certs.mode=certManager requires cert-manager CRDs to be installed in the cluster.
+  # (Helm will fail fast if cert-manager.io/v1 is not available, unless dev.deployCertManager=true.)
+  certs:
+    # -- Use existingSecrets for customer-provided certs, or certManager to have the chart
+    # create cert-manager Certificate resources.
+    mode: existingSecrets
+
+    # -- Settings only used when certs.mode=certManager
+    certManager:
+      # -- IssuerRef used to issue service certificates. If name is empty, the chart will
+      # create a namespaced Issuer + CA (dev-friendly default).
+      issuerRef:
+        kind: Issuer
+        name: ""
+        group: cert-manager.io
+
+# ==============================================================================
 # Postgres configuration
 # ==============================================================================
 
@@ -939,6 +989,62 @@ logfire-ff-cache-byte:
 #     labels:
 #       type: my-volume
 
+# -- Compaction worker
+# logfire-ff-compaction-worker:
+#   # -- Workload labels
+#   labels: {}
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   jobParallelism: 3
+#   downloadParallelism: 10
+#   replicas: 2
+#   datafusionMemory: "3072MB"
+#   compactionTiers:
+#     - size_threshold_bytes: "1KB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "10KB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "100KB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "1MB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "10MB"
+#       count_threshold: 10
+#     - size_threshold_bytes: "100MB"
+#       count_threshold: 10
+#   resources:
+#     cpu: "2"
+#     memory: "8Gi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 3
+#     hpa:
+#       enabled: true
+#       memAverage: 50
+#       cpuAverage: 50
+#     keda:
+#       enabled: true
+#       triggers:
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+#   scratchVolume:
+#     storageClassName: my-storage-class
+#     storage: 1Gi
+#     labels:
+#       type: my-volume
+
 # -- Maintenance scheduler
 # logfire-ff-maintenance-scheduler:
 #   # -- Workload labels
@@ -1270,6 +1376,7 @@ otel_collector:
 
 # -- Existing Secret with the following keys:
 #  - logfire-dex-client-secret
+#  - logfire-encryption-key
 #  - logfire-meta-write-token
 #  - logfire-meta-frontend-token
 #  - logfire-jwt-secret
@@ -1306,6 +1413,12 @@ dev:
   deployPostgres: false
   # -- Use a local MinIO instance as object storage (NOT for production)
   deployMinio: false
+  # -- Deploy cert-manager (NOT for production; includes cluster-scoped resources).
+  deployCertManager: false
+
+# -- cert-manager chart values (only used when `dev.deployCertManager` is true)
+cert-manager:
+  installCRDs: true
 
 # -- MailDev image configuration (only used when `dev.deployMaildev` is true)
 maildev:

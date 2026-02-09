@@ -5,5 +5,8 @@ dependencies:
 - name: minio
   repository: https://charts.bitnami.com/bitnami
   version: 17.0.21
-digest: sha256:0dbf46cbdd45f2f7f52453a9bf4f5ea3d825c81cd4c71709f7204cc0ce1c1f0d
-generated: "2025-09-19T10:18:11.580731-03:00"
+- name: cert-manager
+  repository: https://charts.jetstack.io
+  version: v1.19.2
+digest: sha256:c76ba4d2438fec04386bb90b1a1a0f7fdeffdb183ba4ab570c0d32917058bb44
+generated: "2026-01-21T08:56:43.760451-03:00"

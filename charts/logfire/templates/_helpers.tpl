@@ -355,6 +355,16 @@ Create dex config secret name
 {{- end }}
 {{- end -}}
 
+{{- define "logfire.hooksAnnotationsWithoutArgoDeletePolicy" -}}
+{{- with .Values.hooksAnnotations }}
+{{- range $key, $value := . }}
+{{- if ne $key "argocd.argoproj.io/hook-delete-policy" }}
+{{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
 {{/*
 Create Postgres secret name
 */}}
@@ -448,7 +458,16 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $oauth2 := dict "skipApprovalScreen" true "passwordConnector" "local" -}}
 
 {{- $web := dict "http" "0.0.0.0:5556" -}}
+{{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+  {{- $_ := set $web "https" (printf "0.0.0.0:%v" .Values.inClusterTls.httpsPort) -}}
+  {{- $_ := set $web "tlsCert" "/etc/dex/tls/tls.crt" -}}
+  {{- $_ := set $web "tlsKey" "/etc/dex/tls/tls.key" -}}
+{{- end -}}
 {{- $grpc := dict "addr" "0.0.0.0:5557" -}}
+{{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+  {{- $_ := set $grpc "tlsCert" "/etc/dex/tls/tls.crt" -}}
+  {{- $_ := set $grpc "tlsKey" "/etc/dex/tls/tls.key" -}}
+{{- end -}}
 
 {{- $client := dict -}}
 {{- $_ := set $client "id" (include "logfire.dexClientId" .) -}}
@@ -846,6 +865,242 @@ tolerations:
 
 {{/*
 ================================================================================
+In-cluster TLS helpers
+================================================================================
+*/}}
+
+{{- define "logfire.inClusterTls.enabled" -}}
+{{- .Values.inClusterTls.enabled | default false -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.secretNamePrefix" -}}
+{{- if .Values.inClusterTls.secretNamePrefix -}}
+{{- .Values.inClusterTls.secretNamePrefix -}}
+{{- else -}}
+{{- .Release.Name -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.secretName" -}}
+{{- $prefix := include "logfire.inClusterTls.secretNamePrefix" .ctx -}}
+{{- printf "%s-%s-tls" $prefix .serviceName -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.caBundle.isConfigMap" -}}
+{{- and (include "logfire.inClusterTls.enabled" . | eq "true") (.Values.inClusterTls.caBundle.existingConfigMap.name) -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.mode" -}}
+{{- dig "certs" "mode" "existingSecrets" .Values.inClusterTls -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.isCertManager" -}}
+{{- eq (include "logfire.inClusterTls.certs.mode" .) "certManager" -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.certManager.issuerRef.kind" -}}
+{{- dig "certs" "certManager" "issuerRef" "kind" "Issuer" .Values.inClusterTls -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.certManager.issuerRef.name" -}}
+{{- dig "certs" "certManager" "issuerRef" "name" "" .Values.inClusterTls -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.certManager.issuerRef.group" -}}
+{{- dig "certs" "certManager" "issuerRef" "group" "cert-manager.io" .Values.inClusterTls -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.certManager.autoIssuer" -}}
+{{- and (include "logfire.inClusterTls.certs.isCertManager" . | eq "true") (not (include "logfire.inClusterTls.certs.certManager.issuerRef.name" .)) -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.certs.certManager.autoCaSecretName" -}}
+{{- printf "%s-incluster-ca" .Release.Name -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.https.servicePort" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+- name: {{ .name | default "https" }}
+  port: {{ $ctx.Values.inClusterTls.httpsPort }}
+  targetPort: {{ .targetPort | default "https" }}
+  appProtocol: HTTPS
+  protocol: TCP
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.https.containerPort" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+- name: {{ .name | default "https" }}
+  containerPort: {{ $ctx.Values.inClusterTls.httpsPort }}
+  protocol: TCP
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.server.checksumAnnotation" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+{{- $serviceName := required "inClusterTls.server.checksumAnnotation: serviceName is required" .serviceName -}}
+{{- $annotationKey := .annotationKey | default "checksum/incluster-tls-cert" -}}
+{{- $secretKey := .secretKey | default "tls.crt" -}}
+{{- $secretName := include "logfire.inClusterTls.secretName" (dict "ctx" $ctx "serviceName" $serviceName) -}}
+{{ $annotationKey }}: {{ include "utils.secretChecksum" (dict "ctx" $ctx "name" $secretName "key" $secretKey) }}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.server.volumeMount" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+- name: {{ .volumeName | default "logfire-incluster-tls" }}
+  mountPath: {{ .mountPath | default "/etc/tls" }}
+  readOnly: true
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.server.volume" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+{{- $serviceName := required "inClusterTls.server.volume: serviceName is required" .serviceName -}}
+{{- $volumeName := .volumeName | default "logfire-incluster-tls" -}}
+{{- $secretName := include "logfire.inClusterTls.secretName" (dict "ctx" $ctx "serviceName" $serviceName) -}}
+- name: {{ $volumeName }}
+  secret:
+    secretName: {{ $secretName }}
+    items:
+      - key: tls.crt
+        path: {{ .crtPath | default "tls.crt" }}
+      - key: tls.key
+        path: {{ .keyPath | default "tls.key" }}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.caBundle.volumeMount" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+- name: {{ .volumeName | default "logfire-incluster-ca-bundle" }}
+  mountPath: {{ required "inClusterTls.caBundle.volumeMount: mountPath is required" .mountPath }}
+  readOnly: true
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.caBundle.volume" -}}
+{{- $ctx := .ctx -}}
+{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+{{- $volumeName := .volumeName | default "logfire-incluster-ca-bundle" -}}
+{{- $caBundleSecretName := dig "existingSecret" "name" "" $ctx.Values.inClusterTls.caBundle -}}
+{{- $autoIssuer := include "logfire.inClusterTls.certs.certManager.autoIssuer" $ctx | eq "true" -}}
+- name: {{ $volumeName }}
+  {{- if (include "logfire.inClusterTls.caBundle.isConfigMap" $ctx | eq "true") }}
+  configMap:
+    name: {{ $ctx.Values.inClusterTls.caBundle.existingConfigMap.name }}
+    items:
+      - key: {{ $ctx.Values.inClusterTls.caBundle.existingConfigMap.key | default "ca.crt" }}
+        path: ca.crt
+  {{- else if $caBundleSecretName }}
+  secret:
+    secretName: {{ $caBundleSecretName }}
+    items:
+      - key: {{ dig "existingSecret" "key" "ca.crt" $ctx.Values.inClusterTls.caBundle }}
+        path: ca.crt
+  {{- else if $autoIssuer }}
+  secret:
+    secretName: {{ include "logfire.inClusterTls.certs.certManager.autoCaSecretName" $ctx }}
+    items:
+      - key: tls.crt
+        path: ca.crt
+  {{- end }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Get the scheme (http/https) based on in-cluster TLS setting.
+Usage: {{ include "logfire.scheme" . }}
+*/}}
+{{- define "logfire.scheme" -}}
+{{- if and .Values.inClusterTls .Values.inClusterTls.enabled -}}
+https
+{{- else -}}
+http
+{{- end -}}
+{{- end -}}
+
+{{/*
+Get the port based on in-cluster TLS setting.
+Usage: {{ include "logfire.port" (dict "port" 9001 "root" .) }}
+*/}}
+{{- define "logfire.port" -}}
+{{- $port := .port -}}
+{{- $root := .root -}}
+{{- if and $root.Values.inClusterTls $root.Values.inClusterTls.enabled -}}
+{{- $root.Values.inClusterTls.httpsPort -}}
+{{- else -}}
+{{- $port -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+================================================================================
+Dev Postgres helpers
+================================================================================
+*/}}
+
+{{- define "logfire.dev.waitForPostgres.initContainers" -}}
+{{- $ctx := .ctx -}}
+{{- $serviceName := .serviceName -}}
+{{- if and $ctx.Values.dev.deployPostgres (has $serviceName (list
+  "logfire-backend"
+  "logfire-worker"
+  "logfire-dex"
+  "logfire-backend-migrations"
+  "logfire-ff-migrations"
+  "logfire-ff-crud-api"
+  "logfire-ff-maintenance-scheduler"
+  "logfire-ff-maintenance-worker"
+  "logfire-ff-compaction-worker"
+  "logfire-ff-query-api"
+  "logfire-ff-query-worker"
+  "logfire-ff-ingest"
+  "logfire-ff-ingest-processor"
+)) -}}
+- name: check-db-ready
+  image: postgres:17
+  command:
+    - sh
+    - -c
+    - >-
+      until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432; do echo "Waiting for postgres..."; sleep 2; done
+{{- end -}}
+{{- end -}}
+
+{{/*
+Merge initContainers from values with dev Postgres wait initContainer.
+*/}}
+{{- define "logfire.initContainers" -}}
+{{- $ctx := .ctx -}}
+{{- $serviceName := required "logfire.initContainers: serviceName is required" .serviceName -}}
+{{- $userInit := (index $ctx.Values $serviceName | default dict).initContainers -}}
+{{- $devInit := include "logfire.dev.waitForPostgres.initContainers" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
+{{- $userHasCheckDbReady := dict "value" false -}}
+{{- range $userInit }}
+  {{- if eq .name "check-db-ready" }}
+    {{- $_ := set $userHasCheckDbReady "value" true -}}
+  {{- end -}}
+{{- end -}}
+{{- $includeDevInit := and $devInit (not $userHasCheckDbReady.value) -}}
+{{- if or $includeDevInit $userInit -}}
+initContainers:
+{{- if $includeDevInit }}
+{{ $devInit | nindent 2 }}
+{{- end }}
+{{- with $userInit }}
+{{ toYaml . | nindent 2 }}
+{{- end }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+================================================================================
 Configuration Validation Helpers
 ================================================================================
 These helpers validate chart configuration and fail with clear error messages
@@ -940,7 +1195,7 @@ Validate existing secret configuration
 {{- define "logfire.validate.existingSecret" -}}
 {{- if .Values.existingSecret.enabled -}}
   {{- if not .Values.existingSecret.name -}}
-    {{- fail "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys." -}}
+    {{- fail "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-encryption-key, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys." -}}
   {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -1005,6 +1260,52 @@ Validate email/admin configuration
 {{- end -}}
 
 {{/*
+Validate in-cluster TLS configuration
+*/}}
+{{- define "logfire.validate.inClusterTls" -}}
+{{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+  {{- $mode := include "logfire.inClusterTls.certs.mode" . -}}
+  {{- if not (or (eq $mode "existingSecrets") (eq $mode "certManager")) -}}
+    {{- fail (printf "inClusterTls.certs.mode must be one of 'existingSecrets' or 'certManager' (got %q)" $mode) -}}
+  {{- end -}}
+
+  {{- $cm := .Values.inClusterTls.caBundle.existingConfigMap.name -}}
+  {{- $secret := dig "existingSecret" "name" "" .Values.inClusterTls.caBundle -}}
+  {{- if and $cm $secret -}}
+    {{- fail "inClusterTls.caBundle: specify only one of existingConfigMap.name or existingSecret.name" -}}
+  {{- end -}}
+
+  {{- if eq $mode "certManager" -}}
+    {{- $issuerKind := include "logfire.inClusterTls.certs.certManager.issuerRef.kind" . -}}
+    {{- $issuerName := include "logfire.inClusterTls.certs.certManager.issuerRef.name" . -}}
+    {{- if not (or (eq $issuerKind "Issuer") (eq $issuerKind "ClusterIssuer")) -}}
+      {{- fail (printf "inClusterTls.certs.certManager.issuerRef.kind must be 'Issuer' or 'ClusterIssuer' (got %q)" $issuerKind) -}}
+    {{- end -}}
+
+    {{- /* Auto-Issuer only supports creating a namespaced Issuer */ -}}
+    {{- if and (not $issuerName) (ne $issuerKind "Issuer") -}}
+      {{- fail "inClusterTls.certs.mode=certManager with an empty issuerRef.name uses the chart-managed *namespaced* Issuer. Set issuerRef.kind=Issuer, or provide a non-empty issuerRef.name (Issuer/ClusterIssuer)." -}}
+    {{- end -}}
+
+    {{- $autoIssuer := include "logfire.inClusterTls.certs.certManager.autoIssuer" . | eq "true" -}}
+    {{- if and (not $cm) (not $secret) (not $autoIssuer) -}}
+      {{- fail "inClusterTls.enabled is true and certs.mode=certManager, but no CA bundle was provided. Set inClusterTls.caBundle.existingConfigMap.name (recommended) or inClusterTls.caBundle.existingSecret.name, or leave issuerRef.name empty to use the chart-managed CA." -}}
+    {{- end -}}
+
+    {{- if and (not (dig "deployCertManager" false .Values.dev)) (not (.Capabilities.APIVersions.Has "cert-manager.io/v1")) -}}
+      {{- fail "inClusterTls.certs.mode=certManager requires cert-manager CRDs (cert-manager.io/v1). Either install cert-manager separately, or set dev.deployCertManager=true for Kind/dev." -}}
+    {{- end -}}
+
+  {{- else -}}
+    {{- /* existingSecrets */ -}}
+    {{- if and (not $cm) (not $secret) -}}
+      {{- fail "inClusterTls.enabled is true and certs.mode=existingSecrets, but no CA bundle was provided. Set inClusterTls.caBundle.existingConfigMap.name (recommended) or inClusterTls.caBundle.existingSecret.name." -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Validate Redis configuration
 */}}
 {{- define "logfire.validate.redis" -}}
@@ -1058,4 +1359,5 @@ Call this from templates that need to ensure configuration is valid.
 {{- include "logfire.validate.adminSecret" . -}}
 {{- include "logfire.validate.admin" . -}}
 {{- include "logfire.validate.redis" . -}}
+{{- include "logfire.validate.inClusterTls" . -}}
 {{- end -}}

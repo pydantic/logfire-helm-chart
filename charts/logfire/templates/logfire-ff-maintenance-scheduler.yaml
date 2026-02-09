@@ -34,6 +34,7 @@ spec:
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         checksum/logfire-postgres-ff-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresFFDsn" )}}
         {{- end }}
+        {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
@@ -44,10 +45,7 @@ spec:
         - name: {{ . | quote }}
       {{- end }}
       {{- end }}
-      {{- with (index .Values $serviceName | default dict).initContainers }}
-      initContainers:
-        {{- . | toYaml | nindent 8 }}
-      {{- end}}
+      {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
@@ -66,7 +64,9 @@ spec:
             - --host=0.0.0.0
             - --port=8013
           ports:
-            - containerPort: 8013
+            - name: http
+              containerPort: 8013
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: logfire-ff-base-config
@@ -117,6 +117,11 @@ spec:
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end }}
+          {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+          volumeMounts:
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /health
@@ -133,5 +138,10 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      volumes:
+        {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
+      {{- end }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

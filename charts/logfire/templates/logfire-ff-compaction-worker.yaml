@@ -1,42 +1,15 @@
-{{- $serviceName := "logfire-ff-ingest-processor" }}
+{{- $serviceName := "logfire-ff-compaction-worker" }}
 {{- $defaultCpu := "1" -}}
 {{- $serviceValues := get .Values $serviceName | default dict -}}
 {{- $resources := get $serviceValues "resources" | default dict -}}
 {{- $cpu := get $resources "cpu" | default $defaultCpu -}}
-{{- $cpuInt := 0 -}}
-{{- if hasSuffix "m" $cpu -}}
-{{-  $cpuInt = div (int (trimSuffix "m" $cpu)) 1000 -}}
-{{- else -}}
-{{-  $cpuInt = $cpu -}}
-{{- end -}}
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: {{ $serviceName }}
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-  annotations:
-    {{- include "logfire.serviceAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
-spec:
-  selector:
-    {{- include "logfire.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: {{ $serviceName }}
-  ports:
-  - name: http
-    port: 8012
-    targetPort: http
-  {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
-  type: ClusterIP
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ $serviceName }}
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
+    {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   annotations:
     {{- include "logfire.postgresSecret.annotations" . | nindent 4 }}
@@ -50,7 +23,6 @@ spec:
     matchLabels:
       {{- include "logfire.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: {{ $serviceName }}
-  minReadySeconds: 15
   template:
     metadata:
       labels:
@@ -59,10 +31,10 @@ spec:
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
         checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
-        {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         checksum/logfire-postgres-ff-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresFFDsn" )}}
         {{- end }}
+        {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
@@ -85,86 +57,96 @@ spec:
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+{{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | indent 10 }}
           command:
             - fusionfire
-            - ingest-processor
+            - compaction-worker
             - --host=0.0.0.0
-            - --port=8012
+            - --port=8013
           ports:
             - name: http
-              containerPort: 8012
+              containerPort: 8013
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
-          lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "15"
           envFrom:
             - configMapRef:
                 name: logfire-ff-base-config
             - configMapRef:
-                name: logfire-ff-ingest-config
-            - configMapRef:
                 name: logfire-ff-write-config
           env:
-            - name: OTEL_TRACES_SAMPLER_ARG
-              value: "0.05"
-            - name: OTEL_TRACES_SAMPLER
-              value: "parentbased_traceidratio"
-            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
-            - name: FF_INGEST_PATH
-              value: "/tmp/ingest-data"
-            - name: FF_INGEST_NUM_WORKERS
-              value: "0"
-            - name: FF_INGEST_NUM_CLEANUP_WORKERS
-              value: "0"
             - name: FF_IO_THREADS
-              value: {{ $cpuInt | float64 | floor | int | quote }}
+              value: {{ $cpu | quote }}
             - name: FF_DATAFUSION_THREADS
               {{- $dataFusionThreads := sub (atoi $cpu) 1 }}
               value: {{ (gt $dataFusionThreads 0) | ternary $dataFusionThreads "1" | quote }}
+            - name: FF_INDEX_COMPACTION_CHANCE
+              value: "1.0"
+            - name: FF_ENABLE_SCHEMA_UPGRADES
+              value: "true"
+            - name: FF_UPGRADE_MAX_DAYS
+              value: "7"
+            - name: FF_CACHE_OBJECT_STORE_HTTP_HEADERS
+              value: x-ff-no-warm-cache=1
+            - name: FF_COMPACTION_MAX_DAYS
+              value: "3"
+            - name: FF_MAX_PARTITIONS_PER_COMPACTION_SCAN
+              value: "5000"
+            - name: FF_COMPACTION_LOOP_BACKOFF_DELAY
+              value: "1s"
+            - name: FF_DELETION_LOOP_DELAY
+              value: "30s"
+            - name: FF_COMPACTION_GATHER_DELAY
+              value: "1s"
+            - name: FF_MAINTENANCE_SCHEDULING_CONCURRENCY
+              value: "8"
+            - name: FF_DATAFUSION_MEMORY_LIMIT
+              value: {{ (get (get .Values $serviceName | default dict) "datafusionMemory" | default "512MB" | quote) }}
+            - name: FF_MAX_FILES_PER_COMPACTION_JOB
+              value: "10000"
+            - name: FF_ENABLE_SPILL_TO_DISK
+              value: "true"
+            - name: FF_TEMP_DIR
+              value: /scratch/fusionfire
+            - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
+              value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "10" | quote) }}
+            - name: FF_COMPACTION_JOB_PARALLELISM
+              value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "3" | quote) }}
+            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
+            {{- include "logfire.ffCompactionTiers" . | nindent 12 -}}
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end }}
+          volumeMounts:
+            - name: {{ include "logfire.scratchVolumeName" . }}
+              mountPath: /scratch
+            {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
           livenessProbe:
             httpGet:
               path: /health
-              port: 8012
-            initialDelaySeconds: 0
-            periodSeconds: 5
+              port: 8013
+            initialDelaySeconds: 30
+            periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
           readinessProbe:
             httpGet:
-              path: /ready
-              port: 8012
-            initialDelaySeconds: 0
-            periodSeconds: 5
+              path: /health
+              port: 8013
+            initialDelaySeconds: 30
+            periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
-          startupProbe:
-            httpGet:
-              path: /health
-              port: 8012
-            initialDelaySeconds: 30
-            timeoutSeconds: 5
-            periodSeconds: 10
-            failureThreshold: 30
-          volumeMounts:
-            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
-            {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
-            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
       volumes:
-        {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
-        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
-        {{- include "logfire.objectStoreVolumes" . | nindent 8 }}
+      {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 6 }}
+      {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
+      {{- include "logfire.scratchVolume" (get (get .Values $serviceName | default dict) "scratchVolume" | default dict) | nindent 6 }}
+      {{- include "logfire.objectStoreVolumes" . | nindent 6 }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

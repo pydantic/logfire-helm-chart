@@ -1,0 +1,45 @@
+{{- $inClusterTlsEnabled := (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+{{- $certManagerMode := (include "logfire.inClusterTls.certs.isCertManager" . | eq "true") -}}
+{{- $deployCertManager := dig "deployCertManager" false .Values.dev -}}
+{{- if and $inClusterTlsEnabled $certManagerMode $deployCertManager -}}
+{{- $webhookServiceName := printf "%s-cert-manager-webhook" .Release.Name -}}
+{{- $webhookAddress := printf "https://%s.%s.svc:443" $webhookServiceName .Release.Namespace -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-incluster-tls-wait" .Release.Name }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ printf "%s-incluster-tls-wait" .Release.Name }}
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: wait
+          image: curlimages/curl:8.12.1
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              echo "Waiting for cert-manager webhook: {{ $webhookAddress }}"
+              for i in $(seq 1 600); do
+                # We only need the TCP/TLS handshake to succeed. Avoid `-f` so a 404 isn't treated as a failure.
+                if curl -kSs --connect-timeout 1 --max-time 2 -o /dev/null "{{ $webhookAddress }}/"; then
+                  echo "cert-manager webhook is reachable"
+                  exit 0
+                fi
+                sleep 1
+              done
+              echo "Timed out waiting for cert-manager webhook to become reachable"
+              exit 1
+{{- end }}

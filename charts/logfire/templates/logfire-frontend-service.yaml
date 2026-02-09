@@ -14,8 +14,13 @@ spec:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
-  - port: 8080
-    targetPort: 8080
+  {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+  {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
+  {{- else }}
+  - name: http
+    port: 8080
+    targetPort: http
+  {{- end }}
   type: ClusterIP
 ---
 apiVersion: apps/v1
@@ -41,6 +46,7 @@ spec:
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
         checksum/service-config: {{ include (print $.Template.BasePath "/logfire-frontend-service-config.yaml") . | sha256sum }}
+        {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       serviceAccountName: {{ include "logfire.serviceAccountName" . }}
@@ -50,10 +56,7 @@ spec:
         - name: {{ . | quote }}
       {{- end }}
       {{- end }}
-      {{- with (index .Values $serviceName | default dict).initContainers }}
-      initContainers:
-        {{- . | toYaml | nindent 8 }}
-      {{- end}}
+      {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
@@ -73,9 +76,24 @@ spec:
               mountPath: /opt/nginx
             - name: tmp
               mountPath: /tmp
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "volumeName" "logfire-frontend-tls" "mountPath" "/etc/nginx/tls") | nindent 12 }}
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
           env:
             - name: STRIPE_PUBLISHABLE_KEY
               value: ""
@@ -103,5 +121,6 @@ spec:
             name: logfire-frontend-service-config
         - name: tmp
           emptyDir: {}
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName "volumeName" "logfire-frontend-tls") | nindent 8 }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

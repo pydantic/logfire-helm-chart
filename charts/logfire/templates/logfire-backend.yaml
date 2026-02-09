@@ -18,6 +18,8 @@ spec:
   ports:
   - port: 8000
     targetPort: 8000
+    name: "http"
+  {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
   type: ClusterIP
 ---
 apiVersion: apps/v1
@@ -45,6 +47,7 @@ spec:
       annotations:
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
         checksum/logfire-dex-client-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-dex-client-secret" )) "key" "logfire-dex-client-secret" )}}
+        checksum/logfire-encryption-key: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-encryption-key" )) "key" "logfire-encryption-key" )}}
         checksum/logfire-jwt-client-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret" )) "key" "logfire-jwt-secret" )}}
         checksum/logfire-meta-frontend-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-frontend-token" )) "key" "logfire-meta-frontend-token" )}}
         checksum/logfire-meta-write-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token" )) "key" "logfire-meta-write-token" )}}
@@ -67,10 +70,7 @@ spec:
         - name: {{ . | quote }}
       {{- end }}
       {{- end }}
-      {{- with (index .Values $serviceName | default dict).initContainers }}
-      initContainers:
-        {{- . | toYaml | nindent 8 }}
-      {{- end}}
+      {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
@@ -86,14 +86,28 @@ spec:
           command: ["python", "-m", "logfire_backend"]
           ports:
             - containerPort: 8000
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            failureThreshold: 10
           livenessProbe:
             httpGet:
               path: /health/live
               port: 8000
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health
               port: 8000
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 2
           env:
             - name: APP_PORT
               value: "8000"
@@ -109,7 +123,17 @@ spec:
             - name: WORKER_REDIS_DSN
               value: {{ .Values.redisDsn }}
             - name: DEX_INTERNAL_URL
-              value: http://logfire-dex:5556
+              value: "{{ include "logfire.scheme" . }}://logfire-dex:{{ include "logfire.port" (dict "port" 5556 "root" .) }}"
+            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+            - name: LOGFIRE_CA_PATH
+              value: /etc/logfire/incluster-ca/ca.crt
+            - name: HTTPS_PORT
+              value: "{{ .Values.inClusterTls.httpsPort }}"
+            - name: TLS_CERT_PATH
+              value: "/etc/tls/tls.crt"
+            - name: "TLS_KEY_PATH"
+              value: "/etc/tls/tls.key"
+            {{- end }}
             {{- with .Values.ai }}
             {{- with .model }}
             - name: AI_MODEL
@@ -189,18 +213,23 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-encryption-key") }}
+                  key: logfire-encryption-key
             - name: FUSIONFIRE_QUERY_HOST
-              value: http://logfire-ff-query-api
+              value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
             - name: FUSIONFIRE_QUERY_PORT
-              value: "8011"
+              value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
             - name: FUSIONFIRE_INGEST_HOST
-              value: http://logfire-ff-ingest-processor
+              value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor"
             - name: FUSIONFIRE_INGEST_PORT
-              value: "8012"
+              value: "{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
             - name: FUSIONFIRE_CRUD_HOST
-              value: http://logfire-ff-crud-api
+              value: "{{ include "logfire.scheme" . }}://logfire-ff-crud-api"
             - name: FUSIONFIRE_CRUD_PORT
-              value: "8011"
+              value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
             - name: MIN_DATE_USAGE_CHART  # TODO: make this optional?
               value: "2025-01-01"
             - name: DEFAULT_SUBSCRIPTION_PLAN
@@ -253,5 +282,15 @@ spec:
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}
+          {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+          volumeMounts:
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
+          {{- end }}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      volumes:
+        {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
+      {{- end }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

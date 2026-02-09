@@ -25,8 +25,10 @@ spec:
     {{- include "logfire.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
-  - port: 8012
-    targetPort: 8012
+  - name: http
+    port: 8012
+    targetPort: http
+  {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
   clusterIP: None
 ---
 apiVersion: apps/v1
@@ -60,6 +62,7 @@ spec:
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
         checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
+        {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         checksum/logfire-postgres-ff-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresFFDsn" )}}
         {{- end }}
@@ -73,10 +76,7 @@ spec:
         - name: {{ . | quote }}
       {{- end }}
       {{- end }}
-      {{- with (index .Values $serviceName | default dict).initContainers }}
-      initContainers:
-        {{- . | toYaml | nindent 8 }}
-      {{- end}}
+      {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
@@ -95,7 +95,9 @@ spec:
             - --host=0.0.0.0
             - --port=8012
           ports:
-            - containerPort: 8012
+            - name: http
+              containerPort: 8012
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
           lifecycle:
             preStop:
               exec:
@@ -120,7 +122,7 @@ spec:
             - name: FF_INGEST_NUM_WORKERS
               value: {{ mul (atoi (toString ($cpu))) 8 | quote }}
             - name: FF_INGEST_DOWNSTREAM_URL
-              value: "http://logfire-ff-ingest-processor:8012"
+              value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor:{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
             - name: FF_IO_THREADS
               value: {{ $cpuInt | float64 | floor | int | quote }}
             - name: FF_DATAFUSION_THREADS
@@ -163,8 +165,12 @@ spec:
             - name: {{ include "logfire.ingestVolumeName" . }}
               mountPath: "/fusionfire/ingest-data"
             {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
       volumes:
-      {{- include "logfire.objectStoreVolumes" . | nindent 6 }}
+        {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
+        {{- include "logfire.objectStoreVolumes" . | nindent 8 }}
   volumeClaimTemplates:
       {{- include "logfire.ingestVolume" (get (get .Values $serviceName | default dict) "volumeClaimTemplates" | default dict) | nindent 4 }}
 

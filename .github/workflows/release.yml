@@ -35,10 +35,122 @@ jobs:
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.7.0
         env:
-          CR_GENERATE_RELEASE_NOTES: "true"
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         with:
           skip_existing: true
+
+      - name: Update release notes from PR body
+        uses: actions/github-script@v7
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          script: |
+            const fs = require('fs');
+
+            const chartYaml = fs.readFileSync('charts/logfire/Chart.yaml', 'utf8');
+            const versionMatch = chartYaml.match(/^version:\s*([0-9]+\.[0-9]+\.[0-9]+(?:[-+][^\s]+)?)\s*$/m);
+            if (!versionMatch) {
+              core.info('No chart version found in charts/logfire/Chart.yaml; skipping release notes update.');
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = `logfire-${versionMatch[1]}`;
+            core.info(`Updating release notes for ${owner}/${repo}@${tag}`);
+
+            let release;
+            try {
+              ({ data: release } = await github.rest.repos.getReleaseByTag({ owner, repo, tag }));
+            } catch (error) {
+              if (error?.status === 404) {
+                core.info(`No GitHub release found for tag ${tag}; skipping.`);
+                return;
+              }
+              throw error;
+            }
+
+            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner,
+              repo,
+              commit_sha: context.sha,
+              per_page: 50,
+            });
+
+            const pr =
+              prs.find((p) => p.merged_at && p.base?.ref === 'main') ||
+              prs.find((p) => p.base?.ref === 'main') ||
+              prs[0];
+            if (!pr) {
+              core.info(`No PR associated with commit ${context.sha}; skipping release notes update.`);
+              return;
+            }
+
+            const { data: fullPr } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: pr.number,
+            });
+
+            const prBody = (fullPr.body || '').trim();
+            if (!prBody) {
+              core.info(`PR #${pr.number} has no body; skipping release notes update.`);
+              return;
+            }
+
+            const extractSection = (body, heading) => {
+              const pattern = new RegExp(`^##\\s+${heading}\\s*$`, 'im');
+              const match = body.match(pattern);
+              if (!match) return '';
+              const start = body.indexOf(match[0]) + match[0].length;
+              const rest = body.slice(start);
+              const next = rest.search(/^##\\s+/m);
+              const section = (next === -1 ? rest : rest.slice(0, next)).trim();
+              return section.replace(/<!--[\s\S]*?-->/g, '').trim();
+            };
+
+            const summary = extractSection(prBody, 'Summary');
+            let upgradeNotes = extractSection(prBody, 'Upgrade notes');
+            const breakingChangesLegacy = extractSection(prBody, 'Breaking changes');
+
+            if (!upgradeNotes && breakingChangesLegacy) {
+              upgradeNotes = `### Breaking changes\n${breakingChangesLegacy}`;
+            } else if (upgradeNotes && breakingChangesLegacy) {
+              upgradeNotes = `${upgradeNotes}\n\n### Breaking changes\n${breakingChangesLegacy}`;
+            }
+
+            if (!summary && !upgradeNotes) {
+              core.info(`PR #${pr.number} does not contain release note sections; skipping release notes update.`);
+              return;
+            }
+
+            const curated = [];
+            if (summary) curated.push('## Summary', summary);
+            if (upgradeNotes) curated.push('## Upgrade notes', upgradeNotes);
+            curated.push(`PR: ${fullPr.html_url}`);
+
+            const markerStart = '<!-- BEGIN PR NOTES -->';
+            const markerEnd = '<!-- END PR NOTES -->';
+            const curatedBlock = `${markerStart}\n${curated.join('\n\n')}\n${markerEnd}`;
+            const existingBody = (release.body || '').trim();
+
+            let finalBody;
+            if (existingBody.includes(markerStart) && existingBody.includes(markerEnd)) {
+              finalBody = existingBody.replace(
+                new RegExp(`${markerStart}[\\s\\S]*?${markerEnd}`),
+                curatedBlock,
+              );
+            } else if (existingBody) {
+              finalBody = `${curatedBlock}\n\n---\n\n${existingBody}`;
+            } else {
+              finalBody = curatedBlock;
+            }
+
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: release.id,
+              body: finalBody,
+            });
 
       - name: Update gh-pages README
         run: |
