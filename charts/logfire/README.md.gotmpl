@@ -54,15 +54,27 @@ $ kubectl -n logfire port-forward svc/logfire-service 8080:8080
 
 ## In-cluster HTTPS (service-to-service)
 
-When enabled, the chart switches selected in-cluster traffic to HTTPS (TLS + certificate verification). Today this covers:
+When enabled, the chart switches in-cluster traffic to HTTPS (TLS + certificate verification) incrementally. Current coverage includes:
 
-* Gateway API / Ingress -> `logfire-service` (controller support varies; see notes below).
-* `logfire-service` (HAProxy) -> `logfire-frontend-service`, `logfire-dex`, and Fusionfire ingest.
-* Fusionfire cache HAProxies -> their `*-internal` cache backends.
-* `logfire-dex` serves HTTPS on `inClusterTls.httpsPort` and serves gRPC over TLS on port `5557`.
-* `logfire-backend` and `logfire-worker` mount the in-cluster CA bundle for outbound HTTPS calls.
+* Gateway API / Ingress -> `logfire-service` on `inClusterTls.httpsPort` (controller support varies; see notes below).
+* `logfire-service` (HAProxy) serves HTTPS on `inClusterTls.httpsPort`.
+* `logfire-service` (HAProxy) verifies upstream certs for `logfire-frontend-service`, `logfire-dex`, `logfire-backend`, and `logfire-ff-ingest`.
+* `logfire-frontend-service`, `logfire-dex`, `logfire-backend`, and Fusionfire API/cache services expose HTTPS on `inClusterTls.httpsPort`.
+* `logfire-dex` also configures gRPC TLS on `:5557` using the same mounted cert/key.
+* Internal clients in `logfire-backend`, `logfire-worker`, Fusionfire services, and cache HAProxies use HTTPS with CA verification.
+* Fusionfire cache HAProxies verify TLS to their `*-internal` cache backends.
+* Kubernetes probes remain on the original HTTP ports.
 
-For certificate verification, HAProxy uses `inClusterTls.caBundle.*`, or (when using cert-manager auto-Issuer) the chart-created CA Secret.
+For certificate verification, TLS clients use `inClusterTls.caBundle.*`, or (when using cert-manager auto-Issuer) the chart-created CA Secret.
+
+CA bundle requirements by mode:
+
+* `inClusterTls.certs.mode=certManager` + empty `issuerRef.name`: CA bundle is optional (chart-managed Issuer + CA).
+* `inClusterTls.certs.mode=certManager` + non-empty `issuerRef.name` (custom issuer): set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
+* `inClusterTls.certs.mode=existingSecrets`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
+
+`inClusterTls.caBundle` resources must exist in the same namespace as the Helm release.
+If you need stable/predictable TLS Secret names, set `inClusterTls.secretNamePrefix` (default: release name).
 
 When using Kubernetes Ingress instead of Gateway API, the chart points the Ingress at the `logfire-service` HTTPS port when `inClusterTls.enabled` is true. For ingress-nginx, the chart also sets `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"` automatically (unless you override it). For other ingress controllers, you may need to set a controller-specific annotation to enable HTTPS to upstream services.
 

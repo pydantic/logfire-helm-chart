@@ -887,7 +887,11 @@ In-cluster TLS helpers
 {{- end -}}
 
 {{- define "logfire.inClusterTls.caBundle.isConfigMap" -}}
-{{- and (include "logfire.inClusterTls.enabled" . | eq "true") (.Values.inClusterTls.caBundle.existingConfigMap.name) -}}
+{{- if and (include "logfire.inClusterTls.enabled" . | eq "true") (.Values.inClusterTls.caBundle.existingConfigMap.name) -}}
+true
+{{- else -}}
+false
+{{- end -}}
 {{- end -}}
 
 {{- define "logfire.inClusterTls.certs.mode" -}}

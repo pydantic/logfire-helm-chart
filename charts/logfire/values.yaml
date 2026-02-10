@@ -187,20 +187,25 @@ inClusterTls:
   httpsPort: 8443
 
   # -- CA bundle used by clients (HAProxy and other workloads) to verify service certificates.
-  # If certs.mode=certManager and inClusterTls.certs.certManager.issuerRef.name is empty, the chart creates a
-  # namespaced CA and HAProxy mounts it automatically. Otherwise, you must provide a CA bundle here.
-  # Provide either an existing ConfigMap or Secret containing a CA certificate.
+  # Required when:
+  # - certs.mode=existingSecrets
+  # - certs.mode=certManager with a non-empty certs.certManager.issuerRef.name (custom issuer)
+  # Optional when:
+  # - certs.mode=certManager with an empty issuerRef.name (chart-managed namespaced Issuer + CA)
+  # Provide exactly one of existingConfigMap or existingSecret. The referenced resource must
+  # exist in the same namespace as this Helm release.
   caBundle:
     existingConfigMap:
       name: ""
       key: "ca.crt"
-    # existingSecret:
-    #   name: ""
-    #   key: "ca.crt"
+    existingSecret:
+      name: ""
+      key: "ca.crt"
 
   # -- Convention-based certificate secret naming.
   # When enabled, the chart expects a kubernetes.io/tls Secret per service:
   #   <release>-<service>-tls
+  # This also controls secret names used by chart-created cert-manager Certificates.
   # If secretNamePrefix is empty, the prefix defaults to the Helm release name.
   secretNamePrefix: ""
 
