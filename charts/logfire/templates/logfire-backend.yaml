@@ -205,6 +205,8 @@ spec:
               value: "2025-01-01"
             - name: DEFAULT_SUBSCRIPTION_PLAN
               value: non_stripe
+            - name: DEFAULT_PERSONAL_SUBSCRIPTION_PLAN
+              value: non_stripe
             - name: LOGFIRE_REGION
               value: {{ .Values.logfireRegion | default "local" }}
             - name: KNOWN_LOGFIRE_REGIONS
