@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.10.4](https://img.shields.io/badge/Version-0.10.4-informational?style=flat-square) ![AppVersion: pr-a8ce523f](https://img.shields.io/badge/AppVersion-pr--a8ce523f-informational?style=flat-square)
+![Version: 0.11.2](https://img.shields.io/badge/Version-0.11.2-informational?style=flat-square) ![AppVersion: pr-90d0e519](https://img.shields.io/badge/AppVersion-pr--90d0e519-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -290,6 +290,8 @@ Pydantic Logfire requires Object Storage to store data.  There are a number of d
 
 Each has their own set of environment variables that can be used to configure them. However if your kubernetes service account has the appropriate credentials, that be used by setting `serviceAccountName`.
 
+**Important**: Do not enable versioning on your object storage bucket. Logfire manages its own data lifecycle and versioning will interfere with this process and increase storage costs unnecessarily.
+
 #### Amazon S3
 
 Variables extracted from environment:
@@ -504,7 +506,7 @@ Before diving deeper, verify these common configuration issues:
 * **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.10.4](https://img.shields.io/badge/Version-0.10.4-informational?style=flat-square) ![AppVersion: pr-a8ce523f](https://img.shields.io/badge/AppVersion-pr--a8ce523f-informational?style=flat-square)
+![Version: 0.11.2](https://img.shields.io/badge/Version-0.11.2-informational?style=flat-square) ![AppVersion: pr-90d0e519](https://img.shields.io/badge/AppVersion-pr--90d0e519-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -583,6 +585,8 @@ Helm chart for self-hosted Pydantic Logfire
 | logfire-dex.replicas | int | `1` | Number of replicas |
 | logfire-dex.resources | object | `{"cpu":"250m","memory":"256Mi"}` | Resource requests/limits |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
+| logfire-ff-cache-byte | object | `{"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
+| logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume |
 | logfire-ff-ingest | object | `{"annotations":{},"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
