@@ -628,20 +628,24 @@ Helm chart for self-hosted Pydantic Logfire
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-cache-byte | object | `{"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
 | logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume |
-| logfire-ff-ingest | object | `{"annotations":{},"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
-| logfire-ff-ingest-processor | object | `{"annotations":{},"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
+| logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
+| logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
+| logfire-ff-ingest-processor.env | list | `[{"name":"RUST_LOG","value":"warn"}]` | Extra env vars for the ingest processor pod |
 | logfire-ff-ingest-processor.labels | object | `{}` | Workload labels |
 | logfire-ff-ingest-processor.podAnnotations | object | `{}` | Pod annotations |
 | logfire-ff-ingest-processor.podLabels | object | `{}` | Pod labels |
 | logfire-ff-ingest-processor.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-ingest.annotations | object | `{}` | Workload annotations |
+| logfire-ff-ingest.env | list | `[{"name":"RUST_LOG","value":"warn"}]` | Extra env vars for the ingest pod |
 | logfire-ff-ingest.labels | object | `{}` | Workload labels |
 | logfire-ff-ingest.podAnnotations | object | `{}` | Pod annotations |
 | logfire-ff-ingest.podLabels | object | `{}` | Pod labels |
 | logfire-ff-ingest.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-ingest.volumeClaimTemplates | object | `{"storage":"16Gi"}` | Configuration for the StatefulSet PersistentVolumeClaim template |
 | logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` | Storage provisioned for each pod |
+| logfire-ff-maintenance-scheduler | object | `{"env":[{"name":"RUST_LOG","value":"warn"}]}` | Environment overrides for the maintenance scheduler pod |
+| logfire-ff-query-api | object | `{"env":[{"name":"RUST_LOG","value":"warn"}]}` | Environment overrides for the query API pod |
 | logfire-redis.enabled | bool | `true` | Deploy Redis as part of this chart. Disable to use an external Redis instance. |
 | logfire-redis.image | object | `{"pullPolicy":"IfNotPresent","repository":"redis","tag":"7.2"}` | Redis image configuration |
 | logfire-redis.image.pullPolicy | string | `"IfNotPresent"` | Redis image pull policy |
