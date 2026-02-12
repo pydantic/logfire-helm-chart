@@ -128,3 +128,171 @@ spec:
         defaultMode: 0520
         name: {{ include "logfire.fullname" . }}-test-ingest
   restartPolicy: Never
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "logfire.fullname" . }}-test-contract
+  annotations:
+    "helm.sh/hook": test
+data:
+  test_contract.sh: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      BASE_URL="http://logfire-service:8080"
+      ORG_NAME="logfire-meta"
+      PROJECT_NAME="helm-contract-$(date +%s)-$RANDOM"
+      SERVICE_NAME="helm-contract-service"
+
+      apk add --no-cache curl jq
+
+      create_project_body=$(jq -n \
+        --arg project_name "${PROJECT_NAME}" \
+        '{"project_name": $project_name, "visibility": "public"}')
+      create_project_response=$(curl -sS --fail -X POST \
+        "${BASE_URL}/ui-api/organizations/${ORG_NAME}/projects/" \
+        -H "Authorization: Bearer ${META_FRONTEND_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d "${create_project_body}")
+      created_project_name=$(echo "${create_project_response}" | jq -r '.project_name // empty')
+      if [ "${created_project_name}" != "${PROJECT_NAME}" ]; then
+        echo "Failed to create project"
+        echo "${create_project_response}"
+        exit 1
+      fi
+
+      write_token=$(curl -sS --fail -X POST \
+        "${BASE_URL}/ui-api/organizations/${ORG_NAME}/projects/${PROJECT_NAME}/write-tokens/" \
+        -H "Authorization: Bearer ${META_FRONTEND_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"description":"helm contract write token"}' | jq -r '.')
+      if [ -z "${write_token}" ] || [ "${write_token}" = "null" ]; then
+        echo "Failed to create write token"
+        exit 1
+      fi
+
+      read_token=$(curl -sS --fail -X POST \
+        "${BASE_URL}/ui-api/organizations/${ORG_NAME}/projects/${PROJECT_NAME}/read-tokens/" \
+        -H "Authorization: Bearer ${META_FRONTEND_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{"description":"helm contract read token"}' | jq -r '.')
+      if [ -z "${read_token}" ] || [ "${read_token}" = "null" ]; then
+        echo "Failed to create read token"
+        exit 1
+      fi
+
+      CURRENT_TIME_NANOS=$(date +%s%N)
+      START_TIME_NANOS=${CURRENT_TIME_NANOS}
+      END_TIME_NANOS=$((START_TIME_NANOS + 1000000))
+      TRACE_ID=$(hexdump -n 16 -v -e '/1 "%02x"' /dev/urandom)
+      SPAN_ID=$(hexdump -n 8 -v -e '/1 "%02x"' /dev/urandom)
+
+      PAYLOAD=$(cat <<EOF
+      {
+        "resourceSpans": [
+          {
+            "resource": {
+              "attributes": [
+                {
+                  "key": "service.name",
+                  "value": {
+                    "stringValue": "${SERVICE_NAME}"
+                  }
+                }
+              ]
+            },
+            "scopeSpans": [
+              {
+                "scope": {
+                  "name": "helm-contract-test"
+                },
+                "spans": [
+                  {
+                    "traceId": "${TRACE_ID}",
+                    "spanId": "${SPAN_ID}",
+                    "name": "contract-span",
+                    "kind": 1,
+                    "startTimeUnixNano": "${START_TIME_NANOS}",
+                    "endTimeUnixNano": "${END_TIME_NANOS}",
+                    "attributes": [
+                      {
+                        "key": "operation.type",
+                        "value": {
+                          "stringValue": "contract"
+                        }
+                      }
+                    ],
+                    "status": {}
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+      EOF
+      )
+
+      ingest_status=$(curl -s -o /tmp/ingest.out -w "%{http_code}" -X POST \
+        "${BASE_URL}/v1/traces" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: ${write_token}" \
+        -d "${PAYLOAD}")
+      if [ "${ingest_status}" -ne 200 ]; then
+        echo "Failed to ingest traces, status=${ingest_status}"
+        cat /tmp/ingest.out || true
+        exit 1
+      fi
+
+      query_ok=0
+      for _ in $(seq 1 30); do
+        curl -sS --fail -o /tmp/query_body.out -G \
+          "${BASE_URL}/v1/query" \
+          --data-urlencode "sql=SELECT count(*) AS count FROM records" \
+          -H "Authorization: Bearer ${read_token}" \
+          -H "Accept: application/json"
+        count_value=$(jq -r '.columns[] | select(.name=="count") | .values[0] // empty' /tmp/query_body.out)
+        if [ -n "${count_value}" ] && [ "${count_value}" != "null" ] && [ "${count_value}" -ge 1 ] 2>/dev/null; then
+          query_ok=1
+          break
+        fi
+        sleep 2
+      done
+
+      if [ "${query_ok}" -ne 1 ]; then
+        echo "Timed out waiting for ingested data to become queryable"
+        cat /tmp/query_body.out || true
+        exit 1
+      fi
+
+      echo "Contract tests passed for project ${PROJECT_NAME}"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "logfire.fullname" . }}-test-contract
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: test-contract
+      image: bash:5.2-alpine3.21
+      imagePullPolicy: IfNotPresent
+      command: ['/usr/local/bin/bash', '-c', '/app/test_contract.sh']
+      env:
+        - name: META_FRONTEND_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-frontend-token") }}
+              key: logfire-meta-frontend-token
+      volumeMounts:
+      - name: config-volume
+        mountPath: /app/test_contract.sh
+        subPath: test_contract.sh
+  volumes:
+    - name: config-volume
+      configMap:
+        defaultMode: 0520
+        name: {{ include "logfire.fullname" . }}-test-contract
+  restartPolicy: Never
