@@ -438,6 +438,11 @@ logfire-ff-ingest:
     # -- Storage provisioned for each pod
     storage: 16Gi
 
+  # -- Extra env vars for the ingest pod
+  env:
+    - name: RUST_LOG
+      value: warn
+
   # //// Enables serviceName for older K8s versions
   # serviceName: true
 
@@ -480,6 +485,11 @@ logfire-ff-ingest-processor:
     # -- Service annotations
     annotations: {}
 
+  # -- Extra env vars for the ingest processor pod
+  env:
+    - name: RUST_LOG
+      value: warn
+
   # resources:
   #   cpu: "2"
   #   memory: "4Gi"
@@ -503,6 +513,18 @@ logfire-ff-ingest-processor:
   # pdb:
   #   maxUnavailable: 1
   #   minAvailable: 1
+
+# -- Environment overrides for the query API pod
+logfire-ff-query-api:
+  env:
+    - name: RUST_LOG
+      value: warn
+
+# -- Environment overrides for the maintenance scheduler pod
+logfire-ff-maintenance-scheduler:
+  env:
+    - name: RUST_LOG
+      value: warn
 
 
 # -- Autoscaling & resources for the `logfire-backend` pod
