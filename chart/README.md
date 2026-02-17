@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.11.3](https://img.shields.io/badge/Version-0.11.3-informational?style=flat-square) ![AppVersion: pr-90d0e519](https://img.shields.io/badge/AppVersion-pr--90d0e519-informational?style=flat-square)
+![Version: 0.12.3](https://img.shields.io/badge/Version-0.12.3-informational?style=flat-square) ![AppVersion: 6aee52e3](https://img.shields.io/badge/AppVersion-6aee52e3-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -50,6 +50,36 @@ Then port-forward the service:
 ``` sh
 $ kubectl -n logfire port-forward svc/logfire-service 8080:8080
 ```
+
+## In-cluster HTTPS (service-to-service)
+
+When enabled, the chart switches in-cluster traffic to HTTPS (TLS + certificate verification) incrementally. Current coverage includes:
+
+* Gateway API / Ingress -> `logfire-service` on `inClusterTls.httpsPort` (controller support varies; see notes below).
+* `logfire-service` (HAProxy) serves HTTPS on `inClusterTls.httpsPort`.
+* `logfire-service` (HAProxy) verifies upstream certs for `logfire-frontend-service`, `logfire-dex`, `logfire-backend`, and `logfire-ff-ingest`.
+* `logfire-frontend-service`, `logfire-dex`, `logfire-backend`, and Fusionfire API/cache services expose HTTPS on `inClusterTls.httpsPort`.
+* `logfire-dex` also configures gRPC TLS on `:5557` using the same mounted cert/key.
+* Internal clients in `logfire-backend`, `logfire-worker`, Fusionfire services, and cache HAProxies use HTTPS with CA verification.
+* Fusionfire cache HAProxies verify TLS to their `*-internal` cache backends.
+* Kubernetes probes remain on the original HTTP ports.
+
+For certificate verification, TLS clients use `inClusterTls.caBundle.*`, or (when using cert-manager auto-Issuer) the chart-created CA Secret.
+
+CA bundle requirements by mode:
+
+* `inClusterTls.certs.mode=certManager` + empty `issuerRef.name`: CA bundle is optional (chart-managed Issuer + CA).
+* `inClusterTls.certs.mode=certManager` + non-empty `issuerRef.name` (custom issuer): set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
+* `inClusterTls.certs.mode=existingSecrets`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
+
+`inClusterTls.caBundle` resources must exist in the same namespace as the Helm release.
+If you need stable/predictable TLS Secret names, set `inClusterTls.secretNamePrefix` (default: release name).
+
+When using Kubernetes Ingress instead of Gateway API, the chart points the Ingress at the `logfire-service` HTTPS port when `inClusterTls.enabled` is true. For ingress-nginx, the chart also sets `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"` automatically (unless you override it). For other ingress controllers, you may need to set a controller-specific annotation to enable HTTPS to upstream services.
+
+For Kind/dev, you can optionally deploy cert-manager as a Helm dependency (`dev.deployCertManager`). When working from this repo, run `helm dependency update charts/logfire` to fetch the dependency charts.
+
+When `dev.deployCertManager=true` and `inClusterTls.certs.mode=certManager`, the chart uses a Helm hook Job to wait for the cert-manager webhook before creating `Issuer`/`Certificate` resources, so a single `helm upgrade --install` works.
 
 ## Prerequisites
 
@@ -506,7 +536,7 @@ Before diving deeper, verify these common configuration issues:
 * **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.11.3](https://img.shields.io/badge/Version-0.11.3-informational?style=flat-square) ![AppVersion: pr-90d0e519](https://img.shields.io/badge/AppVersion-pr--90d0e519-informational?style=flat-square)
+![Version: 0.12.3](https://img.shields.io/badge/Version-0.12.3-informational?style=flat-square) ![AppVersion: 6aee52e3](https://img.shields.io/badge/AppVersion-6aee52e3-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -516,6 +546,7 @@ Helm chart for self-hosted Pydantic Logfire
 |------------|------|---------|
 | https://charts.bitnami.com/bitnami | minio | 17.0.21 |
 | https://charts.bitnami.com/bitnami | postgresql | 16.7.27 |
+| https://charts.jetstack.io | cert-manager | v1.19.2 |
 
 ## Values
 
@@ -534,10 +565,12 @@ Helm chart for self-hosted Pydantic Logfire
 | ai.openAi.apiKey | string | `nil` | OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | ai.openAi.baseUrl | string | `nil` | OpenAI base URL for custom endpoints (e.g., Azure OpenAI proxy, local models). |
 | ai.vertexAi.region | string | `nil` | Vertex AI region |
+| cert-manager | object | `{"installCRDs":true}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
+| dev.deployCertManager | bool | `false` | Deploy cert-manager (NOT for production; includes cluster-scoped resources). |
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
 | dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
-| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret |
+| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret |
 | existingSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
@@ -566,6 +599,14 @@ Helm chart for self-hosted Pydantic Logfire
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks) |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | imagePullSecrets | list | `[]` | Image pull secrets used by all pods |
+| inClusterTls | object | `{"caBundle":{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}},"certs":{"certManager":{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}},"mode":"existingSecrets"},"enabled":false,"httpsPort":8443,"secretNamePrefix":""}` | Enable full in-cluster HTTPS with certificate verification. This is independent from `ingress.tls` / `gateway.tls`.  NOTE: Implementation is incremental; see the "In-cluster HTTPS (service-to-service)" section in the README for current coverage and testing guidance. |
+| inClusterTls.caBundle | object | `{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}}` | CA bundle used by clients (HAProxy and other workloads) to verify service certificates. Required when: - certs.mode=existingSecrets - certs.mode=certManager with a non-empty certs.certManager.issuerRef.name (custom issuer) Optional when: - certs.mode=certManager with an empty issuerRef.name (chart-managed namespaced Issuer + CA) Provide exactly one of existingConfigMap or existingSecret. The referenced resource must exist in the same namespace as this Helm release. |
+| inClusterTls.certs | object | `{"certManager":{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}},"mode":"existingSecrets"}` | Certificate provisioning for in-cluster TLS. certs.mode=certManager requires cert-manager CRDs to be installed in the cluster. (Helm will fail fast if cert-manager.io/v1 is not available, unless dev.deployCertManager=true.) |
+| inClusterTls.certs.certManager | object | `{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}}` | Settings only used when certs.mode=certManager |
+| inClusterTls.certs.certManager.issuerRef | object | `{"group":"cert-manager.io","kind":"Issuer","name":""}` | IssuerRef used to issue service certificates. If name is empty, the chart will create a namespaced Issuer + CA (dev-friendly default). |
+| inClusterTls.certs.mode | string | `"existingSecrets"` | Use existingSecrets for customer-provided certs, or certManager to have the chart create cert-manager Certificate resources. |
+| inClusterTls.httpsPort | int | `8443` | Port used for in-cluster HTTPS on Services. Use a non-privileged port to avoid securityContext constraints. |
+| inClusterTls.secretNamePrefix | string | `""` | Convention-based certificate secret naming. When enabled, the chart expects a kubernetes.io/tls Secret per service:   <release>-<service>-tls This also controls secret names used by chart-created cert-manager Certificates. If secretNamePrefix is empty, the prefix defaults to the Helm release name. |
 | ingress.annotations | object | `{}` | Ingress annotations |
 | ingress.enabled | bool | `true` | Enable the Ingress resource. If you are NOT using an ingress resource, you still need to set `tls` and `hostnames` so the application can generate correct URLs/CORS. |
 | ingress.hostname | string | `"logfire.example.com"` | DEPRECATED (kept for backward compatibility). Use `hostnames` (list) for all new deployments. |
@@ -587,20 +628,24 @@ Helm chart for self-hosted Pydantic Logfire
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-cache-byte | object | `{"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
 | logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume |
-| logfire-ff-ingest | object | `{"annotations":{},"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
-| logfire-ff-ingest-processor | object | `{"annotations":{},"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
+| logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
+| logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
+| logfire-ff-ingest-processor.env | list | `[{"name":"RUST_LOG","value":"warn"}]` | Extra env vars for the ingest processor pod |
 | logfire-ff-ingest-processor.labels | object | `{}` | Workload labels |
 | logfire-ff-ingest-processor.podAnnotations | object | `{}` | Pod annotations |
 | logfire-ff-ingest-processor.podLabels | object | `{}` | Pod labels |
 | logfire-ff-ingest-processor.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-ingest.annotations | object | `{}` | Workload annotations |
+| logfire-ff-ingest.env | list | `[{"name":"RUST_LOG","value":"warn"}]` | Extra env vars for the ingest pod |
 | logfire-ff-ingest.labels | object | `{}` | Workload labels |
 | logfire-ff-ingest.podAnnotations | object | `{}` | Pod annotations |
 | logfire-ff-ingest.podLabels | object | `{}` | Pod labels |
 | logfire-ff-ingest.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-ingest.volumeClaimTemplates | object | `{"storage":"16Gi"}` | Configuration for the StatefulSet PersistentVolumeClaim template |
 | logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` | Storage provisioned for each pod |
+| logfire-ff-maintenance-scheduler | object | `{"env":[{"name":"RUST_LOG","value":"warn"}]}` | Environment overrides for the maintenance scheduler pod |
+| logfire-ff-query-api | object | `{"env":[{"name":"RUST_LOG","value":"warn"}]}` | Environment overrides for the query API pod |
 | logfire-redis.enabled | bool | `true` | Deploy Redis as part of this chart. Disable to use an external Redis instance. |
 | logfire-redis.image | object | `{"pullPolicy":"IfNotPresent","repository":"redis","tag":"7.2"}` | Redis image configuration |
 | logfire-redis.image.pullPolicy | string | `"IfNotPresent"` | Redis image pull policy |
