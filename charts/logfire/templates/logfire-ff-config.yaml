@@ -11,6 +11,7 @@ data:
   FF_SEND_TO_LOGFIRE: "true"
   FF_FORCE_CONSOLE_LOGGING: "true"
   OTEL_RESOURCE_ATTRIBUTES: "vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app"
+  FF_CACHE_OBJECT_STORE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-byte:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
 {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
   FF_TLS_MODE: "allow"
   FF_HTTPS_PORT: {{ .Values.inClusterTls.httpsPort | quote }}
@@ -33,7 +34,6 @@ metadata:
     app.kubernetes.io/component: logfire-ff-config
 data:
   FF_FUSIONFIRE_COLLECT_STATISTICS: "0.0"
-  FF_CACHE_OBJECT_STORE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-byte:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
   FF_IPC_CACHE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-ipc:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
   FF_FILTER_CACHE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-filter:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
   FF_IPC_FILTER_CACHE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-filter:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
