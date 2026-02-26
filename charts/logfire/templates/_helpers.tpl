@@ -779,6 +779,16 @@ affinity:
 {{- end -}}
 {{- end -}}
 
+{{- define "logfire.topologySpreadConstraints" -}}
+{{- $serviceValues := index .Values .serviceName | default dict -}}
+{{- $serviceConstraints := $serviceValues.topologySpreadConstraints | default list -}}
+{{- $merged := concat $serviceConstraints (.Values.topologySpreadConstraints | default list) -}}
+{{- if $merged -}}
+topologySpreadConstraints:
+{{- toYaml $merged | nindent 2 }}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.tolerations" -}}
 {{- $serviceValues := index .Values .serviceName | default dict -}}
 {{- $serviceTolerations := $serviceValues.tolerations | default list -}}
