@@ -140,17 +140,26 @@ spec:
 {{- end -}}
 
 {{- define "logfire.resources"}}
-{{- if index (index .Values .serviceName | default dict) "resources" }}
-{{- with index .Values .serviceName "resources" }}
+{{- $resources := index (index .Values .serviceName | default dict) "resources" | default dict -}}
+{{- if $resources }}
 resources:
   requests:
-    memory: {{ .memory | default "1Gi" }}
-    cpu: {{ .cpu | default "1" }}
+    memory: {{ $resources.memory | default "1Gi" }}
+    cpu: {{ $resources.cpu | default "1" }}
+    {{- if hasKey $resources "ephemeralStorageRequest" }}
+    ephemeral-storage: {{ $resources.ephemeralStorageRequest }}
+    {{- else if hasKey $resources "ephemeralStorage" }}
+    ephemeral-storage: {{ $resources.ephemeralStorage }}
+    {{- end }}
   limits:
-    memory: {{ .memory | default "1Gi" }}
-    cpu: {{ .cpu | default "1" }}
-{{- end}}
-{{- end}}
+    memory: {{ $resources.memory | default "1Gi" }}
+    cpu: {{ $resources.cpu | default "1" }}
+    {{- if hasKey $resources "ephemeralStorageLimit" }}
+    ephemeral-storage: {{ $resources.ephemeralStorageLimit }}
+    {{- else if hasKey $resources "ephemeralStorage" }}
+    ephemeral-storage: {{ $resources.ephemeralStorage }}
+    {{- end }}
+{{- end }}
 {{- end}}
 
 {{/*

@@ -788,6 +788,11 @@ logfire-ff-cache-byte:
 #   resources:
 #     cpu: "2"
 #     memory: "8Gi"
+#     # Optional: sets both requests+limits for container writable layer/logs
+#     ephemeralStorage: "2Gi"
+#     # Optional: set request+limit separately
+#     # ephemeralStorageRequest: "1Gi"
+#     # ephemeralStorageLimit: "4Gi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 3
@@ -994,6 +999,11 @@ logfire-ff-cache-byte:
 #   resources:
 #     cpu: "2"
 #     memory: "8Gi"
+#     # Optional: sets both requests+limits for container writable layer/logs
+#     ephemeralStorage: "2Gi"
+#     # Optional: set request+limit separately
+#     # ephemeralStorageRequest: "1Gi"
+#     # ephemeralStorageLimit: "4Gi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 3
