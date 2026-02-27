@@ -81,6 +81,7 @@ Determine if HPA is enabled maintaining backward compatibility with old values f
 {{- end -}}
 
 {{- define "logfire.autoscaler" }}
+{{- include "logfire.validate.autoscaling" (dict "Values" .Values "serviceName" .serviceName) -}}
 {{- if index (index .Values .serviceName | default dict) "autoscaling" }}
 {{- $kind := (not (eq .serviceName "logfire-ff-ingest") | ternary "Deployment" "StatefulSet" ) }}
 {{- with index .Values .serviceName "autoscaling" }}
@@ -100,6 +101,7 @@ Determine if HPA is enabled maintaining backward compatibility with old values f
 {{- define "logfire.pdb" }}
 {{- $root := .root -}}
 {{- $serviceName := .serviceName -}}
+{{- include "logfire.validate.pdb" (dict "Values" $root.Values "serviceName" $serviceName) -}}
 {{- if hasKey $root.Values $serviceName }}
 {{- if index (index $root.Values $serviceName | default dict) "pdb" }}
 {{- with index $root.Values $serviceName "pdb" }}

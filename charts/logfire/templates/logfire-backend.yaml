@@ -1,7 +1,4 @@
 {{- $serviceName := "logfire-backend" }}
-{{- include "logfire.validateConfig" . -}}
-{{- include "logfire.validate.autoscaling" (dict "Values" .Values "serviceName" $serviceName) -}}
-{{- include "logfire.validate.pdb" (dict "Values" .Values "serviceName" $serviceName) -}}
 apiVersion: v1
 kind: Service
 metadata:
