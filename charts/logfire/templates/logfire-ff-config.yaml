@@ -12,6 +12,7 @@ data:
   FF_FORCE_CONSOLE_LOGGING: "true"
   OTEL_RESOURCE_ATTRIBUTES: "vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app"
   FF_CACHE_OBJECT_STORE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-byte:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
+  FF_SHARED_REDIS_DSN: {{ .Values.redisDsn }}
 {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
   FF_TLS_MODE: "allow"
   FF_HTTPS_PORT: {{ .Values.inClusterTls.httpsPort | quote }}
@@ -68,7 +69,6 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-ff-config
 data:
-  FF_SHARED_REDIS_DSN: {{ .Values.redisDsn }}
   FF_BACKEND_SERVICE_URL: "{{ include "logfire.scheme" . }}://logfire-backend:{{ include "logfire.port" (dict "port" 8000 "root" .) }}"
   FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
   FF_FAILOVER_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}/_ingest_failover

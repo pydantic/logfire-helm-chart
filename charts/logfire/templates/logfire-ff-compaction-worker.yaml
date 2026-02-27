@@ -78,8 +78,6 @@ spec:
             - name: FF_DATAFUSION_THREADS
               {{- $dataFusionThreads := sub (atoi $cpu) 1 }}
               value: {{ (gt $dataFusionThreads 0) | ternary $dataFusionThreads "1" | quote }}
-            - name: FF_INDEX_COMPACTION_CHANCE
-              value: "1.0"
             - name: FF_ENABLE_SCHEMA_UPGRADES
               value: "true"
             - name: FF_UPGRADE_MAX_DAYS
