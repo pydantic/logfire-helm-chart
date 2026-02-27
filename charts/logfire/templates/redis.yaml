@@ -47,6 +47,7 @@ spec:
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.affinity" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.topologySpreadConstraints" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- $redisImage := get $redisValues "image" | default dict }}
       {{- $redisImagePullPolicy := default "IfNotPresent" (default .Values.image.pullPolicy $redisImage.pullPolicy) }}
       containers:

@@ -14,6 +14,9 @@ affinity: {}
 # -- Tolerations applied to all workloads
 tolerations: []
 
+# -- topologySpreadConstraints applied to all workloads
+topologySpreadConstraints: []
+
 # -- Kubernetes cluster domain for service discovery
 # clusterDomain: cluster.local
 
@@ -401,6 +404,7 @@ logfire-dex:
   # nodeSelector: {}
   # affinity: {}
   # tolerations: []
+  # topologySpreadConstraints: []
   # pdb:
   #   maxUnavailable: 1
   #   minAvailable: 1
@@ -784,6 +788,11 @@ logfire-ff-cache-byte:
 #   resources:
 #     cpu: "2"
 #     memory: "8Gi"
+#     # Optional: sets both requests+limits for container writable layer/logs
+#     ephemeralStorage: "2Gi"
+#     # Optional: set request+limit separately
+#     # ephemeralStorageRequest: "1Gi"
+#     # ephemeralStorageLimit: "4Gi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 3
@@ -990,6 +999,11 @@ logfire-ff-cache-byte:
 #   resources:
 #     cpu: "2"
 #     memory: "8Gi"
+#     # Optional: sets both requests+limits for container writable layer/logs
+#     ephemeralStorage: "2Gi"
+#     # Optional: set request+limit separately
+#     # ephemeralStorageRequest: "1Gi"
+#     # ephemeralStorageLimit: "4Gi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 3

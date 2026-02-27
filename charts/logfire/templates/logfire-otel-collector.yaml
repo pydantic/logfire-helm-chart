@@ -126,6 +126,7 @@ spec:
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.affinity" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.topologySpreadConstraints" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- $otelCollector := default (dict) .Values.otel_collector }}
       {{- $otelImage := get $otelCollector "image" | default dict }}
       containers:

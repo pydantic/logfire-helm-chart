@@ -1,7 +1,4 @@
 {{- $serviceName := "logfire-backend" }}
-{{- include "logfire.validateConfig" . -}}
-{{- include "logfire.validate.autoscaling" (dict "Values" .Values "serviceName" $serviceName) -}}
-{{- include "logfire.validate.pdb" (dict "Values" .Values "serviceName" $serviceName) -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -76,6 +73,7 @@ spec:
       {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.affinity" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.topologySpreadConstraints" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       containers:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
