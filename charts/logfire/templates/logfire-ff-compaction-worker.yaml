@@ -3,6 +3,8 @@
 {{- $serviceValues := get .Values $serviceName | default dict -}}
 {{- $resources := get $serviceValues "resources" | default dict -}}
 {{- $cpu := get $resources "cpu" | default $defaultCpu -}}
+{{- $cpuCores := int (include "logfire.cpuCores" $cpu) -}}
+{{- $dataFusionThreads := max 1 (sub $cpuCores 1) -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -75,10 +77,9 @@ spec:
                 name: logfire-ff-write-config
           env:
             - name: FF_IO_THREADS
-              value: {{ $cpu | quote }}
+              value: {{ $cpuCores | quote }}
             - name: FF_DATAFUSION_THREADS
-              {{- $dataFusionThreads := sub (atoi $cpu) 1 }}
-              value: {{ (gt $dataFusionThreads 0) | ternary $dataFusionThreads "1" | quote }}
+              value: {{ $dataFusionThreads | quote }}
             - name: FF_ENABLE_SCHEMA_UPGRADES
               value: "true"
             - name: FF_UPGRADE_MAX_DAYS

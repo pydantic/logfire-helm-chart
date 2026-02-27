@@ -3,6 +3,8 @@
 {{- $serviceValues := get .Values $serviceName | default dict -}}
 {{- $resources := get $serviceValues "resources" | default dict -}}
 {{- $cpu := get $resources "cpu" | default $defaultCpu -}}
+{{- $cpuCores := int (include "logfire.cpuCores" $cpu) -}}
+{{- $dataFusionThreads := max 1 (sub $cpuCores 1) -}}
 {{- if (index .Values $serviceName | default dict).enabled }}
 apiVersion: apps/v1
 kind: Deployment
@@ -87,10 +89,9 @@ spec:
             - name: FF_PG_POOL_MIN_CONNECTIONS
               value: "1"
             - name: FF_IO_THREADS
-              value: {{ $cpu | quote }}
+              value: {{ $cpuCores | quote }}
             - name: FF_DATAFUSION_THREADS
-              {{- $dataFusionThreads := sub (atoi $cpu) 1 }}
-              value: {{ (gt $dataFusionThreads 0) | ternary $dataFusionThreads "1" | quote }}
+              value: {{ $dataFusionThreads | quote }}
             - name: FF_DATAFUSION_MEMORY_LIMIT
               value: {{ (get (get .Values $serviceName | default dict) "datafusionMemory" | default "512MB" | quote) }}
             - name: FF_DATAFUSION_THREAD_STACK_SIZE

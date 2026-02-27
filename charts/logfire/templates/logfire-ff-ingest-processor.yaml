@@ -3,12 +3,8 @@
 {{- $serviceValues := get .Values $serviceName | default dict -}}
 {{- $resources := get $serviceValues "resources" | default dict -}}
 {{- $cpu := get $resources "cpu" | default $defaultCpu -}}
-{{- $cpuInt := 0 -}}
-{{- if hasSuffix "m" $cpu -}}
-{{-  $cpuInt = div (int (trimSuffix "m" $cpu)) 1000 -}}
-{{- else -}}
-{{-  $cpuInt = $cpu -}}
-{{- end -}}
+{{- $cpuCores := int (include "logfire.cpuCores" $cpu) -}}
+{{- $dataFusionThreads := max 1 (sub $cpuCores 1) -}}
 
 apiVersion: v1
 kind: Service
@@ -122,10 +118,9 @@ spec:
             - name: FF_INGEST_NUM_CLEANUP_WORKERS
               value: "0"
             - name: FF_IO_THREADS
-              value: {{ $cpuInt | float64 | floor | int | quote }}
+              value: {{ $cpuCores | quote }}
             - name: FF_DATAFUSION_THREADS
-              {{- $dataFusionThreads := sub (atoi $cpu) 1 }}
-              value: {{ (gt $dataFusionThreads 0) | ternary $dataFusionThreads "1" | quote }}
+              value: {{ $dataFusionThreads | quote }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
