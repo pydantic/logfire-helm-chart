@@ -13,6 +13,7 @@ data:
   OTEL_RESOURCE_ATTRIBUTES: "vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app"
   FF_CACHE_OBJECT_STORE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-byte:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
   FF_SHARED_REDIS_DSN: {{ .Values.redisDsn }}
+  FF_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}
 {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
   FF_TLS_MODE: "allow"
   FF_HTTPS_PORT: {{ .Values.inClusterTls.httpsPort | quote }}
@@ -42,7 +43,6 @@ data:
   FF_IPC_CACHE_HOT_FILE_AGE_MINUTES: "30"
   FF_IPC_CACHE_SMALL_FILE_SIZE_MB: "5"
   FF_EXTERNAL_TABLES_PG_ENABLED_TABLES: "logfire.annotations,logfire.experiments"
-  FF_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}
 
 ---
 
@@ -55,7 +55,6 @@ metadata:
     app.kubernetes.io/component: logfire-ff-config
 data:
   FF_WRITE_INDEX_THRESHOLD_BYTES: "1048576"
-  FF_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}
   FF_PARQUET_WRITER_MAX_ROWS_PER_ROW_GROUP: "100000"
   FF_PARQUET_WRITER_MAX_ROWS_PER_PAGE: "15000"
 
