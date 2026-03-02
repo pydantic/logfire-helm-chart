@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.12.5](https://img.shields.io/badge/Version-0.12.5-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
+![Version: 0.13.0](https://img.shields.io/badge/Version-0.13.0-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -536,7 +536,7 @@ Before diving deeper, verify these common configuration issues:
 * **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.12.5](https://img.shields.io/badge/Version-0.12.5-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
+![Version: 0.13.0](https://img.shields.io/badge/Version-0.13.0-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -570,6 +570,10 @@ Helm chart for self-hosted Pydantic Logfire
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
 | dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
+| existingGatewaySecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret for the AI Gateway with the following keys:  - key (gateway encryption key)  - internalSecret (gateway internal secret) |
+| existingGatewaySecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
+| existingGatewaySecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret |
 | existingSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |

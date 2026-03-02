@@ -36,6 +36,10 @@ adminSecret:
   enabled: true
   name: "logfire-admin"
 
+existingGatewaySecret:
+  enabled: true
+  name: "logfire-gateway"
+
 logfire-dex:
   initContainers:
   - name: check-db-ready

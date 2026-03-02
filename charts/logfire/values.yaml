@@ -569,6 +569,48 @@ logfire-ff-maintenance-scheduler:
 #     minAvailable: 1
 
 
+# -- Autoscaling & resources for the `logfire-ai-gateway` pod
+# logfire-ai-gateway:
+#   # -- Workload labels
+#   labels: {}
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
+#   # -- Number of replicas
+#   replicas: 1
+#   # -- Resource requests/limits
+#   resources:
+#     cpu: "250m"
+#     memory: "256Mi"
+#   # -- Autoscaler settings
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 3
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 60
+#     keda:
+#       enabled: true
+#       triggers:
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
 # -- Autoscaling & resources for the query API pods
 # logfire-ff-query-api:
 #   # -- Workload labels
@@ -1344,6 +1386,8 @@ image:
   fusionfireImage: fusionfire
   # @ignored
   dexImage: dex
+  # @ignored
+  gatewayImage: gateway
 
 # -- HAProxy image configuration (used by the service and feature-flag proxies)
 haproxy:
@@ -1409,6 +1453,17 @@ otel_collector:
 #  - logfire-jwt-secret
 #  - logfire-unsubscribe-secret
 existingSecret:
+  # -- Use an existing Secret (recommended for Argo CD users).
+  enabled: false
+  # -- Name of the Kubernetes Secret resource.
+  name: ""
+  # -- Optional annotations for the Secret (e.g., for external secret managers).
+  annotations: {}
+
+# -- Existing Secret for the AI Gateway with the following keys:
+#  - key (gateway encryption key)
+#  - internalSecret (gateway internal secret)
+existingGatewaySecret:
   # -- Use an existing Secret (recommended for Argo CD users).
   enabled: false
   # -- Name of the Kubernetes Secret resource.

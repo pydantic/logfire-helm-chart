@@ -68,10 +68,12 @@ stringData:
       acl path_ingest path_reg -i ^/v1/(traces|metrics|logs)$
       acl path_dex path_beg /auth-api
       acl path_backend path_reg -i ^/(ui-api|v1|api)/
+      acl path_ai_gateway path_beg /proxy
 
 
       use_backend logfire-ingest if path_ingest
       use_backend logfire-dex if path_dex
+      use_backend logfire-ai-gateway if path_ai_gateway
       use_backend logfire-backend if path_backend
 
       default_backend logfire-frontend
@@ -122,6 +124,23 @@ stringData:
       server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check port 5558 resolvers kubernetes ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $dexSni }}) verifyhost {{ $dexSni }}
       {{- else }}
       server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:5556 check port 5558 resolvers kubernetes
+      {{- end }}
+
+    backend logfire-ai-gateway
+      balance roundrobin
+      # Health checks
+      option httpchk
+      http-check send meth GET uri /proxy/ hdr Host logfire-ai-gateway
+      option http-server-close
+      timeout connect 3s
+      timeout server 50s
+      http-check expect status 200
+
+      {{- $gatewaySni := printf "logfire-ai-gateway.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      server logfire-ai-gateway logfire-ai-gateway.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check resolvers kubernetes ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $gatewaySni }}) verifyhost {{ $gatewaySni }} check-ssl
+      {{- else }}
+      server logfire-ai-gateway logfire-ai-gateway.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8788 check resolvers kubernetes
       {{- end }}
 
     backend logfire-backend
