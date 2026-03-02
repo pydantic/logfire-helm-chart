@@ -402,6 +402,19 @@ Logfire secret name
 {{- end }}
 {{- end -}}
 
+{{/*
+Gateway secret name
+*/}}
+{{- define "logfire.gatewaySecretName" -}}
+{{- $ctx := required "logfire.gatewaySecretName: need .ctx" .ctx -}}
+{{- $ex := get $ctx.Values "existingGatewaySecret" | default dict -}}
+{{- if and (get $ex "enabled") (get $ex "name") -}}
+    {{ get $ex "name" }}
+{{- else }}
+{{- .secretName }}
+{{- end }}
+{{- end -}}
+
 {{- define "logfire.objectStoreEnv" -}}
 - name: FF_OBJECT_STORE_URI
   value: {{ .Values.objectStore.uri }}
@@ -625,12 +638,13 @@ Annotations to allow existing postgres secret reloading
 {{- end -}}
 {{- end }}
 
-{{/* 
-Annotations to allow both postgres and existing secrets reloading
+{{/*
+Annotations to allow postgres, existing, and gateway secrets reloading
 */}}
 {{- define "logfire.secretAnnotations" -}}
 {{- $postgresAnns := .Values.postgresSecret.annotations -}}
 {{- $existingAnns := .Values.existingSecret.annotations -}}
+{{- $gatewayAnns := (get .Values "existingGatewaySecret" | default dict).annotations -}}
 
 {{- $merged := dict -}}
 
@@ -641,6 +655,10 @@ Annotations to allow both postgres and existing secrets reloading
 {{- /* Merge in the second set, overwriting any duplicate keys */ -}}
 {{- if and .Values.existingSecret.enabled $existingAnns -}}
   {{- $merged = merge $merged $existingAnns -}}
+{{- end -}}
+
+{{- if and (get (get .Values "existingGatewaySecret" | default dict) "enabled") $gatewayAnns -}}
+  {{- $merged = merge $merged $gatewayAnns -}}
 {{- end -}}
 
 {{- if $merged -}}
@@ -1205,6 +1223,18 @@ Validate existing secret configuration
 {{- end -}}
 
 {{/*
+Validate gateway secret configuration
+*/}}
+{{- define "logfire.validate.existingGatewaySecret" -}}
+{{- $ex := get .Values "existingGatewaySecret" | default dict -}}
+{{- if get $ex "enabled" -}}
+  {{- if not (get $ex "name") -}}
+    {{- fail "existingGatewaySecret.name is required when existingGatewaySecret.enabled is true. Provide the name of your Kubernetes Secret containing 'key' (gateway encryption key) and 'internalSecret' (gateway internal secret) keys." -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Validate admin secret configuration
 */}}
 {{- define "logfire.validate.adminSecret" -}}
@@ -1360,6 +1390,7 @@ Call this from templates that need to ensure configuration is valid.
 {{- include "logfire.validate.dexStorage" . -}}
 {{- include "logfire.validate.ai" . -}}
 {{- include "logfire.validate.existingSecret" . -}}
+{{- include "logfire.validate.existingGatewaySecret" . -}}
 {{- include "logfire.validate.adminSecret" . -}}
 {{- include "logfire.validate.admin" . -}}
 {{- include "logfire.validate.redis" . -}}
