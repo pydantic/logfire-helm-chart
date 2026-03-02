@@ -53,6 +53,11 @@ spec:
         checksum/logfire-meta-write-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token" )) "key" "logfire-meta-write-token" )}}
         checksum/logfire-unsubscribe-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-unsubscribe-secret" )) "key" "logfire-unsubscribe-secret" )}}
         {{- end }}
+        {{- $gwEx := get .Values "existingGatewaySecret" | default dict }}
+        {{- if or (not (get $gwEx "enabled")) (empty (get $gwEx "annotations")) }}
+        checksum/gateway-encryption: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-encryption")) "key" "key" )}}
+        checksum/gateway-internal-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-internal-secret")) "key" "internalSecret" )}}
+        {{- end }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         checksum/logfire-postgres-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresDsn" )}}
         {{- end }}
@@ -230,6 +235,18 @@ spec:
               value: "{{ include "logfire.scheme" . }}://logfire-ff-crud-api"
             - name: FUSIONFIRE_CRUD_PORT
               value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
+            - name: GATEWAY_BASE_URL
+              value: "{{ include "logfire.scheme" . }}://logfire-ai-gateway:{{ include "logfire.port" (dict "port" 8788 "root" .) }}"
+            - name: GATEWAY_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: key
+                  name: {{ include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-encryption") }}
+            - name: GATEWAY_INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: internalSecret
+                  name: {{ include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-internal-secret") }}
             - name: MIN_DATE_USAGE_CHART  # TODO: make this optional?
               value: "2025-01-01"
             - name: DEFAULT_SUBSCRIPTION_PLAN
