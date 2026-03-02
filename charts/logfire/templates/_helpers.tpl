@@ -430,6 +430,19 @@ Logfire secret name
 {{- end }}
 {{- end -}}
 
+{{/*
+Gateway secret name
+*/}}
+{{- define "logfire.gatewaySecretName" -}}
+{{- $ctx := required "logfire.gatewaySecretName: need .ctx" .ctx -}}
+{{- $ex := get $ctx.Values "existingGatewaySecret" | default dict -}}
+{{- if and (get $ex "enabled") (get $ex "name") -}}
+    {{ get $ex "name" }}
+{{- else }}
+{{- .secretName }}
+{{- end }}
+{{- end -}}
+
 {{- define "logfire.objectStoreEnv" -}}
 - name: FF_OBJECT_STORE_URI
   value: {{ .Values.objectStore.uri }}
@@ -653,12 +666,13 @@ Annotations to allow existing postgres secret reloading
 {{- end -}}
 {{- end }}
 
-{{/* 
-Annotations to allow both postgres and existing secrets reloading
+{{/*
+Annotations to allow postgres, existing, and gateway secrets reloading
 */}}
 {{- define "logfire.secretAnnotations" -}}
 {{- $postgresAnns := .Values.postgresSecret.annotations -}}
 {{- $existingAnns := .Values.existingSecret.annotations -}}
+{{- $gatewayAnns := (get .Values "existingGatewaySecret" | default dict).annotations -}}
 
 {{- $merged := dict -}}
 
@@ -669,6 +683,10 @@ Annotations to allow both postgres and existing secrets reloading
 {{- /* Merge in the second set, overwriting any duplicate keys */ -}}
 {{- if and .Values.existingSecret.enabled $existingAnns -}}
   {{- $merged = merge $merged $existingAnns -}}
+{{- end -}}
+
+{{- if and (index .Values "logfire-ai-gateway" "enabled") (get (get .Values "existingGatewaySecret" | default dict) "enabled") $gatewayAnns -}}
+  {{- $merged = merge $merged $gatewayAnns -}}
 {{- end -}}
 
 {{- if $merged -}}
@@ -1076,6 +1094,7 @@ Dev Postgres helpers
   "logfire-ff-query-worker"
   "logfire-ff-ingest"
   "logfire-ff-ingest-processor"
+  "logfire-ai-gateway"
 )) -}}
 - name: check-db-ready
   image: postgres:17

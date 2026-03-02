@@ -24,6 +24,9 @@
   (dict "serviceName" "logfire-ff-query-api")
   (dict "serviceName" "logfire-ff-query-worker")
 -}}
+{{- if (index .Values "logfire-ai-gateway" "enabled") }}
+{{- $certServices = append $certServices (dict "serviceName" "logfire-ai-gateway") }}
+{{- end -}}
 
 {{- if $autoIssuer }}
 apiVersion: cert-manager.io/v1

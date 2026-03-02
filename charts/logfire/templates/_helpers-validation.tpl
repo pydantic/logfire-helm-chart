@@ -111,6 +111,21 @@ Validate admin secret configuration
 {{- end -}}
 
 {{/*
+Validate gateway secret configuration
+*/}}
+{{- define "logfire.validate.existingGatewaySecret" -}}
+{{- if (index .Values "logfire-ai-gateway" "enabled") -}}
+{{- $ex := get .Values "existingGatewaySecret" | default dict -}}
+{{- if get $ex "enabled" -}}
+  {{- if not (get $ex "name") -}}
+    {{- fail "existingGatewaySecret.name is required when existingGatewaySecret.enabled is true. Provide the name of your Kubernetes Secret containing 'key' (gateway encryption key) and 'internalSecret' (gatewa internal secret) keys." -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+
+{{/*
 Validate autoscaling configuration - warn if both HPA and KEDA are enabled
 */}}
 {{- define "logfire.validate.autoscaling" -}}
@@ -263,6 +278,7 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.dexStorage"
   "logfire.validate.ai"
   "logfire.validate.existingSecret"
+  "logfire.validate.existingGatewaySecret"
   "logfire.validate.adminSecret"
   "logfire.validate.admin"
   "logfire.validate.redis"

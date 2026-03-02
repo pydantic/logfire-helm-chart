@@ -601,6 +601,10 @@ Helm chart for self-hosted Pydantic Logfire
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
 | dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
+| existingGatewaySecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret for the AI Gateway with the following keys:  - key (gateway encryption key)  - internalSecret (gateway internal secret) |
+| existingGatewaySecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
+| existingGatewaySecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret |
 | existingSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
@@ -647,6 +651,8 @@ Helm chart for self-hosted Pydantic Logfire
 | ingress.tls | bool | `false` | Enable TLS/HTTPS. Required for correct CORS behavior. |
 | istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
 | istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-ff-proxy-cache-{byte,filter,ipc}, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
+| logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
+| logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
 | logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"labels":{},"podAnnotations":{},"podLabels":{},"replicas":1,"resources":{"cpu":"250m","memory":"256Mi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
 | logfire-dex.config | object | `{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex configuration (see https://dexidp.io/docs/) |
