@@ -141,28 +141,31 @@ spec:
 {{- end -}}
 {{- end -}}
 
-{{- define "logfire.resources"}}
+{{- define "logfire.resources" -}}
 {{- $resources := index (index .Values .serviceName | default dict) "resources" | default dict -}}
-{{- if $resources }}
+{{- if $resources -}}
+{{- if hasKey $resources "ephemeralStorageRequest" -}}
+{{- fail (printf "resources.ephemeralStorageRequest is not supported for '%s'. Use resources.ephemeralStorage instead." .serviceName) -}}
+{{- end -}}
+{{- if hasKey $resources "ephemeralStorageLimit" -}}
+{{- fail (printf "resources.ephemeralStorageLimit is not supported for '%s'. Use resources.ephemeralStorage instead." .serviceName) -}}
+{{- end -}}
+{{- $ephemeralStorageSet := hasKey $resources "ephemeralStorage" -}}
 resources:
   requests:
     memory: {{ $resources.memory | default "1Gi" }}
     cpu: {{ $resources.cpu | default "1" }}
-    {{- if hasKey $resources "ephemeralStorageRequest" }}
-    ephemeral-storage: {{ $resources.ephemeralStorageRequest }}
-    {{- else if hasKey $resources "ephemeralStorage" }}
+    {{- if $ephemeralStorageSet }}
     ephemeral-storage: {{ $resources.ephemeralStorage }}
     {{- end }}
   limits:
     memory: {{ $resources.memory | default "1Gi" }}
     cpu: {{ $resources.cpu | default "1" }}
-    {{- if hasKey $resources "ephemeralStorageLimit" }}
-    ephemeral-storage: {{ $resources.ephemeralStorageLimit }}
-    {{- else if hasKey $resources "ephemeralStorage" }}
+    {{- if $ephemeralStorageSet }}
     ephemeral-storage: {{ $resources.ephemeralStorage }}
     {{- end }}
-{{- end }}
-{{- end}}
+{{- end -}}
+{{- end -}}
 
 {{/*
 Get effective hostnames - prefers gateway.hostnames when gateway is enabled, falls back to ingress.hostnames
@@ -742,43 +745,27 @@ default-checksum
 {{- end -}}
 {{- end -}}
 
-{{- define "logfire.nodeSelector" -}}
+{{- define "logfire.podScheduling" -}}
 {{- $serviceValues := index .Values .serviceName | default dict -}}
-{{- $serviceSelector := $serviceValues.nodeSelector | default dict -}}
-{{- $merged := merge $serviceSelector (.Values.nodeSelector | default dict) -}}
-{{- if $merged -}}
+{{- $nodeSelector := merge ($serviceValues.nodeSelector | default dict) (.Values.nodeSelector | default dict) -}}
+{{- $affinity := merge ($serviceValues.affinity | default dict) (.Values.affinity | default dict) -}}
+{{- $tolerations := concat ($serviceValues.tolerations | default list) (.Values.tolerations | default list) -}}
+{{- $topologySpreadConstraints := concat ($serviceValues.topologySpreadConstraints | default list) (.Values.topologySpreadConstraints | default list) -}}
+{{- if $nodeSelector -}}
 nodeSelector:
-{{- toYaml $merged | nindent 2 }}
+{{- toYaml $nodeSelector | nindent 2 }}
 {{- end -}}
-{{- end -}}
-
-{{- define "logfire.affinity" -}}
-{{- $serviceValues := index .Values .serviceName | default dict -}}
-{{- $serviceAffinity := $serviceValues.affinity | default dict -}}
-{{- $merged := merge $serviceAffinity (.Values.affinity | default dict) -}}
-{{- if $merged -}}
+{{- if $affinity -}}
 affinity:
-{{- toYaml $merged | nindent 2 }}
+{{- toYaml $affinity | nindent 2 }}
 {{- end -}}
-{{- end -}}
-
-{{- define "logfire.topologySpreadConstraints" -}}
-{{- $serviceValues := index .Values .serviceName | default dict -}}
-{{- $serviceConstraints := $serviceValues.topologySpreadConstraints | default list -}}
-{{- $merged := concat $serviceConstraints (.Values.topologySpreadConstraints | default list) -}}
-{{- if $merged -}}
-topologySpreadConstraints:
-{{- toYaml $merged | nindent 2 }}
-{{- end -}}
-{{- end -}}
-
-{{- define "logfire.tolerations" -}}
-{{- $serviceValues := index .Values .serviceName | default dict -}}
-{{- $serviceTolerations := $serviceValues.tolerations | default list -}}
-{{- $merged := concat $serviceTolerations (.Values.tolerations | default list) -}}
-{{- if $merged -}}
+{{- if $tolerations -}}
 tolerations:
-{{- toYaml $merged | nindent 2 }}
+{{- toYaml $tolerations | nindent 2 }}
+{{- end -}}
+{{- if $topologySpreadConstraints -}}
+topologySpreadConstraints:
+{{- toYaml $topologySpreadConstraints | nindent 2 }}
 {{- end -}}
 {{- end -}}
 

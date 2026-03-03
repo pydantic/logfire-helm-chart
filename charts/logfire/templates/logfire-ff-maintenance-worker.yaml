@@ -1,10 +1,7 @@
 {{- $serviceName := "logfire-ff-maintenance-worker" }}
-{{- $defaultCpu := "1" -}}
-{{- $serviceValues := get .Values $serviceName | default dict -}}
-{{- $resources := get $serviceValues "resources" | default dict -}}
-{{- $cpu := get $resources "cpu" | default $defaultCpu -}}
-{{- $cpuCores := int (include "logfire.cpuCores" $cpu) -}}
-{{- $dataFusionThreads := max 1 (sub $cpuCores 1) -}}
+{{- $threadSettings := include "logfire.ffThreadSettings" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $cpuCores := int (get $threadSettings "cpuCores") -}}
+{{- $dataFusionThreads := int (get $threadSettings "dataFusionThreads") -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -50,17 +47,14 @@ spec:
       {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
-      {{- include "logfire.affinity" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
-      {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
-      {{- include "logfire.topologySpreadConstraints" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       containers:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
-{{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | indent 10 }}
+{{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
             - fusionfire
             - maintenance-worker

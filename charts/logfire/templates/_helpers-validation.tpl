@@ -247,16 +247,22 @@ Master validation template - runs all validations
 Call this from templates that need to ensure configuration is valid.
 */}}
 {{- define "logfire.validateConfig" -}}
-{{- include "logfire.validate.objectStore" . -}}
-{{- include "logfire.validate.ingress" . -}}
-{{- include "logfire.validate.gateway" . -}}
-{{- include "logfire.validate.ingressGatewayConflict" . -}}
-{{- include "logfire.validate.postgres" . -}}
-{{- include "logfire.validate.dexStorage" . -}}
-{{- include "logfire.validate.ai" . -}}
-{{- include "logfire.validate.existingSecret" . -}}
-{{- include "logfire.validate.adminSecret" . -}}
-{{- include "logfire.validate.admin" . -}}
-{{- include "logfire.validate.redis" . -}}
-{{- include "logfire.validate.inClusterTls" . -}}
+{{- $root := . -}}
+{{- $validators := list
+  "logfire.validate.objectStore"
+  "logfire.validate.ingress"
+  "logfire.validate.gateway"
+  "logfire.validate.ingressGatewayConflict"
+  "logfire.validate.postgres"
+  "logfire.validate.dexStorage"
+  "logfire.validate.ai"
+  "logfire.validate.existingSecret"
+  "logfire.validate.adminSecret"
+  "logfire.validate.admin"
+  "logfire.validate.redis"
+  "logfire.validate.inClusterTls"
+  -}}
+{{- range $validator := $validators -}}
+{{- include $validator $root -}}
+{{- end -}}
 {{- end -}}

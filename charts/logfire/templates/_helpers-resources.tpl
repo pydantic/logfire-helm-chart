@@ -40,6 +40,18 @@ Convert Kubernetes CPU quantity to integer cores using ceil, with minimum 1.
 {{- end -}}
 
 {{/*
+Derive FF service CPU core count and DataFusion thread count from resources.cpu.
+*/}}
+{{- define "logfire.ffThreadSettings" -}}
+{{- $serviceValues := get .Values .serviceName | default dict -}}
+{{- $resources := get $serviceValues "resources" | default dict -}}
+{{- $cpu := get $resources "cpu" | default "1" -}}
+{{- $cpuCores := int (include "logfire.cpuCores" $cpu) -}}
+{{- $dataFusionThreads := max 1 (sub $cpuCores 1) -}}
+{{- dict "cpuCores" $cpuCores "dataFusionThreads" $dataFusionThreads | toJson -}}
+{{- end -}}
+
+{{/*
 Convert Kubernetes memory quantity to mebibytes (Mi).
 Supports common binary and decimal suffixes plus plain bytes.
 */}}
