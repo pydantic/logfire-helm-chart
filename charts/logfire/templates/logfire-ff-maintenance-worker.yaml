@@ -100,6 +100,10 @@ spec:
               value: "true"
             - name: FF_TEMP_DIR
               value: /scratch/fusionfire
+            {{- with (get (get .Values $serviceName | default dict) "spillToDiskQuota") }}
+            - name: FF_SPILL_TO_DISK_QUOTA
+              value: {{ . | quote }}
+            {{- end }}
             - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
               value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "10" | quote) }}
             - name: FF_COMPACTION_JOB_PARALLELISM

@@ -696,9 +696,27 @@ Custom labels for workloads
 Custom labels for workloads pods
 */}}
 {{- define "logfire.podLabels" -}}
-{{- $serviceValues := index .Values .serviceName -}}
-{{- if and $serviceValues $serviceValues.podLabels -}}
-{{- toYaml $serviceValues.podLabels -}}
+{{- $serviceName := .serviceName -}}
+{{- $serviceValues := index .Values $serviceName | default dict -}}
+{{- $servicePodLabels := $serviceValues.podLabels | default dict -}}
+{{- $merged := deepCopy $servicePodLabels -}}
+{{- if dig "disableSidecarOnKnownWorkloads" false (.Values.istio | default dict) -}}
+  {{- $knownWorkloads := list
+    "logfire-service"
+    "logfire-ff-proxy-cache-byte"
+    "logfire-ff-proxy-cache-filter"
+    "logfire-ff-proxy-cache-ipc"
+    "logfire-backend-migrations"
+    "logfire-ff-migrations"
+    "logfire-redis"
+    "logfire-otel-collector"
+    -}}
+  {{- if and (has $serviceName $knownWorkloads) (not (hasKey $merged "sidecar.istio.io/inject")) -}}
+    {{- $_ := set $merged "sidecar.istio.io/inject" "false" -}}
+  {{- end -}}
+{{- end -}}
+{{- if $merged -}}
+{{- toYaml $merged -}}
 {{- end -}}
 {{- end -}}
 

@@ -106,6 +106,12 @@ imagePullSecrets:
   - logfire-image-key
 ```
 
+### Mirrored Registries
+
+If you mirror Logfire images into your own registry (for example ECR), keep the chart version and mirrored image tags aligned.
+By default, workload images use the chart `appVersion` tag unless you explicitly override tags in values.
+If your mirrored tags are stale compared to the chart release, you can hit mismatches between chart templates and runtime image behavior.
+
 ### Hostnames
 
 There is at least a hostname that is required to be set: I.e, `logfire.example.com`. Set via the `ingress.hostnames` value.
@@ -246,6 +252,20 @@ gateway:
   annotations:
     app.kubernetes.io/part-of: logfire
 ```
+
+## Istio Compatibility Profile (Optional)
+
+If you run Istio and see protocol/mTLS sidecar issues on HAProxy/migration/infra workloads, you can enable:
+
+```yaml
+istio:
+  disableSidecarOnKnownWorkloads: true
+```
+
+This automatically sets `sidecar.istio.io/inject: "false"` on:
+`logfire-service`, `logfire-ff-proxy-cache-byte`, `logfire-ff-proxy-cache-filter`, `logfire-ff-proxy-cache-ipc`, `logfire-backend-migrations`, `logfire-ff-migrations`, `logfire-redis`, and `logfire-otel-collector`.
+
+You can still override labels per workload using `<workload>.podLabels`.
 
 ### Dex
 
@@ -614,6 +634,8 @@ Helm chart for self-hosted Pydantic Logfire
 | ingress.ingressClassName | string | `"nginx"` | IngressClass to use (e.g., nginx) |
 | ingress.secretName | string | `"logfire-frontend-cert"` | TLS Secret name if you want to do a custom one |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS. Required for correct CORS behavior. |
+| istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
+| istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-ff-proxy-cache-{byte,filter,ipc}, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
 | logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"labels":{},"podAnnotations":{},"podLabels":{},"replicas":1,"resources":{"cpu":"250m","memory":"256Mi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
 | logfire-dex.config | object | `{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex configuration (see https://dexidp.io/docs/) |
