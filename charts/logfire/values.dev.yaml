@@ -30,4 +30,3 @@ dev:
   deployPostgres: true
   deployMinio: true
   deployMaildev: true
-

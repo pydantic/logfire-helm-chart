@@ -107,6 +107,12 @@ imagePullSecrets:
   - logfire-image-key
 ```
 
+### Mirrored Registries
+
+If you mirror Logfire images into your own registry (for example ECR), keep the chart version and mirrored image tags aligned.
+By default, workload images use the chart `appVersion` tag unless you explicitly override tags in values.
+If your mirrored tags are stale compared to the chart release, you can hit mismatches between chart templates and runtime image behavior.
+
 ### Hostnames
 
 There is at least a hostname that is required to be set: I.e, `logfire.example.com`. Set via the `ingress.hostnames` value.
@@ -247,6 +253,20 @@ gateway:
   annotations:
     app.kubernetes.io/part-of: logfire
 ```
+
+## Istio Compatibility Profile (Optional)
+
+If you run Istio and see protocol/mTLS sidecar issues on HAProxy/migration/infra workloads, you can enable:
+
+```yaml
+istio:
+  disableSidecarOnKnownWorkloads: true
+```
+
+This automatically sets `sidecar.istio.io/inject: "false"` on:
+`logfire-service`, `logfire-ff-proxy-cache-byte`, `logfire-ff-proxy-cache-filter`, `logfire-ff-proxy-cache-ipc`, `logfire-backend-migrations`, `logfire-ff-migrations`, `logfire-redis`, and `logfire-otel-collector`.
+
+You can still override labels per workload using `<workload>.podLabels`.
 
 ### Dex
 

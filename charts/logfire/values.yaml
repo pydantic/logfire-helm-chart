@@ -14,6 +14,17 @@ affinity: {}
 # -- Tolerations applied to all workloads
 tolerations: []
 
+# -- topologySpreadConstraints applied to all workloads
+topologySpreadConstraints: []
+
+# -- Istio compatibility options
+istio:
+  # -- When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:
+  #    logfire-service, logfire-ff-proxy-cache-{byte,filter,ipc}, logfire-backend-migrations,
+  #    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.
+  #    You can still override per workload via `<workload>.podLabels`.
+  disableSidecarOnKnownWorkloads: false
+
 # -- Kubernetes cluster domain for service discovery
 # clusterDomain: cluster.local
 
@@ -401,6 +412,7 @@ logfire-dex:
   # nodeSelector: {}
   # affinity: {}
   # tolerations: []
+  # topologySpreadConstraints: []
   # pdb:
   #   maxUnavailable: 1
   #   minAvailable: 1
@@ -525,7 +537,6 @@ logfire-ff-maintenance-scheduler:
   env:
     - name: RUST_LOG
       value: warn
-
 
 # -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
@@ -784,6 +795,8 @@ logfire-ff-cache-byte:
 #   resources:
 #     cpu: "2"
 #     memory: "8Gi"
+#     # Optional: sets both requests+limits for container writable layer/logs
+#     ephemeralStorage: "2Gi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 3
@@ -974,6 +987,7 @@ logfire-ff-cache-byte:
 #   downloadParallelism: 10
 #   replicas: 2
 #   datafusionMemory: "3072MB"
+#   spillToDiskQuota: "32GB"
 #   compactionTiers:
 #     - size_threshold_bytes: "1KB"
 #       count_threshold: 10
@@ -990,6 +1004,8 @@ logfire-ff-cache-byte:
 #   resources:
 #     cpu: "2"
 #     memory: "8Gi"
+#     # Optional: sets both requests+limits for container writable layer/logs
+#     ephemeralStorage: "2Gi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 3
@@ -1030,6 +1046,7 @@ logfire-ff-cache-byte:
 #   downloadParallelism: 10
 #   replicas: 2
 #   datafusionMemory: "3072MB"
+#   spillToDiskQuota: "32GB"
 #   compactionTiers:
 #     - size_threshold_bytes: "1KB"
 #       count_threshold: 10

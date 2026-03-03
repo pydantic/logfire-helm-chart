@@ -1,14 +1,8 @@
 {{- $serviceName := "logfire-ff-ingest" }}
-{{- $defaultCpu := "1" -}}
 {{- $serviceValues := get .Values $serviceName | default dict -}}
-{{- $resources := get $serviceValues "resources" | default dict -}}
-{{- $cpu := get $resources "cpu" | default $defaultCpu -}}
-{{- $cpuInt := 0 -}}
-{{- if hasSuffix "m" $cpu -}}
-{{-  $cpuInt = div (int (trimSuffix "m" $cpu)) 1000 -}}
-{{- else -}}
-{{-  $cpuInt = $cpu -}}
-{{- end -}}
+{{- $threadSettings := include "logfire.ffThreadSettings" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $cpuCores := int (get $threadSettings "cpuCores") -}}
+{{- $dataFusionThreads := int (get $threadSettings "dataFusionThreads") -}}
 
 apiVersion: v1
 kind: Service
@@ -79,9 +73,7 @@ spec:
       {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- include "logfire.nodeSelector" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
-      {{- include "logfire.affinity" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
-      {{- include "logfire.tolerations" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       containers:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
@@ -109,8 +101,6 @@ spec:
                 name: logfire-ff-base-config
             - configMapRef:
                 name: logfire-ff-ingest-config
-            - configMapRef:
-                name: logfire-ff-write-config
           env:
             - name: OTEL_TRACES_SAMPLER_ARG
               value: "0.05"
@@ -120,14 +110,13 @@ spec:
             - name: FF_INGEST_PATH
               value: "/fusionfire/ingest-data"
             - name: FF_INGEST_NUM_WORKERS
-              value: {{ mul (atoi (toString ($cpu))) 8 | quote }}
+              value: {{ mul $cpuCores 8 | quote }}
             - name: FF_INGEST_DOWNSTREAM_URL
               value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor:{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
             - name: FF_IO_THREADS
-              value: {{ $cpuInt | float64 | floor | int | quote }}
+              value: {{ $cpuCores | quote }}
             - name: FF_DATAFUSION_THREADS
-              {{- $dataFusionThreads := sub (atoi $cpu) 1 }}
-              value: {{ (gt $dataFusionThreads 0) | ternary $dataFusionThreads "1" | quote }}
+              value: {{ $dataFusionThreads | quote }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
