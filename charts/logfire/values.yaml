@@ -394,6 +394,13 @@ logfire-dex:
   resources:
     cpu: "250m"
     memory: "256Mi"
+    # requests:
+    #   cpu: "250m"
+    #   memory: "256Mi"
+    # limits:
+    #   cpu: "500m"
+    #   memory: "512Mi"
+    # If limits are omitted, they default to requests (Guaranteed QoS).
 
   # autoscaling:
   #   minReplicas: 1
@@ -402,6 +409,9 @@ logfire-dex:
   #     enabled: true
   #     memAverage: 65
   #     cpuAverage: 60
+  #     behavior:
+  #       scaleDown:
+  #         stabilizationWindowSeconds: 300
   #   keda:
   #     enabled: true
   #     triggers:
@@ -468,6 +478,9 @@ logfire-ff-ingest:
   #     enabled: true
   #     memAverage: 40
   #     cpuAverage: 60
+  #     behavior:
+  #       scaleDown:
+  #         stabilizationWindowSeconds: 300
   #   keda:
   #     enabled: true
   #     triggers:
@@ -512,6 +525,9 @@ logfire-ff-ingest-processor:
   #     enabled: true
   #     memAverage: 50
   #     cpuAverage: 80
+  #     behavior:
+  #       scaleDown:
+  #         stabilizationWindowSeconds: 300
   #   keda:
   #     enabled: true
   #     triggers:

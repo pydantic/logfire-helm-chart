@@ -76,6 +76,9 @@ logfire-ff-ingest:
       enabled: true
       memAverage: 65
       cpuAverage: 20
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
     minReplicas: 1
     maxReplicas: 2
 
@@ -83,6 +86,10 @@ logfire-ff-compaction-worker:
   scratchVolume:
     storageClassName: standard
     storage: "1Gi"
+  resources:
+    requests:
+      cpu: "300m"
+      memory: "768Mi"
   autoscaling:
     minReplicas: 1
     maxReplicas: 2
