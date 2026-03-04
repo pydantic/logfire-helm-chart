@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.12.6](https://img.shields.io/badge/Version-0.12.6-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
+![Version: 0.12.7](https://img.shields.io/badge/Version-0.12.7-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -519,15 +519,26 @@ This is how you can configure each service:
   replicas: 1
   # -- Resource limits and allocations
   resources:
-    cpu: "1"
-    memory: "1Gi"
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1"
+      memory: "2Gi"
   # -- Autoscaler settings
   autoscaling:
     minReplicas: 2
     maxReplicas: 4
-    memAverage: 65
-    cpuAverage: 20
+    hpa:
+      enabled: true
+      memAverage: 65
+      cpuAverage: 20
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
 ```
+
+If `resources.limits` is omitted, this chart defaults limits to the configured requests (Guaranteed QoS).
 
 See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hosted/scaling/) for some production level values and DB recommended settings.
 
@@ -556,7 +567,7 @@ Before diving deeper, verify these common configuration issues:
 * **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.12.6](https://img.shields.io/badge/Version-0.12.6-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
+![Version: 0.12.7](https://img.shields.io/badge/Version-0.12.7-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
