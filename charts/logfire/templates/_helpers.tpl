@@ -155,19 +155,26 @@ spec:
 {{- if hasKey $resources "ephemeralStorageLimit" -}}
 {{- fail (printf "resources.ephemeralStorageLimit is not supported for '%s'. Use resources.ephemeralStorage instead." .serviceName) -}}
 {{- end -}}
-{{- $ephemeralStorageSet := hasKey $resources "ephemeralStorage" -}}
+{{- $requests := index $resources "requests" | default dict -}}
+{{- $limits := index $resources "limits" | default dict -}}
+{{- $cpuRequest := coalesce (index $requests "cpu") (index $resources "cpu") (index $limits "cpu") "1" -}}
+{{- $memoryRequest := coalesce (index $requests "memory") (index $resources "memory") (index $limits "memory") "1Gi" -}}
+{{- $ephemeralStorageRequest := coalesce (index $requests "ephemeral-storage") (index $requests "ephemeralStorage") (index $resources "ephemeralStorage") (index $limits "ephemeral-storage") (index $limits "ephemeralStorage") -}}
+{{- $cpuLimit := coalesce (index $limits "cpu") $cpuRequest -}}
+{{- $memoryLimit := coalesce (index $limits "memory") $memoryRequest -}}
+{{- $ephemeralStorageLimit := coalesce (index $limits "ephemeral-storage") (index $limits "ephemeralStorage") $ephemeralStorageRequest -}}
 resources:
   requests:
-    memory: {{ $resources.memory | default "1Gi" }}
-    cpu: {{ $resources.cpu | default "1" }}
-    {{- if $ephemeralStorageSet }}
-    ephemeral-storage: {{ $resources.ephemeralStorage }}
+    memory: {{ $memoryRequest }}
+    cpu: {{ $cpuRequest }}
+    {{- if $ephemeralStorageRequest }}
+    ephemeral-storage: {{ $ephemeralStorageRequest }}
     {{- end }}
   limits:
-    memory: {{ $resources.memory | default "1Gi" }}
-    cpu: {{ $resources.cpu | default "1" }}
-    {{- if $ephemeralStorageSet }}
-    ephemeral-storage: {{ $resources.ephemeralStorage }}
+    memory: {{ $memoryLimit }}
+    cpu: {{ $cpuLimit }}
+    {{- if $ephemeralStorageLimit }}
+    ephemeral-storage: {{ $ephemeralStorageLimit }}
     {{- end }}
 {{- end -}}
 {{- end -}}

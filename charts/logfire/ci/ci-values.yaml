@@ -86,6 +86,10 @@ logfire-ff-compaction-worker:
   scratchVolume:
     storageClassName: standard
     storage: "1Gi"
+  resources:
+    requests:
+      cpu: "300m"
+      memory: "768Mi"
   autoscaling:
     minReplicas: 1
     maxReplicas: 2

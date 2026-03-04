@@ -519,8 +519,12 @@ This is how you can configure each service:
   replicas: 1
   # -- Resource limits and allocations
   resources:
-    cpu: "1"
-    memory: "1Gi"
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "1"
+      memory: "2Gi"
   # -- Autoscaler settings
   autoscaling:
     minReplicas: 2
@@ -533,6 +537,8 @@ This is how you can configure each service:
         scaleDown:
           stabilizationWindowSeconds: 300
 ```
+
+If `resources.limits` is omitted, this chart defaults limits to the configured requests (Guaranteed QoS).
 
 See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hosted/scaling/) for some production level values and DB recommended settings.
 

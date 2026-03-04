@@ -394,6 +394,13 @@ logfire-dex:
   resources:
     cpu: "250m"
     memory: "256Mi"
+    # requests:
+    #   cpu: "250m"
+    #   memory: "256Mi"
+    # limits:
+    #   cpu: "500m"
+    #   memory: "512Mi"
+    # If limits are omitted, they default to requests (Guaranteed QoS).
 
   # autoscaling:
   #   minReplicas: 1
