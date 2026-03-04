@@ -526,8 +526,13 @@ This is how you can configure each service:
   autoscaling:
     minReplicas: 2
     maxReplicas: 4
-    memAverage: 65
-    cpuAverage: 20 
+    hpa:
+      enabled: true
+      memAverage: 65
+      cpuAverage: 20
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
 ```
 
 See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hosted/scaling/) for some production level values and DB recommended settings.

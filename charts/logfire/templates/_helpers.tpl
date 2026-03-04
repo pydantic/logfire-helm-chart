@@ -2,6 +2,7 @@
 {{- $cpuAverage := dig "hpa" "cpuAverage" .cpuAverage . }}
 {{- $memAverage := dig "hpa" "memAverage" .memAverage . }}
 {{- $extraMetrics := dig "hpa" "extraMetrics" .extraMetrics . }}
+{{- $behavior := dig "hpa" "behavior" nil . }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -36,6 +37,10 @@ spec:
 {{- if $extraMetrics }}
 {{- toYaml $extraMetrics | nindent 2 }}
 {{- end}}
+{{- with $behavior }}
+  behavior:
+{{- toYaml . | nindent 4 }}
+{{- end }}
 {{- end}}
 
 {{- define "logfire.keda" }}

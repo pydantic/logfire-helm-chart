@@ -402,6 +402,9 @@ logfire-dex:
   #     enabled: true
   #     memAverage: 65
   #     cpuAverage: 60
+  #     behavior:
+  #       scaleDown:
+  #         stabilizationWindowSeconds: 300
   #   keda:
   #     enabled: true
   #     triggers:
@@ -468,6 +471,9 @@ logfire-ff-ingest:
   #     enabled: true
   #     memAverage: 40
   #     cpuAverage: 60
+  #     behavior:
+  #       scaleDown:
+  #         stabilizationWindowSeconds: 300
   #   keda:
   #     enabled: true
   #     triggers:
@@ -512,6 +518,9 @@ logfire-ff-ingest-processor:
   #     enabled: true
   #     memAverage: 50
   #     cpuAverage: 80
+  #     behavior:
+  #       scaleDown:
+  #         stabilizationWindowSeconds: 300
   #   keda:
   #     enabled: true
   #     triggers:
