@@ -49,6 +49,7 @@ spec:
         checksum/logfire-meta-frontend-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-frontend-token" )) "key" "logfire-meta-frontend-token" )}}
         checksum/logfire-meta-write-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token" )) "key" "logfire-meta-write-token" )}}
         checksum/logfire-unsubscribe-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-unsubscribe-secret" )) "key" "logfire-unsubscribe-secret" )}}
+        checksum/logfire-mcp-oauth-client-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-mcp-oauth-client-secret" )) "key" "logfire-mcp-oauth-client-secret" )}}
         {{- end }}
         {{- if (index .Values "logfire-ai-gateway" "enabled") }}
         {{- $gwEx := get .Values "existingGatewaySecret" | default dict }}
@@ -291,12 +292,17 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.adminSecretName" (dict "ctx" . "secretName" "logfire-admin-totp-recovery-codes") }}
                   key: logfire-admin-totp-recovery-codes
+            - name: MCP_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-mcp-oauth-client-secret") }}
+                  key: logfire-mcp-oauth-client-secret
             {{- include "logfire.groupOrganizationMapping" . | nindent 12 }}
             - name: BOOTSTRAPPED_ORGANIZATIONS
               # This will make it possible to log-in sans-credentials by visiting a URL like:
               # http://localhost:8080/logfire-meta/logfire-meta#token=U8TO1taNdD7YwgBMcfeQVU7RB6Hgtrwd
               # You'll need to get the right host and get the secret from k8s
-              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)"}]}]'
+              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)"}], "oauth_clients": [{"client_id": "logfire-mcp", "client_secret": "$(MCP_OAUTH_CLIENT_SECRET)", "client_name": "Logfire Remote MCP Server", "redirect_uris": ["{{ include "logfire.url" . }}/mcp/oauth/callback"], "allowed_scopes": ["project:read", "project:write", "project:write_token", "project:read_dashboard", "project:write_dashboard", "project:read_alert", "project:write_alert", "organization:create_project", "organization:read_channel", "organization:write_channel"]}]}]'
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}

@@ -605,7 +605,7 @@ Helm chart for self-hosted Pydantic Logfire
 | existingGatewaySecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
 | existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingGatewaySecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret |
+| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret  - logfire-mcp-oauth-client-secret |
 | existingSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |

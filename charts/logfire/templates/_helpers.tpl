@@ -1095,6 +1095,7 @@ Dev Postgres helpers
   "logfire-ff-ingest"
   "logfire-ff-ingest-processor"
   "logfire-ai-gateway"
+  "logfire-remote-mcp"
 )) -}}
 - name: check-db-ready
   image: postgres:17

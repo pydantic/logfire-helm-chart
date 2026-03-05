@@ -641,6 +641,49 @@ logfire-ai-gateway:
 #     minAvailable: 1
 
 
+# -- Autoscaling & resources for the `logfire-remote-mcp` pod
+# logfire-remote-mcp:
+#   # -- Workload labels
+#   labels: {}
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
+#   # -- Number of replicas
+#   replicas: 1
+#   # -- Resource requests/limits
+#   resources:
+#     cpu: "250m"
+#     memory: "256Mi"
+#   # -- Autoscaler settings
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 3
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 60
+#     keda:
+#       enabled: true
+#       triggers:
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+#   # -- Additional environment variables
+#   env: []
+
 # -- Autoscaling & resources for the query API pods
 # logfire-ff-query-api:
 #   # -- Workload labels
@@ -1490,6 +1533,7 @@ otel_collector:
 #  - logfire-meta-frontend-token
 #  - logfire-jwt-secret
 #  - logfire-unsubscribe-secret
+#  - logfire-mcp-oauth-client-secret
 existingSecret:
   # -- Use an existing Secret (recommended for Argo CD users).
   enabled: false
