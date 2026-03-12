@@ -40,12 +40,29 @@ Convert Kubernetes CPU quantity to integer cores using ceil, with minimum 1.
 {{- end -}}
 
 {{/*
-Derive FF service CPU core count and DataFusion thread count from resources.cpu.
+Resolve effective resource requests/limits for a workload.
+Supports both legacy flat keys and nested requests/limits.
 */}}
-{{- define "logfire.ffThreadSettings" -}}
+{{- define "logfire.effectiveResources" -}}
 {{- $serviceValues := get .Values .serviceName | default dict -}}
 {{- $resources := get $serviceValues "resources" | default dict -}}
-{{- $cpu := get $resources "cpu" | default "1" -}}
+{{- $requests := get $resources "requests" | default dict -}}
+{{- $limits := get $resources "limits" | default dict -}}
+{{- $cpuRequest := coalesce (get $requests "cpu") (get $resources "cpu") (get $limits "cpu") "1" -}}
+{{- $memoryRequest := coalesce (get $requests "memory") (get $resources "memory") (get $limits "memory") "1Gi" -}}
+{{- $ephemeralStorageRequest := coalesce (get $requests "ephemeral-storage") (get $requests "ephemeralStorage") (get $resources "ephemeralStorage") (get $limits "ephemeral-storage") (get $limits "ephemeralStorage") -}}
+{{- $cpuLimit := coalesce (get $limits "cpu") $cpuRequest -}}
+{{- $memoryLimit := coalesce (get $limits "memory") $memoryRequest -}}
+{{- $ephemeralStorageLimit := coalesce (get $limits "ephemeral-storage") (get $limits "ephemeralStorage") $ephemeralStorageRequest -}}
+{{- dict "cpuRequest" $cpuRequest "memoryRequest" $memoryRequest "ephemeralStorageRequest" $ephemeralStorageRequest "cpuLimit" $cpuLimit "memoryLimit" $memoryLimit "ephemeralStorageLimit" $ephemeralStorageLimit | toJson -}}
+{{- end -}}
+
+{{/*
+Derive FF service CPU core count and DataFusion thread count from the effective CPU request.
+*/}}
+{{- define "logfire.ffThreadSettings" -}}
+{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
+{{- $cpu := get $effectiveResources "cpuRequest" -}}
 {{- $cpuCores := int (include "logfire.cpuCores" $cpu) -}}
 {{- $dataFusionThreads := max 1 (sub $cpuCores 1) -}}
 {{- dict "cpuCores" $cpuCores "dataFusionThreads" $dataFusionThreads | toJson -}}
@@ -113,9 +130,8 @@ Calculate memory assignments based on service memory request.
 {{-   $percentage := get $dot "percentage" -}}
 {{-   $defaultMemory := get $dot "defaultMemory" | default "1Gi" -}}
 
-{{-   $serviceValues := get $values $serviceName | default dict -}}
-{{-   $resources := get $serviceValues "resources" | default dict -}}
-{{-   $memory := get $resources "memory" | default $defaultMemory -}}
+{{-   $effectiveResources := include "logfire.effectiveResources" (dict "Values" $values "serviceName" $serviceName) | fromJson -}}
+{{-   $memory := get $effectiveResources "memoryRequest" | default $defaultMemory -}}
 
 {{-   $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
 

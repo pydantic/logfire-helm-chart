@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.12.8](https://img.shields.io/badge/Version-0.12.8-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
+![Version: 0.12.9](https://img.shields.io/badge/Version-0.12.9-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -114,7 +114,8 @@ If your mirrored tags are stale compared to the chart release, you can hit misma
 
 ### Hostnames
 
-There is at least a hostname that is required to be set: I.e, `logfire.example.com`. Set via the `ingress.hostnames` value.
+There is at least a hostname that is required to be set: I.e, `logfire.example.com`.
+Set it via `ingress.hostnames` / `ingress.hostname`, or via `gateway.hostnames` when using Gateway API.
 
 We have an ingress configuration that will allow you to set up ingress:
 
@@ -146,7 +147,7 @@ ingress:
   - logfire.example.com
 ```
 
-If you are *not* using kubernetes ingress, you must still set the hostnames under the `ingress` configuration.
+If you are *not* using kubernetes ingress, you must still set at least one public hostname so the chart can generate correct URLs and CORS settings.
 
 #### Using Gateway API
 
@@ -161,15 +162,14 @@ The chart can create both a Gateway and HTTPRoute resource for you:
 ingress:
   # Disable the Ingress resource
   enabled: false
-  # Still required for CORS headers and Gateway listener hostname
   tls: true
-  hostnames:
-    - logfire.example.com
   # TLS secret for the Gateway listener
   secretName: logfire-tls-cert
 
 gateway:
   enabled: true
+  hostnames:
+    - logfire.example.com
   # Create the Gateway resource (default: true)
   create: true
   # GatewayClass name (required when create is true)
@@ -192,11 +192,11 @@ If you already have a Gateway resource in your cluster, you can attach the HTTPR
 ingress:
   enabled: false
   tls: true
-  hostnames:
-    - logfire.example.com
 
 gateway:
   enabled: true
+  hostnames:
+    - logfire.example.com
   # Don't create the Gateway resource
   create: false
   # Name of the existing Gateway (required when create is false)
@@ -567,7 +567,7 @@ Before diving deeper, verify these common configuration issues:
 * **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.12.8](https://img.shields.io/badge/Version-0.12.8-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
+![Version: 0.12.9](https://img.shields.io/badge/Version-0.12.9-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
