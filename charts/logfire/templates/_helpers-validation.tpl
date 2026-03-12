@@ -18,13 +18,13 @@ Validate that objectStore.uri is configured (required for production)
 {{- end -}}
 
 {{/*
-Validate ingress hostnames configuration
+Validate public hostnames configuration
 */}}
 {{- define "logfire.validate.ingress" -}}
-{{- $hasHostnames := and .Values.ingress.hostnames (gt (len .Values.ingress.hostnames) 0) -}}
-{{- $hasHostname := .Values.ingress.hostname -}}
-{{- if not (or $hasHostnames $hasHostname) -}}
-  {{- fail "ingress.hostnames (or ingress.hostname) is required. Specify at least one hostname for Logfire (e.g., hostnames: ['logfire.example.com']). This is needed for CORS and URL generation even if ingress.enabled is false." -}}
+{{- $result := include "logfire.effective_hostnames" . | fromJson -}}
+{{- $hosts := default (list) $result.hosts -}}
+{{- if eq (len $hosts) 0 -}}
+  {{- fail "At least one hostname is required for Logfire. Set gateway.hostnames, ingress.hostnames, or ingress.hostname so the chart can generate public URLs and CORS settings." -}}
 {{- end -}}
 {{- end -}}
 
@@ -120,8 +120,14 @@ Validate autoscaling configuration - warn if both HPA and KEDA are enabled
 {{- if $autoscaling -}}
   {{- $hpaEnabled := include "logfire.hpa.enabled" $autoscaling | eq "true" -}}
   {{- $kedaEnabled := include "logfire.keda.enabled" $autoscaling | eq "true" -}}
+  {{- $cpuAverage := dig "hpa" "cpuAverage" $autoscaling.cpuAverage $autoscaling -}}
+  {{- $memAverage := dig "hpa" "memAverage" $autoscaling.memAverage $autoscaling -}}
+  {{- $extraMetrics := dig "hpa" "extraMetrics" $autoscaling.extraMetrics $autoscaling -}}
   {{- if and $hpaEnabled $kedaEnabled -}}
     {{- fail (printf "Both HPA and KEDA are enabled for '%s'. Only one autoscaler should be enabled at a time to avoid conflicts." $serviceName) -}}
+  {{- end -}}
+  {{- if and $hpaEnabled (not (or $cpuAverage $memAverage $extraMetrics)) -}}
+    {{- fail (printf "HPA is enabled for '%s', but no metrics are configured. Set autoscaling.hpa.cpuAverage, autoscaling.hpa.memAverage, or autoscaling.hpa.extraMetrics (or the backward-compatible top-level equivalents)." $serviceName) -}}
   {{- end -}}
   {{- if $autoscaling.minReplicas -}}
     {{- if $autoscaling.maxReplicas -}}

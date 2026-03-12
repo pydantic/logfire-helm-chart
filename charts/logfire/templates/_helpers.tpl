@@ -3,6 +3,7 @@
 {{- $memAverage := dig "hpa" "memAverage" .memAverage . }}
 {{- $extraMetrics := dig "hpa" "extraMetrics" .extraMetrics . }}
 {{- $behavior := dig "hpa" "behavior" nil . }}
+{{- $hasMetrics := or $cpuAverage $memAverage $extraMetrics }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -17,6 +18,7 @@ spec:
     name: {{ .serviceName }}
   minReplicas: {{ .minReplicas | default "1" }}
   maxReplicas: {{ .maxReplicas |  default "2" }}
+  {{- if $hasMetrics }}
   metrics:
   {{- if $cpuAverage }}
   - type: Resource
@@ -37,6 +39,7 @@ spec:
 {{- if $extraMetrics }}
 {{- toYaml $extraMetrics | nindent 2 }}
 {{- end}}
+  {{- end }}
 {{- with $behavior }}
   behavior:
 {{- toYaml . | nindent 4 }}
@@ -155,14 +158,13 @@ spec:
 {{- if hasKey $resources "ephemeralStorageLimit" -}}
 {{- fail (printf "resources.ephemeralStorageLimit is not supported for '%s'. Use resources.ephemeralStorage instead." .serviceName) -}}
 {{- end -}}
-{{- $requests := index $resources "requests" | default dict -}}
-{{- $limits := index $resources "limits" | default dict -}}
-{{- $cpuRequest := coalesce (index $requests "cpu") (index $resources "cpu") (index $limits "cpu") "1" -}}
-{{- $memoryRequest := coalesce (index $requests "memory") (index $resources "memory") (index $limits "memory") "1Gi" -}}
-{{- $ephemeralStorageRequest := coalesce (index $requests "ephemeral-storage") (index $requests "ephemeralStorage") (index $resources "ephemeralStorage") (index $limits "ephemeral-storage") (index $limits "ephemeralStorage") -}}
-{{- $cpuLimit := coalesce (index $limits "cpu") $cpuRequest -}}
-{{- $memoryLimit := coalesce (index $limits "memory") $memoryRequest -}}
-{{- $ephemeralStorageLimit := coalesce (index $limits "ephemeral-storage") (index $limits "ephemeralStorage") $ephemeralStorageRequest -}}
+{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
+{{- $cpuRequest := get $effectiveResources "cpuRequest" -}}
+{{- $memoryRequest := get $effectiveResources "memoryRequest" -}}
+{{- $ephemeralStorageRequest := get $effectiveResources "ephemeralStorageRequest" -}}
+{{- $cpuLimit := get $effectiveResources "cpuLimit" -}}
+{{- $memoryLimit := get $effectiveResources "memoryLimit" -}}
+{{- $ephemeralStorageLimit := get $effectiveResources "ephemeralStorageLimit" -}}
 resources:
   requests:
     memory: {{ $memoryRequest }}
@@ -777,26 +779,24 @@ default-checksum
 
 {{- define "logfire.podScheduling" -}}
 {{- $serviceValues := index .Values .serviceName | default dict -}}
-{{- $nodeSelector := merge ($serviceValues.nodeSelector | default dict) (.Values.nodeSelector | default dict) -}}
-{{- $affinity := merge ($serviceValues.affinity | default dict) (.Values.affinity | default dict) -}}
+{{- $nodeSelector := merge (deepCopy ($serviceValues.nodeSelector | default dict)) (.Values.nodeSelector | default dict) -}}
+{{- $affinity := merge (deepCopy ($serviceValues.affinity | default dict)) (.Values.affinity | default dict) -}}
 {{- $tolerations := concat ($serviceValues.tolerations | default list) (.Values.tolerations | default list) -}}
 {{- $topologySpreadConstraints := concat ($serviceValues.topologySpreadConstraints | default list) (.Values.topologySpreadConstraints | default list) -}}
+{{- $blocks := list -}}
 {{- if $nodeSelector -}}
-nodeSelector:
-{{- toYaml $nodeSelector | nindent 2 }}
+{{- $blocks = append $blocks (printf "nodeSelector:%s" (toYaml $nodeSelector | nindent 2 | trimSuffix "\n")) -}}
 {{- end -}}
 {{- if $affinity -}}
-affinity:
-{{- toYaml $affinity | nindent 2 }}
+{{- $blocks = append $blocks (printf "affinity:%s" (toYaml $affinity | nindent 2 | trimSuffix "\n")) -}}
 {{- end -}}
 {{- if $tolerations -}}
-tolerations:
-{{- toYaml $tolerations | nindent 2 }}
+{{- $blocks = append $blocks (printf "tolerations:%s" (toYaml $tolerations | nindent 2 | trimSuffix "\n")) -}}
 {{- end -}}
 {{- if $topologySpreadConstraints -}}
-topologySpreadConstraints:
-{{- toYaml $topologySpreadConstraints | nindent 2 }}
+{{- $blocks = append $blocks (printf "topologySpreadConstraints:%s" (toYaml $topologySpreadConstraints | nindent 2 | trimSuffix "\n")) -}}
 {{- end -}}
+{{- join "\n" $blocks -}}
 {{- end -}}
 
 {{- define "logfire.groupOrganizationMapping" -}}
