@@ -105,14 +105,14 @@ spec:
           - name: LOGFIRE_SERVICE_NAME
             value: {{ $serviceName }}
           - name: LOGFIRE_SERVICE_VERSION
-            value: {{ .Values.appVersion }}
+            value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName) | quote }}
           - name: HOST_IP
             valueFrom:
               fieldRef:
                 apiVersion: v1
                 fieldPath: status.hostIP
           - name: OTEL_RESOURCE_ATTRIBUTES
-            value: vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision={{ .Chart.AppVersion | default "main" | quote }},service.version={{ .Chart.AppVersion | default "main" | quote }}
+            value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName) | quote }}
           - name: COLLECTOR_OTLP_GRPC_HOST
             value: http://logfire-otel-collector:4317
           - name: APP_PORT

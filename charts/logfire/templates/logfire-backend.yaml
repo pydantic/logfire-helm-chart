@@ -206,11 +206,11 @@ spec:
             - name: COLLECTOR_OTLP_GRPC_HOST
               value: http://logfire-otel-collector:4317
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision={{ .Chart.AppVersion | default "main" | quote }},logfire.code.work_dir=/app
+              value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | quote }}
             - name: LOGFIRE_SERVICE_NAME
               value: {{ $serviceName }}
             - name: LOGFIRE_SERVICE_VERSION
-              value: {{ .Values.appVersion }}
+              value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName) | quote }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:

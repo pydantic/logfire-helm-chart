@@ -369,6 +369,31 @@ Usage: {{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" "log
 {{- end -}}
 
 {{/*
+Get the runtime version for a service, matching the selected image tag.
+Usage: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" "logfire-backend") }}
+*/}}
+{{- define "logfire.serviceVersion" -}}
+{{- include "logfire.serviceTag" (dict "Values" .root.Values "serviceName" .serviceName "Chart" .root.Chart) -}}
+{{- end -}}
+
+{{/*
+Build OTEL resource attributes for a service using the runtime image tag.
+Usage: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" "logfire-backend" "codeWorkDir" "/app") }}
+*/}}
+{{- define "logfire.otelResourceAttributes" -}}
+{{- $version := include "logfire.serviceVersion" . -}}
+{{- $attrs := list
+  "vcs.repository.url.full=https://github.com/pydantic/platform"
+  (printf "vcs.repository.ref.revision=%s" $version)
+  (printf "service.version=%s" $version)
+-}}
+{{- with .codeWorkDir }}
+  {{- $attrs = append $attrs (printf "logfire.code.work_dir=%s" .) -}}
+{{- end }}
+{{- join "," $attrs -}}
+{{- end -}}
+
+{{/*
 Create dex config secret name
 */}}
 {{- define "logfire.dexSecretName" -}}
@@ -591,14 +616,20 @@ overrides are not provided.
 {{- end }}
 
 {{- define "logfire.otlpExporterEnv" }}
+{{- $serviceName := .serviceName -}}
+{{- $root := .root -}}
 - name: "OTEL_EXPORTER_OTLP_PROTOCOL"
   value: "grpc"
 - name: "COLLECTOR_OTLP_GRPC_HOST"
   value: http://logfire-otel-collector:4317
 - name: LOGFIRE_SERVICE_NAME
-  value: {{ . }}
+  value: {{ $serviceName }}
+- name: LOGFIRE_SERVICE_VERSION
+  value: {{ include "logfire.serviceVersion" (dict "root" $root "serviceName" $serviceName) | quote }}
 - name: OTEL_SERVICE_NAME
-  value: {{ . }}
+  value: {{ $serviceName }}
+- name: OTEL_RESOURCE_ATTRIBUTES
+  value: {{ include "logfire.otelResourceAttributes" (dict "root" $root "serviceName" $serviceName "codeWorkDir" .codeWorkDir) | quote }}
 {{- end }}
 
 {{- define "logfire.scratchVolumeName" -}}

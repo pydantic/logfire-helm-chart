@@ -93,21 +93,21 @@ jobs:
               pull_number: pr.number,
             });
 
-            const prBody = (fullPr.body || '').trim();
+            const prBody = (fullPr.body || '').replace(/\r\n?/g, '\n').trim();
             if (!prBody) {
               core.info(`PR #${pr.number} has no body; skipping release notes update.`);
               return;
             }
 
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const extractSection = (body, heading) => {
-              const pattern = new RegExp(`^##\\s+${heading}\\s*$`, 'im');
+              const pattern = new RegExp(
+                `(?:^|\\n)##\\s+${escapeRegExp(heading)}\\s*(?:\\n|$)([\\s\\S]*?)(?=\\n##\\s+|$)`,
+                'i',
+              );
               const match = body.match(pattern);
               if (!match) return '';
-              const start = body.indexOf(match[0]) + match[0].length;
-              const rest = body.slice(start);
-              const next = rest.search(/^##\\s+/m);
-              const section = (next === -1 ? rest : rest.slice(0, next)).trim();
-              return section.replace(/<!--[\s\S]*?-->/g, '').trim();
+              return match[1].replace(/<!--[\s\S]*?-->/g, '').trim();
             };
 
             const summary = extractSection(prBody, 'Summary');
