@@ -923,43 +923,6 @@ logfire-ff-cache-byte:
 #     minAvailable: 1
 
 
-# -- Autoscaling & resources for the Filter cache pods
-# logfire-ff-cache-filter:
-#   # -- Workload labels
-#   labels: {}
-#   # -- Workload annotations
-#   annotations: {}
-#   # -- Pod labels
-#   podLabels: {}
-#   # -- Pod annotations
-#   podAnnotations: {}
-#   # -- Number of replicas
-#   replicas: 1
-#   resources:
-#     cpu: "500m"
-#     memory: "2Gi"
-#   autoscaling:
-#     minReplicas: 1
-#     maxReplicas: 2
-#     hpa:
-#       enabled: true
-#       memAverage: 65
-#       cpuAverage: 40
-#     keda:
-#       enabled: true
-#       triggers:
-#         - type: cpu
-#           metricType: Utilization
-#           metadata:
-#             value: "50"
-#   nodeSelector: {}
-#   affinity: {}
-#   tolerations: []
-#   pdb:
-#     maxUnavailable: 1
-#     minAvailable: 1
-
-
 # -- Autoscaling & resources for the byte proxy cache pods
 # logfire-ff-proxy-cache-byte:
 #   # -- Workload labels
@@ -1001,45 +964,6 @@ logfire-ff-cache-byte:
 
 # -- Autoscaling & resources for the IPC proxy cache pods
 # logfire-ff-proxy-cache-ipc:
-#   # -- Workload labels
-#   labels: {}
-#   # -- Workload annotations
-#   annotations: {}
-#   # -- Pod labels
-#   podLabels: {}
-#   # -- Pod annotations
-#   podAnnotations: {}
-#   service:
-#     # -- Service annotations
-#     annotations: {}
-#   replicas: 2
-#   resources:
-#     cpu: "250m"
-#     memory: "256Mi"
-#   autoscaling:
-#     minReplicas: 1
-#     maxReplicas: 2
-#     hpa:
-#       enabled: true
-#       memAverage: 65
-#       cpuAverage: 40
-#     keda:
-#       enabled: true
-#       triggers:
-#         - type: cpu
-#           metricType: Utilization
-#           metadata:
-#             value: "50"
-#   nodeSelector: {}
-#   affinity: {}
-#   tolerations: []
-#   pdb:
-#     maxUnavailable: 1
-#     minAvailable: 1
-
-
-# -- Autoscaling & resources for the filter proxy cache pods
-# logfire-ff-proxy-cache-filter:
 #   # -- Workload labels
 #   labels: {}
 #   # -- Workload annotations
