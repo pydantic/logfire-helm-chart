@@ -596,6 +596,94 @@ logfire-ff-maintenance-scheduler:
 #     minAvailable: 1
 
 
+# -- Autoscaling & resources for the `logfire-ai-gateway` pod
+# @default -- disabled
+logfire-ai-gateway:
+  # -- Enable the AI gateway service
+  enabled: false
+#   # -- Workload labels
+#   labels: {}
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
+#   # -- Number of replicas
+#   replicas: 1
+#   # -- Resource requests/limits
+#   resources:
+#     cpu: "250m"
+#     memory: "256Mi"
+#   # -- Autoscaler settings
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 3
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 60
+#     keda:
+#       enabled: true
+#       triggers:
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
+# -- Autoscaling & resources for the `logfire-remote-mcp` pod
+# logfire-remote-mcp:
+#   # -- Workload labels
+#   labels: {}
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
+#   # -- Number of replicas
+#   replicas: 1
+#   # -- Resource requests/limits
+#   resources:
+#     cpu: "250m"
+#     memory: "256Mi"
+#   # -- Autoscaler settings
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 3
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 60
+#     keda:
+#       enabled: true
+#       triggers:
+#         - type: cpu
+#           metricType: Utilization
+#           metadata:
+#             value: "50"
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+#   # -- Additional environment variables
+#   env: []
+
 # -- Autoscaling & resources for the query API pods
 # logfire-ff-query-api:
 #   # -- Workload labels
@@ -835,43 +923,6 @@ logfire-ff-cache-byte:
 #     minAvailable: 1
 
 
-# -- Autoscaling & resources for the Filter cache pods
-# logfire-ff-cache-filter:
-#   # -- Workload labels
-#   labels: {}
-#   # -- Workload annotations
-#   annotations: {}
-#   # -- Pod labels
-#   podLabels: {}
-#   # -- Pod annotations
-#   podAnnotations: {}
-#   # -- Number of replicas
-#   replicas: 1
-#   resources:
-#     cpu: "500m"
-#     memory: "2Gi"
-#   autoscaling:
-#     minReplicas: 1
-#     maxReplicas: 2
-#     hpa:
-#       enabled: true
-#       memAverage: 65
-#       cpuAverage: 40
-#     keda:
-#       enabled: true
-#       triggers:
-#         - type: cpu
-#           metricType: Utilization
-#           metadata:
-#             value: "50"
-#   nodeSelector: {}
-#   affinity: {}
-#   tolerations: []
-#   pdb:
-#     maxUnavailable: 1
-#     minAvailable: 1
-
-
 # -- Autoscaling & resources for the byte proxy cache pods
 # logfire-ff-proxy-cache-byte:
 #   # -- Workload labels
@@ -913,45 +964,6 @@ logfire-ff-cache-byte:
 
 # -- Autoscaling & resources for the IPC proxy cache pods
 # logfire-ff-proxy-cache-ipc:
-#   # -- Workload labels
-#   labels: {}
-#   # -- Workload annotations
-#   annotations: {}
-#   # -- Pod labels
-#   podLabels: {}
-#   # -- Pod annotations
-#   podAnnotations: {}
-#   service:
-#     # -- Service annotations
-#     annotations: {}
-#   replicas: 2
-#   resources:
-#     cpu: "250m"
-#     memory: "256Mi"
-#   autoscaling:
-#     minReplicas: 1
-#     maxReplicas: 2
-#     hpa:
-#       enabled: true
-#       memAverage: 65
-#       cpuAverage: 40
-#     keda:
-#       enabled: true
-#       triggers:
-#         - type: cpu
-#           metricType: Utilization
-#           metadata:
-#             value: "50"
-#   nodeSelector: {}
-#   affinity: {}
-#   tolerations: []
-#   pdb:
-#     maxUnavailable: 1
-#     minAvailable: 1
-
-
-# -- Autoscaling & resources for the filter proxy cache pods
-# logfire-ff-proxy-cache-filter:
 #   # -- Workload labels
 #   labels: {}
 #   # -- Workload annotations
@@ -1377,6 +1389,10 @@ image:
   fusionfireImage: fusionfire
   # @ignored
   dexImage: dex
+  # @ignored
+  gatewayRepository: us-docker.pkg.dev/pydantic-public-registries/paig/
+  # @ignored
+  gatewayImage: gateway
 
 # -- HAProxy image configuration (used by the service and feature-flag proxies)
 haproxy:
@@ -1441,7 +1457,19 @@ otel_collector:
 #  - logfire-meta-frontend-token
 #  - logfire-jwt-secret
 #  - logfire-unsubscribe-secret
+#  - logfire-mcp-oauth-client-secret
 existingSecret:
+  # -- Use an existing Secret (recommended for Argo CD users).
+  enabled: false
+  # -- Name of the Kubernetes Secret resource.
+  name: ""
+  # -- Optional annotations for the Secret (e.g., for external secret managers).
+  annotations: {}
+
+# -- Existing Secret for the AI Gateway with the following keys:
+#  - key (gateway encryption key)
+#  - internalSecret (gateway internal secret)
+existingGatewaySecret:
   # -- Use an existing Secret (recommended for Argo CD users).
   enabled: false
   # -- Name of the Kubernetes Secret resource.

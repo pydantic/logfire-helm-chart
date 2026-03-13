@@ -15,7 +15,6 @@
   (dict "serviceName" "logfire-ff-ingest")
   (dict "serviceName" "logfire-ff-ingest-processor")
   (dict "serviceName" "logfire-ff-cache-byte")
-  (dict "serviceName" "logfire-ff-cache-filter")
   (dict "serviceName" "logfire-ff-cache-ipc")
   (dict "serviceName" "logfire-ff-crud-api")
   (dict "serviceName" "logfire-ff-maintenance-scheduler")
@@ -23,7 +22,11 @@
   (dict "serviceName" "logfire-ff-compaction-worker")
   (dict "serviceName" "logfire-ff-query-api")
   (dict "serviceName" "logfire-ff-query-worker")
+  (dict "serviceName" "logfire-remote-mcp")
 -}}
+{{- if (index .Values "logfire-ai-gateway" "enabled") }}
+{{- $certServices = append $certServices (dict "serviceName" "logfire-ai-gateway") }}
+{{- end -}}
 
 {{- if $autoIssuer }}
 apiVersion: cert-manager.io/v1

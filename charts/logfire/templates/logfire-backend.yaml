@@ -49,6 +49,14 @@ spec:
         checksum/logfire-meta-frontend-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-frontend-token" )) "key" "logfire-meta-frontend-token" )}}
         checksum/logfire-meta-write-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token" )) "key" "logfire-meta-write-token" )}}
         checksum/logfire-unsubscribe-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-unsubscribe-secret" )) "key" "logfire-unsubscribe-secret" )}}
+        checksum/logfire-mcp-oauth-client-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-mcp-oauth-client-secret" )) "key" "logfire-mcp-oauth-client-secret" )}}
+        {{- end }}
+        {{- if (index .Values "logfire-ai-gateway" "enabled") }}
+        {{- $gwEx := get .Values "existingGatewaySecret" | default dict }}
+        {{- if or (not (get $gwEx "enabled")) (empty (get $gwEx "annotations")) }}
+        checksum/gateway-encryption: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-encryption")) "key" "key" )}}
+        checksum/gateway-internal-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-internal-secret")) "key" "internalSecret" )}}
+        {{- end }}
         {{- end }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         checksum/logfire-postgres-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresDsn" )}}
@@ -198,11 +206,11 @@ spec:
             - name: COLLECTOR_OTLP_GRPC_HOST
               value: http://logfire-otel-collector:4317
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision={{ .Chart.AppVersion | default "main" | quote }},logfire.code.work_dir=/app
+              value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | quote }}
             - name: LOGFIRE_SERVICE_NAME
               value: {{ $serviceName }}
             - name: LOGFIRE_SERVICE_VERSION
-              value: {{ .Values.appVersion }}
+              value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName) | quote }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -225,6 +233,22 @@ spec:
               value: "{{ include "logfire.scheme" . }}://logfire-ff-crud-api"
             - name: FUSIONFIRE_CRUD_PORT
               value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
+            {{- if (index .Values "logfire-ai-gateway" "enabled") }}
+            - name: GATEWAY_BASE_URL
+              value: "{{ include "logfire.scheme" . }}://logfire-ai-gateway:{{ include "logfire.port" (dict "port" 8788 "root" .) }}"
+            {{- end }}
+            {{- if (index .Values "logfire-ai-gateway" "enabled") }}
+            - name: GATEWAY_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: key
+                  name: {{ include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-encryption") }}
+            - name: GATEWAY_INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: internalSecret
+                  name: {{ include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-internal-secret") }}
+            {{- end }}
             - name: MIN_DATE_USAGE_CHART  # TODO: make this optional?
               value: "2025-01-01"
             - name: DEFAULT_SUBSCRIPTION_PLAN
@@ -268,12 +292,17 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.adminSecretName" (dict "ctx" . "secretName" "logfire-admin-totp-recovery-codes") }}
                   key: logfire-admin-totp-recovery-codes
+            - name: MCP_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-mcp-oauth-client-secret") }}
+                  key: logfire-mcp-oauth-client-secret
             {{- include "logfire.groupOrganizationMapping" . | nindent 12 }}
             - name: BOOTSTRAPPED_ORGANIZATIONS
               # This will make it possible to log-in sans-credentials by visiting a URL like:
               # http://localhost:8080/logfire-meta/logfire-meta#token=U8TO1taNdD7YwgBMcfeQVU7RB6Hgtrwd
               # You'll need to get the right host and get the secret from k8s
-              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)"}]}]'
+              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)"}], "oauth_clients": [{"client_id": "logfire-mcp", "client_secret": "$(MCP_OAUTH_CLIENT_SECRET)", "client_name": "Logfire Remote MCP Server", "redirect_uris": ["{{ include "logfire.url" . }}/mcp/oauth/callback"], "allowed_scopes": ["project:read", "project:write", "project:write_token", "project:read_dashboard", "project:write_dashboard", "project:read_alert", "project:write_alert", "organization:create_project", "organization:read_channel", "organization:write_channel"]}]}]'
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}

@@ -36,6 +36,10 @@ adminSecret:
   enabled: true
   name: "logfire-admin"
 
+existingGatewaySecret:
+  enabled: true
+  name: "logfire-gateway"
+
 logfire-dex:
   initContainers:
   - name: check-db-ready
@@ -96,6 +100,9 @@ logfire-ff-compaction-worker:
     # -- backward compat
     memAverage: 65
     cpuAverage: 20
+
+logfire-ai-gateway:
+  enabled: true
 
 postgresql:
   primary:

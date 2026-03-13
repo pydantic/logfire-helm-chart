@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.12.9](https://img.shields.io/badge/Version-0.12.9-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
+![Version: 0.13.0](https://img.shields.io/badge/Version-0.13.0-informational?style=flat-square) ![AppVersion: c10a2280](https://img.shields.io/badge/AppVersion-c10a2280-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -263,7 +263,7 @@ istio:
 ```
 
 This automatically sets `sidecar.istio.io/inject: "false"` on:
-`logfire-service`, `logfire-ff-proxy-cache-byte`, `logfire-ff-proxy-cache-filter`, `logfire-ff-proxy-cache-ipc`, `logfire-backend-migrations`, `logfire-ff-migrations`, `logfire-redis`, and `logfire-otel-collector`.
+`logfire-service`, `logfire-ff-proxy-cache-byte`, `logfire-ff-proxy-cache-ipc`, `logfire-backend-migrations`, `logfire-ff-migrations`, `logfire-redis`, and `logfire-otel-collector`.
 
 You can still override labels per workload using `<workload>.podLabels`.
 
@@ -567,7 +567,7 @@ Before diving deeper, verify these common configuration issues:
 * **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
 # logfire
 
-![Version: 0.12.9](https://img.shields.io/badge/Version-0.12.9-informational?style=flat-square) ![AppVersion: 47872889](https://img.shields.io/badge/AppVersion-47872889-informational?style=flat-square)
+![Version: 0.13.0](https://img.shields.io/badge/Version-0.13.0-informational?style=flat-square) ![AppVersion: c10a2280](https://img.shields.io/badge/AppVersion-c10a2280-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -601,7 +601,11 @@ Helm chart for self-hosted Pydantic Logfire
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
 | dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
-| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret |
+| existingGatewaySecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret for the AI Gateway with the following keys:  - key (gateway encryption key)  - internalSecret (gateway internal secret) |
+| existingGatewaySecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
+| existingGatewaySecret.name | string | `""` | Name of the Kubernetes Secret resource. |
+| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret  - logfire-mcp-oauth-client-secret |
 | existingSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
@@ -647,6 +651,8 @@ Helm chart for self-hosted Pydantic Logfire
 | ingress.tls | bool | `false` | Enable TLS/HTTPS. Required for correct CORS behavior. |
 | istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
 | istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-ff-proxy-cache-{byte,filter,ipc}, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
+| logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
+| logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
 | logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"labels":{},"podAnnotations":{},"podLabels":{},"replicas":1,"resources":{"cpu":"250m","memory":"256Mi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
 | logfire-dex.config | object | `{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex configuration (see https://dexidp.io/docs/) |

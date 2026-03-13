@@ -87,13 +87,18 @@ jobs:
             --from-literal="logfire-meta-frontend-token=$(date +%s%N | sha256sum | head -c 32)" \
             --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)" \
             --from-literal="logfire-unsubscribe-secret=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-encryption-key=$(head -c 32 /dev/urandom | base64 | tr -d '\n')"
+            --from-literal="logfire-encryption-key=$(head -c 32 /dev/urandom | base64 | tr -d '\n')" \
+            --from-literal="logfire-mcp-oauth-client-secret=$(date +%s%N | sha256sum | head -c 32)"
 
           kubectl create secret generic logfire-admin \
             --from-literal="logfire-admin-password=$(date +%s%N | sha256sum | head -c 32)" \
             --from-literal="logfire-admin-totp-secret=$(head -c 20 /dev/urandom | base32 | tr -d '=' | head -c 32)" \
             --from-literal="logfire-admin-totp-recovery-codes=[\"$(date +%s%N | sha256sum | head -c 32)\"]" \
             --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)"
+
+          kubectl create secret generic logfire-gateway \
+            --from-literal="key=$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '\n')" \
+            --from-literal="internalSecret=$(date +%s%N | sha256sum | head -c 32)"
 
       - name: Run chart testing
         if: steps.list-changed.outputs.changed == 'true'

@@ -369,6 +369,31 @@ Usage: {{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" "log
 {{- end -}}
 
 {{/*
+Get the runtime version for a service, matching the selected image tag.
+Usage: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" "logfire-backend") }}
+*/}}
+{{- define "logfire.serviceVersion" -}}
+{{- include "logfire.serviceTag" (dict "Values" .root.Values "serviceName" .serviceName "Chart" .root.Chart) -}}
+{{- end -}}
+
+{{/*
+Build OTEL resource attributes for a service using the runtime image tag.
+Usage: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" "logfire-backend" "codeWorkDir" "/app") }}
+*/}}
+{{- define "logfire.otelResourceAttributes" -}}
+{{- $version := include "logfire.serviceVersion" . -}}
+{{- $attrs := list
+  "vcs.repository.url.full=https://github.com/pydantic/platform"
+  (printf "vcs.repository.ref.revision=%s" $version)
+  (printf "service.version=%s" $version)
+-}}
+{{- with .codeWorkDir }}
+  {{- $attrs = append $attrs (printf "logfire.code.work_dir=%s" .) -}}
+{{- end }}
+{{- join "," $attrs -}}
+{{- end -}}
+
+{{/*
 Create dex config secret name
 */}}
 {{- define "logfire.dexSecretName" -}}
@@ -423,6 +448,19 @@ Logfire secret name
 {{- define "logfire.adminSecretName" -}}
 {{- $ctx := required "logfire.adminSecretName: need .ctx" .ctx -}}
 {{- $ex := get $ctx.Values "adminSecret" | default dict -}}
+{{- if and (get $ex "enabled") (get $ex "name") -}}
+    {{ get $ex "name" }}
+{{- else }}
+{{- .secretName }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Gateway secret name
+*/}}
+{{- define "logfire.gatewaySecretName" -}}
+{{- $ctx := required "logfire.gatewaySecretName: need .ctx" .ctx -}}
+{{- $ex := get $ctx.Values "existingGatewaySecret" | default dict -}}
 {{- if and (get $ex "enabled") (get $ex "name") -}}
     {{ get $ex "name" }}
 {{- else }}
@@ -578,14 +616,20 @@ overrides are not provided.
 {{- end }}
 
 {{- define "logfire.otlpExporterEnv" }}
+{{- $serviceName := .serviceName -}}
+{{- $root := .root -}}
 - name: "OTEL_EXPORTER_OTLP_PROTOCOL"
   value: "grpc"
 - name: "COLLECTOR_OTLP_GRPC_HOST"
   value: http://logfire-otel-collector:4317
 - name: LOGFIRE_SERVICE_NAME
-  value: {{ . }}
+  value: {{ $serviceName }}
+- name: LOGFIRE_SERVICE_VERSION
+  value: {{ include "logfire.serviceVersion" (dict "root" $root "serviceName" $serviceName) | quote }}
 - name: OTEL_SERVICE_NAME
-  value: {{ . }}
+  value: {{ $serviceName }}
+- name: OTEL_RESOURCE_ATTRIBUTES
+  value: {{ include "logfire.otelResourceAttributes" (dict "root" $root "serviceName" $serviceName "codeWorkDir" .codeWorkDir) | quote }}
 {{- end }}
 
 {{- define "logfire.scratchVolumeName" -}}
@@ -653,12 +697,13 @@ Annotations to allow existing postgres secret reloading
 {{- end -}}
 {{- end }}
 
-{{/* 
-Annotations to allow both postgres and existing secrets reloading
+{{/*
+Annotations to allow postgres, existing, and gateway secrets reloading
 */}}
 {{- define "logfire.secretAnnotations" -}}
 {{- $postgresAnns := .Values.postgresSecret.annotations -}}
 {{- $existingAnns := .Values.existingSecret.annotations -}}
+{{- $gatewayAnns := (get .Values "existingGatewaySecret" | default dict).annotations -}}
 
 {{- $merged := dict -}}
 
@@ -669,6 +714,10 @@ Annotations to allow both postgres and existing secrets reloading
 {{- /* Merge in the second set, overwriting any duplicate keys */ -}}
 {{- if and .Values.existingSecret.enabled $existingAnns -}}
   {{- $merged = merge $merged $existingAnns -}}
+{{- end -}}
+
+{{- if and (index .Values "logfire-ai-gateway" "enabled") (get (get .Values "existingGatewaySecret" | default dict) "enabled") $gatewayAnns -}}
+  {{- $merged = merge $merged $gatewayAnns -}}
 {{- end -}}
 
 {{- if $merged -}}
@@ -718,7 +767,6 @@ Custom labels for workloads pods
   {{- $knownWorkloads := list
     "logfire-service"
     "logfire-ff-proxy-cache-byte"
-    "logfire-ff-proxy-cache-filter"
     "logfire-ff-proxy-cache-ipc"
     "logfire-backend-migrations"
     "logfire-ff-migrations"
@@ -1076,6 +1124,8 @@ Dev Postgres helpers
   "logfire-ff-query-worker"
   "logfire-ff-ingest"
   "logfire-ff-ingest-processor"
+  "logfire-ai-gateway"
+  "logfire-remote-mcp"
 )) -}}
 - name: check-db-ready
   image: postgres:17

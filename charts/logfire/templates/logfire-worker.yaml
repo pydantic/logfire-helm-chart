@@ -72,7 +72,7 @@ spec:
             - name: LOGFIRE_SERVICE_NAME
               value: {{ $serviceName }}
             - name: LOGFIRE_SERVICE_VERSION
-              value: {{ .Chart.AppVersion | quote }}
+              value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName) | quote }}
             - name: CRUD_PG_DSN
               valueFrom:
                 secretKeyRef:
@@ -105,7 +105,7 @@ spec:
               value: /etc/logfire/incluster-ca/ca.crt
             {{- end }}
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: vcs.repository.url.full=https://github.com/pydantic/platform,vcs.repository.ref.revision=main,logfire.code.work_dir=/app
+              value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | quote }}
             - name: COLLECTOR_OTLP_GRPC_HOST
               value: http://logfire-otel-collector:4317
             - name: FRONTEND_HOST

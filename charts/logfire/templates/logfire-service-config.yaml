@@ -68,10 +68,18 @@ stringData:
       acl path_ingest path_reg -i ^/v1/(traces|metrics|logs)$
       acl path_dex path_beg /auth-api
       acl path_backend path_reg -i ^/(ui-api|v1|api)/
+      {{- if (index .Values "logfire-ai-gateway" "enabled") }}
+      acl path_ai_gateway path_beg /proxy
+      {{- end }}
+      acl path_remote_mcp path_beg /mcp /.well-known/oauth-authorization-server/mcp /.well-known/oauth-protected-resource/mcp
 
 
       use_backend logfire-ingest if path_ingest
       use_backend logfire-dex if path_dex
+      {{- if (index .Values "logfire-ai-gateway" "enabled") }}
+      use_backend logfire-ai-gateway if path_ai_gateway
+      {{- end }}
+      use_backend logfire-remote-mcp if path_remote_mcp
       use_backend logfire-backend if path_backend
 
       default_backend logfire-frontend
@@ -122,6 +130,42 @@ stringData:
       server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check port 5558 resolvers kubernetes ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $dexSni }}) verifyhost {{ $dexSni }}
       {{- else }}
       server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:5556 check port 5558 resolvers kubernetes
+      {{- end }}
+
+    {{- if (index .Values "logfire-ai-gateway" "enabled") }}
+    backend logfire-ai-gateway
+      balance roundrobin
+      # Health checks
+      option httpchk
+      http-check send meth GET uri /proxy/ hdr Host logfire-ai-gateway
+      option http-server-close
+      timeout connect 3s
+      timeout server 50s
+      http-check expect status 200
+
+      {{- $gatewaySni := printf "logfire-ai-gateway.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      server logfire-ai-gateway logfire-ai-gateway.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check resolvers kubernetes ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $gatewaySni }}) verifyhost {{ $gatewaySni }} check-ssl
+      {{- else }}
+      server logfire-ai-gateway logfire-ai-gateway.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8788 check resolvers kubernetes
+      {{- end }}
+    {{- end }}
+
+    backend logfire-remote-mcp
+      balance roundrobin
+      # Health checks
+      option httpchk
+      http-check send meth GET uri /health hdr Host {{ include "logfire.primary_hostname" . }}
+      option http-server-close
+      timeout connect 3s
+      timeout server 50s
+      http-check expect status 200
+
+      {{- $remoteMcpSni := printf "logfire-remote-mcp.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      server logfire-remote-mcp logfire-remote-mcp.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check resolvers kubernetes ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $remoteMcpSni }}) verifyhost {{ $remoteMcpSni }} check-ssl
+      {{- else }}
+      server logfire-remote-mcp logfire-remote-mcp.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8005 check resolvers kubernetes
       {{- end }}
 
     backend logfire-backend

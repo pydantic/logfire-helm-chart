@@ -89,7 +89,7 @@ spec:
             - configMapRef:
                 name: logfire-ff-query-config
           env:
-            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
+            {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             {{- include "logfire.objectStoreEnv" . | nindent 12 }}
             - name: OTEL_TRACES_SAMPLER
               value: parentbased_traceidratio

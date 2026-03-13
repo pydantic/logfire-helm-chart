@@ -109,7 +109,7 @@ spec:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
             {{- include "logfire.objectStoreEnv" . | nindent 12 }}
-            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
+            {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             - name: FF_DATAFUSION_THREAD_STACK_SIZE
               value: "8MB" 
             {{- with (index .Values $serviceName | default dict).env }}

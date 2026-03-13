@@ -108,7 +108,7 @@ spec:
               value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "10" | quote) }}
             - name: FF_COMPACTION_JOB_PARALLELISM
               value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "3" | quote) }}
-            {{- include "logfire.otlpExporterEnv" $serviceName | nindent 12 }}
+            {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
