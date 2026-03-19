@@ -116,7 +116,8 @@ If your mirrored tags are stale compared to the chart release, you can hit misma
 ### Hostnames
 
 There is at least a hostname that is required to be set: I.e, `logfire.example.com`.
-Set it via `ingress.hostnames` / `ingress.hostname`, or via `gateway.hostnames` when using Gateway API.
+Set it via `ingress.hostnames` / `ingress.hostname`, or via `gateway.hostnames`.
+If you are not rendering an Ingress, you still need to set the public hostnames and TLS mode through either `ingress.*` or `gateway.*` so the chart can generate correct URLs and CORS settings.
 
 We have an ingress configuration that will allow you to set up ingress:
 
@@ -141,11 +142,12 @@ I.e, this config will turn off the ingress resource, but still set appropriate c
 ingress:
   # this turns off the ingress resource
   enabled: false
-  # used to ensure appropriate CORS headers are set.  If your browser is accessing it on https, then needs to be enabled here
+
+gateway:
+  # these values are still used for public URL/CORS generation even if gateway.enabled is false
   tls: true
-  # used to ensure appropriate CORS headers are set.
   hostnames:
-  - logfire.example.com
+    - logfire.example.com
 ```
 
 If you are *not* using kubernetes ingress, you must still set at least one public hostname so the chart can generate correct URLs and CORS settings.
@@ -163,12 +165,12 @@ The chart can create both a Gateway and HTTPRoute resource for you:
 ingress:
   # Disable the Ingress resource
   enabled: false
-  tls: true
-  # TLS secret for the Gateway listener
-  secretName: logfire-tls-cert
 
 gateway:
   enabled: true
+  tls: true
+  # TLS secret for the Gateway listener
+  tlsSecretName: logfire-tls-cert
   hostnames:
     - logfire.example.com
   # Create the Gateway resource (default: true)
@@ -183,7 +185,7 @@ gateway:
     external-dns.alpha.kubernetes.io/hostname: logfire.example.com
 ```
 
-When `ingress.tls` is true, the Gateway will be configured with an HTTPS listener on port 443. Otherwise, an HTTP listener on port 80 will be created.
+When `gateway.tls` is true (or when it falls back to `ingress.tls`), the Gateway will be configured with an HTTPS listener on port 443. Otherwise, an HTTP listener on port 80 will be created.
 
 ##### Option 2: Use an existing Gateway
 
@@ -192,10 +194,10 @@ If you already have a Gateway resource in your cluster, you can attach the HTTPR
 ```yaml
 ingress:
   enabled: false
-  tls: true
 
 gateway:
   enabled: true
+  tls: true
   hostnames:
     - logfire.example.com
   # Don't create the Gateway resource

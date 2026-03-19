@@ -115,7 +115,8 @@ If your mirrored tags are stale compared to the chart release, you can hit misma
 ### Hostnames
 
 There is at least a hostname that is required to be set: I.e, `logfire.example.com`.
-Set it via `ingress.hostnames` / `ingress.hostname`, or via `gateway.hostnames` when using Gateway API.
+Set it via `ingress.hostnames` / `ingress.hostname`, or via `gateway.hostnames`.
+If you are not rendering an Ingress, you still need to set the public hostnames and TLS mode through either `ingress.*` or `gateway.*` so the chart can generate correct URLs and CORS settings.
 
 We have an ingress configuration that will allow you to set up ingress:
 
@@ -140,11 +141,12 @@ I.e, this config will turn off the ingress resource, but still set appropriate c
 ingress:
   # this turns off the ingress resource
   enabled: false
-  # used to ensure appropriate CORS headers are set.  If your browser is accessing it on https, then needs to be enabled here
+
+gateway:
+  # these values are still used for public URL/CORS generation even if gateway.enabled is false
   tls: true
-  # used to ensure appropriate CORS headers are set.
   hostnames:
-  - logfire.example.com
+    - logfire.example.com
 ```
 
 If you are *not* using kubernetes ingress, you must still set at least one public hostname so the chart can generate correct URLs and CORS settings.
@@ -162,12 +164,12 @@ The chart can create both a Gateway and HTTPRoute resource for you:
 ingress:
   # Disable the Ingress resource
   enabled: false
-  tls: true
-  # TLS secret for the Gateway listener
-  secretName: logfire-tls-cert
 
 gateway:
   enabled: true
+  tls: true
+  # TLS secret for the Gateway listener
+  tlsSecretName: logfire-tls-cert
   hostnames:
     - logfire.example.com
   # Create the Gateway resource (default: true)
@@ -182,7 +184,7 @@ gateway:
     external-dns.alpha.kubernetes.io/hostname: logfire.example.com
 ```
 
-When `ingress.tls` is true, the Gateway will be configured with an HTTPS listener on port 443. Otherwise, an HTTP listener on port 80 will be created.
+When `gateway.tls` is true (or when it falls back to `ingress.tls`), the Gateway will be configured with an HTTPS listener on port 443. Otherwise, an HTTP listener on port 80 will be created.
 
 ##### Option 2: Use an existing Gateway
 
@@ -191,10 +193,10 @@ If you already have a Gateway resource in your cluster, you can attach the HTTPR
 ```yaml
 ingress:
   enabled: false
-  tls: true
 
 gateway:
   enabled: true
+  tls: true
   hostnames:
     - logfire.example.com
   # Don't create the Gateway resource
@@ -618,7 +620,7 @@ Helm chart for self-hosted Pydantic Logfire
 | gateway.gatewayAnnotations | object | `{}` | Gateway annotations (only used when create is true) |
 | gateway.gatewayClassName | string | `""` | GatewayClass name to use (required when create is true). Common values: istio, cilium, nginx, envoy-gateway, gke-l7-rilb, gke-l7-global-external-managed |
 | gateway.gatewayLabels | object | `{}` | Gateway labels (only used when create is true) |
-| gateway.hostnames | list | `[]` | Hostname(s) for the Gateway listener and HTTPRoute. If not set, falls back to ingress.hostnames for backward compatibility. These hostnames are also used for CORS/URL generation when gateway is enabled. |
+| gateway.hostnames | list | `[]` | Hostname(s) for the Gateway listener and HTTPRoute. If not set, falls back to ingress.hostnames for backward compatibility. These hostnames also override the app's public URL/CORS hostnames whenever set. |
 | gateway.labels | object | `{}` | HTTPRoute labels (in addition to standard labels) |
 | gateway.listeners | list | `[]` | Gateway listeners configuration. If not specified, a default HTTP/HTTPS listener will be auto-generated based on tls setting. |
 | gateway.maildevHostname | string | `""` | Hostname for the maildev HTTPRoute (only used when dev.deployMaildev is true). If not set, no hostname filter is applied to the maildev HTTPRoute. |
@@ -627,7 +629,7 @@ Helm chart for self-hosted Pydantic Logfire
 | gateway.namespace | string | `""` | Namespace of an existing Gateway (only used when create is false). Leave empty to use the same namespace as the HTTPRoute. |
 | gateway.sectionName | string | `""` | Section name within the Gateway to attach the HTTPRoute to (optional). Use this when the Gateway has multiple listeners. |
 | gateway.timeouts | object | `{}` | Timeout settings for the HTTPRoute backend. |
-| gateway.tls | string | nil (uses ingress.tls) | Enable TLS/HTTPS for the Gateway listener. If not set, falls back to ingress.tls for backward compatibility. Also affects CORS behavior (http vs https URLs). |
+| gateway.tls | string | nil (uses ingress.tls) | Enable TLS/HTTPS for the Gateway listener. If not set, falls back to ingress.tls for backward compatibility. Also overrides the app's public URL scheme/CORS behavior (http vs https URLs) whenever set. |
 | gateway.tlsSecretName | string | nil (uses ingress.secretName) | TLS Secret name for the Gateway listener certificate. If not set, falls back to ingress.secretName for backward compatibility. |
 | groupOrganizationMapping | list | `[]` | List of mapping to automatically assign members of OIDC group to logfire roles |
 | haproxy | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.2"}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
@@ -643,7 +645,7 @@ Helm chart for self-hosted Pydantic Logfire
 | inClusterTls.httpsPort | int | `8443` | Port used for in-cluster HTTPS on Services. Use a non-privileged port to avoid securityContext constraints. |
 | inClusterTls.secretNamePrefix | string | `""` | Convention-based certificate secret naming. When enabled, the chart expects a kubernetes.io/tls Secret per service:   <release>-<service>-tls This also controls secret names used by chart-created cert-manager Certificates. If secretNamePrefix is empty, the prefix defaults to the Helm release name. |
 | ingress.annotations | object | `{}` | Ingress annotations |
-| ingress.enabled | bool | `true` | Enable the Ingress resource. If you are NOT using an ingress resource, you still need to set `tls` and `hostnames` so the application can generate correct URLs/CORS. |
+| ingress.enabled | bool | `true` | Enable the Ingress resource. If you are NOT using an ingress resource, you still need to set public `tls` and `hostnames` via either `ingress.*` or `gateway.*` so the application can generate correct URLs/CORS. |
 | ingress.hostname | string | `"logfire.example.com"` | DEPRECATED (kept for backward compatibility). Use `hostnames` (list) for all new deployments. |
 | ingress.hostnames | list | `["logfire.example.com"]` | Hostname(s) for Pydantic Logfire. Preferred method. Supports one or more hostnames; put the primary domain first. |
 | ingress.ingressClassName | string | `"nginx"` | IngressClass to use (e.g., nginx) |
