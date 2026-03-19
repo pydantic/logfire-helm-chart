@@ -132,6 +132,8 @@ spec:
             value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName) | quote }}
           - name: LOGFIRE_BASE_URL
             value: http://logfire-otel-collector:4318
+          - name: ON_PREM
+            value: "true"
           - name: LOGFIRE_SERVICE_NAME
             value: {{ $serviceName }}
           - name: GITHUB_SHA

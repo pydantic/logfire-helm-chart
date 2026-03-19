@@ -58,7 +58,7 @@ rateLimits: {}
 ingress:
   # -- Enable the Ingress resource.
   # If you are NOT using an ingress resource, you still need to set `tls` and `hostnames`
-  # so the application can generate correct URLs/CORS.
+  # via either `ingress.*` or `gateway.*` so the application can generate correct URLs/CORS.
   enabled: true
 
   # -- Enable TLS/HTTPS. Required for correct CORS behavior.
@@ -109,13 +109,13 @@ gateway:
 
   # -- Hostname(s) for the Gateway listener and HTTPRoute.
   # If not set, falls back to ingress.hostnames for backward compatibility.
-  # These hostnames are also used for CORS/URL generation when gateway is enabled.
+  # These hostnames also override the app's URL/CORS hostnames whenever set.
   hostnames: []
   #   - logfire.example.com
 
   # -- Enable TLS/HTTPS for the Gateway listener.
   # If not set, falls back to ingress.tls for backward compatibility.
-  # Also affects CORS behavior (http vs https URLs).
+  # Also overrides the app's public URL scheme/CORS behavior (http vs https URLs) whenever set.
   # @default -- nil (uses ingress.tls)
   tls:
 

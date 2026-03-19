@@ -182,12 +182,12 @@ resources:
 {{- end -}}
 
 {{/*
-Get effective hostnames - prefers gateway.hostnames when gateway is enabled, falls back to ingress.hostnames
+Get effective hostnames - prefers explicit gateway.hostnames, falls back to ingress.hostnames
 Returns a wrapped object {"hosts": [...]} to work around fromJson limitation with top-level arrays.
 */}}
 {{- define "logfire.effective_hostnames" -}}
 {{- $hosts := list -}}
-{{- if and .Values.gateway.enabled .Values.gateway.hostnames -}}
+{{- if .Values.gateway.hostnames -}}
   {{- $hosts = .Values.gateway.hostnames -}}
 {{- else if .Values.ingress.hostnames -}}
   {{- $hosts = .Values.ingress.hostnames -}}
@@ -198,10 +198,10 @@ Returns a wrapped object {"hosts": [...]} to work around fromJson limitation wit
 {{- end -}}
 
 {{/*
-Get effective TLS setting - prefers gateway.tls when gateway is enabled and set, falls back to ingress.tls
+Get effective TLS setting - prefers explicit gateway.tls, falls back to ingress.tls
 */}}
 {{- define "logfire.effective_tls" -}}
-{{- if and .Values.gateway.enabled (not (kindIs "invalid" .Values.gateway.tls)) -}}
+{{- if not (kindIs "invalid" .Values.gateway.tls) -}}
   {{- .Values.gateway.tls -}}
 {{- else -}}
   {{- .Values.ingress.tls | default false -}}
