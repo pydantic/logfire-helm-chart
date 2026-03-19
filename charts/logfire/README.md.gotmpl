@@ -117,7 +117,7 @@ If your mirrored tags are stale compared to the chart release, you can hit misma
 
 There is at least a hostname that is required to be set: I.e, `logfire.example.com`.
 Set it via `ingress.hostnames` / `ingress.hostname`, or via `gateway.hostnames`.
-If you are not rendering an Ingress, you still need to set the public hostnames and TLS mode through either `ingress.*` or `gateway.*` so the chart can generate correct URLs and CORS settings.
+If you are not rendering an Ingress, you still need to set hostnames and TLS mode through either `ingress.*` or `gateway.*` so the chart can generate correct URLs and CORS settings.
 
 We have an ingress configuration that will allow you to set up ingress:
 
@@ -144,7 +144,7 @@ ingress:
   enabled: false
 
 gateway:
-  # these values are still used for public URL/CORS generation even if gateway.enabled is false
+  # these values are still used for URL/CORS generation even if gateway.enabled is false
   tls: true
   hostnames:
     - logfire.example.com

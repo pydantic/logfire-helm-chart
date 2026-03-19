@@ -116,7 +116,7 @@ If your mirrored tags are stale compared to the chart release, you can hit misma
 
 There is at least a hostname that is required to be set: I.e, `logfire.example.com`.
 Set it via `ingress.hostnames` / `ingress.hostname`, or via `gateway.hostnames`.
-If you are not rendering an Ingress, you still need to set the public hostnames and TLS mode through either `ingress.*` or `gateway.*` so the chart can generate correct URLs and CORS settings.
+If you are not rendering an Ingress, you still need to set hostnames and TLS mode through either `ingress.*` or `gateway.*` so the chart can generate correct URLs and CORS settings.
 
 We have an ingress configuration that will allow you to set up ingress:
 
@@ -143,7 +143,7 @@ ingress:
   enabled: false
 
 gateway:
-  # these values are still used for public URL/CORS generation even if gateway.enabled is false
+  # these values are still used for URL/CORS generation even if gateway.enabled is false
   tls: true
   hostnames:
     - logfire.example.com
@@ -620,7 +620,7 @@ Helm chart for self-hosted Pydantic Logfire
 | gateway.gatewayAnnotations | object | `{}` | Gateway annotations (only used when create is true) |
 | gateway.gatewayClassName | string | `""` | GatewayClass name to use (required when create is true). Common values: istio, cilium, nginx, envoy-gateway, gke-l7-rilb, gke-l7-global-external-managed |
 | gateway.gatewayLabels | object | `{}` | Gateway labels (only used when create is true) |
-| gateway.hostnames | list | `[]` | Hostname(s) for the Gateway listener and HTTPRoute. If not set, falls back to ingress.hostnames for backward compatibility. These hostnames also override the app's public URL/CORS hostnames whenever set. |
+| gateway.hostnames | list | `[]` | Hostname(s) for the Gateway listener and HTTPRoute. If not set, falls back to ingress.hostnames for backward compatibility. These hostnames also override the app's URL/CORS hostnames whenever set. |
 | gateway.labels | object | `{}` | HTTPRoute labels (in addition to standard labels) |
 | gateway.listeners | list | `[]` | Gateway listeners configuration. If not specified, a default HTTP/HTTPS listener will be auto-generated based on tls setting. |
 | gateway.maildevHostname | string | `""` | Hostname for the maildev HTTPRoute (only used when dev.deployMaildev is true). If not set, no hostname filter is applied to the maildev HTTPRoute. |
@@ -645,7 +645,7 @@ Helm chart for self-hosted Pydantic Logfire
 | inClusterTls.httpsPort | int | `8443` | Port used for in-cluster HTTPS on Services. Use a non-privileged port to avoid securityContext constraints. |
 | inClusterTls.secretNamePrefix | string | `""` | Convention-based certificate secret naming. When enabled, the chart expects a kubernetes.io/tls Secret per service:   <release>-<service>-tls This also controls secret names used by chart-created cert-manager Certificates. If secretNamePrefix is empty, the prefix defaults to the Helm release name. |
 | ingress.annotations | object | `{}` | Ingress annotations |
-| ingress.enabled | bool | `true` | Enable the Ingress resource. If you are NOT using an ingress resource, you still need to set public `tls` and `hostnames` via either `ingress.*` or `gateway.*` so the application can generate correct URLs/CORS. |
+| ingress.enabled | bool | `true` | Enable the Ingress resource. If you are NOT using an ingress resource, you still need to set `tls` and `hostnames` via either `ingress.*` or `gateway.*` so the application can generate correct URLs/CORS. |
 | ingress.hostname | string | `"logfire.example.com"` | DEPRECATED (kept for backward compatibility). Use `hostnames` (list) for all new deployments. |
 | ingress.hostnames | list | `["logfire.example.com"]` | Hostname(s) for Pydantic Logfire. Preferred method. Supports one or more hostnames; put the primary domain first. |
 | ingress.ingressClassName | string | `"nginx"` | IngressClass to use (e.g., nginx) |
