@@ -1430,6 +1430,13 @@ redisDsn: redis://logfire-redis:6379
 
 # -- otel-collector configuration
 otel_collector:
+  # -- exporter configuration for the otlphttp exporter
+  # Override these to send telemetry data to a different OTLP-compatible destination.
+  exporter:
+    endpoint: http://logfire-ff-ingest:8012
+    tls:
+      insecure: true
+    headers: {}
   image:
     repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
     tag: "0.139.0"
