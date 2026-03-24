@@ -18,12 +18,18 @@ data:
 
     exporters:
       debug:
+      {{- $exporter := .Values.otel_collector.exporter | default dict }}
       otlphttp:
-        endpoint: http://logfire-ff-ingest:8012
+        endpoint: {{ $exporter.endpoint | default "http://logfire-ff-ingest:8012" }}
         tls:
-          insecure: true
+          {{- ($exporter.tls | default (dict "insecure" true)) | toYaml | nindent 10 }}
+        {{- if $exporter.headers }}
+        headers:
+          {{- $exporter.headers | toYaml | nindent 10 }}
+        {{- else }}
         headers:
           Authorization: "Bearer ${LOGFIRE_META_WRITE_TOKEN}"
+        {{- end }}
       {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
       {{- with .Values.otel_collector.prometheus }}
       prometheus:
