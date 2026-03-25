@@ -81,6 +81,15 @@ spec:
             protocol: TCP
             name: "http"
           {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 10 }}
+          startupProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /health
+              port: {{ $servicePort }}
+              scheme: HTTP
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 1
           livenessProbe:
             failureThreshold: 3
             httpGet:

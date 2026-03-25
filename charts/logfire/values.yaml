@@ -1666,7 +1666,7 @@ sizingPresets:
         cpu: "2"
         memory: "4Gi"
       autoscaling:
-        minReplicas: 2
+        minReplicas: 1
         maxReplicas: 24
         hpa:
           enabled: true
