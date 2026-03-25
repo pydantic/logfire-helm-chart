@@ -88,11 +88,48 @@ Determine if HPA is enabled maintaining backward compatibility with old values f
 {{- end -}}
 {{- end -}}
 
+{{/*
+Resolve effective service values using preset sizing defaults plus explicit overrides.
+Only sizing-related keys are inherited from presets.
+*/}}
+{{- define "logfire.effectiveServiceValues" -}}
+{{- $serviceName := .serviceName -}}
+{{- $serviceValues := get .Values $serviceName | default dict -}}
+{{- $merged := dict -}}
+{{- $presetName := .Values.sizingPreset | default "" -}}
+{{- if $presetName -}}
+  {{- $presets := .Values.sizingPresets | default dict -}}
+  {{- if not (hasKey $presets $presetName) -}}
+    {{- fail (printf "Unknown sizingPreset %q. Valid presets: %s" $presetName ((keys $presets | sortAlpha) | join ", ")) -}}
+  {{- end -}}
+  {{- $presetValues := get $presets $presetName | default dict -}}
+  {{- $presetServiceValues := get $presetValues $serviceName | default dict -}}
+  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "queryParallelism" "datafusionMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "downloadParallelism" "jobParallelism" -}}
+    {{- if hasKey $presetServiceValues $key -}}
+      {{- $_ := set $merged $key (deepCopy (get $presetServiceValues $key)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $merged = mergeOverwrite $merged (deepCopy $serviceValues) -}}
+{{- $merged | toJson -}}
+{{- end -}}
+
+{{/*
+Render spec.replicas only when autoscaling is not configured for the workload.
+*/}}
+{{- define "logfire.replicas" -}}
+{{- $serviceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- if not (hasKey $serviceValues "autoscaling") -}}
+replicas: {{ dig "replicas" "1" $serviceValues }}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.autoscaler" }}
 {{- include "logfire.validate.autoscaling" (dict "Values" .Values "serviceName" .serviceName) -}}
-{{- if index (index .Values .serviceName | default dict) "autoscaling" }}
+{{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" .serviceName) | fromJson -}}
+{{- if index $serviceValues "autoscaling" }}
 {{- $kind := (not (eq .serviceName "logfire-ff-ingest") | ternary "Deployment" "StatefulSet" ) }}
-{{- with index .Values .serviceName "autoscaling" }}
+{{- with index $serviceValues "autoscaling" }}
   {{- $ctx := deepCopy . -}}
   {{- $_ := set $ctx "serviceName" $.serviceName -}}
   {{- $_ := set $ctx "kind" $kind -}}
@@ -110,9 +147,9 @@ Determine if HPA is enabled maintaining backward compatibility with old values f
 {{- $root := .root -}}
 {{- $serviceName := .serviceName -}}
 {{- include "logfire.validate.pdb" (dict "Values" $root.Values "serviceName" $serviceName) -}}
-{{- if hasKey $root.Values $serviceName }}
-{{- if index (index $root.Values $serviceName | default dict) "pdb" }}
-{{- with index $root.Values $serviceName "pdb" }}
+{{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" $root.Values "serviceName" $serviceName) | fromJson -}}
+{{- if index $serviceValues "pdb" }}
+{{- with index $serviceValues "pdb" }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -135,7 +172,6 @@ spec:
 {{- end }}
 {{- end }}
 {{- end }}
-{{- end }}
 
 {{- define "logfire.ffCompactionTiers" -}}
 {{- if (get (get .Values "logfire-ff-maintenance-worker" | default  dict) "compactionTiers") -}}
@@ -150,7 +186,8 @@ spec:
 {{- end -}}
 
 {{- define "logfire.resources" -}}
-{{- $resources := index (index .Values .serviceName | default dict) "resources" | default dict -}}
+{{- $serviceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- $resources := index $serviceValues "resources" | default dict -}}
 {{- if $resources -}}
 {{- if hasKey $resources "ephemeralStorageRequest" -}}
 {{- fail (printf "resources.ephemeralStorageRequest is not supported for '%s'. Use resources.ephemeralStorage instead." .serviceName) -}}

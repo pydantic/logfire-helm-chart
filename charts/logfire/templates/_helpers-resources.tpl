@@ -44,7 +44,7 @@ Resolve effective resource requests/limits for a workload.
 Supports both legacy flat keys and nested requests/limits.
 */}}
 {{- define "logfire.effectiveResources" -}}
-{{- $serviceValues := get .Values .serviceName | default dict -}}
+{{- $serviceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
 {{- $resources := get $serviceValues "resources" | default dict -}}
 {{- $requests := get $resources "requests" | default dict -}}
 {{- $limits := get $resources "limits" | default dict -}}

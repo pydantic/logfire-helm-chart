@@ -128,9 +128,22 @@ Validate gateway secret configuration
 {{/*
 Validate autoscaling configuration - warn if both HPA and KEDA are enabled
 */}}
+{{- define "logfire.validate.sizingPreset" -}}
+{{- $presetName := .Values.sizingPreset | default "" -}}
+{{- if $presetName -}}
+  {{- $presets := .Values.sizingPresets | default dict -}}
+  {{- if not (hasKey $presets $presetName) -}}
+    {{- fail (printf "Unknown sizingPreset %q. Valid presets: %s" $presetName ((keys $presets | sortAlpha) | join ", ")) -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Validate autoscaling configuration - warn if both HPA and KEDA are enabled
+*/}}
 {{- define "logfire.validate.autoscaling" -}}
 {{- $serviceName := .serviceName -}}
-{{- $serviceValues := index .Values $serviceName | default dict -}}
+{{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $autoscaling := $serviceValues.autoscaling | default dict -}}
 {{- if $autoscaling -}}
   {{- $hpaEnabled := include "logfire.hpa.enabled" $autoscaling | eq "true" -}}
@@ -159,7 +172,7 @@ Validate PDB configuration - minAvailable and maxUnavailable are mutually exclus
 */}}
 {{- define "logfire.validate.pdb" -}}
 {{- $serviceName := .serviceName -}}
-{{- $serviceValues := index .Values $serviceName | default dict -}}
+{{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $pdb := $serviceValues.pdb | default dict -}}
 {{- if and $pdb.minAvailable $pdb.maxUnavailable -}}
   {{- fail (printf "pdb.minAvailable and pdb.maxUnavailable are mutually exclusive for '%s'. Specify only one." $serviceName) -}}
@@ -270,6 +283,7 @@ Call this from templates that need to ensure configuration is valid.
 {{- define "logfire.validateConfig" -}}
 {{- $root := . -}}
 {{- $validators := list
+  "logfire.validate.sizingPreset"
   "logfire.validate.objectStore"
   "logfire.validate.ingress"
   "logfire.validate.gateway"
