@@ -1,4 +1,5 @@
 adminEmail: hello@example.dev
+sizingPreset: dev
 
 # -- test with security context
 podSecurityContext:
@@ -41,10 +42,6 @@ existingGatewaySecret:
   name: "logfire-gateway"
 
 logfire-dex:
-  initContainers:
-  - name: check-db-ready
-    image: postgres:17
-    command: ['sh', '-c', 'until pg_isready -h logfire-postgres -p 5432; do echo "Waiting for postgres..."; sleep 2; done']
   config:
     storage:
       type: postgres
@@ -59,47 +56,21 @@ logfire-dex:
     staticClients: []
 
 logfire-backend:
-  initContainers:
-  - name: check-db-ready
-    image: postgres:17
-    command: ['sh', '-c', 'until pg_isready -h logfire-postgres -p 5432; do echo "Waiting for postgres..."; sleep 2; done']
   pdb:
     minUnavailable: 1
 
 logfire-ff-maintenance-worker:
   scratchVolume:
     storageClassName: standard
-    storage: "1Gi"
 
 logfire-ff-ingest:
   volumeClaimTemplates:
     storageClassName: standard
     storage: "1Gi"
-  autoscaling:
-    hpa:
-      enabled: true
-      memAverage: 65
-      cpuAverage: 20
-      behavior:
-        scaleDown:
-          stabilizationWindowSeconds: 300
-    minReplicas: 1
-    maxReplicas: 2
 
 logfire-ff-compaction-worker:
   scratchVolume:
     storageClassName: standard
-    storage: "1Gi"
-  resources:
-    requests:
-      cpu: "300m"
-      memory: "768Mi"
-  autoscaling:
-    minReplicas: 1
-    maxReplicas: 2
-    # -- backward compat
-    memAverage: 65
-    cpuAverage: 20
 
 logfire-ai-gateway:
   enabled: true

@@ -1602,7 +1602,36 @@ extraObjects: []
 # ==============================================================================
 
 # -- Workload sizing presets. Explicit per-service values always override the selected preset.
+# @ignored
 sizingPresets:
+  dev:
+    logfire-ff-ingest:
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 2
+        hpa:
+          enabled: true
+          memAverage: 65
+          cpuAverage: 20
+          behavior:
+            scaleDown:
+              stabilizationWindowSeconds: 300
+    logfire-ff-maintenance-worker:
+      scratchVolume:
+        storage: "1Gi"
+    logfire-ff-compaction-worker:
+      resources:
+        cpu: "300m"
+        memory: "768Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 2
+        hpa:
+          enabled: true
+          memAverage: 65
+          cpuAverage: 20
+      scratchVolume:
+        storage: "1Gi"
   standard:
     logfire-dex:
       resources:

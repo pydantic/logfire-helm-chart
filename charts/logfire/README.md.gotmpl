@@ -514,7 +514,7 @@ logfire.info('Hello, {place}!', place='World')
 
 Logfire is designed to be horizontally scalable. You can adjust the replica counts and resources for each component to handle your specific workload.
 
-The chart also supports optional workload sizing presets through `sizingPreset`. Leaving it empty keeps sizing driven entirely by explicit per-service values. The built-in `standard` preset applies the customer-oriented defaults in `values.yaml`, and you can still override any individual workload after selecting it.
+The chart also supports optional workload sizing presets through `sizingPreset`. Leaving it empty keeps sizing driven entirely by explicit per-service values. The built-in `standard` preset applies the customer-oriented defaults in `values.yaml`. You can still override any individual workload after selecting a preset.
 
 ```yaml
 sizingPreset: standard
