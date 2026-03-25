@@ -514,6 +514,17 @@ logfire.info('Hello, {place}!', place='World')
 
 Logfire is designed to be horizontally scalable. You can adjust the replica counts and resources for each component to handle your specific workload.
 
+The chart also supports optional workload sizing presets through `sizingPreset`. Leaving it empty keeps sizing driven entirely by explicit per-service values. The built-in `standard` preset applies the customer-oriented defaults in `values.yaml`. You can still override any individual workload after selecting a preset.
+
+```yaml
+sizingPreset: standard
+
+logfire-worker:
+  resources:
+    cpu: "500m"
+    memory: "1Gi"
+```
+
 This is how you can configure each service:
 
 ```yaml
@@ -568,3 +579,9 @@ Before diving deeper, verify these common configuration issues:
 * **GitHub Issues**: If your issue persists, please open up an issue with details about your deployment (Chart version, Kubernetes version, values file, any relevant error logs).
 
 * **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
+
+{{ template "chart.requirementsSection" . }}
+
+{{ template "chart.valuesSection" . }}
+
+{{ template "helm-docs.versionFooter" . }}

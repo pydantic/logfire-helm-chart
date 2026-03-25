@@ -1,4 +1,5 @@
 {{- $serviceName := "logfire-ff-compaction-worker" }}
+{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $threadSettings := include "logfire.ffThreadSettings" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $cpuCores := int (get $threadSettings "cpuCores") -}}
 {{- $dataFusionThreads := int (get $threadSettings "dataFusionThreads") -}}
@@ -14,9 +15,7 @@ metadata:
     {{- include "logfire.postgresSecret.annotations" . | nindent 4 }}
     {{- include "logfire.annotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
 spec:
-  {{- if not (hasKey (index .Values $serviceName | default dict) "autoscaling") }}
-  replicas: {{ dig "replicas" "1" (index .Values $serviceName | default dict) }}
-  {{- end }}
+  {{- include "logfire.replicas" (dict "Values" .Values "serviceName" $serviceName) | nindent 2 }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
@@ -93,21 +92,21 @@ spec:
             - name: FF_MAINTENANCE_SCHEDULING_CONCURRENCY
               value: "8"
             - name: FF_DATAFUSION_MEMORY_LIMIT
-              value: {{ (get (get .Values $serviceName | default dict) "datafusionMemory" | default "512MB" | quote) }}
+              value: {{ (get $effectiveServiceValues "datafusionMemory" | default "512MB" | quote) }}
             - name: FF_MAX_FILES_PER_COMPACTION_JOB
               value: "10000"
             - name: FF_ENABLE_SPILL_TO_DISK
               value: "true"
             - name: FF_TEMP_DIR
               value: /scratch/fusionfire
-            {{- with (get (get .Values $serviceName | default dict) "spillToDiskQuota") }}
+            {{- with (get $effectiveServiceValues "spillToDiskQuota") }}
             - name: FF_SPILL_TO_DISK_QUOTA
               value: {{ . | quote }}
             {{- end }}
             - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
-              value: {{ (get (get .Values $serviceName | default dict) "downloadParallelism" | default "10" | quote) }}
+              value: {{ (get $effectiveServiceValues "downloadParallelism" | default "10" | quote) }}
             - name: FF_COMPACTION_JOB_PARALLELISM
-              value: {{ (get (get .Values $serviceName | default dict) "jobParallelism" | default "3" | quote) }}
+              value: {{ (get $effectiveServiceValues "jobParallelism" | default "3" | quote) }}
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             - name: PG_DSN
               valueFrom:
@@ -144,7 +143,7 @@ spec:
       volumes:
       {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 6 }}
       {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
-      {{- include "logfire.scratchVolume" (get (get .Values $serviceName | default dict) "scratchVolume" | default dict) | nindent 6 }}
+      {{- include "logfire.scratchVolume" (get $effectiveServiceValues "scratchVolume" | default dict) | nindent 6 }}
       {{- include "logfire.objectStoreVolumes" . | nindent 6 }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

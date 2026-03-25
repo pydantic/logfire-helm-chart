@@ -1,3 +1,6 @@
+{{- $cacheIpcValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-cache-ipc") | fromJson -}}
+{{- $cacheIpcAutoscaling := get $cacheIpcValues "autoscaling" | default dict -}}
+{{- $cacheIpcMaxCount := coalesce (get $cacheIpcAutoscaling "maxReplicas") (get $cacheIpcValues "replicas") 1 -}}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -70,12 +73,9 @@ stringData:
       retries 4
       option redispatch 2
 
-      {{- $values := (index .Values "logfire-ff-cache-ipc" | default dict) -}}
-      {{- $autoscaling := (index $values "autoscaling" | default dict) -}}
-      {{- $maxCount := coalesce (index $autoscaling "maxReplicas") (index $values "replicas") 1 }}
       {{- $cacheIpcSni := printf "logfire-ff-cache-ipc.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
       {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-      server-template logfire-ff-cache-ipc 1-{{ $maxCount }} logfire-ff-cache-ipc-internal.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check resolvers kubernetes inter 250ms hash-key addr ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $cacheIpcSni }}) verifyhost {{ $cacheIpcSni }} check-ssl
+      server-template logfire-ff-cache-ipc 1-{{ $cacheIpcMaxCount }} logfire-ff-cache-ipc-internal.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check resolvers kubernetes inter 250ms hash-key addr ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $cacheIpcSni }}) verifyhost {{ $cacheIpcSni }} check-ssl
       {{- else }}
-      server-template logfire-ff-cache-ipc 1-{{ $maxCount }} logfire-ff-cache-ipc-internal.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:9001 check resolvers kubernetes inter 250ms hash-key addr
+      server-template logfire-ff-cache-ipc 1-{{ $cacheIpcMaxCount }} logfire-ff-cache-ipc-internal.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:9001 check resolvers kubernetes inter 250ms hash-key addr
       {{- end }}

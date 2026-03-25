@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.3](https://img.shields.io/badge/Version-0.13.3-informational?style=flat-square) ![AppVersion: 80bc3daa](https://img.shields.io/badge/AppVersion-80bc3daa-informational?style=flat-square)
+![Version: 0.13.4](https://img.shields.io/badge/Version-0.13.4-informational?style=flat-square) ![AppVersion: 80bc3daa](https://img.shields.io/badge/AppVersion-80bc3daa-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -513,6 +513,17 @@ logfire.info('Hello, {place}!', place='World')
 
 Logfire is designed to be horizontally scalable. You can adjust the replica counts and resources for each component to handle your specific workload.
 
+The chart also supports optional workload sizing presets through `sizingPreset`. Leaving it empty keeps sizing driven entirely by explicit per-service values. The built-in `standard` preset applies the customer-oriented defaults in `values.yaml`. You can still override any individual workload after selecting a preset.
+
+```yaml
+sizingPreset: standard
+
+logfire-worker:
+  resources:
+    cpu: "500m"
+    memory: "1Gi"
+```
+
 This is how you can configure each service:
 
 ```yaml
@@ -567,11 +578,6 @@ Before diving deeper, verify these common configuration issues:
 * **GitHub Issues**: If your issue persists, please open up an issue with details about your deployment (Chart version, Kubernetes version, values file, any relevant error logs).
 
 * **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
-# logfire
-
-![Version: 0.13.3](https://img.shields.io/badge/Version-0.13.3-informational?style=flat-square) ![AppVersion: 80bc3daa](https://img.shields.io/badge/AppVersion-80bc3daa-informational?style=flat-square)
-
-Helm chart for self-hosted Pydantic Logfire
 
 ## Requirements
 
@@ -655,7 +661,7 @@ Helm chart for self-hosted Pydantic Logfire
 | istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-ff-proxy-cache-{byte,filter,ipc}, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
-| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"labels":{},"podAnnotations":{},"podLabels":{},"replicas":1,"resources":{"cpu":"250m","memory":"256Mi"},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
 | logfire-dex.config | object | `{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex configuration (see https://dexidp.io/docs/) |
 | logfire-dex.config.connectors | list | `[]` | Dex auth connectors (see https://dexidp.io/docs/connectors/) The redirectURI can be omitted—it will be generated automatically. If specified, the custom value will be honored. |
@@ -664,8 +670,6 @@ Helm chart for self-hosted Pydantic Logfire
 | logfire-dex.labels | object | `{}` | Workload labels |
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.podLabels | object | `{}` | Pod labels |
-| logfire-dex.replicas | int | `1` | Number of replicas |
-| logfire-dex.resources | object | `{"cpu":"250m","memory":"256Mi"}` | Resource requests/limits |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-cache-byte | object | `{"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
 | logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume |
@@ -742,6 +746,7 @@ Helm chart for self-hosted Pydantic Logfire
 | serviceAccount.create | bool | `false` | Create a ServiceAccount |
 | serviceAccount.name | string | `""` | Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template. If create is false and this is not set, the default ServiceAccount is used. |
 | serviceAccountName | string | `"default"` | DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility. @deprecated |
+| sizingPreset | string | `""` | Workload sizing preset. Leave empty to skip preset sizing, or set to `standard` to apply the built-in customer sizing defaults. |
 | smtp.host | string | `nil` | SMTP server hostname |
 | smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | smtp.port | int | `25` | SMTP server port |
