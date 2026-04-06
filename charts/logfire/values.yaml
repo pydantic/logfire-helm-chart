@@ -20,7 +20,7 @@ topologySpreadConstraints: []
 # -- Istio compatibility options
 istio:
   # -- When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:
-  #    logfire-service, logfire-ff-proxy-cache-{byte,filter,ipc}, logfire-backend-migrations,
+  #    logfire-service, logfire-ff-proxy-cache-byte, logfire-backend-migrations,
   #    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.
   #    You can still override per workload via `<workload>.podLabels`.
   disableSidecarOnKnownWorkloads: false
@@ -889,45 +889,6 @@ logfire-ff-cache-byte:
 #       type: my-volume
 
 
-# -- Autoscaling & resources for the IPC cache pods
-# logfire-ff-cache-ipc:
-#   # -- Workload labels
-#   labels: {}
-#   # -- Workload annotations
-#   annotations: {}
-#   # -- Pod labels
-#   podLabels: {}
-#   # -- Pod annotations
-#   podAnnotations: {}
-#   # -- Number of replicas
-#   replicas: 1
-#   resources:
-#     cpu: "2"
-#     memory: "8Gi"
-#     # Optional: sets both requests+limits for container writable layer/logs
-#     ephemeralStorage: "2Gi"
-#   autoscaling:
-#     minReplicas: 1
-#     maxReplicas: 6
-#     hpa:
-#       enabled: true
-#       memAverage: 65
-#       cpuAverage: 40
-#     keda:
-#       enabled: true
-#       triggers:
-#         - type: cpu
-#           metricType: Utilization
-#           metadata:
-#             value: "50"
-#   nodeSelector: {}
-#   affinity: {}
-#   tolerations: []
-#   pdb:
-#     maxUnavailable: 1
-#     minAvailable: 1
-
-
 # -- Autoscaling & resources for the byte proxy cache pods
 # logfire-ff-proxy-cache-byte:
 #   # -- Workload labels
@@ -945,45 +906,6 @@ logfire-ff-cache-byte:
 #   resources:
 #     cpu: "750m"
 #     memory: "768Mi"
-#   autoscaling:
-#     minReplicas: 1
-#     maxReplicas: 2
-#     hpa:
-#       enabled: true
-#       memAverage: 65
-#       cpuAverage: 40
-#     keda:
-#       enabled: true
-#       triggers:
-#         - type: cpu
-#           metricType: Utilization
-#           metadata:
-#             value: "50"
-#   nodeSelector: {}
-#   affinity: {}
-#   tolerations: []
-#   pdb:
-#     maxUnavailable: 1
-#     minAvailable: 1
-
-
-# -- Autoscaling & resources for the IPC proxy cache pods
-# logfire-ff-proxy-cache-ipc:
-#   # -- Workload labels
-#   labels: {}
-#   # -- Workload annotations
-#   annotations: {}
-#   # -- Pod labels
-#   podLabels: {}
-#   # -- Pod annotations
-#   podAnnotations: {}
-#   service:
-#     # -- Service annotations
-#     annotations: {}
-#   replicas: 2
-#   resources:
-#     cpu: "250m"
-#     memory: "256Mi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 2
@@ -1132,8 +1054,6 @@ logfire-ff-cache-byte:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#   jobParallelism: 3
-#   downloadParallelism: 10
 #   replicas: 1
 #   datafusionMemory: "512MB"
 #   compactionTiers:
@@ -1787,36 +1707,10 @@ sizingPresets:
           cpuAverage: 25
       scratchVolume:
         storage: 32Gi
-    logfire-ff-cache-ipc:
-      resources:
-        cpu: "2"
-        memory: "8Gi"
-      autoscaling:
-        minReplicas: 1
-        maxReplicas: 6
-        hpa:
-          enabled: true
-          memAverage: 65
-          cpuAverage: 40
-      pdb:
-        maxUnavailable: 1
     logfire-ff-proxy-cache-byte:
       resources:
         cpu: "750m"
         memory: "768Mi"
-      autoscaling:
-        minReplicas: 1
-        maxReplicas: 6
-        hpa:
-          enabled: true
-          memAverage: 65
-          cpuAverage: 40
-      pdb:
-        maxUnavailable: 1
-    logfire-ff-proxy-cache-ipc:
-      resources:
-        cpu: "250m"
-        memory: "256Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 6
