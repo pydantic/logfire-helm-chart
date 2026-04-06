@@ -1,5 +1,9 @@
 {{- $serviceName := "logfire-ff-query-api" }}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $threadSettings := include "logfire.ffThreadSettings" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $defaultDatafusionMemory := include "logfire.ffQueryDatafusionMemoryDefault" (dict "Values" .Values "serviceName" $serviceName) -}}
+{{- $cpuCores := int (get $threadSettings "cpuCores") -}}
+{{- $dataFusionThreads := int (get $threadSettings "dataFusionThreads") -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -97,10 +101,18 @@ spec:
               value: /scratch/fusionfire
             - name: FF_QUERY_PARALLELISM
               value: {{ (get $effectiveServiceValues "queryParallelism" | default "4" | quote) }}
+            {{- if not (get (get .Values "logfire-ff-query-worker" | default  dict) "enabled") }}
+            - name: FF_IO_THREADS
+              value: {{ $cpuCores | quote }}
+            - name: FF_DATAFUSION_THREADS
+              value: {{ $dataFusionThreads | quote }}
+            - name: FF_DATAFUSION_MEMORY_LIMIT
+              value: {{ (get $effectiveServiceValues "datafusionMemory" | default $defaultDatafusionMemory | quote) }}
+            - name: FF_IO_THREAD_STACK_SIZE
+              value: "8MB"
+            {{- end }}
             - name: FF_DATAFUSION_THREAD_STACK_SIZE
               value: "8MB"
-            - name: FF_USE_PHYSICAL_PLAN_ENDPOINT_CHANCE
-              value: "0.05"
             - name: FF_CACHE_ARROW_IPC_CHANCE
               value: "1.0"
             - name: FF_REDIS_TAIL_DSN

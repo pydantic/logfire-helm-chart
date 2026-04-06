@@ -173,18 +173,6 @@ spec:
 {{- end }}
 {{- end }}
 
-{{- define "logfire.ffCompactionTiers" -}}
-{{- if (get (get .Values "logfire-ff-maintenance-worker" | default  dict) "compactionTiers") -}}
-{{- with (get (get .Values "logfire-ff-maintenance-worker" | default  dict) "compactionTiers") -}}
-- name: FF_COMPACTION_TIERS
-  value: {{ . | toJson | squote }}
-{{- end -}}
-{{- else -}}
-- name: FF_COMPACTION_TIERS
-  value: '[{"count_threshold":10,"size_threshold_bytes":"1KB"},{"count_threshold":10,"size_threshold_bytes":"10KB"},{"count_threshold":10,"size_threshold_bytes":"100KB"},{"count_threshold":10,"size_threshold_bytes":"1MB"},{"count_threshold":10,"size_threshold_bytes":"10MB"},{"count_threshold":10,"size_threshold_bytes":"100MB"}]'
-{{- end -}}
-{{- end -}}
-
 {{- define "logfire.resources" -}}
 {{- $serviceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
 {{- $resources := index $serviceValues "resources" | default dict -}}
@@ -851,14 +839,6 @@ default-checksum
 "logfire-backend-migrations-{{ .Release.Revision }}"
 {{- else -}}
 "logfire-backend-migrations"
-{{- end -}}
-{{- end -}}
-
-{{- define "logfire.ffMigrations.name" -}}
-{{- if .Values.dev.deployPostgres -}}
-"logfire-ff-migrations-{{ .Release.Revision }}"
-{{- else -}}
-"logfire-ff-migrations"
 {{- end -}}
 {{- end -}}
 

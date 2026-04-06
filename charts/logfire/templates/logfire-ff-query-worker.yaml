@@ -1,6 +1,7 @@
 {{- $serviceName := "logfire-ff-query-worker" }}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $threadSettings := include "logfire.ffThreadSettings" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $defaultDatafusionMemory := include "logfire.ffQueryDatafusionMemoryDefault" (dict "Values" .Values "serviceName" $serviceName) -}}
 {{- $cpuCores := int (get $threadSettings "cpuCores") -}}
 {{- $dataFusionThreads := int (get $threadSettings "dataFusionThreads") -}}
 {{- if (index .Values $serviceName | default dict).enabled }}
@@ -86,7 +87,7 @@ spec:
             - name: FF_DATAFUSION_THREADS
               value: {{ $dataFusionThreads | quote }}
             - name: FF_DATAFUSION_MEMORY_LIMIT
-              value: {{ (get $effectiveServiceValues "datafusionMemory" | default "512MB" | quote) }}
+              value: {{ (get $effectiveServiceValues "datafusionMemory" | default $defaultDatafusionMemory | quote) }}
             - name: FF_DATAFUSION_THREAD_STACK_SIZE
               value: "8MB"
             - name: FF_IO_THREAD_STACK_SIZE
