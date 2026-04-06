@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.7](https://img.shields.io/badge/Version-0.13.7-informational?style=flat-square) ![AppVersion: df347376](https://img.shields.io/badge/AppVersion-df347376-informational?style=flat-square)
+![Version: 0.13.7](https://img.shields.io/badge/Version-0.13.7-informational?style=flat-square) ![AppVersion: f355af55](https://img.shields.io/badge/AppVersion-f355af55-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -265,7 +265,7 @@ istio:
 ```
 
 This automatically sets `sidecar.istio.io/inject: "false"` on:
-`logfire-service`, `logfire-ff-proxy-cache-byte`, `logfire-ff-proxy-cache-ipc`, `logfire-backend-migrations`, `logfire-ff-migrations`, `logfire-redis`, and `logfire-otel-collector`.
+`logfire-service`, `logfire-ff-proxy-cache-byte`, `logfire-backend-migrations`, `logfire-ff-migrations`, `logfire-redis`, and `logfire-otel-collector`.
 
 You can still override labels per workload using `<workload>.podLabels`.
 
@@ -658,7 +658,7 @@ Before diving deeper, verify these common configuration issues:
 | ingress.secretName | string | `"logfire-frontend-cert"` | TLS Secret name if you want to do a custom one |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS. Required for correct CORS behavior. |
 | istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
-| istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-ff-proxy-cache-{byte,filter,ipc}, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
+| istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-ff-proxy-cache-byte, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
 | logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |

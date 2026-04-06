@@ -10,6 +10,7 @@ data:
   RUST_LOG: "info"
   FF_SEND_TO_LOGFIRE: "true"
   FF_FORCE_CONSOLE_LOGGING: "true"
+  FF_COLLECT_STATISTICS_FROM_ZONE_MAP_INDEXES: "false"
   FF_CACHE_OBJECT_STORE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-byte:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
   FF_SHARED_REDIS_DSN: {{ .Values.redisDsn }}
   FF_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}
@@ -20,7 +21,6 @@ data:
   FF_TLS_KEY_PATH: "/etc/tls/tls.key"
   FF_TLS_CLIENT_ENABLE: "true"
   FF_TLS_CLIENT_CA_PATH: "/etc/logfire/incluster-ca/ca.crt"
-  FF_TLS_CLIENT_SNI_HOSTNAME: "logfire-ff-query-worker"
   FF_TLS_CLIENT_PORT: {{ .Values.inClusterTls.httpsPort | quote }}
 {{- end }}
 
@@ -34,10 +34,9 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-ff-config
 data:
-  FF_IPC_CACHE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-ipc:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
-  FF_IPC_CACHE_HOT_FILE_AGE_MINUTES: "30"
-  FF_IPC_CACHE_SMALL_FILE_SIZE_MB: "5"
-  FF_EXTERNAL_TABLES_PG_ENABLED_TABLES: "logfire.annotations,logfire.experiments"
+  FF_DISTRIBUTED_CHANCE: "0"
+  FF_RETRY_FAILED_DISTRIBUTED_QUERIES: "false"
+  FF_EXTERNAL_TABLES_PG_ENABLED_TABLES: "logfire.annotations,logfire.experiments,logfire.datasets,logfire.dataset_cases"
 
 ---
 
@@ -52,7 +51,6 @@ data:
   FF_WRITE_INDEX_THRESHOLD_BYTES: "1048576"
   FF_PARQUET_WRITER_MAX_ROWS_PER_ROW_GROUP: "100000"
   FF_PARQUET_WRITER_MAX_ROWS_PER_PAGE: "15000"
-  FF_CACHE_ARROW_IPC_CHANCE: "0.0"
 
 ---
 

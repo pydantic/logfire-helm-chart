@@ -806,7 +806,6 @@ Custom labels for workloads pods
   {{- $knownWorkloads := list
     "logfire-service"
     "logfire-ff-proxy-cache-byte"
-    "logfire-ff-proxy-cache-ipc"
     "logfire-backend-migrations"
     "logfire-ff-migrations"
     "logfire-redis"

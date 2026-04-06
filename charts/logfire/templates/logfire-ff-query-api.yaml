@@ -113,8 +113,10 @@ spec:
             {{- end }}
             - name: FF_DATAFUSION_THREAD_STACK_SIZE
               value: "8MB"
-            - name: FF_CACHE_ARROW_IPC_CHANCE
-              value: "1.0"
+            {{- if (get (get .Values "logfire-ff-query-worker" | default  dict) "enabled") }}
+            - name: FF_TLS_CLIENT_SNI_HOSTNAME
+              value: "logfire-ff-query-worker"
+            {{- end }}
             - name: FF_REDIS_TAIL_DSN
               value: {{ .Values.redisDsn }}
             - name: PG_DSN
