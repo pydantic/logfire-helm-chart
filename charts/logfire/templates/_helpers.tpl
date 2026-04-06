@@ -407,15 +407,29 @@ Usage: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" 
 */}}
 {{- define "logfire.otelResourceAttributes" -}}
 {{- $version := include "logfire.serviceVersion" . -}}
-{{- $attrs := list
-  "vcs.repository.url.full=https://github.com/pydantic/platform"
-  (printf "vcs.repository.ref.revision=%s" $version)
-  (printf "service.version=%s" $version)
+{{- $attrs := dict
+  "vcs.repository.url.full" "https://github.com/pydantic/platform"
+  "vcs.repository.ref.revision" $version
+  "service.version" $version
 -}}
 {{- with .codeWorkDir }}
-  {{- $attrs = append $attrs (printf "logfire.code.work_dir=%s" .) -}}
+  {{- $_ := set $attrs "logfire.code.work_dir" . -}}
 {{- end }}
-{{- join "," $attrs -}}
+{{- $attrs = mergeOverwrite $attrs ((get .root.Values "otelResourceAttributes") | default dict) -}}
+{{- include "logfire.renderOtelResourceAttributes" $attrs -}}
+{{- end -}}
+
+{{/*
+Render OTEL resource attributes from a map into OTEL_RESOURCE_ATTRIBUTES format.
+Usage: {{ include "logfire.renderOtelResourceAttributes" (dict "service.name" "my-service") }}
+*/}}
+{{- define "logfire.renderOtelResourceAttributes" -}}
+{{- $resourceAttributes := . | default dict -}}
+{{- $pairs := list -}}
+{{- range $key := keys $resourceAttributes | sortAlpha }}
+  {{- $pairs = append $pairs (printf "%s=%v" $key (get $resourceAttributes $key)) -}}
+{{- end -}}
+{{- join "," $pairs -}}
 {{- end -}}
 
 {{/*
