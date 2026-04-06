@@ -702,6 +702,8 @@ logfire-ai-gateway:
 #     annotations: {}
 #   # -- Parallelism per pod
 #   queryParallelism: 4
+#   # -- DataFusion memory limit when query-workers are disabled and query-api runs in query-worker mode
+#   datafusionMemory: "3072MB"
 #   # -- Number of replicas
 #   replicas: 2
 #   resources:
@@ -1430,6 +1432,13 @@ redisDsn: redis://logfire-redis:6379
 # OpenTelemetry Collector
 # ==============================================================================
 
+# -- Additional OTEL resource attributes to stamp onto internal telemetry emitted by Logfire workloads.
+# These are merged on top of the chart defaults and can override them.
+# Example:
+#   deployment.environment.name: prod
+#   service.namespace: logfire
+otelResourceAttributes: {}
+
 # -- otel-collector configuration
 otel_collector:
   # -- exporter configuration for the otlphttp exporter
@@ -1699,6 +1708,8 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-query-api:
+      queryParallelism: 4
+      datafusionMemory: "3072MB"
       resources:
         cpu: "2"
         memory: "8Gi"

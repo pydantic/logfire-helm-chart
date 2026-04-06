@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.5](https://img.shields.io/badge/Version-0.13.5-informational?style=flat-square) ![AppVersion: 80bc3daa](https://img.shields.io/badge/AppVersion-80bc3daa-informational?style=flat-square)
+![Version: 0.13.6](https://img.shields.io/badge/Version-0.13.6-informational?style=flat-square) ![AppVersion: 80bc3daa](https://img.shields.io/badge/AppVersion-80bc3daa-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -718,6 +718,7 @@ Before diving deeper, verify these common configuration issues:
 | objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`) |
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials |
+| otelResourceAttributes | object | `{}` | Additional OTEL resource attributes to stamp onto internal telemetry emitted by Logfire workloads. These are merged on top of the chart defaults and can override them. Example:   deployment.environment.name: prod   service.namespace: logfire |
 | otel_collector | object | `{"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.139.0"},"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | otel-collector configuration |
 | otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}}` | exporter configuration for the otlphttp exporter Override these to send telemetry data to a different OTLP-compatible destination. |
 | podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details |

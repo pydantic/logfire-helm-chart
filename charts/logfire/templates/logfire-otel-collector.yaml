@@ -124,6 +124,14 @@ spec:
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- $otelCollector := default (dict) .Values.otel_collector }}
       {{- $otelImage := get $otelCollector "image" | default dict }}
+      {{- $collectorResourceAttributes := (get .Values "otelResourceAttributes") | default dict }}
+      {{- $extraEnv := (index .Values $serviceName | default dict).env | default list }}
+      {{- $envState := dict "hasOtelResourceAttributes" false }}
+      {{- range $extraEnv }}
+        {{- if eq .name "OTEL_RESOURCE_ATTRIBUTES" }}
+          {{- $_ := set $envState "hasOtelResourceAttributes" true }}
+        {{- end }}
+      {{- end }}
       containers:
         - name: otel-collector
           image: {{ include "logfire.imageRef" (dict "image" $otelImage "defaultRepository" "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib" "defaultTag" "0.139.0") }}
@@ -149,7 +157,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token") }}
                   key: logfire-meta-write-token
-            {{- with (index .Values $serviceName | default dict).env }}
+            {{- if and (not (get $envState "hasOtelResourceAttributes")) $collectorResourceAttributes }}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: {{ include "logfire.renderOtelResourceAttributes" $collectorResourceAttributes | quote }}
+            {{- end }}
+            {{- with $extraEnv }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}
       volumes:

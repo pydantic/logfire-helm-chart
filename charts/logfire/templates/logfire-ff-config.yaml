@@ -34,7 +34,6 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-ff-config
 data:
-  FF_FUSIONFIRE_COLLECT_STATISTICS: "0.0"
   FF_IPC_CACHE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-ipc:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
   FF_IPC_CACHE_HOT_FILE_AGE_MINUTES: "30"
   FF_IPC_CACHE_SMALL_FILE_SIZE_MB: "5"
@@ -54,6 +53,20 @@ data:
   FF_PARQUET_WRITER_MAX_ROWS_PER_ROW_GROUP: "100000"
   FF_PARQUET_WRITER_MAX_ROWS_PER_PAGE: "15000"
   FF_CACHE_ARROW_IPC_CHANCE: "0.0"
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logfire-ff-maintenance-config
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-ff-config
+data:
+  FF_CACHE_OBJECT_STORE_HTTP_HEADERS: x-ff-no-warm-cache=1
+  FF_COMPACTION_LOOP_BACKOFF_DELAY: "1s"
+  FF_COMPACTION_TIERS: {{ include "logfire.ffCompactionTiersValue" . | squote }}
 
 ---
 

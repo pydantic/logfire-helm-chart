@@ -58,17 +58,6 @@ Supports both legacy flat keys and nested requests/limits.
 {{- end -}}
 
 {{/*
-Derive FF service CPU core count and DataFusion thread count from the effective CPU request.
-*/}}
-{{- define "logfire.ffThreadSettings" -}}
-{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
-{{- $cpu := get $effectiveResources "cpuRequest" -}}
-{{- $cpuCores := int (include "logfire.cpuCores" $cpu) -}}
-{{- $dataFusionThreads := max 1 (sub $cpuCores 1) -}}
-{{- dict "cpuCores" $cpuCores "dataFusionThreads" $dataFusionThreads | toJson -}}
-{{- end -}}
-
-{{/*
 Convert Kubernetes memory quantity to mebibytes (Mi).
 Supports common binary and decimal suffixes plus plain bytes.
 */}}
