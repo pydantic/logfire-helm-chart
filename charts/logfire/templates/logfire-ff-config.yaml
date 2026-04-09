@@ -14,6 +14,7 @@ data:
   FF_CACHE_OBJECT_STORE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-byte:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
   FF_SHARED_REDIS_DSN: {{ .Values.redisDsn }}
   FF_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}
+  FF_PG_TRANSACTION_TIMEOUT: "30s"
 {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
   FF_TLS_MODE: "allow"
   FF_HTTPS_PORT: {{ .Values.inClusterTls.httpsPort | quote }}
@@ -65,6 +66,7 @@ data:
   FF_CACHE_OBJECT_STORE_HTTP_HEADERS: x-ff-no-warm-cache=1
   FF_COMPACTION_LOOP_BACKOFF_DELAY: "1s"
   FF_COMPACTION_TIERS: {{ include "logfire.ffCompactionTiersValue" . | squote }}
+  FF_INGEST_MAX_TIME_SKEW: "60s"
 
 ---
 
@@ -79,5 +81,6 @@ data:
   FF_BACKEND_SERVICE_URL: "{{ include "logfire.scheme" . }}://logfire-backend:{{ include "logfire.port" (dict "port" 8000 "root" .) }}"
   FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
   FF_FAILOVER_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}/_ingest_failover
+  FF_INGEST_MAX_TIME_SKEW: "60s"
   FF_INGEST_MAX_FUTURE_TIME_DRIFT: "1h"
   FF_INGEST_MAX_PAST_TIME_DRIFT: "24h"
