@@ -66,7 +66,7 @@ data:
   FF_CACHE_OBJECT_STORE_HTTP_HEADERS: x-ff-no-warm-cache=1
   FF_COMPACTION_LOOP_BACKOFF_DELAY: "1s"
   FF_COMPACTION_TIERS: {{ include "logfire.ffCompactionTiersValue" . | squote }}
-  FF_INGEST_MAX_TIME_SKEW: "60s"
+  FF_INGEST_MAX_TIME_SKEW: "120s"
 
 ---
 
@@ -81,6 +81,6 @@ data:
   FF_BACKEND_SERVICE_URL: "{{ include "logfire.scheme" . }}://logfire-backend:{{ include "logfire.port" (dict "port" 8000 "root" .) }}"
   FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
   FF_FAILOVER_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}/_ingest_failover
-  FF_INGEST_MAX_TIME_SKEW: "60s"
+  FF_INGEST_MAX_TIME_SKEW: "120s"
   FF_INGEST_MAX_FUTURE_TIME_DRIFT: "1h"
   FF_INGEST_MAX_PAST_TIME_DRIFT: "24h"
