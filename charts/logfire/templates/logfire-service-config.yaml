@@ -71,10 +71,11 @@ stringData:
       acl path_ingest path_reg -i ^/v1/(traces|metrics|logs)$
       acl path_dex path_beg /auth-api
       acl path_backend path_reg -i ^/(ui-api|v1|api)/
+      acl path_backend path_beg /.well-known/oauth-authorization-server /.well-known/openid-configuration
       {{- if (index .Values "logfire-ai-gateway" "enabled") }}
-      acl path_ai_gateway path_beg /proxy
+      acl path_ai_gateway path_beg /proxy /.well-known/oauth-protected-resource/proxy
       {{- end }}
-      acl path_remote_mcp path_beg /mcp /.well-known/oauth-authorization-server/mcp /.well-known/oauth-protected-resource/mcp
+      acl path_remote_mcp path_beg /mcp /.well-known/oauth-protected-resource/mcp
 
 
       use_backend logfire-ingest if path_ingest

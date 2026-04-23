@@ -278,6 +278,38 @@ Primary logfire host with protocol scheme.
 {{- end -}}
 
 {{/*
+Public AI gateway resource URL (RFC 8707 audience). Defaults to the main Logfire URL + /proxy.
+*/}}
+{{- define "logfire.gatewayOauthResourceUrl" -}}
+{{- if .Values.aiGatewayOauth.resourceUrl -}}
+{{- .Values.aiGatewayOauth.resourceUrl -}}
+{{- else if (index .Values "logfire-ai-gateway" "enabled") -}}
+{{- printf "%s/proxy" (include "logfire.url" . | trim) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+OAuth issuer for AI gateway tokens. Defaults to the main Logfire URL.
+*/}}
+{{- define "logfire.gatewayOauthIssuer" -}}
+{{- if .Values.aiGatewayOauth.issuer -}}
+{{- .Values.aiGatewayOauth.issuer -}}
+{{- else if (index .Values "logfire-ai-gateway" "enabled") -}}
+{{- include "logfire.url" . | trim -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Public host used by the frontend CSP for AI gateway requests.
+*/}}
+{{- define "logfire.publicGatewayHost" -}}
+{{- $resourceUrl := include "logfire.gatewayOauthResourceUrl" . | trim -}}
+{{- if $resourceUrl -}}
+{{- (urlParse $resourceUrl).host -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Full list of logfire urls, primary and alternative domains with scheme.
 */}}
 {{- define "logfire.all_urls" -}}

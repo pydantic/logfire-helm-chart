@@ -80,8 +80,6 @@ spec:
               value: {{ (get $effectiveServiceValues "queryParallelism" | default "4" | quote) }}
             - name: FF_PG_POOL_MAX_CONNECTIONS
               value: "4"
-            - name: FF_PG_POOL_MIN_CONNECTIONS
-              value: "1"
             - name: FF_IO_THREADS
               value: {{ $cpuCores | quote }}
             - name: FF_DATAFUSION_THREADS

@@ -146,16 +146,6 @@ spec:
             value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
           - name: FUSIONFIRE_QUERY_PORT
             value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
-          {{- /* MCP OAuth2 is not supported without TLS for hostnames different than localhost */ -}}
-          {{- if or (include "logfire.effective_tls" . | eq "true") (eq (include "logfire.primary_hostname" .) "localhost") }}
-          - name: LOGFIRE_OAUTH_CLIENT_ID
-            value: "logfire-mcp"
-          - name: LOGFIRE_OAUTH_CLIENT_SECRET
-            valueFrom:
-              secretKeyRef:
-                name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-mcp-oauth-client-secret") }}
-                key: logfire-mcp-oauth-client-secret
-          {{- end }}
           - name: LOGFIRE_REGION
             value: {{ .Values.logfireRegion | default "local" }}
           - name: ALLOWED_HOSTS
