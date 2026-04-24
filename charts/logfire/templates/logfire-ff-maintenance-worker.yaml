@@ -83,8 +83,6 @@ spec:
               value: "30s"
             - name: FF_DATAFUSION_MEMORY_LIMIT
               value: {{ (get $effectiveServiceValues "datafusionMemory" | default "512MB" | quote) }}
-            - name: FF_DATAFUSION_TARGET_PARTITIONS
-              value: "1"
             - name: FF_ENABLE_SPILL_TO_DISK
               value: "true"
             - name: FF_TEMP_DIR

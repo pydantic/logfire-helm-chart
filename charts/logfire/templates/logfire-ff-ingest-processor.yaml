@@ -109,6 +109,10 @@ spec:
               value: "0"
             - name: FF_INGEST_NUM_CLEANUP_WORKERS
               value: "0"
+            - name: FF_DIRECT_FILE_INGEST_SUBMIT_CONCURRENCY
+              value: "128"
+            - name: FF_INGEST_DIRECT_FILE_BUFFER_MAX_BYTES
+              value: "8MB"
             - name: FF_IO_THREADS
               value: {{ $cpuCores | quote }}
             - name: FF_DATAFUSION_THREADS

@@ -136,6 +136,15 @@ spec:
             value: {{ $serviceName }}
           - name: GITHUB_SHA
             value: {{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) | quote }}
+          - name: GATEWAY_OAUTH_SIGNING_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret") }}
+                key: logfire-jwt-secret
+          - name: GATEWAY_OAUTH_RESOURCE_URL
+            value: {{ include "logfire.gatewayOauthResourceUrl" . | trim | quote }}
+          - name: GATEWAY_OAUTH_ISSUER
+            value: {{ include "logfire.gatewayOauthIssuer" . | trim | quote }}
           {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
           - name: IN_CLUSTER_CA_BUNDLE_PATH
             value: /etc/logfire/incluster-ca/ca.crt

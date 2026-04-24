@@ -309,6 +309,12 @@ ai:
   # -- AI provider+model string. Prefix the model with the provider (e.g., `azure:gpt-4o`).
   # See https://ai.pydantic.dev/models/ for more information.
   model:
+  # -- AI provider+model string for chat-oriented workloads. Falls back to `ai.model` in the application when unset.
+  chatModel:
+  # -- Enterprise default AI provider+model string.
+  enterpriseModel:
+  # -- Enterprise chat AI provider+model string.
+  enterpriseChatModel:
 
   openAi:
     # -- OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
@@ -642,6 +648,16 @@ logfire-ai-gateway:
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
+
+# -- AI gateway OAuth metadata configuration.
+# If left empty, the chart derives self-hosted defaults from the primary Logfire URL:
+#   resourceUrl = <logfire.url>/proxy
+#   issuer      = <logfire.url>
+aiGatewayOauth:
+  # -- Public AI gateway resource URL (RFC 8707 audience).
+  resourceUrl: ""
+  # -- OAuth authorization server issuer URL used by the AI gateway.
+  issuer: ""
 
 
 # -- Autoscaling & resources for the `logfire-remote-mcp` pod

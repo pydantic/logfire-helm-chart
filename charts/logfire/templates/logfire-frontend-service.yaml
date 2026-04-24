@@ -103,6 +103,10 @@ spec:
               value: ""
             - name: OTEL_SERVICE_NAME
               value: {{ $serviceName }}
+            {{- if (index .Values "logfire-ai-gateway" "enabled") }}
+            - name: PUBLIC_GATEWAY_HOST
+              value: {{ include "logfire.publicGatewayHost" . | trim | quote }}
+            {{- end }}
             {{ if eq (.Values.ingress.tls | default false) false }}
             - name: E2E
               value: "true"
