@@ -20,6 +20,11 @@ objectStore:
     AWS_ENDPOINT: http://logfire-minio:9000
     AWS_ALLOW_HTTP: "true"
 
+ai:
+  model: openai:gpt-4o
+  openAi:
+    apiKey: dummy
+
 dev:
   deployPostgres: true
   deployMinio: true
