@@ -465,6 +465,61 @@ Usage: {{ include "logfire.renderOtelResourceAttributes" (dict "service.name" "m
 {{- end -}}
 
 {{/*
+Render shared AI provider environment variables for workloads that construct AI clients.
+*/}}
+{{- define "logfire.aiProviderEnv" -}}
+{{- with .Values.ai.openAi }}
+{{- with .apiKey }}
+- name: OPENAI_API_KEY
+  {{- if kindIs "map" . }}
+  {{- if hasKey . "valueFrom" }}
+  valueFrom:
+    {{- toYaml .valueFrom | nindent 4 }}
+  {{- end }}
+  {{- else }}
+  value: {{ . }}
+  {{- end }}
+{{- end }}
+{{- with .baseUrl }}
+- name: OPENAI_BASE_URL
+  {{- if kindIs "map" . }}
+  {{- if hasKey . "valueFrom" }}
+  valueFrom:
+    {{- toYaml .valueFrom | nindent 4 }}
+  {{- end }}
+  {{- else }}
+  value: {{ . }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- with .Values.ai.vertexAi.region }}
+- name: GOOGLE_CLOUD_LOCATION
+  value: {{ . }}
+{{- end }}
+{{- with .Values.ai.azureOpenAi }}
+{{- with .endpoint }}
+- name: AZURE_OPENAI_ENDPOINT
+  value: {{ . }}
+{{- end }}
+{{- with .apiKey }}
+- name: AZURE_OPENAI_API_KEY
+  {{- if kindIs "map" . }}
+  {{- if hasKey . "valueFrom" }}
+  valueFrom:
+    {{- toYaml .valueFrom | nindent 4 }}
+  {{- end }}
+  {{- else }}
+  value: {{ . }}
+  {{- end }}
+{{- end }}
+{{- with .apiVersion }}
+- name: OPENAI_API_VERSION
+  value: {{ . }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Create dex config secret name
 */}}
 {{- define "logfire.dexSecretName" -}}

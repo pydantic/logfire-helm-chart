@@ -108,9 +108,12 @@ spec:
               value: http://logfire-otel-collector:4317
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
-            {{- with .Values.ai.model }}
+            {{- with .Values.ai }}
+            {{- with .model }}
             - name: AI_MODEL_DEFAULT
               value: {{ . }}
+            {{- end }}
+            {{ include "logfire.aiProviderEnv" $ | nindent 12 }}
             {{- end }}
             - name: USAGE_TO_BUCKET_BUCKET_NAME
               value: {{ .Values.objectStore.uri }}/usage
