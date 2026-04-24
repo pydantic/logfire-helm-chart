@@ -1,11 +1,11 @@
 # logfire
 
-![Version: 0.13.7](https://img.shields.io/badge/Version-0.13.7-informational?style=flat-square) ![AppVersion: f355af55](https://img.shields.io/badge/AppVersion-f355af55-informational?style=flat-square)
+![Version: 0.13.8](https://img.shields.io/badge/Version-0.13.8-informational?style=flat-square) ![AppVersion: db7bde1d](https://img.shields.io/badge/AppVersion-db7bde1d-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
-This chart exists as public documentation of how to set up and run self-hosted Pydantic Logfire but requires an image pull key to actually use.
-**Self-hosted Logfire is an Enterprise offering that requires a contract and payment, it is not free software**. Please contact sales@pydantic.dev to discuss setting up a contract and pricing.
+This repository and the chart source it contains are licensed under the MIT License. Deploying the official self-hosted Pydantic Logfire product requires separate commercial access to private container images.
+**Self-hosted Logfire is an Enterprise offering that requires a contract and payment.** Please contact sales@pydantic.dev to discuss setting up a contract and pricing.
 
 ## Local Quickstart (Evaluation & Testing)
 
@@ -600,10 +600,16 @@ Before diving deeper, verify these common configuration issues:
 | ai.azureOpenAi.apiKey | string | `nil` | Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | ai.azureOpenAi.apiVersion | string | `nil` | Azure OpenAI API version |
 | ai.azureOpenAi.endpoint | string | `nil` | Azure OpenAI endpoint |
+| ai.chatModel | string | `nil` | AI provider+model string for chat-oriented workloads. Falls back to `ai.model` in the application when unset. |
+| ai.enterpriseChatModel | string | `nil` | Enterprise chat AI provider+model string. |
+| ai.enterpriseModel | string | `nil` | Enterprise default AI provider+model string. |
 | ai.model | string | `nil` | AI provider+model string. Prefix the model with the provider (e.g., `azure:gpt-4o`). See https://ai.pydantic.dev/models/ for more information. |
 | ai.openAi.apiKey | string | `nil` | OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | ai.openAi.baseUrl | string | `nil` | OpenAI base URL for custom endpoints (e.g., Azure OpenAI proxy, local models). |
 | ai.vertexAi.region | string | `nil` | Vertex AI region |
+| aiGatewayOauth | object | `{"issuer":"","resourceUrl":""}` | AI gateway OAuth metadata configuration. If left empty, the chart derives self-hosted defaults from the primary Logfire URL:   resourceUrl = <logfire.url>/proxy   issuer      = <logfire.url> |
+| aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
+| aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
 | cert-manager | object | `{"installCRDs":true}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
 | dev.deployCertManager | bool | `false` | Deploy cert-manager (NOT for production; includes cluster-scoped resources). |
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
