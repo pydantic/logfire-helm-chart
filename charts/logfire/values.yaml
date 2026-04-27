@@ -610,6 +610,8 @@ logfire-ff-maintenance-scheduler:
 logfire-ai-gateway:
   # -- Enable the AI gateway service
   enabled: false
+  # -- HAProxy inactivity timeout for public `/proxy` requests to the AI gateway.
+  proxyTimeout: 600s
 #   # -- Workload labels
 #   labels: {}
 #   # -- Workload annotations

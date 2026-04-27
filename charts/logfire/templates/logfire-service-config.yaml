@@ -1,6 +1,8 @@
 {{- $ingestValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-ingest") | fromJson -}}
 {{- $ingestAutoscaling := get $ingestValues "autoscaling" | default dict -}}
 {{- $ingestMaxCount := coalesce (get $ingestAutoscaling "maxReplicas") (get $ingestValues "replicas") 1 -}}
+{{- $aiGatewayValues := index .Values "logfire-ai-gateway" | default dict -}}
+{{- $aiGatewayProxyTimeout := get $aiGatewayValues "proxyTimeout" | default "600s" -}}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -46,7 +48,7 @@ stringData:
       option http-keep-alive
       no option httpclose
       timeout http-keep-alive 60s
-      timeout client 80s
+      timeout client {{ ternary $aiGatewayProxyTimeout "80s" (get $aiGatewayValues "enabled") }}
       http-request set-header Host %[req.hdr(Host)]
       http-request set-header X-Real-IP %[src]
 
@@ -72,7 +74,7 @@ stringData:
       acl path_dex path_beg /auth-api
       acl path_backend path_reg -i ^/(ui-api|v1|api)/
       acl path_backend path_beg /.well-known/oauth-authorization-server /.well-known/openid-configuration
-      {{- if (index .Values "logfire-ai-gateway" "enabled") }}
+      {{- if (get $aiGatewayValues "enabled") }}
       acl path_ai_gateway path_beg /proxy /.well-known/oauth-protected-resource/proxy
       {{- end }}
       acl path_remote_mcp path_beg /mcp /.well-known/oauth-protected-resource/mcp
@@ -80,7 +82,7 @@ stringData:
 
       use_backend logfire-ingest if path_ingest
       use_backend logfire-dex if path_dex
-      {{- if (index .Values "logfire-ai-gateway" "enabled") }}
+      {{- if (get $aiGatewayValues "enabled") }}
       use_backend logfire-ai-gateway if path_ai_gateway
       {{- end }}
       use_backend logfire-remote-mcp if path_remote_mcp
@@ -133,7 +135,7 @@ stringData:
       server logfire-dex logfire-dex.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:5556 check port 5558 resolvers kubernetes
       {{- end }}
 
-    {{- if (index .Values "logfire-ai-gateway" "enabled") }}
+    {{- if (get $aiGatewayValues "enabled") }}
     backend logfire-ai-gateway
       balance roundrobin
       # Health checks
@@ -141,7 +143,7 @@ stringData:
       http-check send meth GET uri /proxy/ hdr Host logfire-ai-gateway
       option http-server-close
       timeout connect 3s
-      timeout server 50s
+      timeout server {{ $aiGatewayProxyTimeout }}
       http-check expect status 200
 
       {{- $gatewaySni := printf "logfire-ai-gateway.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
