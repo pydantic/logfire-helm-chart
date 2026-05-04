@@ -1,6 +1,7 @@
 {{- $serviceName := "logfire-ff-query-api" }}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $threadSettings := include "logfire.ffThreadSettings" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $queryParallelism := include "logfire.ffQueryApiParallelism" (dict "Values" .Values "serviceName" $serviceName) -}}
 {{- $defaultDatafusionMemory := include "logfire.ffQueryDatafusionMemoryDefault" (dict "Values" .Values "serviceName" $serviceName) -}}
 {{- $cpuCores := int (get $threadSettings "cpuCores") -}}
 {{- $dataFusionThreads := int (get $threadSettings "dataFusionThreads") -}}
@@ -100,7 +101,7 @@ spec:
             - name: FF_TEMP_DIR
               value: /scratch/fusionfire
             - name: FF_QUERY_PARALLELISM
-              value: {{ (get $effectiveServiceValues "queryParallelism" | default "4" | quote) }}
+              value: {{ $queryParallelism | quote }}
             {{- if not (get (get .Values "logfire-ff-query-worker" | default  dict) "enabled") }}
             - name: FF_IO_THREADS
               value: {{ $cpuCores | quote }}

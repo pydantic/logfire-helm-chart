@@ -718,10 +718,11 @@ aiGatewayOauth:
 #   service:
 #     # -- Service annotations
 #     annotations: {}
-#   # -- Parallelism per pod
-#   queryParallelism: 4
-#   # -- DataFusion memory limit when query-workers are disabled and query-api runs in query-worker mode
-#   datafusionMemory: "3072MB"
+#   # -- Parallelism per pod. Defaults to 2x computed FF_IO_THREADS.
+#   # queryParallelism: 4
+#   # -- DataFusion memory limit when query-workers are disabled and query-api runs in query-worker mode.
+#   # Defaults to half of the pod memory request.
+#   # datafusionMemory: "4096MB"
 #   # -- Number of replicas
 #   replicas: 2
 #   resources:
@@ -956,10 +957,12 @@ logfire-ff-cache-byte:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#   jobParallelism: 3
+#   # -- Compaction job concurrency. Defaults from CPU request, capped at 10.
+#   # jobParallelism: 3
 #   downloadParallelism: 10
 #   replicas: 2
-#   datafusionMemory: "3072MB"
+#   # -- DataFusion memory limit. Defaults to 3/8 of the pod memory limit.
+#   # datafusionMemory: "3072MB"
 #   spillToDiskQuota: "32GB"
 #   compactionTiers:
 #     - size_threshold_bytes: "1KB"
@@ -1015,10 +1018,12 @@ logfire-ff-cache-byte:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#   jobParallelism: 3
+#   # -- Compaction job concurrency. Defaults from CPU request, capped at 10.
+#   # jobParallelism: 3
 #   downloadParallelism: 10
 #   replicas: 2
-#   datafusionMemory: "3072MB"
+#   # -- DataFusion memory limit. Defaults to 3/8 of the pod memory limit.
+#   # datafusionMemory: "3072MB"
 #   spillToDiskQuota: "32GB"
 #   compactionTiers:
 #     - size_threshold_bytes: "1KB"
@@ -1646,8 +1651,6 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-query-api:
-      queryParallelism: 4
-      datafusionMemory: "3072MB"
       resources:
         cpu: "2"
         memory: "8Gi"
@@ -1739,7 +1742,6 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-maintenance-worker:
-      datafusionMemory: "3072MB"
       resources:
         cpu: "2"
         memory: "8Gi"
@@ -1755,7 +1757,6 @@ sizingPresets:
       scratchVolume:
         storage: "1Gi"
     logfire-ff-maintenance-scheduler:
-      datafusionMemory: "512MB"
       resources:
         cpu: "500m"
         memory: "512Mi"
@@ -1768,7 +1769,6 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-compaction-worker:
-      datafusionMemory: "3072MB"
       resources:
         cpu: "2"
         memory: "8Gi"
@@ -1778,7 +1778,7 @@ sizingPresets:
         hpa:
           enabled: true
           memAverage: 50
-          cpuAverage: 60
+          cpuAverage: 40
       pdb:
         maxUnavailable: 1
       scratchVolume:
