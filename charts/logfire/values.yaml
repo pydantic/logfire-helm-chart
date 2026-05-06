@@ -467,7 +467,7 @@ logfire-ff-ingest:
   # -- Configuration for the StatefulSet PersistentVolumeClaim template
   volumeClaimTemplates:
     # -- Storage provisioned for each pod
-    storage: 64Gi
+    storage: 16Gi
 
   # -- Extra env vars for the ingest pod
   env:
@@ -1605,7 +1605,7 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-ingest:
       volumeClaimTemplates:
-        storage: 64Gi
+        storage: 16Gi
       resources:
         cpu: "1"
         memory: "2Gi"

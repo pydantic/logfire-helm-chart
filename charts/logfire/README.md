@@ -680,7 +680,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-cache-byte | object | `{"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
 | logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume |
-| logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"64Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
+| logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
 | logfire-ff-ingest-processor.env | list | `[{"name":"RUST_LOG","value":"warn"}]` | Extra env vars for the ingest processor pod |
@@ -694,8 +694,8 @@ Before diving deeper, verify these common configuration issues:
 | logfire-ff-ingest.podAnnotations | object | `{}` | Pod annotations |
 | logfire-ff-ingest.podLabels | object | `{}` | Pod labels |
 | logfire-ff-ingest.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-ingest.volumeClaimTemplates | object | `{"storage":"64Gi"}` | Configuration for the StatefulSet PersistentVolumeClaim template |
-| logfire-ff-ingest.volumeClaimTemplates.storage | string | `"64Gi"` | Storage provisioned for each pod |
+| logfire-ff-ingest.volumeClaimTemplates | object | `{"storage":"16Gi"}` | Configuration for the StatefulSet PersistentVolumeClaim template |
+| logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` | Storage provisioned for each pod |
 | logfire-ff-maintenance-scheduler | object | `{"env":[{"name":"RUST_LOG","value":"warn"}]}` | Environment overrides for the maintenance scheduler pod |
 | logfire-ff-query-api | object | `{"env":[{"name":"RUST_LOG","value":"warn"}]}` | Environment overrides for the query API pod |
 | logfire-redis.enabled | bool | `true` | Deploy Redis as part of this chart. Disable to use an external Redis instance. |
