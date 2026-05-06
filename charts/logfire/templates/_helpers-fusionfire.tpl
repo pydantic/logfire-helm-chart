@@ -45,6 +45,37 @@ Resolve query parallelism from explicit service values, falling back to the comp
 {{- end -}}
 
 {{/*
+Default ingest direct-file buffering.
+Keeps the in-memory direct-file submit buffer to roughly 1/8 of the pod memory
+request and caps concurrency at the platform value used by larger ingest pods.
+*/}}
+{{- define "logfire.ffIngestDirectFileSettingsDefault" -}}
+{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
+{{- $threadSettings := include "logfire.ffThreadSettings" . | fromJson -}}
+{{- $memory := get $effectiveResources "memoryRequest" -}}
+{{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
+{{- $cpuCores := int (get $threadSettings "cpuCores") -}}
+{{- $bufferMi := min 8 (max 1 (div $memoryMi 256)) -}}
+{{- $memoryBudgetMi := max $bufferMi (div $memoryMi 8) -}}
+{{- $memoryConcurrency := max 1 (div $memoryBudgetMi $bufferMi) -}}
+{{- $cpuConcurrency := mul $cpuCores 32 -}}
+{{- $submitConcurrency := min 128 (max 1 (min $cpuConcurrency $memoryConcurrency)) -}}
+{{- dict "bufferMaxBytes" (printf "%dMB" $bufferMi) "submitConcurrency" $submitConcurrency | toJson -}}
+{{- end -}}
+
+{{/*
+Resolve ingest direct-file buffering from explicit service values, falling back
+to computed defaults.
+*/}}
+{{- define "logfire.ffIngestDirectFileSettings" -}}
+{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- $defaults := include "logfire.ffIngestDirectFileSettingsDefault" . | fromJson -}}
+{{- $bufferMaxBytes := get $effectiveServiceValues "directFileBufferMaxBytes" | default (get $defaults "bufferMaxBytes") -}}
+{{- $submitConcurrency := get $effectiveServiceValues "directFileSubmitConcurrency" | default (get $defaults "submitConcurrency") -}}
+{{- dict "bufferMaxBytes" $bufferMaxBytes "submitConcurrency" $submitConcurrency | toJson -}}
+{{- end -}}
+
+{{/*
 Resolve query-api parallelism. When dedicated query-workers are enabled,
 default from query-worker sizing because query-api schedules work onto workers.
 */}}

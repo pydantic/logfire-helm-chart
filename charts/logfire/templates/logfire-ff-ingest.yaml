@@ -2,6 +2,7 @@
 {{- $serviceValues := get .Values $serviceName | default dict -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $threadSettings := include "logfire.ffThreadSettings" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $directFileSettings := include "logfire.ffIngestDirectFileSettings" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $cpuCores := int (get $threadSettings "cpuCores") -}}
 {{- $dataFusionThreads := int (get $threadSettings "dataFusionThreads") -}}
 
@@ -108,10 +109,12 @@ spec:
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             - name: FF_INGEST_PATH
               value: "/fusionfire/ingest-data"
-            - name: FF_INGEST_NUM_WORKERS
-              value: {{ mul $cpuCores 8 | quote }}
             - name: FF_INGEST_DOWNSTREAM_URL
               value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor:{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
+            - name: FF_INGEST_DIRECT_FILE_BUFFER_MAX_BYTES
+              value: {{ get $directFileSettings "bufferMaxBytes" | quote }}
+            - name: FF_DIRECT_FILE_INGEST_SUBMIT_CONCURRENCY
+              value: {{ get $directFileSettings "submitConcurrency" | quote }}
             - name: FF_IO_THREADS
               value: {{ $cpuCores | quote }}
             - name: FF_DATAFUSION_THREADS
