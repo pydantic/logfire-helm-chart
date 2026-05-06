@@ -108,6 +108,10 @@ spec:
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             - name: FF_INGEST_PATH
               value: "/fusionfire/ingest-data"
+            - name: FF_DIRECT_FILE_INGEST_SUBMIT_CONCURRENCY
+              value: "32"
+            - name: FF_INGEST_DIRECT_FILE_BUFFER_MAX_BYTES
+              value: "8MB"
             - name: FF_INGEST_NUM_WORKERS
               value: {{ mul $cpuCores 8 | quote }}
             - name: FF_INGEST_DOWNSTREAM_URL
