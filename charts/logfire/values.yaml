@@ -467,7 +467,7 @@ logfire-ff-ingest:
   # -- Configuration for the StatefulSet PersistentVolumeClaim template
   volumeClaimTemplates:
     # -- Storage provisioned for each pod
-    storage: 16Gi
+    storage: 64Gi
 
   # -- Extra env vars for the ingest pod
   env:
@@ -476,6 +476,11 @@ logfire-ff-ingest:
 
   # //// Enables serviceName for older K8s versions
   # serviceName: true
+
+  # -- Direct-file ingest buffer size per submit worker. Defaults from pod memory request, capped at 8MB.
+  # directFileBufferMaxBytes: "8MB"
+  # -- Direct-file ingest submit concurrency. Defaults from CPU and memory request, capped at 128.
+  # directFileSubmitConcurrency: 32
 
   # resources:
   #   cpu: "1"
@@ -1600,7 +1605,7 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-ingest:
       volumeClaimTemplates:
-        storage: 16Gi
+        storage: 64Gi
       resources:
         cpu: "1"
         memory: "2Gi"
