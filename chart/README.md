@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.12](https://img.shields.io/badge/Version-0.13.12-informational?style=flat-square) ![AppVersion: 7a510972](https://img.shields.io/badge/AppVersion-7a510972-informational?style=flat-square)
+![Version: 0.13.13](https://img.shields.io/badge/Version-0.13.13-informational?style=flat-square) ![AppVersion: a013748c](https://img.shields.io/badge/AppVersion-a013748c-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -118,7 +118,7 @@ There is at least a hostname that is required to be set: I.e, `logfire.example.c
 Set it via `ingress.hostnames` / `ingress.hostname`, or via `gateway.hostnames`.
 If you are not rendering an Ingress, you still need to set hostnames and TLS mode through either `ingress.*` or `gateway.*` so the chart can generate correct URLs and CORS settings.
 
-We have an ingress configuration that will allow you to set up ingress:
+Example Ingress configuration:
 
 ```yaml
 ingress:
@@ -489,6 +489,7 @@ ai:
     apiKey: openai-api-key
   vertexAi:
     region: region  # Optional, only needed for Vertex AI if not using default region
+    anthropicProjectId: gcp-project-id  # Required for anthropic-vertex:* models
   azureOpenAi:
     endpoint: azure-openai-endpoint
     apiKey: azure-openai-api-key
@@ -513,7 +514,9 @@ logfire.info('Hello, {place}!', place='World')
 
 Logfire is designed to be horizontally scalable. You can adjust the replica counts and resources for each component to handle your specific workload.
 
-The chart also supports optional workload sizing presets through `sizingPreset`. Leaving it empty keeps sizing driven entirely by explicit per-service values. The built-in `standard` preset applies the customer-oriented defaults in `values.yaml`. You can still override any individual workload after selecting a preset.
+For customer deployments, we recommend starting with `sizingPreset: standard`. This applies the built-in workload resources, autoscaling, PDBs, and scratch/ingest volume sizes from `values.yaml`; you can still override any individual workload after selecting the preset.
+
+`sizingPreset` only covers workload sizing. You still need to configure environment-specific prerequisites such as hostnames/TLS, image pull secrets, PostgreSQL, object storage URI and credentials, and any required `storageClassName` values if your cluster has no suitable default StorageClass.
 
 ```yaml
 sizingPreset: standard
@@ -603,9 +606,14 @@ Before diving deeper, verify these common configuration issues:
 | ai.chatModel | string | `nil` | AI provider+model string for chat-oriented workloads. Falls back to `ai.model` in the application when unset. |
 | ai.enterpriseChatModel | string | `nil` | Enterprise chat AI provider+model string. |
 | ai.enterpriseModel | string | `nil` | Enterprise default AI provider+model string. |
+| ai.enterpriseReasoningModel | string | `nil` | Enterprise reasoning AI provider+model string. Falls back to `ai.reasoningModel` in the worker when unset. |
+| ai.llmJudgeModel | string | `nil` | AI provider+model string for LLM-as-a-judge evaluation workloads. Falls back to `ai.model` in the application when unset. |
 | ai.model | string | `nil` | AI provider+model string. Prefix the model with the provider (e.g., `azure:gpt-4o`). See https://ai.pydantic.dev/models/ for more information. |
 | ai.openAi.apiKey | string | `nil` | OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | ai.openAi.baseUrl | string | `nil` | OpenAI base URL for custom endpoints (e.g., Azure OpenAI proxy, local models). |
+| ai.reasoningModel | string | `nil` | AI provider+model string for reasoning-oriented worker workloads such as workflows. |
+| ai.vertexAi.anthropicBaseUrl | string | `nil` | Anthropic Vertex partner-models API base URL. |
+| ai.vertexAi.anthropicProjectId | string | `nil` | GCP project ID for Anthropic Vertex models. |
 | ai.vertexAi.region | string | `nil` | Vertex AI region |
 | aiGatewayOauth | object | `{"issuer":"","resourceUrl":""}` | AI gateway OAuth metadata configuration. If left empty, the chart derives self-hosted defaults from the primary Logfire URL:   resourceUrl = <logfire.url>/proxy   issuer      = <logfire.url> |
 | aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
