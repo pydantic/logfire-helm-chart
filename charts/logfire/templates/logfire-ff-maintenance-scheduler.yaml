@@ -75,10 +75,6 @@ spec:
               value: {{ $cpuCores | quote }}
             - name: FF_DATAFUSION_THREADS
               value: {{ $dataFusionThreads | quote }}
-            - name: FF_ENABLE_SCHEMA_UPGRADES
-              value: "true"
-            - name: FF_UPGRADE_MAX_DAYS
-              value: "7"
             - name: FF_COMPACTION_MAX_DAYS
               value: "3"
             - name: FF_MAX_PARTITIONS_PER_COMPACTION_SCAN

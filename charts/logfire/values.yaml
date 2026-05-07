@@ -311,10 +311,16 @@ ai:
   model:
   # -- AI provider+model string for chat-oriented workloads. Falls back to `ai.model` in the application when unset.
   chatModel:
+  # -- AI provider+model string for reasoning-oriented worker workloads such as workflows.
+  reasoningModel:
+  # -- AI provider+model string for LLM-as-a-judge evaluation workloads. Falls back to `ai.model` in the application when unset.
+  llmJudgeModel:
   # -- Enterprise default AI provider+model string.
   enterpriseModel:
   # -- Enterprise chat AI provider+model string.
   enterpriseChatModel:
+  # -- Enterprise reasoning AI provider+model string. Falls back to `ai.reasoningModel` in the worker when unset.
+  enterpriseReasoningModel:
 
   openAi:
     # -- OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
@@ -325,6 +331,10 @@ ai:
   vertexAi:
     # -- Vertex AI region
     region:
+    # -- GCP project ID for Anthropic Vertex models.
+    anthropicProjectId:
+    # -- Anthropic Vertex partner-models API base URL.
+    anthropicBaseUrl:
 
   azureOpenAi:
     # -- Azure OpenAI endpoint

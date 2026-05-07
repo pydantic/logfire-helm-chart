@@ -119,7 +119,7 @@ There is at least a hostname that is required to be set: I.e, `logfire.example.c
 Set it via `ingress.hostnames` / `ingress.hostname`, or via `gateway.hostnames`.
 If you are not rendering an Ingress, you still need to set hostnames and TLS mode through either `ingress.*` or `gateway.*` so the chart can generate correct URLs and CORS settings.
 
-We have an ingress configuration that will allow you to set up ingress:
+Example Ingress configuration:
 
 ```yaml
 ingress:
@@ -490,6 +490,7 @@ ai:
     apiKey: openai-api-key
   vertexAi:
     region: region  # Optional, only needed for Vertex AI if not using default region
+    anthropicProjectId: gcp-project-id  # Required for anthropic-vertex:* models
   azureOpenAi:
     endpoint: azure-openai-endpoint
     apiKey: azure-openai-api-key
@@ -514,7 +515,9 @@ logfire.info('Hello, {place}!', place='World')
 
 Logfire is designed to be horizontally scalable. You can adjust the replica counts and resources for each component to handle your specific workload.
 
-The chart also supports optional workload sizing presets through `sizingPreset`. Leaving it empty keeps sizing driven entirely by explicit per-service values. The built-in `standard` preset applies the customer-oriented defaults in `values.yaml`. You can still override any individual workload after selecting a preset.
+For customer deployments, we recommend starting with `sizingPreset: standard`. This applies the built-in workload resources, autoscaling, PDBs, and scratch/ingest volume sizes from `values.yaml`; you can still override any individual workload after selecting the preset.
+
+`sizingPreset` only covers workload sizing. You still need to configure environment-specific prerequisites such as hostnames/TLS, image pull secrets, PostgreSQL, object storage URI and credentials, and any required `storageClassName` values if your cluster has no suitable default StorageClass.
 
 ```yaml
 sizingPreset: standard
