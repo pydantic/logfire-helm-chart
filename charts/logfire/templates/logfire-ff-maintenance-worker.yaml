@@ -69,10 +69,6 @@ spec:
                 name: logfire-ff-maintenance-config
           env:
             {{- include "logfire.ffBackgroundWorkerExecutionEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
-            - name: FF_ENABLE_SCHEMA_UPGRADES
-              value: "true"
-            - name: FF_UPGRADE_MAX_DAYS
-              value: "7"
             - name: FF_DELETION_LOOP_DELAY
               value: "30s"
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}

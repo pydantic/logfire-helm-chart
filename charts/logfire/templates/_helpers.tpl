@@ -465,11 +465,60 @@ Usage: {{ include "logfire.renderOtelResourceAttributes" (dict "service.name" "m
 {{- end -}}
 
 {{/*
+Render AI model environment variables shared across workloads.
+*/}}
+{{- define "logfire.aiModelEnv" -}}
+{{- $ai := .root.Values.ai | default dict -}}
+{{- $roles := .roles | default list -}}
+{{- with (get $ai "model") }}
+- name: AI_MODEL_DEFAULT
+  value: {{ . }}
+{{- end }}
+{{- if has "chat" $roles }}
+{{- with (get $ai "chatModel") }}
+- name: AI_MODEL_CHAT
+  value: {{ . }}
+{{- end }}
+{{- end }}
+{{- if has "reasoning" $roles }}
+{{- with (get $ai "reasoningModel") }}
+- name: AI_MODEL_REASONING
+  value: {{ . }}
+{{- end }}
+{{- end }}
+{{- with (get $ai "llmJudgeModel") }}
+- name: AI_MODEL_LLM_JUDGE
+  value: {{ . }}
+{{- end }}
+{{- if has "enterprise-default" $roles }}
+{{- with (get $ai "enterpriseModel") }}
+- name: AI_ENTERPRISE_MODEL_DEFAULT
+  value: {{ . }}
+{{- end }}
+{{- end }}
+{{- if has "enterprise-chat" $roles }}
+{{- with (get $ai "enterpriseChatModel") }}
+- name: AI_ENTERPRISE_MODEL_CHAT
+  value: {{ . }}
+{{- end }}
+{{- end }}
+{{- if has "enterprise-reasoning" $roles }}
+{{- with (get $ai "enterpriseReasoningModel") }}
+- name: AI_ENTERPRISE_MODEL_REASONING
+  value: {{ . }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Render shared AI provider environment variables for workloads that construct AI clients.
 */}}
 {{- define "logfire.aiProviderEnv" -}}
-{{- with .Values.ai.openAi }}
-{{- with .apiKey }}
+{{- $ai := .Values.ai | default dict -}}
+{{- $openAi := get $ai "openAi" | default dict -}}
+{{- $vertexAi := get $ai "vertexAi" | default dict -}}
+{{- $azureOpenAi := get $ai "azureOpenAi" | default dict -}}
+{{- with (get $openAi "apiKey") }}
 - name: OPENAI_API_KEY
   {{- if kindIs "map" . }}
   {{- if hasKey . "valueFrom" }}
@@ -480,7 +529,7 @@ Render shared AI provider environment variables for workloads that construct AI 
   value: {{ . }}
   {{- end }}
 {{- end }}
-{{- with .baseUrl }}
+{{- with (get $openAi "baseUrl") }}
 - name: OPENAI_BASE_URL
   {{- if kindIs "map" . }}
   {{- if hasKey . "valueFrom" }}
@@ -491,17 +540,27 @@ Render shared AI provider environment variables for workloads that construct AI 
   value: {{ . }}
   {{- end }}
 {{- end }}
-{{- end }}
-{{- with .Values.ai.vertexAi.region }}
+{{- with (get $vertexAi "region") }}
 - name: GOOGLE_CLOUD_LOCATION
   value: {{ . }}
+{{- if (get $vertexAi "anthropicProjectId") }}
+- name: CLOUD_ML_REGION
+  value: {{ . }}
 {{- end }}
-{{- with .Values.ai.azureOpenAi }}
-{{- with .endpoint }}
+{{- end }}
+{{- with (get $vertexAi "anthropicProjectId") }}
+- name: ANTHROPIC_VERTEX_PROJECT_ID
+  value: {{ . }}
+{{- end }}
+{{- with (get $vertexAi "anthropicBaseUrl") }}
+- name: ANTHROPIC_VERTEX_BASE_URL
+  value: {{ . }}
+{{- end }}
+{{- with (get $azureOpenAi "endpoint") }}
 - name: AZURE_OPENAI_ENDPOINT
   value: {{ . }}
 {{- end }}
-{{- with .apiKey }}
+{{- with (get $azureOpenAi "apiKey") }}
 - name: AZURE_OPENAI_API_KEY
   {{- if kindIs "map" . }}
   {{- if hasKey . "valueFrom" }}
@@ -512,10 +571,9 @@ Render shared AI provider environment variables for workloads that construct AI 
   value: {{ . }}
   {{- end }}
 {{- end }}
-{{- with .apiVersion }}
+{{- with (get $azureOpenAi "apiVersion") }}
 - name: OPENAI_API_VERSION
   value: {{ . }}
-{{- end }}
 {{- end }}
 {{- end -}}
 

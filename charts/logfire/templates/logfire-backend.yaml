@@ -135,24 +135,11 @@ spec:
             - name: "TLS_KEY_PATH"
               value: "/etc/tls/tls.key"
             {{- end }}
-            {{- with .Values.ai }}
-            {{- with .model }}
-            - name: AI_MODEL_DEFAULT
-              value: {{ . }}
+            {{- with (include "logfire.aiModelEnv" (dict "root" $ "roles" (list "chat" "enterprise-default" "enterprise-chat")) | trim) }}
+            {{- . | nindent 12 }}
             {{- end }}
-            {{- with .chatModel }}
-            - name: AI_MODEL_CHAT
-              value: {{ . }}
-            {{- end }}
-            {{ include "logfire.aiProviderEnv" $ | nindent 12 }}
-            {{- with .enterpriseModel }}
-            - name: AI_ENTERPRISE_MODEL_DEFAULT
-              value: {{ . }}
-            {{- end }}
-            {{- with .enterpriseChatModel }}
-            - name: AI_ENTERPRISE_MODEL_CHAT
-              value: {{ . }}
-            {{- end }}
+            {{- with (include "logfire.aiProviderEnv" $ | trim) }}
+            {{- . | nindent 12 }}
             {{- end }}
             - name: DEX_CLIENT_ID
               value: {{ include "logfire.dexClientId" . }}

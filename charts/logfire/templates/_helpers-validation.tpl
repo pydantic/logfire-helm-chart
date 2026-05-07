@@ -67,24 +67,47 @@ Validate dex storage configuration when using external postgres
 Validate AI configuration consistency - if model is set, required provider config must exist
 */}}
 {{- define "logfire.validate.ai" -}}
-{{- if .Values.ai.model -}}
-  {{- $model := .Values.ai.model -}}
+{{- $ai := .Values.ai | default dict -}}
+{{- $openAi := get $ai "openAi" | default dict -}}
+{{- $vertexAi := get $ai "vertexAi" | default dict -}}
+{{- $azureOpenAi := get $ai "azureOpenAi" | default dict -}}
+{{- $models := list
+  (dict "name" "ai.model" "value" (get $ai "model"))
+  (dict "name" "ai.chatModel" "value" (get $ai "chatModel"))
+  (dict "name" "ai.reasoningModel" "value" (get $ai "reasoningModel"))
+  (dict "name" "ai.llmJudgeModel" "value" (get $ai "llmJudgeModel"))
+  (dict "name" "ai.enterpriseModel" "value" (get $ai "enterpriseModel"))
+  (dict "name" "ai.enterpriseChatModel" "value" (get $ai "enterpriseChatModel"))
+  (dict "name" "ai.enterpriseReasoningModel" "value" (get $ai "enterpriseReasoningModel"))
+-}}
+{{- range $models -}}
+{{- if .value -}}
+  {{- $model := .value -}}
+  {{- $name := .name -}}
   {{- if hasPrefix "openai:" $model -}}
-    {{- if not .Values.ai.openAi.apiKey -}}
-      {{- fail (printf "ai.openAi.apiKey is required when using OpenAI model '%s'. Provide your OpenAI API key." $model) -}}
+    {{- if not (get $openAi "apiKey") -}}
+      {{- fail (printf "ai.openAi.apiKey is required when %s uses OpenAI model '%s'. Provide your OpenAI API key." $name $model) -}}
     {{- end -}}
   {{- else if hasPrefix "azure:" $model -}}
-    {{- if not .Values.ai.azureOpenAi.endpoint -}}
-      {{- fail (printf "ai.azureOpenAi.endpoint is required when using Azure OpenAI model '%s'." $model) -}}
+    {{- if not (get $azureOpenAi "endpoint") -}}
+      {{- fail (printf "ai.azureOpenAi.endpoint is required when %s uses Azure OpenAI model '%s'." $name $model) -}}
     {{- end -}}
-    {{- if not .Values.ai.azureOpenAi.apiKey -}}
-      {{- fail (printf "ai.azureOpenAi.apiKey is required when using Azure OpenAI model '%s'." $model) -}}
+    {{- if not (get $azureOpenAi "apiKey") -}}
+      {{- fail (printf "ai.azureOpenAi.apiKey is required when %s uses Azure OpenAI model '%s'." $name $model) -}}
     {{- end -}}
   {{- else if hasPrefix "google-vertex:" $model -}}
-    {{- if not .Values.ai.vertexAi.region -}}
-      {{- fail (printf "ai.vertexAi.region is required when using Google Vertex AI model '%s'." $model) -}}
+    {{- if not (get $vertexAi "region") -}}
+      {{- fail (printf "ai.vertexAi.region is required when %s uses Google Vertex AI model '%s'." $name $model) -}}
+    {{- end -}}
+  {{- else if hasPrefix "anthropic-vertex:" $model -}}
+    {{- if not (get $vertexAi "region") -}}
+      {{- fail (printf "ai.vertexAi.region is required when %s uses Anthropic Vertex model '%s'." $name $model) -}}
+    {{- end -}}
+    {{- if not (get $vertexAi "anthropicProjectId") -}}
+      {{- fail (printf "ai.vertexAi.anthropicProjectId is required when %s uses Anthropic Vertex model '%s'." $name $model) -}}
     {{- end -}}
   {{- end -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
