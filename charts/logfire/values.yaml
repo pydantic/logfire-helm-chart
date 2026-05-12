@@ -1706,8 +1706,12 @@ sizingPresets:
         maxUnavailable: 1
     logfire-worker:
       resources:
-        cpu: "250m"
-        memory: "512Mi"
+        requests:
+          cpu: "250m"
+          memory: "512Mi"
+        limits:
+          cpu: "1"
+          memory: "512Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 5
