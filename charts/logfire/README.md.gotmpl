@@ -515,7 +515,7 @@ logfire.info('Hello, {place}!', place='World')
 
 Logfire is designed to be horizontally scalable. You can adjust the replica counts and resources for each component to handle your specific workload.
 
-For customer deployments, we recommend starting with `sizingPreset: standard`. This applies the built-in workload resources, autoscaling, PDBs, and scratch/ingest volume sizes from `values.yaml`; you can still override any individual workload after selecting the preset.
+For customer deployments, we recommend starting with a built-in sizing preset. Use `sizingPreset: standard` for general production deployments. For a very low-traffic instance, `sizingPreset: small` provides a smaller footprint. Presets apply workload resources, autoscaling, PDBs, and selected FusionFire execution settings; you can still override any individual workload after selecting the preset.
 
 `sizingPreset` only covers workload sizing. You still need to configure environment-specific prerequisites such as hostnames/TLS, image pull secrets, PostgreSQL, object storage URI and credentials, and any required `storageClassName` values if your cluster has no suitable default StorageClass.
 

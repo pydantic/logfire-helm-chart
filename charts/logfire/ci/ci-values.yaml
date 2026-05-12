@@ -1,5 +1,5 @@
 adminEmail: hello@example.dev
-sizingPreset: dev
+sizingPreset: small
 
 # -- test with security context
 podSecurityContext:
@@ -70,6 +70,11 @@ logfire-ff-maintenance-worker:
 
 logfire-ff-ingest:
   volumeClaimTemplates:
+    storageClassName: standard
+    storage: "1Gi"
+
+logfire-ff-cache-byte:
+  scratchVolume:
     storageClassName: standard
     storage: "1Gi"
 
