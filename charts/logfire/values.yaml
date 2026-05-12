@@ -818,6 +818,7 @@ aiGatewayOauth:
 #   resources:
 #     cpu: "250m"
 #     memory: "512Mi"
+#     ephemeralStorage: "1Gi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 5
@@ -1689,9 +1690,11 @@ sizingPresets:
         requests:
           cpu: "500m"
           memory: "768Mi"
+          ephemeral-storage: "1Gi"
         limits:
           cpu: "1500m"
           memory: "1Gi"
+          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 6
@@ -1701,6 +1704,15 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+      scratchVolume:
+        storage: "1Gi"
+    logfire-ff-query-worker:
+      resources:
+        cpu: "500m"
+        memory: "768Mi"
+        ephemeralStorage: "1Gi"
+      scratchVolume:
+        storage: "1Gi"
     logfire-ff-crud-api:
       resources:
         cpu: "100m"
@@ -1732,9 +1744,11 @@ sizingPresets:
         requests:
           cpu: "250m"
           memory: "512Mi"
+          ephemeral-storage: "1Gi"
         limits:
           cpu: "1"
           memory: "512Mi"
+          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -1748,6 +1762,7 @@ sizingPresets:
       resources:
         cpu: "100m"
         memory: "256Mi"
+        ephemeralStorage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -1802,6 +1817,7 @@ sizingPresets:
       resources:
         cpu: "250m"
         memory: "512Mi"
+        ephemeralStorage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 1
@@ -1830,9 +1846,11 @@ sizingPresets:
         requests:
           cpu: "500m"
           memory: "2Gi"
+          ephemeral-storage: "1Gi"
         limits:
           cpu: "1"
           memory: "3Gi"
+          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 2
@@ -1911,6 +1929,25 @@ sizingPresets:
           cpuAverage: 25
       pdb:
         maxUnavailable: 1
+    logfire-ai-gateway:
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "512Mi"
+          ephemeral-storage: "1Gi"
+        limits:
+          cpu: "500m"
+          memory: "1Gi"
+          ephemeral-storage: "1Gi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 6
+        hpa:
+          enabled: true
+          memAverage: 65
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
     logfire-remote-mcp:
       resources:
         cpu: "250m"
@@ -1927,6 +1964,7 @@ sizingPresets:
       resources:
         cpu: "2"
         memory: "8Gi"
+        ephemeralStorage: "1Gi"
       autoscaling:
         minReplicas: 2
         maxReplicas: 8
@@ -1936,6 +1974,15 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+      scratchVolume:
+        storage: "6Gi"
+    logfire-ff-query-worker:
+      resources:
+        cpu: "500m"
+        memory: "4Gi"
+        ephemeralStorage: "1Gi"
+      scratchVolume:
+        storage: "6Gi"
     logfire-ff-crud-api:
       resources:
         cpu: "125m"
@@ -1967,9 +2014,11 @@ sizingPresets:
         requests:
           cpu: "250m"
           memory: "512Mi"
+          ephemeral-storage: "1Gi"
         limits:
           cpu: "1"
           memory: "512Mi"
+          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 5
@@ -2022,6 +2071,7 @@ sizingPresets:
       resources:
         cpu: "2"
         memory: "8Gi"
+        ephemeralStorage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 16
@@ -2049,6 +2099,7 @@ sizingPresets:
       resources:
         cpu: "2"
         memory: "8Gi"
+        ephemeralStorage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 16
