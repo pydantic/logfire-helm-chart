@@ -182,6 +182,8 @@ small pods conservative while allowing larger workers to make progress.
 Default background maintenance/compaction object-store download concurrency.
 Sub-core workers keep download concurrency low to avoid memory spikes, but
 workers with more than 1Gi memory can tolerate a second in-flight download.
+Full-core workers with less than 8Gi memory use moderate download concurrency;
+larger workers keep the historical platform default.
 */}}
 {{- define "logfire.ffBackgroundDownloadParallelismDefault" -}}
 {{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
@@ -195,6 +197,8 @@ workers with more than 1Gi memory can tolerate a second in-flight download.
 {{- else -}}
 1
 {{- end -}}
+{{- else if lt $memoryMi 8192 -}}
+4
 {{- else -}}
 10
 {{- end -}}

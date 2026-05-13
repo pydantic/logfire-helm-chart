@@ -51,7 +51,7 @@ rateLimits: {}
 #    perHour: 60
 #    perMinute: 10
 
-# -- Workload sizing preset. Leave empty to skip preset sizing, or set to `standard` or `small` to apply built-in customer sizing defaults.
+# -- Workload sizing preset. Leave empty to skip preset sizing, or set to `standard`, `small`, or `tiny` to apply built-in customer sizing defaults.
 sizingPreset: ""
 
 # ==============================================================================
@@ -1612,7 +1612,7 @@ sizingPresets:
           cpuAverage: 20
       scratchVolume:
         storage: "1Gi"
-  small:
+  tiny:
     logfire-dex:
       resources:
         cpu: "50m"
@@ -1866,6 +1866,270 @@ sizingPresets:
       resources:
         cpu: "150m"
         memory: "256Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 4
+        hpa:
+          enabled: true
+          memAverage: 70
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+  small:
+    logfire-dex:
+      resources:
+        cpu: "100m"
+        memory: "128Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          memAverage: 65
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+    logfire-ff-ingest:
+      resources:
+        cpu: "500m"
+        memory: "1Gi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 12
+        hpa:
+          enabled: true
+          memAverage: 40
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+    logfire-ff-ingest-processor:
+      resources:
+        cpu: "1"
+        memory: "1Gi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 12
+        hpa:
+          enabled: true
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+    logfire-backend:
+      resources:
+        cpu: "750m"
+        memory: "1Gi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 4
+        hpa:
+          enabled: true
+          memAverage: 75
+          cpuAverage: 50
+      pdb:
+        maxUnavailable: 1
+    logfire-remote-mcp:
+      resources:
+        requests:
+          cpu: "150m"
+          memory: "384Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+    logfire-ff-query-api:
+      queryParallelism: 4
+      resources:
+        requests:
+          cpu: "1"
+          memory: "2Gi"
+          ephemeral-storage: "1Gi"
+        limits:
+          cpu: "2"
+          memory: "3Gi"
+          ephemeral-storage: "1Gi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 8
+        hpa:
+          enabled: true
+          memAverage: 70
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+      scratchVolume:
+        storage: "2Gi"
+    logfire-ff-query-worker:
+      resources:
+        cpu: "1"
+        memory: "2Gi"
+        ephemeralStorage: "1Gi"
+      scratchVolume:
+        storage: "2Gi"
+    logfire-ff-crud-api:
+      resources:
+        cpu: "125m"
+        memory: "256Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 6
+        hpa:
+          enabled: true
+          memAverage: 65
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+    logfire-frontend-service:
+      resources:
+        cpu: "100m"
+        memory: "128Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          memAverage: 70
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+    logfire-worker:
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "512Mi"
+          ephemeral-storage: "1Gi"
+        limits:
+          cpu: "1"
+          memory: "512Mi"
+          ephemeral-storage: "1Gi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 5
+        hpa:
+          enabled: true
+          memAverage: 65
+          cpuAverage: 70
+      pdb:
+        maxUnavailable: 1
+    logfire-ai-gateway:
+      resources:
+        requests:
+          cpu: "150m"
+          memory: "384Mi"
+          ephemeral-storage: "1Gi"
+        limits:
+          cpu: "500m"
+          memory: "768Mi"
+          ephemeral-storage: "1Gi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 6
+        hpa:
+          enabled: true
+          memAverage: 65
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+    logfire-service:
+      resources:
+        cpu: "500m"
+        memory: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 6
+        hpa:
+          enabled: true
+          memAverage: 65
+          cpuAverage: 40
+      pdb:
+        maxUnavailable: 1
+    logfire-ff-cache-byte:
+      resources:
+        cpu: "500m"
+        memory: "1Gi"
+      scratchVolume:
+        storage: "4Gi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 8
+        hpa:
+          enabled: true
+          memAverage: 65
+          cpuAverage: 25
+      pdb:
+        maxUnavailable: 1
+    logfire-ff-proxy-cache-byte:
+      resources:
+        cpu: "500m"
+        memory: "384Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 8
+        hpa:
+          enabled: true
+          memAverage: 65
+          cpuAverage: 40
+      pdb:
+        maxUnavailable: 1
+    logfire-ff-maintenance-worker:
+      resources:
+        cpu: "500m"
+        memory: "1Gi"
+        ephemeralStorage: "1Gi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 6
+        hpa:
+          enabled: true
+          memAverage: 50
+          cpuAverage: 50
+      pdb:
+        maxUnavailable: 1
+      scratchVolume:
+        storage: "2Gi"
+    logfire-ff-maintenance-scheduler:
+      resources:
+        cpu: "250m"
+        memory: "256Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 2
+        hpa:
+          enabled: true
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+    logfire-ff-compaction-worker:
+      resources:
+        requests:
+          cpu: "1"
+          memory: "4Gi"
+          ephemeral-storage: "1Gi"
+        limits:
+          cpu: "2"
+          memory: "4Gi"
+          ephemeral-storage: "1Gi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 8
+        hpa:
+          enabled: true
+          memAverage: 60
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+      scratchVolume:
+        storage: "2Gi"
+    logfire-otel-collector:
+      resources:
+        cpu: "250m"
+        memory: "512Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
