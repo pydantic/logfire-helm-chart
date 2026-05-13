@@ -1,5 +1,5 @@
 adminEmail: hello@example.dev
-sizingPreset: small
+sizingPreset: tiny
 
 # -- test with security context
 podSecurityContext:
