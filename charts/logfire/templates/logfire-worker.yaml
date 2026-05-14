@@ -66,6 +66,7 @@ spec:
             httpGet:
               path: /health
               port: 8003
+            failureThreshold: 10
           env:
             - name: LOGFIRE_SERVICE_NAME
               value: {{ $serviceName }}

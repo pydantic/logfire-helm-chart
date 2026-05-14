@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.14](https://img.shields.io/badge/Version-0.13.14-informational?style=flat-square) ![AppVersion: a013748c](https://img.shields.io/badge/AppVersion-a013748c-informational?style=flat-square)
+![Version: 0.13.15](https://img.shields.io/badge/Version-0.13.15-informational?style=flat-square) ![AppVersion: a013748c](https://img.shields.io/badge/AppVersion-a013748c-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -514,7 +514,7 @@ logfire.info('Hello, {place}!', place='World')
 
 Logfire is designed to be horizontally scalable. You can adjust the replica counts and resources for each component to handle your specific workload.
 
-For customer deployments, we recommend starting with `sizingPreset: standard`. This applies the built-in workload resources, autoscaling, PDBs, and scratch/ingest volume sizes from `values.yaml`; you can still override any individual workload after selecting the preset.
+For customer deployments, we recommend starting with a built-in sizing preset. Use `sizingPreset: standard` for general production deployments, `sizingPreset: small` for lower-traffic deployments that still need room for ingest/query spikes, or `sizingPreset: tiny` for a very low-traffic instance with the smallest footprint. Presets apply workload resources, autoscaling, PDBs, and selected FusionFire execution settings; you can still override any individual workload after selecting the preset.
 
 `sizingPreset` only covers workload sizing. You still need to configure environment-specific prerequisites such as hostnames/TLS, image pull secrets, PostgreSQL, object storage URI and credentials, and any required `storageClassName` values if your cluster has no suitable default StorageClass.
 
@@ -525,6 +525,7 @@ logfire-worker:
   resources:
     cpu: "500m"
     memory: "1Gi"
+    ephemeralStorage: "1Gi"
 ```
 
 This is how you can configure each service:
@@ -538,9 +539,11 @@ This is how you can configure each service:
     requests:
       cpu: "500m"
       memory: "1Gi"
+      ephemeral-storage: "1Gi"
     limits:
       cpu: "1"
       memory: "2Gi"
+      ephemeral-storage: "2Gi"
   # -- Autoscaler settings
   autoscaling:
     minReplicas: 2
@@ -762,7 +765,7 @@ Before diving deeper, verify these common configuration issues:
 | serviceAccount.create | bool | `false` | Create a ServiceAccount |
 | serviceAccount.name | string | `""` | Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template. If create is false and this is not set, the default ServiceAccount is used. |
 | serviceAccountName | string | `"default"` | DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility. @deprecated |
-| sizingPreset | string | `""` | Workload sizing preset. Leave empty to skip preset sizing, or set to `standard` to apply the built-in customer sizing defaults. |
+| sizingPreset | string | `""` | Workload sizing preset. Leave empty to skip preset sizing, or set to `standard`, `small`, or `tiny` to apply built-in customer sizing defaults. |
 | smtp.host | string | `nil` | SMTP server hostname |
 | smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | smtp.port | int | `25` | SMTP server port |

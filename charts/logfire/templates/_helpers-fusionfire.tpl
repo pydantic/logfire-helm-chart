@@ -15,6 +15,27 @@ Helpers specific to Fusionfire workloads and configuration.
 {{- end -}}
 {{- end -}}
 
+{{- define "logfire.ffMaxCompactionJobSizeBytesDefault" -}}
+{{- $compactionWorker := dict "Values" .Values "serviceName" "logfire-ff-compaction-worker" -}}
+{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" $compactionWorker | fromJson -}}
+{{- $resources := get $effectiveServiceValues "resources" | default dict -}}
+{{- if $resources -}}
+{{- $effectiveResources := include "logfire.effectiveResources" $compactionWorker | fromJson -}}
+{{- $memory := get $effectiveResources "memoryRequest" -}}
+{{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
+{{- $jobSizeMi := min 512 (max 32 (div $memoryMi 16)) -}}
+{{- printf "%dMB" $jobSizeMi -}}
+{{- else -}}
+512MB
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.ffMaxCompactionJobSizeBytes" -}}
+{{- $maintenanceServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-maintenance-worker") | fromJson -}}
+{{- $compactionServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-compaction-worker") | fromJson -}}
+{{- coalesce (get $compactionServiceValues "maxCompactionJobSizeBytes") (get $maintenanceServiceValues "maxCompactionJobSizeBytes") (include "logfire.ffMaxCompactionJobSizeBytesDefault" .) -}}
+{{- end -}}
+
 {{/*
 Derive FF service CPU core count and DataFusion thread count from the effective CPU request.
 */}}
@@ -97,19 +118,45 @@ Uses half the pod memory request, leaving headroom for the HTTP process/runtime.
 {{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
 {{- $memory := get $effectiveResources "memoryRequest" -}}
 {{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
-{{- $datafusionMemoryMi := max 512 (div $memoryMi 2) -}}
+{{- $datafusionMemoryMi := max 256 (div $memoryMi 2) -}}
 {{- printf "%dMB" $datafusionMemoryMi -}}
 {{- end -}}
 
 {{/*
 Default DataFusion memory cap for background maintenance/compaction workers.
-Uses the pod memory limit so burstable workers can use their configured headroom.
+Larger workers use the pod memory limit so burstable workers can use their
+configured headroom. Sub-core workers use a smaller fraction to leave room for
+the process runtime, object store clients, decompression, and parquet writers.
 */}}
 {{- define "logfire.ffBackgroundDatafusionMemoryDefault" -}}
 {{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
+{{- $cpu := get $effectiveResources "cpuRequest" -}}
 {{- $memory := get $effectiveResources "memoryLimit" -}}
+{{- $cpuMilli := int (include "logfire.cpuMilli" $cpu) -}}
 {{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
-{{- $datafusionMemoryMi := max 512 (div (mul $memoryMi 3) 8) -}}
+{{- $datafusionMemoryMi := 0 -}}
+{{- if lt $cpuMilli 1000 -}}
+  {{- if le $memoryMi 1024 -}}
+    {{- $datafusionMemoryMi = max 128 (div $memoryMi 2) -}}
+  {{- else -}}
+    {{- $datafusionMemoryMi = max 256 (div $memoryMi 8) -}}
+  {{- end -}}
+{{- else -}}
+{{- $datafusionMemoryMi = max 512 (div (mul $memoryMi 3) 8) -}}
+{{- end -}}
+{{- printf "%dMB" $datafusionMemoryMi -}}
+{{- end -}}
+
+{{/*
+Default DataFusion memory cap for the maintenance scheduler.
+The scheduler scans metadata rather than running compaction jobs, so it follows
+the pod memory request directly with a cap matching the previous chart default.
+*/}}
+{{- define "logfire.ffMaintenanceSchedulerDatafusionMemoryDefault" -}}
+{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
+{{- $memory := get $effectiveResources "memoryRequest" -}}
+{{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
+{{- $datafusionMemoryMi := min 512 (max 128 $memoryMi) -}}
 {{- printf "%dMB" $datafusionMemoryMi -}}
 {{- end -}}
 
@@ -119,9 +166,42 @@ The runner gates CPU-heavy work to roughly half this value, so cpu+1 keeps
 small pods conservative while allowing larger workers to make progress.
 */}}
 {{- define "logfire.ffBackgroundJobParallelismDefault" -}}
+{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
 {{- $threadSettings := include "logfire.ffThreadSettings" . | fromJson -}}
+{{- $cpu := get $effectiveResources "cpuRequest" -}}
+{{- $cpuMilli := int (include "logfire.cpuMilli" $cpu) -}}
 {{- $cpuCores := int (get $threadSettings "cpuCores") -}}
+{{- if lt $cpuMilli 1000 -}}
+1
+{{- else -}}
 {{- min 10 (max 3 (add $cpuCores 1)) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Default background maintenance/compaction object-store download concurrency.
+Sub-core workers keep download concurrency low to avoid memory spikes, but
+workers with more than 1Gi memory can tolerate a second in-flight download.
+Full-core workers with less than 8Gi memory use moderate download concurrency;
+larger workers keep the historical platform default.
+*/}}
+{{- define "logfire.ffBackgroundDownloadParallelismDefault" -}}
+{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
+{{- $cpu := get $effectiveResources "cpuRequest" -}}
+{{- $memory := get $effectiveResources "memoryLimit" -}}
+{{- $cpuMilli := int (include "logfire.cpuMilli" $cpu) -}}
+{{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
+{{- if lt $cpuMilli 1000 -}}
+{{- if gt $memoryMi 1024 -}}
+2
+{{- else -}}
+1
+{{- end -}}
+{{- else if lt $memoryMi 8192 -}}
+4
+{{- else -}}
+10
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -142,6 +222,7 @@ Common execution env for background maintenance/compaction workers.
 {{- $threadSettings := include "logfire.ffThreadSettings" . | fromJson -}}
 {{- $defaultDatafusionMemory := include "logfire.ffBackgroundDatafusionMemoryDefault" . -}}
 {{- $jobParallelism := include "logfire.ffBackgroundJobParallelism" . -}}
+{{- $downloadParallelism := include "logfire.ffBackgroundDownloadParallelismDefault" . -}}
 {{- $cpuCores := int (get $threadSettings "cpuCores") -}}
 {{- $dataFusionThreads := int (get $threadSettings "dataFusionThreads") -}}
 - name: FF_IO_THREADS
@@ -159,7 +240,7 @@ Common execution env for background maintenance/compaction workers.
   value: {{ . | quote }}
 {{- end }}
 - name: FF_COMPACTION_DOWNLOAD_PARALLELISM
-  value: {{ (get $effectiveServiceValues "downloadParallelism" | default "10" | quote) }}
+  value: {{ (get $effectiveServiceValues "downloadParallelism" | default $downloadParallelism | quote) }}
 - name: FF_COMPACTION_JOB_PARALLELISM
   value: {{ $jobParallelism | quote }}
 {{- end -}}

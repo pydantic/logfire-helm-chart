@@ -66,6 +66,7 @@ data:
   FF_CACHE_OBJECT_STORE_HTTP_HEADERS: x-ff-no-warm-cache=1
   FF_COMPACTION_LOOP_BACKOFF_DELAY: "1s"
   FF_COMPACTION_TIERS: {{ include "logfire.ffCompactionTiersValue" . | squote }}
+  FF_MAX_COMPACTION_JOB_SIZE_BYTES: {{ include "logfire.ffMaxCompactionJobSizeBytes" . | quote }}
   FF_INGEST_MAX_TIME_SKEW: "120s"
 
 ---
