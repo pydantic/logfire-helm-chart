@@ -19,7 +19,7 @@ data:
     exporters:
       debug:
       {{- $exporter := .Values.otel_collector.exporter | default dict }}
-      otlphttp:
+      otlp_http:
         endpoint: {{ $exporter.endpoint | default "http://logfire-ff-ingest:8012" }}
         tls:
           {{- ($exporter.tls | default (dict "insecure" true)) | toYaml | nindent 10 }}
@@ -54,7 +54,7 @@ data:
       batch:
         timeout: 1s
         send_batch_size: 2048
-      k8sattributes:
+      k8s_attributes:
         filter:
           namespace: {{ .Release.Namespace }}
         extract:
@@ -108,17 +108,17 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [k8sattributes, batch]
-          exporters: [debug, otlphttp]
+          processors: [k8s_attributes, batch]
+          exporters: [debug, otlp_http]
         metrics:
           receivers: [otlp]
-          processors: [k8sattributes, batch]
+          processors: [k8s_attributes, batch]
           {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
-          exporters: [debug, otlphttp, prometheus]
+          exporters: [debug, otlp_http, prometheus]
           {{- else }}
-          exporters: [debug, otlphttp]
+          exporters: [debug, otlp_http]
           {{- end }}
         logs:
           receivers: [otlp]
-          processors: [k8sattributes, batch]
-          exporters: [otlphttp]
+          processors: [k8s_attributes, batch]
+          exporters: [otlp_http]

@@ -1424,7 +1424,7 @@ otelResourceAttributes: {}
 
 # -- otel-collector configuration
 otel_collector:
-  # -- exporter configuration for the otlphttp exporter
+  # -- exporter configuration for the otlp_http exporter
   # Override these to send telemetry data to a different OTLP-compatible destination.
   exporter:
     endpoint: http://logfire-ff-ingest:8012
@@ -1433,7 +1433,7 @@ otel_collector:
     headers: {}
   image:
     repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
-    tag: "0.139.0"
+    tag: "0.152.0"
     pullPolicy: IfNotPresent
   prometheus:
     enabled: false

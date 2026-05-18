@@ -134,7 +134,7 @@ spec:
       {{- end }}
       containers:
         - name: otel-collector
-          image: {{ include "logfire.imageRef" (dict "image" $otelImage "defaultRepository" "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib" "defaultTag" "0.139.0") }}
+          image: {{ include "logfire.imageRef" (dict "image" $otelImage "defaultRepository" "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib" "defaultTag" "0.152.0") }}
           imagePullPolicy: {{ default .Values.image.pullPolicy (get $otelImage "pullPolicy") | quote }}
           command:
           - /otelcol-contrib
