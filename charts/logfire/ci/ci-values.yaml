@@ -17,7 +17,7 @@ objectStore:
   env:
     AWS_ACCESS_KEY_ID: logfire-minio
     AWS_SECRET_ACCESS_KEY: logfire-minio
-    AWS_ENDPOINT: http://logfire-minio:9000
+    AWS_ENDPOINT: http://logfire-minio-svc:9000
     AWS_ALLOW_HTTP: "true"
 
 ai:
@@ -27,7 +27,7 @@ ai:
 
 dev:
   deployPostgres: true
-  deployMinio: true
+  deployObjectStore: true
   deployMaildev: true
 
 postgresSecret:
@@ -89,6 +89,7 @@ devPostgres:
   persistence:
     size: 1Gi
 
-minio:
-  persistence:
-    enabled: false
+rustfs:
+  storageclass:
+    dataStorageSize: 1Gi
+    logStorageSize: 256Mi

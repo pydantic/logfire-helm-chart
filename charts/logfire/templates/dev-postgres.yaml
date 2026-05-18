@@ -1,25 +1,18 @@
 {{- if (.Values.dev).deployPostgres -}}
 {{- $devPostgres := .Values.devPostgres | default dict -}}
-{{- $legacyPostgres := .Values.postgresql | default dict -}}
-{{- $name := include "logfire.devPostgres.name" . -}}
+{{- $name := coalesce (get $devPostgres "fullnameOverride") "logfire-postgres" -}}
 {{- $image := get $devPostgres "image" | default dict -}}
 {{- $auth := get $devPostgres "auth" | default dict -}}
-{{- $password := coalesce (get $auth "postgresPassword") (dig "auth" "postgresPassword" "" $legacyPostgres) "postgres" -}}
-{{- $postgresqlDataDir := coalesce (get $devPostgres "postgresqlDataDir") (get $legacyPostgres "postgresqlDataDir") "/var/lib/postgresql/data/pgdata" -}}
+{{- $password := coalesce (get $auth "postgresPassword") "postgres" -}}
+{{- $postgresqlDataDir := coalesce (get $devPostgres "postgresqlDataDir") "/var/lib/postgresql/data/pgdata" -}}
 {{- $persistence := get $devPostgres "persistence" | default dict -}}
-{{- $legacyPersistence := dig "primary" "persistence" dict $legacyPostgres -}}
 {{- $persistenceEnabled := true -}}
 {{- if hasKey $persistence "enabled" -}}
 {{- $persistenceEnabled = get $persistence "enabled" -}}
-{{- else if hasKey $legacyPersistence "enabled" -}}
-{{- $persistenceEnabled = get $legacyPersistence "enabled" -}}
 {{- end -}}
-{{- $persistenceSize := coalesce (get $persistence "size") (get $legacyPersistence "size") "10Gi" -}}
-{{- $mountPath := coalesce (get $persistence "mountPath") (get $legacyPersistence "mountPath") "/var/lib/postgresql/data" -}}
+{{- $persistenceSize := coalesce (get $persistence "size") "10Gi" -}}
+{{- $mountPath := coalesce (get $persistence "mountPath") "/var/lib/postgresql/data" -}}
 {{- $initdbScripts := dig "initdb" "scripts" dict $devPostgres -}}
-{{- if not $initdbScripts -}}
-{{- $initdbScripts = dig "primary" "initdb" "scripts" dict $legacyPostgres -}}
-{{- end -}}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -161,8 +154,6 @@ spec:
           - ReadWriteOnce
         {{- if hasKey $persistence "storageClassName" }}
         storageClassName: {{ get $persistence "storageClassName" | quote }}
-        {{- else if hasKey $legacyPersistence "storageClassName" }}
-        storageClassName: {{ get $legacyPersistence "storageClassName" | quote }}
         {{- end }}
         resources:
           requests:

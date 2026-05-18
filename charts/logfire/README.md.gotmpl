@@ -11,7 +11,7 @@ This repository and the chart source it contains are licensed under the MIT Lice
 ## Local Quickstart (Evaluation & Testing)
 
 For a fast, local setup to evaluate Logfire, follow our [Local Quickstart Guide](https://logfire.pydantic.dev/docs/reference/self-hosted/local-quickstart/).
-It uses development-grade dependencies like an in-cluster PostgreSQL, MinIO and MailDev to get you up and running in minutes.
+It uses development-grade dependencies like an in-cluster PostgreSQL, S3-compatible object store, and MailDev to get you up and running in minutes.
 
 ## Production Installation
 
@@ -29,7 +29,7 @@ $ helm repo update
 
 ### Local Evaluation (values.dev.yaml)
 
-For quick local testing, the chart includes a `values.dev.yaml` file that enables in-cluster Postgres, MinIO, and MailDev.
+For quick local testing, the chart includes a `values.dev.yaml` file that enables in-cluster Postgres, S3-compatible object storage, and MailDev.
 
 > **Warning**: Do not use this for production deployments.
 
@@ -78,7 +78,7 @@ If you need stable/predictable TLS Secret names, set `inClusterTls.secretNamePre
 
 When using Kubernetes Ingress instead of Gateway API, the chart points the Ingress at the `logfire-service` HTTPS port when `inClusterTls.enabled` is true. For ingress-nginx, the chart also sets `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"` automatically (unless you override it). For other ingress controllers, you may need to set a controller-specific annotation to enable HTTPS to upstream services.
 
-For Kind/dev, you can optionally deploy cert-manager as a Helm dependency (`dev.deployCertManager`). When working from this repo, run `helm dependency update charts/logfire` to fetch the dependency charts.
+For Kind/dev, you can optionally deploy cert-manager as a Helm dependency (`dev.deployCertManager`). When working from this repo, run `helm dependency update charts/logfire` to fetch the dependency chart.
 
 When `dev.deployCertManager=true` and `inClusterTls.certs.mode=certManager`, the chart uses a Helm hook Job to wait for the cert-manager webhook before creating `Issuer`/`Certificate` resources, so a single `helm upgrade --install` works.
 

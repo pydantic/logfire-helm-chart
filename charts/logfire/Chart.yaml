@@ -6,11 +6,11 @@ description: Helm chart for self-hosted Pydantic Logfire
 appVersion: "de5d9121"
 
 dependencies:
-  - name: minio
-    version: "17.0.21"
-    repository: "https://charts.bitnami.com/bitnami"
-    condition: dev.deployMinio
   - name: cert-manager
     version: "v1.19.2"
     repository: "https://charts.jetstack.io"
     condition: dev.deployCertManager
+  - name: rustfs
+    version: "0.3.0"
+    repository: "https://charts.rustfs.com"
+    condition: dev.deployObjectStore

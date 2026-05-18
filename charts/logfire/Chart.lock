@@ -1,9 +1,9 @@
 dependencies:
-- name: minio
-  repository: https://charts.bitnami.com/bitnami
-  version: 17.0.21
 - name: cert-manager
   repository: https://charts.jetstack.io
   version: v1.19.2
-digest: sha256:95cecdc224e965990bfd25579de23eae399d012c933559f4bc1fe8ebd1954c65
-generated: "2026-05-18T19:33:38.351489-03:00"
+- name: rustfs
+  repository: https://charts.rustfs.com
+  version: 0.3.0
+digest: sha256:5eab0999824eed188f579c744358b0456ed210c138ab42601fe89eb479623dbb
+generated: "2026-05-18T19:45:35.011826-03:00"
