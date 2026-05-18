@@ -674,6 +674,9 @@ Before diving deeper, verify these common configuration issues:
 | ingress.ingressClassName | string | `"nginx"` | IngressClass to use (e.g., nginx) |
 | ingress.secretName | string | `"logfire-frontend-cert"` | TLS Secret name if you want to do a custom one |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS. Required for correct CORS behavior. |
+| intakeOauth | object | `{"enabled":false,"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When enabled and `resourceUrl` is empty, the chart derives the self-hosted resource URL from the primary Logfire URL:   resourceUrl = <logfire.url>/v1 |
+| intakeOauth.enabled | bool | `false` | Enable OAuth protected-resource metadata and JWT audience validation for OTLP intake. |
+| intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
 | istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
 | istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-ff-proxy-cache-byte, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |

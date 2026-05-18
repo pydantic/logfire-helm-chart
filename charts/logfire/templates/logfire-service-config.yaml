@@ -74,6 +74,8 @@ stringData:
       acl path_dex path_beg /auth-api
       acl path_backend path_reg -i ^/(ui-api|v1|api)/
       acl path_backend path_beg /.well-known/oauth-authorization-server /.well-known/openid-configuration
+      acl path_backend path -i /.well-known/oauth-protected-resource/v1
+      acl path_backend path_beg /integrations/
       {{- if (get $aiGatewayValues "enabled") }}
       acl path_ai_gateway path_beg /proxy /.well-known/oauth-protected-resource/proxy
       {{- end }}

@@ -179,32 +179,6 @@ small pods conservative while allowing larger workers to make progress.
 {{- end -}}
 
 {{/*
-Default background maintenance/compaction object-store download concurrency.
-Sub-core workers keep download concurrency low to avoid memory spikes, but
-workers with more than 1Gi memory can tolerate a second in-flight download.
-Full-core workers with less than 8Gi memory use moderate download concurrency;
-larger workers keep the historical platform default.
-*/}}
-{{- define "logfire.ffBackgroundDownloadParallelismDefault" -}}
-{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
-{{- $cpu := get $effectiveResources "cpuRequest" -}}
-{{- $memory := get $effectiveResources "memoryLimit" -}}
-{{- $cpuMilli := int (include "logfire.cpuMilli" $cpu) -}}
-{{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
-{{- if lt $cpuMilli 1000 -}}
-{{- if gt $memoryMi 1024 -}}
-2
-{{- else -}}
-1
-{{- end -}}
-{{- else if lt $memoryMi 8192 -}}
-4
-{{- else -}}
-10
-{{- end -}}
-{{- end -}}
-
-{{/*
 Resolve background maintenance/compaction job concurrency from explicit service values,
 falling back to the computed default.
 */}}
@@ -215,6 +189,28 @@ falling back to the computed default.
 {{- end -}}
 
 {{/*
+Default number of CPU-heavy maintenance phases to run concurrently.
+Uses roughly 75% of the effective CPU request, rounded to cores, with a
+minimum of one so sub-core workers can still make progress.
+*/}}
+{{- define "logfire.ffBackgroundCpuConcurrencyDefault" -}}
+{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
+{{- $cpu := get $effectiveResources "cpuRequest" -}}
+{{- $cpuMilli := int (include "logfire.cpuMilli" $cpu) -}}
+{{- max 1 (div (add (mul $cpuMilli 3) 2000) 4000) -}}
+{{- end -}}
+
+{{/*
+Resolve CPU-heavy maintenance concurrency from explicit service values, falling
+back to the computed default.
+*/}}
+{{- define "logfire.ffBackgroundCpuConcurrency" -}}
+{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- $defaultCpuConcurrency := include "logfire.ffBackgroundCpuConcurrencyDefault" . -}}
+{{- get $effectiveServiceValues "cpuConcurrency" | default $defaultCpuConcurrency -}}
+{{- end -}}
+
+{{/*
 Common execution env for background maintenance/compaction workers.
 */}}
 {{- define "logfire.ffBackgroundWorkerExecutionEnv" -}}
@@ -222,7 +218,7 @@ Common execution env for background maintenance/compaction workers.
 {{- $threadSettings := include "logfire.ffThreadSettings" . | fromJson -}}
 {{- $defaultDatafusionMemory := include "logfire.ffBackgroundDatafusionMemoryDefault" . -}}
 {{- $jobParallelism := include "logfire.ffBackgroundJobParallelism" . -}}
-{{- $downloadParallelism := include "logfire.ffBackgroundDownloadParallelismDefault" . -}}
+{{- $cpuConcurrency := include "logfire.ffBackgroundCpuConcurrency" . -}}
 {{- $cpuCores := int (get $threadSettings "cpuCores") -}}
 {{- $dataFusionThreads := int (get $threadSettings "dataFusionThreads") -}}
 - name: FF_IO_THREADS
@@ -239,8 +235,10 @@ Common execution env for background maintenance/compaction workers.
 - name: FF_SPILL_TO_DISK_QUOTA
   value: {{ . | quote }}
 {{- end }}
-- name: FF_COMPACTION_DOWNLOAD_PARALLELISM
-  value: {{ (get $effectiveServiceValues "downloadParallelism" | default $downloadParallelism | quote) }}
+- name: FF_MAINTENANCE_CPU_CONCURRENCY
+  value: {{ $cpuConcurrency | quote }}
+- name: FF_PARQUET_SPOOL_THRESHOLD_BYTES
+  value: {{ (get $effectiveServiceValues "parquetSpoolThresholdBytes" | default "1MB" | quote) }}
 - name: FF_COMPACTION_JOB_PARALLELISM
   value: {{ $jobParallelism | quote }}
 {{- end -}}

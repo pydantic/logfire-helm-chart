@@ -104,7 +104,7 @@ Only sizing-related keys are inherited from presets.
   {{- end -}}
   {{- $presetValues := get $presets $presetName | default dict -}}
   {{- $presetServiceValues := get $presetValues $serviceName | default dict -}}
-  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "queryParallelism" "datafusionMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "downloadParallelism" "jobParallelism" "maxCompactionJobSizeBytes" -}}
+  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "queryParallelism" "datafusionMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" -}}
     {{- if hasKey $presetServiceValues $key -}}
       {{- $_ := set $merged $key (deepCopy (get $presetServiceValues $key)) -}}
     {{- end -}}
@@ -274,6 +274,19 @@ Primary logfire host with protocol scheme.
 {{- $tls := include "logfire.effective_tls" . -}}
 {{- if $primaryHostname -}}
 {{ eq $tls "true" | ternary "https" "http" }}://{{ $primaryHostname }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Public OTLP intake resource URL (RFC 8707 audience).
+*/}}
+{{- define "logfire.intakeOauthResourceUrl" -}}
+{{- if .Values.intakeOauth.enabled -}}
+  {{- if .Values.intakeOauth.resourceUrl -}}
+    {{- .Values.intakeOauth.resourceUrl -}}
+  {{- else -}}
+    {{- printf "%s/v1" (include "logfire.url" . | trim) -}}
+  {{- end -}}
 {{- end -}}
 {{- end -}}
 
