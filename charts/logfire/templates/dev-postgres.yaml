@@ -1,0 +1,171 @@
+{{- if (.Values.dev).deployPostgres -}}
+{{- $devPostgres := .Values.devPostgres | default dict -}}
+{{- $legacyPostgres := .Values.postgresql | default dict -}}
+{{- $name := include "logfire.devPostgres.name" . -}}
+{{- $image := get $devPostgres "image" | default dict -}}
+{{- $auth := get $devPostgres "auth" | default dict -}}
+{{- $password := coalesce (get $auth "postgresPassword") (dig "auth" "postgresPassword" "" $legacyPostgres) "postgres" -}}
+{{- $postgresqlDataDir := coalesce (get $devPostgres "postgresqlDataDir") (get $legacyPostgres "postgresqlDataDir") "/var/lib/postgresql/data/pgdata" -}}
+{{- $persistence := get $devPostgres "persistence" | default dict -}}
+{{- $legacyPersistence := dig "primary" "persistence" dict $legacyPostgres -}}
+{{- $persistenceEnabled := true -}}
+{{- if hasKey $persistence "enabled" -}}
+{{- $persistenceEnabled = get $persistence "enabled" -}}
+{{- else if hasKey $legacyPersistence "enabled" -}}
+{{- $persistenceEnabled = get $legacyPersistence "enabled" -}}
+{{- end -}}
+{{- $persistenceSize := coalesce (get $persistence "size") (get $legacyPersistence "size") "10Gi" -}}
+{{- $mountPath := coalesce (get $persistence "mountPath") (get $legacyPersistence "mountPath") "/var/lib/postgresql/data" -}}
+{{- $initdbScripts := dig "initdb" "scripts" dict $devPostgres -}}
+{{- if not $initdbScripts -}}
+{{- $initdbScripts = dig "primary" "initdb" "scripts" dict $legacyPostgres -}}
+{{- end -}}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dev-postgres
+type: Opaque
+stringData:
+  postgres-password: {{ $password | quote }}
+{{- if $initdbScripts }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-initdb
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dev-postgres
+data:
+  {{- toYaml $initdbScripts | nindent 2 }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dev-postgres
+spec:
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: dev-postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: dev-postgres
+spec:
+  serviceName: {{ $name }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: dev-postgres
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: dev-postgres
+    spec:
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range . }}
+        - name: {{ . | quote }}
+      {{- end }}
+      {{- end }}
+      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" "devPostgres") | nindent 6}}
+      {{- with (get $devPostgres "podSecurityContext") }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: postgres
+          image: {{ include "logfire.imageRef" (dict "image" $image "defaultRepository" "postgres" "defaultTag" "17") }}
+          imagePullPolicy: {{ default "IfNotPresent" (get $image "pullPolicy") | quote }}
+          {{- with (get $devPostgres "securityContext") }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with (get $devPostgres "resources") }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $name }}
+                  key: postgres-password
+            - name: PGDATA
+              value: {{ $postgresqlDataDir | quote }}
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - postgres
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: data
+              mountPath: {{ $mountPath | quote }}
+            {{- if $initdbScripts }}
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+            {{- end }}
+      volumes:
+        {{- if $initdbScripts }}
+        - name: initdb
+          configMap:
+            name: {{ $name }}-initdb
+        {{- end }}
+        {{- if not $persistenceEnabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+  {{- if $persistenceEnabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "logfire.labels" . | nindent 10 }}
+          app.kubernetes.io/component: dev-postgres
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        {{- if hasKey $persistence "storageClassName" }}
+        storageClassName: {{ get $persistence "storageClassName" | quote }}
+        {{- else if hasKey $legacyPersistence "storageClassName" }}
+        storageClassName: {{ get $legacyPersistence "storageClassName" | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $persistenceSize }}
+  {{- end }}
+{{- end }}

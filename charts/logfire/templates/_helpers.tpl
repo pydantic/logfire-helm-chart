@@ -1293,6 +1293,12 @@ Dev Postgres helpers
 ================================================================================
 */}}
 
+{{- define "logfire.devPostgres.name" -}}
+{{- $devPostgres := .Values.devPostgres | default dict -}}
+{{- $legacyPostgres := .Values.postgresql | default dict -}}
+{{- coalesce (get $devPostgres "fullnameOverride") (get $legacyPostgres "fullnameOverride") "logfire-postgres" -}}
+{{- end -}}
+
 {{- define "logfire.dev.waitForPostgres.initContainers" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := .serviceName -}}
@@ -1319,7 +1325,7 @@ Dev Postgres helpers
     - sh
     - -c
     - >-
-      until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432; do echo "Waiting for postgres..."; sleep 2; done
+      until pg_isready -h {{ include "logfire.devPostgres.name" $ctx }} -p 5432; do echo "Waiting for postgres..."; sleep 2; done
 {{- end -}}
 {{- end -}}
 

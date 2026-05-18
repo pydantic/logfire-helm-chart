@@ -1521,25 +1521,40 @@ maildev:
 # Embedded Postgres & MinIO defaults (dev/test)
 # ==============================================================================
 
-postgresql:
-  image:
-    registry: docker.io
-    repository: bitnamilegacy/postgresql
+devPostgres:
+  # -- Name of the dev Postgres Service/StatefulSet.
   fullnameOverride: "logfire-postgres"
+  # -- Dev Postgres image configuration (only used when `dev.deployPostgres` is true).
+  image:
+    repository: postgres
+    tag: "17"
+    pullPolicy: IfNotPresent
   auth:
+    # -- Password for the `postgres` superuser.
     postgresPassword: "postgres"
+  # -- PostgreSQL data directory inside the mounted volume.
   postgresqlDataDir: /var/lib/postgresql/data/pgdata
-  primary:
-    resourcesPreset: small
-    initdb:
-      scripts:
-        create_databases.sql: |
-          CREATE DATABASE crud;
-          CREATE DATABASE dex;
-          CREATE DATABASE ff;
-    persistence:
-      size: 10Gi
-      mountPath: /var/lib/postgresql
+  initdb:
+    # -- SQL scripts run by the official Postgres entrypoint on first initialization.
+    scripts:
+      create_databases.sql: |
+        CREATE DATABASE crud;
+        CREATE DATABASE dex;
+        CREATE DATABASE ff;
+  persistence:
+    # -- Enable persistent storage for dev Postgres.
+    enabled: true
+    # -- Dev Postgres volume size.
+    size: 10Gi
+    # -- Dev Postgres data volume mount path.
+    mountPath: /var/lib/postgresql/data
+    # storageClassName: ""
+  # -- Pod SecurityContext applied only to the dev Postgres pod.
+  podSecurityContext: {}
+  # -- Container SecurityContext applied only to the dev Postgres container.
+  securityContext: {}
+  # -- Resources for the dev Postgres container.
+  resources: {}
 
 minio:
   image:

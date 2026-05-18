@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.16](https://img.shields.io/badge/Version-0.13.16-informational?style=flat-square) ![AppVersion: de5d9121](https://img.shields.io/badge/AppVersion-de5d9121-informational?style=flat-square)
+![Version: 0.13.17](https://img.shields.io/badge/Version-0.13.17-informational?style=flat-square) ![AppVersion: de5d9121](https://img.shields.io/badge/AppVersion-de5d9121-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -590,7 +590,6 @@ Before diving deeper, verify these common configuration issues:
 | Repository | Name | Version |
 |------------|------|---------|
 | https://charts.bitnami.com/bitnami | minio | 17.0.21 |
-| https://charts.bitnami.com/bitnami | postgresql | 16.7.27 |
 | https://charts.jetstack.io | cert-manager | v1.19.2 |
 
 ## Values
@@ -626,6 +625,17 @@ Before diving deeper, verify these common configuration issues:
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
 | dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
+| devPostgres.auth.postgresPassword | string | `"postgres"` | Password for the `postgres` superuser. |
+| devPostgres.fullnameOverride | string | `"logfire-postgres"` | Name of the dev Postgres Service/StatefulSet. |
+| devPostgres.image | object | `{"pullPolicy":"IfNotPresent","repository":"postgres","tag":"17"}` | Dev Postgres image configuration (only used when `dev.deployPostgres` is true). |
+| devPostgres.initdb.scripts | object | `{"create_databases.sql":"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"}` | SQL scripts run by the official Postgres entrypoint on first initialization. |
+| devPostgres.persistence.enabled | bool | `true` | Enable persistent storage for dev Postgres. |
+| devPostgres.persistence.mountPath | string | `"/var/lib/postgresql/data"` | Dev Postgres data volume mount path. |
+| devPostgres.persistence.size | string | `"10Gi"` | Dev Postgres volume size. |
+| devPostgres.podSecurityContext | object | `{}` | Pod SecurityContext applied only to the dev Postgres pod. |
+| devPostgres.postgresqlDataDir | string | `"/var/lib/postgresql/data/pgdata"` | PostgreSQL data directory inside the mounted volume. |
+| devPostgres.resources | object | `{}` | Resources for the dev Postgres container. |
+| devPostgres.securityContext | object | `{}` | Container SecurityContext applied only to the dev Postgres container. |
 | existingGatewaySecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret for the AI Gateway with the following keys:  - key (gateway encryption key)  - internalSecret (gateway internal secret) |
 | existingGatewaySecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
 | existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
@@ -748,15 +758,6 @@ Before diving deeper, verify these common configuration issues:
 | postgresSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
 | postgresSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
 | postgresSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| postgresql.auth.postgresPassword | string | `"postgres"` |  |
-| postgresql.fullnameOverride | string | `"logfire-postgres"` |  |
-| postgresql.image.registry | string | `"docker.io"` |  |
-| postgresql.image.repository | string | `"bitnamilegacy/postgresql"` |  |
-| postgresql.postgresqlDataDir | string | `"/var/lib/postgresql/data/pgdata"` |  |
-| postgresql.primary.initdb.scripts."create_databases.sql" | string | `"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"` |  |
-| postgresql.primary.persistence.mountPath | string | `"/var/lib/postgresql"` |  |
-| postgresql.primary.persistence.size | string | `"10Gi"` |  |
-| postgresql.primary.resourcesPreset | string | `"small"` |  |
 | priorityClassName | string | `""` | Pod priority class See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | rateLimits | object | `{}` | Configure Rate Limiting rules for Logfire endpoints |
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN. Change if using an external Redis instance. |

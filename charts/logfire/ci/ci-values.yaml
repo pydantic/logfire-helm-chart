@@ -85,10 +85,9 @@ logfire-ff-compaction-worker:
 logfire-ai-gateway:
   enabled: true
 
-postgresql:
-  primary:
-    persistence:
-      size: 1Gi
+devPostgres:
+  persistence:
+    size: 1Gi
 
 minio:
   persistence:
