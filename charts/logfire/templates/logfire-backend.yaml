@@ -188,6 +188,10 @@ spec:
             - name: GATEWAY_OAUTH_RESOURCE_URL
               value: {{ include "logfire.gatewayOauthResourceUrl" . | trim | quote }}
             {{- end }}
+            {{- with (include "logfire.intakeOauthResourceUrl" . | trim) }}
+            - name: INTAKE_OAUTH_RESOURCE_URL
+              value: {{ . | quote }}
+            {{- end }}
             {{- if (index .Values "logfire-ai-gateway" "enabled") }}
             - name: GATEWAY_ENCRYPTION_KEY
               valueFrom:

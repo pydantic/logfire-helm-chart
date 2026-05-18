@@ -676,6 +676,14 @@ aiGatewayOauth:
   # -- OAuth authorization server issuer URL used by the AI gateway.
   issuer: ""
 
+# -- OTLP intake OAuth metadata configuration.
+# When `resourceUrl` is empty, the chart derives the self-hosted resource URL
+# from the primary Logfire URL:
+#   resourceUrl = <logfire.url>/v1
+intakeOauth:
+  # -- Public OTLP intake resource URL (RFC 8707 audience).
+  resourceUrl: ""
+
 
 # -- Autoscaling & resources for the `logfire-remote-mcp` pod
 # logfire-remote-mcp:
@@ -976,8 +984,10 @@ logfire-ff-cache-byte:
 #   # -- Compaction job concurrency. Defaults from CPU request: 1 for sub-core workers,
 #   # otherwise CPU cores + 1, bounded between 3 and 10.
 #   # jobParallelism: 3
-#   # -- Compaction object-store download concurrency. Defaults to 1 for sub-core workers, otherwise 10.
-#   downloadParallelism: 10
+#   # -- CPU-heavy maintenance phase concurrency. Defaults to roughly 75% of CPU request, minimum 1.
+#   # cpuConcurrency: 2
+#   # -- Threshold for spilling parquet encode buffers to the scratch volume.
+#   # parquetSpoolThresholdBytes: "1MB"
 #   replicas: 2
 #   # -- DataFusion memory limit. Defaults from CPU and memory resources: sub-core workers
 #   # use conservative memory fractions, larger workers use 3/8 of the pod memory limit.
@@ -1043,8 +1053,10 @@ logfire-ff-cache-byte:
 #   # -- Compaction job concurrency. Defaults from CPU request: 1 for sub-core workers,
 #   # otherwise CPU cores + 1, bounded between 3 and 10.
 #   # jobParallelism: 3
-#   # -- Compaction object-store download concurrency. Defaults to 1 for sub-core workers, otherwise 10.
-#   downloadParallelism: 10
+#   # -- CPU-heavy maintenance phase concurrency. Defaults to roughly 75% of CPU request, minimum 1.
+#   # cpuConcurrency: 2
+#   # -- Threshold for spilling parquet encode buffers to the scratch volume.
+#   # parquetSpoolThresholdBytes: "1MB"
 #   replicas: 2
 #   # -- DataFusion memory limit. Defaults from CPU and memory resources: sub-core workers
 #   # use conservative memory fractions, larger workers use 3/8 of the pod memory limit.
@@ -1412,7 +1424,7 @@ otelResourceAttributes: {}
 
 # -- otel-collector configuration
 otel_collector:
-  # -- exporter configuration for the otlphttp exporter
+  # -- exporter configuration for the otlp_http exporter
   # Override these to send telemetry data to a different OTLP-compatible destination.
   exporter:
     endpoint: http://logfire-ff-ingest:8012
@@ -1421,7 +1433,7 @@ otel_collector:
     headers: {}
   image:
     repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
-    tag: "0.139.0"
+    tag: "0.152.0"
     pullPolicy: IfNotPresent
   prometheus:
     enabled: false
@@ -2346,7 +2358,7 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
       scratchVolume:
-        storage: "1Gi"
+        storage: "4Gi"
     logfire-ff-maintenance-scheduler:
       resources:
         cpu: "500m"
@@ -2374,7 +2386,7 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
       scratchVolume:
-        storage: "1Gi"
+        storage: "4Gi"
     logfire-otel-collector:
       resources:
         cpu: "1"

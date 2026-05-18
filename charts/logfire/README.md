@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.15](https://img.shields.io/badge/Version-0.13.15-informational?style=flat-square) ![AppVersion: a013748c](https://img.shields.io/badge/AppVersion-a013748c-informational?style=flat-square)
+![Version: 0.13.16](https://img.shields.io/badge/Version-0.13.16-informational?style=flat-square) ![AppVersion: de5d9121](https://img.shields.io/badge/AppVersion-de5d9121-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -674,6 +674,8 @@ Before diving deeper, verify these common configuration issues:
 | ingress.ingressClassName | string | `"nginx"` | IngressClass to use (e.g., nginx) |
 | ingress.secretName | string | `"logfire-frontend-cert"` | TLS Secret name if you want to do a custom one |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS. Required for correct CORS behavior. |
+| intakeOauth | object | `{"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When `resourceUrl` is empty, the chart derives the self-hosted resource URL from the primary Logfire URL:   resourceUrl = <logfire.url>/v1 |
+| intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
 | istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
 | istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-ff-proxy-cache-byte, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
@@ -737,8 +739,8 @@ Before diving deeper, verify these common configuration issues:
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials |
 | otelResourceAttributes | object | `{}` | Additional OTEL resource attributes to stamp onto internal telemetry emitted by Logfire workloads. These are merged on top of the chart defaults and can override them. Example:   deployment.environment.name: prod   service.namespace: logfire |
-| otel_collector | object | `{"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.139.0"},"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | otel-collector configuration |
-| otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}}` | exporter configuration for the otlphttp exporter Override these to send telemetry data to a different OTLP-compatible destination. |
+| otel_collector | object | `{"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.152.0"},"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | otel-collector configuration |
+| otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
 | podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
