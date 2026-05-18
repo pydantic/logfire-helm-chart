@@ -2360,7 +2360,7 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
       scratchVolume:
-        storage: "1Gi"
+        storage: "4Gi"
     logfire-ff-maintenance-scheduler:
       resources:
         cpu: "500m"
@@ -2388,7 +2388,7 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
       scratchVolume:
-        storage: "1Gi"
+        storage: "4Gi"
     logfire-otel-collector:
       resources:
         cpu: "1"
