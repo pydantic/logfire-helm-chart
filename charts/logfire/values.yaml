@@ -677,12 +677,10 @@ aiGatewayOauth:
   issuer: ""
 
 # -- OTLP intake OAuth metadata configuration.
-# When enabled and `resourceUrl` is empty, the chart derives the self-hosted
-# resource URL from the primary Logfire URL:
+# When `resourceUrl` is empty, the chart derives the self-hosted resource URL
+# from the primary Logfire URL:
 #   resourceUrl = <logfire.url>/v1
 intakeOauth:
-  # -- Enable OAuth protected-resource metadata and JWT audience validation for OTLP intake.
-  enabled: false
   # -- Public OTLP intake resource URL (RFC 8707 audience).
   resourceUrl: ""
 

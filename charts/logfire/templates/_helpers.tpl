@@ -281,12 +281,10 @@ Primary logfire host with protocol scheme.
 Public OTLP intake resource URL (RFC 8707 audience).
 */}}
 {{- define "logfire.intakeOauthResourceUrl" -}}
-{{- if .Values.intakeOauth.enabled -}}
-  {{- if .Values.intakeOauth.resourceUrl -}}
-    {{- .Values.intakeOauth.resourceUrl -}}
-  {{- else -}}
-    {{- printf "%s/v1" (include "logfire.url" . | trim) -}}
-  {{- end -}}
+{{- if .Values.intakeOauth.resourceUrl -}}
+{{- .Values.intakeOauth.resourceUrl -}}
+{{- else -}}
+{{- printf "%s/v1" (include "logfire.url" . | trim) -}}
 {{- end -}}
 {{- end -}}
 
