@@ -2,11 +2,11 @@ dependencies:
 - name: postgresql
   repository: https://charts.bitnami.com/bitnami
   version: 16.7.27
-- name: minio
-  repository: https://charts.bitnami.com/bitnami
-  version: 17.0.21
 - name: cert-manager
   repository: https://charts.jetstack.io
   version: v1.19.2
-digest: sha256:c76ba4d2438fec04386bb90b1a1a0f7fdeffdb183ba4ab570c0d32917058bb44
-generated: "2026-01-21T08:56:43.760451-03:00"
+- name: rustfs
+  repository: https://charts.rustfs.com
+  version: 0.3.0
+digest: sha256:9a74f1f1df6dd9c759e2bbbf12306f4f40aba08fd33a76fc764da7dbeedb8bb5
+generated: "2026-05-19T10:51:04.82493-03:00"

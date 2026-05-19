@@ -14,3 +14,4 @@ print-logs: false
 chart-repos:
   - bitnami=https://charts.bitnami.com/bitnami
   - jetstack=https://charts.jetstack.io
+  - rustfs=https://charts.rustfs.com

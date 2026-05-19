@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.16](https://img.shields.io/badge/Version-0.13.16-informational?style=flat-square) ![AppVersion: de5d9121](https://img.shields.io/badge/AppVersion-de5d9121-informational?style=flat-square)
+![Version: 0.13.17](https://img.shields.io/badge/Version-0.13.17-informational?style=flat-square) ![AppVersion: de5d9121](https://img.shields.io/badge/AppVersion-de5d9121-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -10,7 +10,7 @@ This repository and the chart source it contains are licensed under the MIT Lice
 ## Local Quickstart (Evaluation & Testing)
 
 For a fast, local setup to evaluate Logfire, follow our [Local Quickstart Guide](https://logfire.pydantic.dev/docs/reference/self-hosted/local-quickstart/).
-It uses development-grade dependencies like an in-cluster PostgreSQL, MinIO and MailDev to get you up and running in minutes.
+It uses development-grade dependencies like an in-cluster PostgreSQL, S3-compatible object store, and MailDev to get you up and running in minutes.
 
 ## Production Installation
 
@@ -28,7 +28,7 @@ $ helm repo update
 
 ### Local Evaluation (values.dev.yaml)
 
-For quick local testing, the chart includes a `values.dev.yaml` file that enables in-cluster Postgres, MinIO, and MailDev.
+For quick local testing, the chart includes a `values.dev.yaml` file that enables in-cluster Postgres, S3-compatible object storage, and MailDev.
 
 > **Warning**: Do not use this for production deployments.
 
@@ -589,9 +589,9 @@ Before diving deeper, verify these common configuration issues:
 
 | Repository | Name | Version |
 |------------|------|---------|
-| https://charts.bitnami.com/bitnami | minio | 17.0.21 |
 | https://charts.bitnami.com/bitnami | postgresql | 16.7.27 |
 | https://charts.jetstack.io | cert-manager | v1.19.2 |
+| https://charts.rustfs.com | rustfs | 0.3.0 |
 
 ## Values
 
@@ -624,7 +624,8 @@ Before diving deeper, verify these common configuration issues:
 | cert-manager | object | `{"installCRDs":true}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
 | dev.deployCertManager | bool | `false` | Deploy cert-manager (NOT for production; includes cluster-scoped resources). |
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
-| dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |
+| dev.deployMinio | bool | `false` | DEPRECATED: Use dev.deployObjectStore instead. The RustFS chart dependency is controlled by dev.deployObjectStore. @deprecated |
+| dev.deployObjectStore | bool | `false` | Use a local S3-compatible object store (NOT for production) |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
 | existingGatewaySecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret for the AI Gateway with the following keys:  - key (gateway encryption key)  - internalSecret (gateway internal secret) |
 | existingGatewaySecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
@@ -717,21 +718,6 @@ Before diving deeper, verify these common configuration issues:
 | logfire-redis.image.repository | string | `"redis"` | Redis image repository |
 | logfire-redis.image.tag | string | `"7.2"` | Redis image tag |
 | maildev | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"maildev/maildev","tag":"latest"}}` | MailDev image configuration (only used when `dev.deployMaildev` is true) |
-| minio.args[0] | string | `"server"` |  |
-| minio.args[1] | string | `"/data"` |  |
-| minio.auth.rootPassword | string | `"logfire-minio"` |  |
-| minio.auth.rootUser | string | `"logfire-minio"` |  |
-| minio.command[0] | string | `"minio"` |  |
-| minio.console.image.registry | string | `"docker.io"` |  |
-| minio.console.image.repository | string | `"bitnamilegacy/minio-object-browser"` |  |
-| minio.fullnameOverride | string | `"logfire-minio"` |  |
-| minio.image.registry | string | `"docker.io"` |  |
-| minio.image.repository | string | `"bitnamilegacy/minio"` |  |
-| minio.lifecycleHooks.postStart.exec.command[0] | string | `"sh"` |  |
-| minio.lifecycleHooks.postStart.exec.command[1] | string | `"-c"` |  |
-| minio.lifecycleHooks.postStart.exec.command[2] | string | `"# Wait for the server to start\nsleep 5\n# Create a bucket\nmc alias set local http://localhost:9000 logfire-minio logfire-minio\nmc mb local/logfire\nmc anonymous set public local/logfire\n"` |  |
-| minio.persistence.mountPath | string | `"/data"` |  |
-| minio.persistence.size | string | `"32Gi"` |  |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
 | objectStore | object | `{"env":{},"uri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
 | objectStore.env | object | `{}` | Additional environment variables for the object store connection |
@@ -761,6 +747,12 @@ Before diving deeper, verify these common configuration issues:
 | rateLimits | object | `{}` | Configure Rate Limiting rules for Logfire endpoints |
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN. Change if using an external Redis instance. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
+| rustfs | object | `{"bucket":"logfire","bucketInit":{"image":{"pullPolicy":"IfNotPresent","repository":"quay.io/minio/mc","tag":"RELEASE.2025-08-13T08-35-41Z"}},"config":{"rustfs":{"console_enable":"false","log_level":"info","obs_log_directory":"/logs","region":"us-east-1"}},"extraManifests":[{"apiVersion":"batch/v1","kind":"Job","metadata":{"annotations":{"helm.sh/hook":"post-install,post-upgrade","helm.sh/hook-delete-policy":"before-hook-creation,hook-succeeded","helm.sh/hook-weight":"5"},"labels":{"app.kubernetes.io/component":"rustfs-bucket-init","app.kubernetes.io/instance":"{{ .Release.Name }}","app.kubernetes.io/name":"{{ include \"rustfs.name\" . }}"},"name":"{{ include \"rustfs.fullname\" . }}-bucket-init","namespace":"{{ .Release.Namespace }}"},"spec":{"backoffLimit":3,"template":{"metadata":{"labels":{"app.kubernetes.io/component":"rustfs-bucket-init","app.kubernetes.io/instance":"{{ .Release.Name }}","app.kubernetes.io/name":"{{ include \"rustfs.name\" . }}"}},"spec":{"containers":[{"command":["/bin/sh","-ec","i=0\nwhile [ \"$i\" -lt 120 ]; do\n  if mc alias set local \"$S3_ENDPOINT\" \"$RUSTFS_ACCESS_KEY\" \"$RUSTFS_SECRET_KEY\" --api S3v4 >/dev/null 2>&1 \\\n    && mc mb --ignore-existing \"local/$BUCKET\" \\\n    && mc anonymous set public \"local/$BUCKET\"; then\n    echo \"Bucket $BUCKET is ready\"\n    exit 0\n  fi\n  i=$((i + 1))\n  sleep 2\ndone\necho \"Timed out waiting for object store bucket $BUCKET\"\nexit 1\n"],"env":[{"name":"RUSTFS_ACCESS_KEY","valueFrom":{"secretKeyRef":{"key":"RUSTFS_ACCESS_KEY","name":"{{ include \"rustfs.secretName\" . }}"}}},{"name":"RUSTFS_SECRET_KEY","valueFrom":{"secretKeyRef":{"key":"RUSTFS_SECRET_KEY","name":"{{ include \"rustfs.secretName\" . }}"}}},{"name":"S3_ENDPOINT","value":"http://{{ include \"rustfs.fullname\" . }}-svc:{{ .Values.service.endpoint.port }}"},{"name":"BUCKET","value":"{{ .Values.bucket }}"}],"image":"{{ .Values.bucketInit.image.repository }}:{{ .Values.bucketInit.image.tag }}","imagePullPolicy":"{{ .Values.bucketInit.image.pullPolicy }}","name":"create-bucket"}],"restartPolicy":"Never"}}}}],"fullnameOverride":"logfire-minio","image":{"rustfs":{"pullPolicy":"IfNotPresent","repository":"rustfs/rustfs","tag":"1.0.0-beta.3"}},"ingress":{"enabled":false},"mode":{"distributed":{"enabled":false},"standalone":{"enabled":true,"strategy":{"type":"Recreate"}}},"replicaCount":1,"resources":{},"secret":{"rustfs":{"access_key":"logfire-minio","secret_key":"logfire-minio"}},"service":{"console":{"port":9001},"endpoint":{"port":9000}},"storageclass":{"dataStorageSize":"32Gi","logStorageSize":"1Gi","name":""}}` | RustFS chart values (only used when `dev.deployObjectStore` is true). |
+| rustfs.bucket | string | `"logfire"` | Bucket created in the dev RustFS object store by rustfs.extraManifests. |
+| rustfs.fullnameOverride | string | `"logfire-minio"` | Keep generated RustFS resource names compatible with the historical MinIO dev service. |
+| rustfs.replicaCount | int | `1` | Single-node RustFS is sufficient for the embedded dev dependency. |
+| rustfs.resources | object | `{}` | Resources for the RustFS dev object store container. |
+| rustfs.storageclass.name | string | `""` | Empty value lets Kubernetes use the cluster default StorageClass. |
 | securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details |
 | serviceAccount | object | `{"annotations":{},"create":false,"name":""}` | ServiceAccount configuration |
 | serviceAccount.annotations | object | `{}` | Annotations to add to the ServiceAccount (e.g., for IAM roles) Example for AWS IRSA:   annotations:     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/my-role Example for GCP Workload Identity:   annotations:     iam.gke.io/gcp-service-account: my-sa@my-project.iam.gserviceaccount.com |

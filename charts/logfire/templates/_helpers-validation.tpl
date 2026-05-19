@@ -10,9 +10,9 @@ when required values are missing or incorrectly configured.
 Validate that objectStore.uri is configured (required for production)
 */}}
 {{- define "logfire.validate.objectStore" -}}
-{{- if not .Values.dev.deployMinio -}}
+{{- if not .Values.dev.deployObjectStore -}}
   {{- if not .Values.objectStore.uri -}}
-    {{- fail "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead." -}}
+    {{- fail "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployObjectStore=true instead." -}}
   {{- end -}}
 {{- end -}}
 {{- end -}}

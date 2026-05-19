@@ -3,20 +3,20 @@ adminEmail: engineering@example.com
 objectStore:
   uri: s3://logfire
   env:
-    # Defaults we configure for MinIO
+    # Defaults we configure for the dev object store
     # Do NOT use this in production!
     # This does not talk to actual AWS,
-    # we just use MinIO as an S3 compatible implementation
+    # we just use an in-cluster S3-compatible implementation
     # and pipe these env vars into our client.
     AWS_ACCESS_KEY_ID: logfire-minio
     AWS_SECRET_ACCESS_KEY: logfire-minio
-    AWS_ENDPOINT: http://logfire-minio:9000
+    AWS_ENDPOINT: http://logfire-minio-svc:9000
     AWS_ALLOW_HTTP: "true"
 
 dev:
   deployPostgres: true
   deployMaildev: true
-  deployMinio: true
+  deployObjectStore: true
 
 postgresDsn: postgres://postgres:postgres@logfire-postgres:5432/crud
 postgresFFDsn: postgres://postgres:postgres@logfire-postgres:5432/ff

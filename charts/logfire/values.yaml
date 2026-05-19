@@ -1500,7 +1500,9 @@ dev:
   deployMaildev: false
   # -- Deploy internal Postgres (NOT for production)
   deployPostgres: false
-  # -- Use a local MinIO instance as object storage (NOT for production)
+  # -- Use a local S3-compatible object store (NOT for production)
+  deployObjectStore: false
+  # -- DEPRECATED: Use dev.deployObjectStore instead. The RustFS chart dependency is controlled by dev.deployObjectStore. @deprecated
   deployMinio: false
   # -- Deploy cert-manager (NOT for production; includes cluster-scoped resources).
   deployCertManager: false
@@ -1518,7 +1520,7 @@ maildev:
 
 
 # ==============================================================================
-# Embedded Postgres & MinIO defaults (dev/test)
+# Embedded Postgres & S3-compatible object store defaults (dev/test)
 # ==============================================================================
 
 postgresql:
@@ -1541,39 +1543,115 @@ postgresql:
       size: 10Gi
       mountPath: /var/lib/postgresql
 
-minio:
-  image:
-    registry: docker.io
-    repository: bitnamilegacy/minio
-  console:
-    image:
-      registry: docker.io
-      repository: bitnamilegacy/minio-object-browser
+# -- RustFS chart values (only used when `dev.deployObjectStore` is true).
+rustfs:
+  # -- Keep generated RustFS resource names compatible with the historical MinIO dev service.
   fullnameOverride: "logfire-minio"
-  auth:
-    rootUser: logfire-minio
-    rootPassword: logfire-minio
-  persistence:
-    mountPath: /data
-    size: 32Gi
-  command:
-    - minio
-  args:
-    - server
-    - /data
-  lifecycleHooks:
-    postStart:
-      exec:
-        command:
-          - sh
-          - -c
-          - |
-            # Wait for the server to start
-            sleep 5
-            # Create a bucket
-            mc alias set local http://localhost:9000 logfire-minio logfire-minio
-            mc mb local/logfire
-            mc anonymous set public local/logfire
+  # -- Single-node RustFS is sufficient for the embedded dev dependency.
+  replicaCount: 1
+  image:
+    rustfs:
+      repository: rustfs/rustfs
+      tag: "1.0.0-beta.3"
+      pullPolicy: IfNotPresent
+  mode:
+    standalone:
+      enabled: true
+      strategy:
+        type: Recreate
+    distributed:
+      enabled: false
+  secret:
+    rustfs:
+      access_key: logfire-minio
+      secret_key: logfire-minio
+  # -- Bucket created in the dev RustFS object store by rustfs.extraManifests.
+  bucket: logfire
+  bucketInit:
+    image:
+      repository: quay.io/minio/mc
+      tag: "RELEASE.2025-08-13T08-35-41Z"
+      pullPolicy: IfNotPresent
+  config:
+    rustfs:
+      console_enable: "false"
+      log_level: info
+      region: us-east-1
+      obs_log_directory: /logs
+  ingress:
+    enabled: false
+  service:
+    endpoint:
+      port: 9000
+    console:
+      port: 9001
+  storageclass:
+    # -- Empty value lets Kubernetes use the cluster default StorageClass.
+    name: ""
+    dataStorageSize: 32Gi
+    logStorageSize: 1Gi
+  # -- Resources for the RustFS dev object store container.
+  resources: {}
+  extraManifests:
+    - apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: "{{ include \"rustfs.fullname\" . }}-bucket-init"
+        namespace: "{{ .Release.Namespace }}"
+        labels:
+          app.kubernetes.io/name: "{{ include \"rustfs.name\" . }}"
+          app.kubernetes.io/instance: "{{ .Release.Name }}"
+          app.kubernetes.io/component: rustfs-bucket-init
+        annotations:
+          helm.sh/hook: post-install,post-upgrade
+          helm.sh/hook-weight: "5"
+          helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+      spec:
+        backoffLimit: 3
+        template:
+          metadata:
+            labels:
+              app.kubernetes.io/name: "{{ include \"rustfs.name\" . }}"
+              app.kubernetes.io/instance: "{{ .Release.Name }}"
+              app.kubernetes.io/component: rustfs-bucket-init
+          spec:
+            restartPolicy: Never
+            containers:
+              - name: create-bucket
+                image: "{{ .Values.bucketInit.image.repository }}:{{ .Values.bucketInit.image.tag }}"
+                imagePullPolicy: "{{ .Values.bucketInit.image.pullPolicy }}"
+                command:
+                  - /bin/sh
+                  - -ec
+                  - |
+                    i=0
+                    while [ "$i" -lt 120 ]; do
+                      if mc alias set local "$S3_ENDPOINT" "$RUSTFS_ACCESS_KEY" "$RUSTFS_SECRET_KEY" --api S3v4 >/dev/null 2>&1 \
+                        && mc mb --ignore-existing "local/$BUCKET" \
+                        && mc anonymous set public "local/$BUCKET"; then
+                        echo "Bucket $BUCKET is ready"
+                        exit 0
+                      fi
+                      i=$((i + 1))
+                      sleep 2
+                    done
+                    echo "Timed out waiting for object store bucket $BUCKET"
+                    exit 1
+                env:
+                  - name: RUSTFS_ACCESS_KEY
+                    valueFrom:
+                      secretKeyRef:
+                        name: "{{ include \"rustfs.secretName\" . }}"
+                        key: RUSTFS_ACCESS_KEY
+                  - name: RUSTFS_SECRET_KEY
+                    valueFrom:
+                      secretKeyRef:
+                        name: "{{ include \"rustfs.secretName\" . }}"
+                        key: RUSTFS_SECRET_KEY
+                  - name: S3_ENDPOINT
+                    value: "http://{{ include \"rustfs.fullname\" . }}-svc:{{ .Values.service.endpoint.port }}"
+                  - name: BUCKET
+                    value: "{{ .Values.bucket }}"
 
 # ==============================================================================
 # Extra Kubernetes manifests
