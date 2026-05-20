@@ -79,7 +79,10 @@ stringData:
       {{- if (get $aiGatewayValues "enabled") }}
       acl path_ai_gateway path_beg /proxy /.well-known/oauth-protected-resource/proxy
       {{- end }}
-      acl path_remote_mcp path_beg /mcp /.well-known/oauth-protected-resource/mcp
+      acl path_remote_mcp path /mcp
+      acl path_remote_mcp path_beg /mcp/
+      acl path_remote_mcp path /.well-known/oauth-protected-resource/mcp
+      acl path_remote_mcp path_beg /.well-known/oauth-protected-resource/mcp/
 
 
       use_backend logfire-ingest if path_ingest
