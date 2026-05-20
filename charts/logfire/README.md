@@ -716,6 +716,8 @@ Before diving deeper, verify these common configuration issues:
 | logfire-redis.image.pullPolicy | string | `"IfNotPresent"` | Redis image pull policy |
 | logfire-redis.image.repository | string | `"redis"` | Redis image repository |
 | logfire-redis.image.tag | string | `"7.2"` | Redis image tag |
+| logfire-remote-mcp | object | `{"enabled":true}` | Autoscaling & resources for the `logfire-remote-mcp` pod |
+| logfire-remote-mcp.enabled | bool | `true` | Enable the remote MCP service. When disabled, the deployment is not rendered and the `/mcp` and `/.well-known/oauth-protected-resource/mcp` haproxy routes are removed. |
 | maildev | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"maildev/maildev","tag":"latest"}}` | MailDev image configuration (only used when `dev.deployMaildev` is true) |
 | minio.args[0] | string | `"server"` |  |
 | minio.args[1] | string | `"/data"` |  |

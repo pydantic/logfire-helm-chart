@@ -1,3 +1,4 @@
+{{- if dig "enabled" true (index .Values "logfire-remote-mcp" | default dict) }}
 {{- $serviceName := "logfire-remote-mcp" }}
 {{- $servicePort := 8005 }}
 {{- include "logfire.validateConfig" . -}}
@@ -178,3 +179,4 @@ spec:
       terminationGracePeriodSeconds: 30
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
+{{- end }}

@@ -686,6 +686,11 @@ intakeOauth:
 
 
 # -- Autoscaling & resources for the `logfire-remote-mcp` pod
+logfire-remote-mcp:
+  # -- Enable the remote MCP service. When disabled, the deployment is not
+  # rendered and the `/mcp` and `/.well-known/oauth-protected-resource/mcp`
+  # haproxy routes are removed.
+  enabled: true
 # logfire-remote-mcp:
 #   # -- Workload labels
 #   labels: {}

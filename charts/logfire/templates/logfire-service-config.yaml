@@ -3,6 +3,8 @@
 {{- $ingestMaxCount := coalesce (get $ingestAutoscaling "maxReplicas") (get $ingestValues "replicas") 1 -}}
 {{- $aiGatewayValues := index .Values "logfire-ai-gateway" | default dict -}}
 {{- $aiGatewayProxyTimeout := get $aiGatewayValues "proxyTimeout" | default "600s" -}}
+{{- $remoteMcpValues := index .Values "logfire-remote-mcp" | default dict -}}
+{{- $remoteMcpEnabled := dig "enabled" true $remoteMcpValues -}}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -79,10 +81,12 @@ stringData:
       {{- if (get $aiGatewayValues "enabled") }}
       acl path_ai_gateway path_beg /proxy /.well-known/oauth-protected-resource/proxy
       {{- end }}
+      {{- if $remoteMcpEnabled }}
       acl path_remote_mcp path /mcp
       acl path_remote_mcp path_beg /mcp/
       acl path_remote_mcp path /.well-known/oauth-protected-resource/mcp
       acl path_remote_mcp path_beg /.well-known/oauth-protected-resource/mcp/
+      {{- end }}
 
 
       use_backend logfire-ingest if path_ingest
@@ -90,7 +94,9 @@ stringData:
       {{- if (get $aiGatewayValues "enabled") }}
       use_backend logfire-ai-gateway if path_ai_gateway
       {{- end }}
+      {{- if $remoteMcpEnabled }}
       use_backend logfire-remote-mcp if path_remote_mcp
+      {{- end }}
       use_backend logfire-backend if path_backend
 
       default_backend logfire-frontend
@@ -159,6 +165,7 @@ stringData:
       {{- end }}
     {{- end }}
 
+    {{- if $remoteMcpEnabled }}
     backend logfire-remote-mcp
       balance roundrobin
       # Health checks
@@ -175,6 +182,7 @@ stringData:
       {{- else }}
       server logfire-remote-mcp logfire-remote-mcp.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8005 check resolvers kubernetes
       {{- end }}
+    {{- end }}
 
     backend logfire-backend
       balance roundrobin
