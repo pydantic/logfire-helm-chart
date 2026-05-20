@@ -733,8 +733,9 @@ Before diving deeper, verify these common configuration issues:
 | minio.persistence.mountPath | string | `"/data"` |  |
 | minio.persistence.size | string | `"32Gi"` |  |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
-| objectStore | object | `{"env":{},"uri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
+| objectStore | object | `{"env":{},"sseCKeyB64":null,"uri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
 | objectStore.env | object | `{}` | Additional environment variables for the object store connection |
+| objectStore.sseCKeyB64 | string | `nil` | Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C). Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy requests. Only used when the object store is S3. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).  IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on a bucket that already contains FusionFire data will break all reads of the pre-existing objects. losing the key means losing the data — AWS does not store it. |
 | objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`) |
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials |

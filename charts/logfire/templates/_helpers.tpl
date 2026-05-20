@@ -666,6 +666,17 @@ Gateway secret name
 {{- define "logfire.objectStoreEnv" -}}
 - name: FF_OBJECT_STORE_URI
   value: {{ .Values.objectStore.uri }}
+{{- with .Values.objectStore.sseCKeyB64 }}
+- name: FF_S3_SSE_C_KEY_B64
+  {{- if kindIs "map" . }}
+  {{- if hasKey . "valueFrom" }}
+  valueFrom:
+    {{- toYaml .valueFrom | nindent 4 }}
+  {{- end }}
+  {{- else }}
+  value: {{ . | quote }}
+  {{- end }}
+{{- end }}
 {{- range $key, $value := .Values.objectStore.env }}
 {{- if kindIs "map" $value }}
 - name: {{ $key }}
