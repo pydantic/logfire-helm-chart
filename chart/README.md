@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.16](https://img.shields.io/badge/Version-0.13.16-informational?style=flat-square) ![AppVersion: de5d9121](https://img.shields.io/badge/AppVersion-de5d9121-informational?style=flat-square)
+![Version: 0.13.17](https://img.shields.io/badge/Version-0.13.17-informational?style=flat-square) ![AppVersion: c14595e4](https://img.shields.io/badge/AppVersion-c14595e4-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -716,6 +716,8 @@ Before diving deeper, verify these common configuration issues:
 | logfire-redis.image.pullPolicy | string | `"IfNotPresent"` | Redis image pull policy |
 | logfire-redis.image.repository | string | `"redis"` | Redis image repository |
 | logfire-redis.image.tag | string | `"7.2"` | Redis image tag |
+| logfire-remote-mcp | object | `{"enabled":true}` | Autoscaling & resources for the `logfire-remote-mcp` pod |
+| logfire-remote-mcp.enabled | bool | `true` | Enable the remote MCP service. When disabled, the deployment is not rendered and the `/mcp` and `/.well-known/oauth-protected-resource/mcp` haproxy routes are removed. |
 | maildev | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"maildev/maildev","tag":"latest"}}` | MailDev image configuration (only used when `dev.deployMaildev` is true) |
 | minio.args[0] | string | `"server"` |  |
 | minio.args[1] | string | `"/data"` |  |
@@ -733,8 +735,9 @@ Before diving deeper, verify these common configuration issues:
 | minio.persistence.mountPath | string | `"/data"` |  |
 | minio.persistence.size | string | `"32Gi"` |  |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
-| objectStore | object | `{"env":{},"uri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
+| objectStore | object | `{"env":{},"sseCKeyB64":null,"uri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
 | objectStore.env | object | `{}` | Additional environment variables for the object store connection |
+| objectStore.sseCKeyB64 | string | `nil` | Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C). Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy requests. Only used when the object store is S3. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).  IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on a bucket that already contains FusionFire data will break all reads of the pre-existing objects. losing the key means losing the data — AWS does not store it. |
 | objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`) |
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials |
