@@ -686,6 +686,11 @@ intakeOauth:
 
 
 # -- Autoscaling & resources for the `logfire-remote-mcp` pod
+logfire-remote-mcp:
+  # -- Enable the remote MCP service. When disabled, the deployment is not
+  # rendered and the `/mcp` and `/.well-known/oauth-protected-resource/mcp`
+  # haproxy routes are removed.
+  enabled: true
 # logfire-remote-mcp:
 #   # -- Workload labels
 #   labels: {}
@@ -1277,6 +1282,16 @@ logfire-ff-cache-byte:
 objectStore:
   # -- URI for object storage (e.g., `s3://bucket`)
   uri:
+  # -- Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C).
+  # Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy
+  # requests. Only used when the object store is S3. Can be a plain string or a
+  # map with valueFrom (e.g., secretKeyRef).
+  #
+  # IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on
+  # a bucket that already contains FusionFire data will break all reads of the
+  # pre-existing objects.
+  # losing the key means losing the data — AWS does not store it.
+  sseCKeyB64:
   # -- Additional environment variables for the object store connection
   env: {}
   # -- Volume mounts for object store credentials
@@ -1306,6 +1321,15 @@ objectStore:
 #           name: my-aws-secret
 #           key: secret-key
 #     AWS_ACCESS_KEY_ID: <access_key>
+#
+# AWS with SSE-C example (key sourced from a secret):
+# objectStore:
+#   uri: s3://<bucket_name>
+#   sseCKeyB64:
+#     valueFrom:
+#       secretKeyRef:
+#         name: my-s3-sse-c
+#         key: key-b64
 
 
 # ==============================================================================

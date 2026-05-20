@@ -21,8 +21,10 @@
   (dict "serviceName" "logfire-ff-compaction-worker")
   (dict "serviceName" "logfire-ff-query-api")
   (dict "serviceName" "logfire-ff-query-worker")
-  (dict "serviceName" "logfire-remote-mcp")
 -}}
+{{- if dig "enabled" true (index .Values "logfire-remote-mcp" | default dict) }}
+{{- $certServices = append $certServices (dict "serviceName" "logfire-remote-mcp") }}
+{{- end -}}
 {{- if (index .Values "logfire-ai-gateway" "enabled") }}
 {{- $certServices = append $certServices (dict "serviceName" "logfire-ai-gateway") }}
 {{- end -}}
