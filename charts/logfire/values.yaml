@@ -192,7 +192,7 @@ gateway:
 # -- Enable full in-cluster HTTPS with certificate verification.
 # This is independent from `ingress.tls` / `gateway.tls`.
 #
-# NOTE: Implementation is incremental; see the "In-cluster HTTPS (service-to-service)" section in the README for current coverage and testing guidance.
+# NOTE: Implementation is incremental; see the README's "In-cluster HTTPS" section for usage notes.
 inClusterTls:
   enabled: false
 

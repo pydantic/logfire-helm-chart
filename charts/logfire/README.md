@@ -7,303 +7,190 @@ Helm chart for self-hosted Pydantic Logfire
 This repository and the chart source it contains are licensed under the MIT License. Deploying the official self-hosted Pydantic Logfire product requires separate commercial access to private container images.
 **Self-hosted Logfire is an Enterprise offering that requires a contract and payment.** Please contact sales@pydantic.dev to discuss setting up a contract and pricing.
 
-## Local Quickstart (Evaluation & Testing)
+## Install Paths
 
-For a fast, local setup to evaluate Logfire, follow our [Local Quickstart Guide](https://logfire.pydantic.dev/docs/reference/self-hosted/local-quickstart/).
-It uses development-grade dependencies like an in-cluster PostgreSQL, MinIO and MailDev to get you up and running in minutes.
+Use this README for the chart-level install flow and values reference.
+Use the [Self-Hosted Installation Guide](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/installation/) for background, architecture, and provider-specific procedures.
 
-## Production Installation
+Choose one path:
 
-For a production-ready deployment, you'll need to connect to your own infrastructure (PostgreSQL, Object Storage, etc.). Our complete guide walks you through every prerequisite and configuration step.
-Check out the full [Self Hosted Installation Guide](https://logfire.pydantic.dev/docs/reference/self-hosted/installation/)
+* **Local evaluation**: use `values.dev.yaml`. It deploys development-grade PostgreSQL, MinIO, and MailDev in the cluster.
+* **Production**: create your own values file, connect external PostgreSQL and object storage, and start with one of the production sizing presets: `standard`, `small`, or `tiny`.
 
-## Installing the Chart
+> **Warning**: `values.dev.yaml` is only for local evaluation and testing. Do not use it for production deployments.
 
-### Add the Helm Repository
+## Install the Chart
 
-``` sh
-$ helm repo add pydantic https://charts.pydantic.dev/
-$ helm repo update
+### 1. Add the Helm Repository
+
+```sh
+helm repo add pydantic https://charts.pydantic.dev/
+helm repo update
 ```
 
-### Local Evaluation (values.dev.yaml)
+### 2. Create the Image Pull Secret
 
-For quick local testing, the chart includes a `values.dev.yaml` file that enables in-cluster Postgres, MinIO, and MailDev.
+Logfire images are private. Contact [sales@pydantic.dev](mailto:sales@pydantic.dev) to get the `key.json` file for your image pull credentials.
 
-> **Warning**: Do not use this for production deployments.
+Create the namespace before creating the secret:
 
-From the chart repository:
-
-``` sh
-$ helm pull pydantic/logfire --untar
-$ helm upgrade --install logfire ./logfire -f ./logfire/values.dev.yaml --create-namespace --namespace logfire
-```
-
-Or from this repo:
-
-``` sh
-$ helm upgrade --install logfire charts/logfire -f charts/logfire/values.dev.yaml --create-namespace --namespace logfire
-```
-
-Then port-forward the service:
-
-``` sh
-$ kubectl -n logfire port-forward svc/logfire-service 8080:8080
-```
-
-## In-cluster HTTPS (service-to-service)
-
-When enabled, the chart switches in-cluster traffic to HTTPS (TLS + certificate verification) incrementally. Current coverage includes:
-
-* Gateway API / Ingress -> `logfire-service` on `inClusterTls.httpsPort` (controller support varies; see notes below).
-* `logfire-service` (HAProxy) serves HTTPS on `inClusterTls.httpsPort`.
-* `logfire-service` (HAProxy) verifies upstream certs for `logfire-frontend-service`, `logfire-dex`, `logfire-backend`, and `logfire-ff-ingest`.
-* `logfire-frontend-service`, `logfire-dex`, `logfire-backend`, and Fusionfire API/cache services expose HTTPS on `inClusterTls.httpsPort`.
-* `logfire-dex` also configures gRPC TLS on `:5557` using the same mounted cert/key.
-* Internal clients in `logfire-backend`, `logfire-worker`, Fusionfire services, and cache HAProxies use HTTPS with CA verification.
-* Fusionfire cache HAProxies verify TLS to their `*-internal` cache backends.
-* Kubernetes probes remain on the original HTTP ports.
-
-For certificate verification, TLS clients use `inClusterTls.caBundle.*`, or (when using cert-manager auto-Issuer) the chart-created CA Secret.
-
-CA bundle requirements by mode:
-
-* `inClusterTls.certs.mode=certManager` + empty `issuerRef.name`: CA bundle is optional (chart-managed Issuer + CA).
-* `inClusterTls.certs.mode=certManager` + non-empty `issuerRef.name` (custom issuer): set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
-* `inClusterTls.certs.mode=existingSecrets`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
-
-`inClusterTls.caBundle` resources must exist in the same namespace as the Helm release.
-If you need stable/predictable TLS Secret names, set `inClusterTls.secretNamePrefix` (default: release name).
-
-When using Kubernetes Ingress instead of Gateway API, the chart points the Ingress at the `logfire-service` HTTPS port when `inClusterTls.enabled` is true. For ingress-nginx, the chart also sets `nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"` automatically (unless you override it). For other ingress controllers, you may need to set a controller-specific annotation to enable HTTPS to upstream services.
-
-For Kind/dev, you can optionally deploy cert-manager as a Helm dependency (`dev.deployCertManager`). When working from this repo, run `helm dependency update charts/logfire` to fetch the dependency charts.
-
-When `dev.deployCertManager=true` and `inClusterTls.certs.mode=certManager`, the chart uses a Helm hook Job to wait for the cert-manager webhook before creating `Issuer`/`Certificate` resources, so a single `helm upgrade --install` works.
-
-## Prerequisites
-
-There are a number of Pydantic Logfire external prerequisites including PostgreSQL, Dex and Object Storage.
-
-### Image Secrets
-
-You will require image pull secrets to pull down the docker images from our private repository. Contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev) to get a copy of them.
-
-When you have the `key.json` file you can load it in as a secret like so:
-
-```
-kubectl create secret docker-registry logfire-image-key \
+```sh
+kubectl create namespace logfire
+kubectl -n logfire create secret docker-registry logfire-image-key \
   --docker-server=us-docker.pkg.dev \
   --docker-username=_json_key \
   --docker-password="$(cat key.json)" \
   --docker-email=YOUR-EMAIL@example.com
 ```
 
-Then you can either configure your [service account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#add-imagepullsecrets-to-a-service-account) to use them or specify this in `values.yaml` under `imagePullSecrets`:
+Reference the secret from your values file:
 
 ```yaml
 imagePullSecrets:
   - logfire-image-key
 ```
 
-### Mirrored Registries
-
-If you mirror Logfire images into your own registry (for example ECR), keep the chart version and mirrored image tags aligned.
+If you mirror Logfire images into your own registry, keep the chart version and mirrored image tags aligned.
 By default, workload images use the chart `appVersion` tag unless you explicitly override tags in values.
-If your mirrored tags are stale compared to the chart release, you can hit mismatches between chart templates and runtime image behavior.
 
-### Hostnames
+### 3a. Local Evaluation
 
-There is at least a hostname that is required to be set: I.e, `logfire.example.com`.
-Set it via `ingress.hostnames` / `ingress.hostname`, or via `gateway.hostnames`.
-If you are not rendering an Ingress, you still need to set hostnames and TLS mode through either `ingress.*` or `gateway.*` so the chart can generate correct URLs and CORS settings.
+From the chart repository package:
 
-Example Ingress configuration:
+```sh
+helm pull pydantic/logfire --untar
+helm upgrade --install logfire ./logfire \
+  -f ./logfire/values.dev.yaml \
+  --namespace logfire
+```
+
+Or from this source repository:
+
+```sh
+helm dependency build charts/logfire
+helm upgrade --install logfire charts/logfire \
+  -f charts/logfire/values.dev.yaml \
+  --namespace logfire
+```
+
+Then port-forward Logfire and MailDev in separate terminals:
+
+```sh
+kubectl -n logfire port-forward svc/logfire-service 8080:8080
+kubectl -n logfire port-forward svc/logfire-maildev 1080:1080
+```
+
+Open Logfire at `http://localhost:8080` and MailDev at `http://localhost:1080`.
+The local values file sets `adminEmail: hello@example.dev`; use MailDev when resetting that account's password.
+
+### 3b. Production Starter
+
+Start with a small production values file and add environment-specific details from there:
+
+```yaml
+imagePullSecrets:
+  - logfire-image-key
+
+sizingPreset: standard
+adminEmail: sre@example.com
+
+ingress:
+  enabled: true
+  tls: true
+  hostnames:
+    - logfire.example.com
+  ingressClassName: nginx
+
+objectStore:
+  uri: s3://logfire-prod
+  env:
+    AWS_DEFAULT_REGION: us-east-1
+
+postgresDsn: postgresql://logfire_crud:PASSWORD@postgres.example.com:5432/crud
+postgresFFDsn: postgresql://logfire_ff:PASSWORD@postgres.example.com:5432/ff
+
+logfire-dex:
+  config:
+    storage:
+      type: postgres
+      config:
+        host: postgres.example.com
+        port: 5432
+        user: logfire_dex
+        database: dex
+        password: PASSWORD
+        ssl:
+          mode: require
+
+smtp:
+  host: smtp.example.com
+  port: 587
+  username: logfire
+  password: PASSWORD
+  use_tls: true
+```
+
+Install it:
+
+```sh
+helm upgrade --install logfire pydantic/logfire \
+  -f values.production.yaml \
+  --namespace logfire
+```
+
+For real deployments, load sensitive values from Kubernetes Secrets, External Secrets, or your secret manager instead of committing plaintext passwords.
+Production clusters should have working HorizontalPodAutoscaler metrics before using the built-in presets.
+If your cluster has no default StorageClass, set the required `storageClassName` values for scratch and ingest volumes.
+
+## Production Checklist
+
+Before installing in production, confirm that you have:
+
+* Image pull credentials configured through `imagePullSecrets`.
+* A public hostname and TLS settings through `ingress.*` or `gateway.*`.
+* External PostgreSQL databases for `crud`, `ff`, and `dex`.
+* Object storage using `s3://`, `gs://`, or `az://`.
+* SMTP credentials for account and password-reset emails.
+* A sizing preset selected: `standard`, `small`, or `tiny`.
+
+## Configuration Notes
+
+### Hostnames and Exposure
+
+Set at least one public hostname so the chart can generate correct public URLs and CORS settings.
+
+For a standard Ingress:
 
 ```yaml
 ingress:
   enabled: true
   tls: true
   hostnames:
-  - logfire.example.com
+    - logfire.example.com
   ingressClassName: nginx
 ```
 
-#### Using the direct service
-
-We expose a service called `logfire-service` which will route traffic appropriately.
-
-If you don't want to use the ingress controller, you will still need to define hostnames and whether you are externally using TLS:
-
-I.e, this config will turn off the ingress resource, but still set appropriate cors headers for the `logfire-service`:
-
-```yaml
-ingress:
-  # this turns off the ingress resource
-  enabled: false
-
-gateway:
-  # these values are still used for URL/CORS generation even if gateway.enabled is false
-  tls: true
-  hostnames:
-    - logfire.example.com
-```
-
-If you are *not* using kubernetes ingress, you must still set at least one public hostname so the chart can generate correct URLs and CORS settings.
-
-#### Using Gateway API
-
-As an alternative to Ingress, you can use the [Kubernetes Gateway API](https://gateway-api.sigs.k8s.io/) to expose Logfire.
-This is useful if you're using a Gateway controller like Istio, Envoy Gateway, Cilium, or any other Gateway API implementation.
-
-##### Option 1: Create a new Gateway
-
-The chart can create both a Gateway and HTTPRoute resource for you:
-
-```yaml
-ingress:
-  # Disable the Ingress resource
-  enabled: false
-
-gateway:
-  enabled: true
-  tls: true
-  # TLS secret for the Gateway listener
-  tlsSecretName: logfire-tls-cert
-  hostnames:
-    - logfire.example.com
-  # Create the Gateway resource (default: true)
-  create: true
-  # GatewayClass name (required when create is true)
-  # Common values: istio, cilium, nginx, envoy-gateway, gke-l7-rilb
-  gatewayClassName: istio
-  # Custom Gateway name (optional, defaults to "logfire-gateway")
-  name: logfire-gateway
-  # Additional Gateway annotations
-  gatewayAnnotations:
-    external-dns.alpha.kubernetes.io/hostname: logfire.example.com
-```
-
-When `gateway.tls` is true (or when it falls back to `ingress.tls`), the Gateway will be configured with an HTTPS listener on port 443. Otherwise, an HTTP listener on port 80 will be created.
-
-##### Option 2: Use an existing Gateway
-
-If you already have a Gateway resource in your cluster, you can attach the HTTPRoute to it:
+If you expose `logfire-service` directly instead of rendering an Ingress, keep `ingress.enabled: false` and still set `gateway.hostnames` and `gateway.tls`:
 
 ```yaml
 ingress:
   enabled: false
 
 gateway:
-  enabled: true
   tls: true
   hostnames:
     - logfire.example.com
-  # Don't create the Gateway resource
-  create: false
-  # Name of the existing Gateway (required when create is false)
-  name: my-existing-gateway
-  # Namespace of the existing Gateway (optional, defaults to release namespace)
-  namespace: istio-system
-  # Section/listener name within the Gateway (optional)
-  sectionName: https
 ```
 
-##### Advanced Gateway Configuration
+Gateway API is supported through `gateway.enabled`.
+Set `gateway.create: true` to create a Gateway, or `gateway.create: false` to attach the HTTPRoute to an existing Gateway.
 
-You can customize the Gateway listeners and HTTPRoute settings:
+### Authentication
 
-```yaml
-gateway:
-  enabled: true
-  create: true
-  gatewayClassName: istio
-  # Custom listeners configuration
-  listeners:
-    - name: https
-      protocol: HTTPS
-      port: 443
-      tls:
-        mode: Terminate
-        certificateRefs:
-          - name: logfire-tls-cert
-      allowedRoutes:
-        namespaces:
-          from: Same
-  # Request specific IP addresses for the Gateway
-  addresses:
-    - type: IPAddress
-      value: "192.168.1.100"
-  # HTTPRoute path matches (defaults to PathPrefix "/")
-  matches:
-    - path:
-        type: PathPrefix
-        value: /
-  # HTTPRoute filters for request/response modification
-  filters:
-    - type: RequestHeaderModifier
-      requestHeaderModifier:
-        add:
-          - name: X-Custom-Header
-            value: custom-value
-  # HTTPRoute timeout settings
-  timeouts:
-    request: 60s
-    backendRequest: 30s
-  # HTTPRoute annotations
-  annotations:
-    app.kubernetes.io/part-of: logfire
-```
+Dex is used as the identity service for Logfire.
+When creating an OAuth app in your provider, set the redirect URI to `<logfire_url>/auth-api/callback`, for example `https://logfire.example.com/auth-api/callback`.
 
-## Istio Compatibility Profile (Optional)
-
-If you run Istio and see protocol/mTLS sidecar issues on HAProxy/migration/infra workloads, you can enable:
-
-```yaml
-istio:
-  disableSidecarOnKnownWorkloads: true
-```
-
-This automatically sets `sidecar.istio.io/inject: "false"` on:
-`logfire-service`, `logfire-ff-proxy-cache-byte`, `logfire-backend-migrations`, `logfire-ff-migrations`, `logfire-redis`, and `logfire-otel-collector`.
-
-You can still override labels per workload using `<workload>.podLabels`.
-
-### Dex
-
-Dex is used as the identity service for logfire & can be configured for many different types of connectors.  The full list of connectors can be found here: [https://dexidp.io/docs/connectors/](https://dexidp.io/docs/connectors/)
-
-We have some connector examples at our [Auth Examples](https://logfire.pydantic.dev/docs/reference/self-hosted/examples/#Auth) section
-
-There is some default configuration provided in `values.yaml`.
-
-#### Authentication Configuration
-
-Depending on what [connector you want to use](https://dexidp.io/docs/connectors/), you can configure dex connectors accordingly.
-
-:envelope: Note: when creating an app in a provider, you should set the RedirectURI/Callback URL to ```<logfire_url>/auth-api/callback```, where ```<logfire_url>``` is your hostname with scheme, like ```https://logfire-example.com/auth-api/callback```
-
-Here's an example using `github` as a connector:
-
-```yaml
-logfire-dex:
-  ...
-  config:
-    connectors:
-      - type: "github"
-        id: "github"
-        name: "GitHub"
-        config:
-          # You get clientID and clientSecret by creating a GitHub OAuth App
-          # See https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app
-          clientID: client_id
-          clientSecret: client_secret
-```
-
-To use GitHub as an example, you can find general instructions for creating an OAuth app [in the GitHub docs](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app).
-
-Dex allows configuration parameters to reference environment variables.
-This can be done by using the `$` symbol.  For example, the `clientID` and `clientSecret` can be set as environment variables:
+Example GitHub connector using Kubernetes Secret references:
 
 ```yaml
 logfire-dex:
@@ -320,205 +207,72 @@ logfire-dex:
           key: client-secret
   config:
     connectors:
-      - type: "github"
-        id: "github"
-        name: "GitHub"
+      - type: github
+        id: github
+        name: GitHub
         config:
           clientID: $GITHUB_CLIENT_ID
           clientSecret: $GITHUB_CLIENT_SECRET
           getUserInfo: true
 ```
 
-You would have to manually (or via IaC, etc.) create `my-github-secret`.
-This allows you to avoid putting any secrets into a `values.yaml` file.
-
 ### Object Storage
 
-Pydantic Logfire requires Object Storage to store data.  There are a number of different integrations that can be used:
+Logfire requires object storage for data. Supported URI schemes are `s3://`, `gs://`, and `az://`.
+Provider credentials can come from `objectStore.env`, mounted secrets, or the Kubernetes service account used by Logfire.
 
-* Amazon S3
-* Google Cloud Storage
-* Azure Storage
-
-Each has their own set of environment variables that can be used to configure them. However if your kubernetes service account has the appropriate credentials, that be used by setting `serviceAccountName`.
-
-**Important**: Do not enable versioning on your object storage bucket. Logfire manages its own data lifecycle and versioning will interfere with this process and increase storage costs unnecessarily.
-
-#### Amazon S3
-
-Variables extracted from environment:
-
- * `AWS_ACCESS_KEY_ID` -> access_key_id
- * `AWS_SECRET_ACCESS_KEY` -> secret_access_key
- * `AWS_DEFAULT_REGION` -> region
- * `AWS_ENDPOINT` -> endpoint
- * `AWS_SESSION_TOKEN` -> token
- * `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` -> <https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html>
- * `AWS_ALLOW_HTTP` -> set to "true" to permit HTTP connections without TLS
-
-Example:
-
-```yaml
-objectStore:
-  uri: s3://<bucket_name>
-  # Note: not needed if the service account specified by `serviceAccountName` itself has credentials
-  env:
-    AWS_DEFAULT_REGION: <region>
-    AWS_SECRET_ACCESS_KEY:
-      valueFrom:
-        secretKeyRef:
-          name: my-aws-secret
-          key: secret-key
-    AWS_ACCESS_KEY_ID: <access_key>
-```
-
-#### Google Cloud Storage
-
-Variables extracted from environment:
-
- * `GOOGLE_SERVICE_ACCOUNT`: location of service account file
- * `GOOGLE_SERVICE_ACCOUNT_PATH`: (alias) location of service account file
- * `SERVICE_ACCOUNT`: (alias) location of service account file
- * `GOOGLE_SERVICE_ACCOUNT_KEY`: JSON serialized service account key
- * `GOOGLE_BUCKET`: bucket name
- * `GOOGLE_BUCKET_NAME`: (alias) bucket name
-
-Volume mounts example:
-```yaml
-objectStore:
-  uri: gs://<bucket>
-  # Note: not needed if the service account specified by `serviceAccountName` itself has credentials
-  env:
-    GOOGLE_SERVICE_ACCOUNT_PATH: /etc/gcp/key.json
-  volumeMounts:
-    - name: gcp-credentials
-      mountPath: /etc/gcp
-      readOnly: true
-  volumes:
-    - name: gcp-credentials
-      secret:
-        secretName: gcs-credentials
-```
-
-JSON key example:
-```yaml
-objectStore:
- uri: gs://<bucket>
- env:
-  GOOGLE_SERVICE_ACCOUNT_KEY:
-   valueFrom:
-    secretKeyRef:
-     name: gcs-credentials
-     key: key.json
-```
-
-#### Azure Storage
-
-Variables extracted from environment:
-
- * `AZURE_STORAGE_ACCOUNT_NAME`: storage account name
- * `AZURE_STORAGE_ACCOUNT_KEY`: storage account master key
- * `AZURE_STORAGE_ACCESS_KEY`: alias for AZURE_STORAGE_ACCOUNT_KEY
- * `AZURE_STORAGE_CLIENT_ID`: client id for service principal authorization
- * `AZURE_STORAGE_CLIENT_SECRET`: client secret for service principal authorization
- * `AZURE_STORAGE_TENANT_ID`: tenant id used in oauth flows
-
-Example:
-
-```yaml
-objectStore:
-  uri: az://<container_name>
-  env:
-    AZURE_STORAGE_ACCOUNT_NAME: <storage_account_name>
-    AZURE_STORAGE_ACCOUNT_KEY:
-      valueFrom:
-        secretKeyRef:
-          name: my-azure-secret
-          key: account-key
-```
+Do not enable bucket versioning. Logfire manages its own data lifecycle, and bucket versioning can increase cost and interfere with lifecycle behavior.
 
 ### PostgreSQL
 
-Pydantic Logfire nominally needs 3 separate PostgreSQL databases: `crud`, `ff`, and `dex`.  Each will need a user with owner permissions to allow migrations to run.
-While they can all be ran on the same instance, they are required to be separate databases to prevent naming/schema collisions.
-
-Here's an example set of values using `postgres.example.com` as the host:
-
-```yaml
-postgresDsn: postgres://postgres:postgres@postgres.example.com:5432/crud
-postgresFFDsn: postgres://postgres:postgres@postgres.example.com:5432/ff
-
-dex:
-  ...
-  # note that the dex chart does not use the uri style connector
-  config:
-    storage:
-      type: postgres
-      config:
-        host: postgres.example.com
-        port: 5432
-        user: postgres
-        database: dex
-        password: postgres
-        ssl:
-          mode: disable
-```
+Logfire requires three separate PostgreSQL databases: `crud`, `ff`, and `dex`.
+They may run on the same PostgreSQL instance, but they must be separate databases to avoid schema collisions.
+Each database user needs owner permissions so migrations can run.
 
 ### Email
 
-Pydantic Logfire uses SMTP to send emails.  You will need to configure email using the following values:
+Configure SMTP so users can receive account and password-reset emails:
 
 ```yaml
 smtp:
   host: smtp.example.com
-  port: 25
-  username: user
-  password: pass
-  use_tls: false
+  port: 587
+  username: logfire
+  password: PASSWORD
+  use_tls: true
 ```
 
 ### AI
 
-Pydantic Logfire AI features can be enabled by setting the `ai` configuration in `values.yaml`.
-You need to specify the model provider and model name you want to use:
+Pydantic Logfire AI features can be enabled by setting the `ai` configuration in your values file:
 
 ```yaml
 ai:
   model: provider:model-name
   openAi:
     apiKey: openai-api-key
-  vertexAi:
-    region: region  # Optional, only needed for Vertex AI if not using default region
-    anthropicProjectId: gcp-project-id  # Required for anthropic-vertex:* models
-  azureOpenAi:
-    endpoint: azure-openai-endpoint
-    apiKey: azure-openai-api-key
-    apiVersion: azure-openai-api-version
 ```
 
-## Configuring Logfire
+## Sizing
 
-Once your self-hosted instance is running, configure your client SDK to send data to your new endpoint by setting the ```base_url``` to send data to.
+Start with a sizing preset instead of hand-sizing every workload:
 
-```python
-import logfire
-
-logfire.configure(
-    token='<your_logfire_token>',
-    advanced=logfire.AdvancedOptions(base_url="https://logfire.example.com")
-)
-logfire.info('Hello, {place}!', place='World')
+```yaml
+sizingPreset: standard
 ```
 
-## Scaling
+Use `standard` for general production deployments, `small` for lower-traffic deployments that still need ingest and query headroom, or `tiny` for the smallest production footprint.
+Presets apply workload resources, autoscaling, PDBs, best-effort topology spreading for HA-sensitive workloads, and selected FusionFire execution settings.
+They do not configure environment-specific prerequisites such as hostnames, TLS, PostgreSQL, object storage, image pull secrets, or StorageClasses.
 
-Logfire is designed to be horizontally scalable. You can adjust the replica counts and resources for each component to handle your specific workload.
+The `standard` preset keeps the public request path, query API, and ingest path at a minimum of three replicas.
+The `small` preset keeps ingest and the edge service more available while preserving a smaller footprint.
+The `tiny` preset intentionally favors the smallest resource footprint over high availability.
 
-For customer deployments, we recommend starting with a built-in sizing preset. Use `sizingPreset: standard` for general production deployments, `sizingPreset: small` for lower-traffic deployments that still need room for ingest/query spikes, or `sizingPreset: tiny` for a very low-traffic instance with the smallest footprint. Presets apply workload resources, autoscaling, PDBs, best-effort topology spreading for HA-sensitive workloads, and selected FusionFire execution settings; you can still override any individual workload after selecting the preset.
+If you do not set a sizing preset or per-workload resources, the chart does not render Kubernetes CPU/memory requests or limits.
+FusionFire still needs internal execution limits, so those derived settings use the `tiny` preset resource baseline without rendering the preset's Kubernetes resources.
 
-`sizingPreset` covers workload sizing and portable availability defaults. The `standard` preset keeps the public request path, query API, and ingest path at a minimum of three replicas; `small` keeps ingest and the edge service more available while preserving a smaller footprint; `tiny` intentionally favors the smallest resource footprint over high availability. You still need to configure environment-specific prerequisites such as hostnames/TLS, image pull secrets, PostgreSQL, object storage URI and credentials, and any required `storageClassName` values if your cluster has no suitable default StorageClass.
-
-If you do not set a sizing preset or per-workload resources, the chart does not render Kubernetes CPU/memory requests or limits. FusionFire still needs internal execution limits, so those derived settings use the `tiny` preset resource baseline without rendering the preset's Kubernetes resources.
+Override individual workloads only after selecting a preset:
 
 ```yaml
 sizingPreset: standard
@@ -530,38 +284,51 @@ logfire-worker:
     ephemeralStorage: "1Gi"
 ```
 
-This is how you can configure each service:
+If `resources.limits` is omitted, this chart defaults limits to the configured requests for Guaranteed QoS.
+
+## Advanced Configuration
+
+### In-cluster HTTPS
+
+`inClusterTls.enabled` switches supported in-cluster service-to-service traffic to HTTPS with certificate verification.
+This is independent from public `ingress.tls` or `gateway.tls`.
+
+Certificate verification uses `inClusterTls.caBundle.*`, or the chart-created CA Secret when using cert-manager auto-Issuer mode.
+
+CA bundle requirements by mode:
+
+* `inClusterTls.certs.mode=certManager` with empty `issuerRef.name`: CA bundle is optional.
+* `inClusterTls.certs.mode=certManager` with custom `issuerRef.name`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
+* `inClusterTls.certs.mode=existingSecrets`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
+
+For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
+When working from this repository, run `helm dependency update charts/logfire` to fetch dependency charts.
+
+### Istio Compatibility
+
+If you run Istio and see protocol or mTLS sidecar issues on HAProxy, migration, or infrastructure workloads, enable:
 
 ```yaml
-<service_name>:
-  # -- Number of pod replicas
-  replicas: 1
-  # -- Resource limits and allocations
-  resources:
-    requests:
-      cpu: "500m"
-      memory: "1Gi"
-      ephemeral-storage: "1Gi"
-    limits:
-      cpu: "1"
-      memory: "2Gi"
-      ephemeral-storage: "2Gi"
-  # -- Autoscaler settings
-  autoscaling:
-    minReplicas: 2
-    maxReplicas: 4
-    hpa:
-      enabled: true
-      memAverage: 65
-      cpuAverage: 20
-      behavior:
-        scaleDown:
-          stabilizationWindowSeconds: 300
+istio:
+  disableSidecarOnKnownWorkloads: true
 ```
 
-If `resources.limits` is omitted, this chart defaults limits to the configured requests (Guaranteed QoS).
+This sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads.
+You can still override labels per workload using `<workload>.podLabels`.
 
-See our [`Scaling guide`](https://logfire.pydantic.dev/docs/reference/self-hosted/scaling/) for some production level values and DB recommended settings.
+## Configure SDKs
+
+Once your self-hosted instance is running, configure client SDKs to send data to your endpoint:
+
+```python
+import logfire
+
+logfire.configure(
+    token='<your_logfire_token>',
+    advanced=logfire.AdvancedOptions(base_url="https://logfire.example.com")
+)
+logfire.info('Hello, {place}!', place='World')
+```
 
 ## Troubleshooting & Support
 
@@ -581,7 +348,7 @@ Before diving deeper, verify these common configuration issues:
 
 ### Additional Resources
 
-* **Troubleshooting Guide**: If you encounter issues, your first stop should be the [Troubleshooting Self Hosted guide](https://logfire.pydantic.dev/docs/reference/self-hosted/troubleshooting/), which includes common issues and steps for accessing internal logs.
+* **Troubleshooting Guide**: If you encounter issues, your first stop should be the [Troubleshooting Self-Hosted guide](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/troubleshooting/), which includes common issues and steps for accessing internal logs.
 
 * **GitHub Issues**: If your issue persists, please open up an issue with details about your deployment (Chart version, Kubernetes version, values file, any relevant error logs).
 
@@ -661,7 +428,7 @@ Before diving deeper, verify these common configuration issues:
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks) |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | imagePullSecrets | list | `[]` | Image pull secrets used by all pods |
-| inClusterTls | object | `{"caBundle":{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}},"certs":{"certManager":{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}},"mode":"existingSecrets"},"enabled":false,"httpsPort":8443,"secretNamePrefix":""}` | Enable full in-cluster HTTPS with certificate verification. This is independent from `ingress.tls` / `gateway.tls`.  NOTE: Implementation is incremental; see the "In-cluster HTTPS (service-to-service)" section in the README for current coverage and testing guidance. |
+| inClusterTls | object | `{"caBundle":{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}},"certs":{"certManager":{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}},"mode":"existingSecrets"},"enabled":false,"httpsPort":8443,"secretNamePrefix":""}` | Enable full in-cluster HTTPS with certificate verification. This is independent from `ingress.tls` / `gateway.tls`.  NOTE: Implementation is incremental; see the README's "In-cluster HTTPS" section for usage notes. |
 | inClusterTls.caBundle | object | `{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}}` | CA bundle used by clients (HAProxy and other workloads) to verify service certificates. Required when: - certs.mode=existingSecrets - certs.mode=certManager with a non-empty certs.certManager.issuerRef.name (custom issuer) Optional when: - certs.mode=certManager with an empty issuerRef.name (chart-managed namespaced Issuer + CA) Provide exactly one of existingConfigMap or existingSecret. The referenced resource must exist in the same namespace as this Helm release. |
 | inClusterTls.certs | object | `{"certManager":{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}},"mode":"existingSecrets"}` | Certificate provisioning for in-cluster TLS. certs.mode=certManager requires cert-manager CRDs to be installed in the cluster. (Helm will fail fast if cert-manager.io/v1 is not available, unless dev.deployCertManager=true.) |
 | inClusterTls.certs.certManager | object | `{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}}` | Settings only used when certs.mode=certManager |
