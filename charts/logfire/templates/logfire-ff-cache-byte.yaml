@@ -75,6 +75,8 @@ spec:
             - --host=0.0.0.0
             - --port=9001
             - --cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 70) }}MB
+            - --in-flight-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 20) }}MB
+            - --file-size-cache-size={{ include "logfire.calculateMemory" (dict "Values" .Values "serviceName" $serviceName "percentage" 5) }}MB
           envFrom:
             - configMapRef:
                 name: logfire-ff-base-config

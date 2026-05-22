@@ -15,24 +15,38 @@ Helpers specific to Fusionfire workloads and configuration.
 {{- end -}}
 {{- end -}}
 
+{{/*
+Resolve FF execution values. No-preset installs borrow tiny's FF-specific
+baseline when a workload has no resources, without rendering tiny's resources,
+autoscaling, PDBs, or scheduling rules.
+*/}}
+{{- define "logfire.ffDerivedServiceValues" -}}
+{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- $derived := deepCopy $effectiveServiceValues -}}
+{{- if and (not (.Values.sizingPreset | default "")) (not (get $effectiveServiceValues "resources")) -}}
+  {{- $tinyPreset := get (.Values.sizingPresets | default dict) "tiny" | default dict -}}
+  {{- $tinyServiceValues := get $tinyPreset .serviceName | default dict -}}
+  {{- range $key := list "queryParallelism" "datafusionMemory" "spillToDiskQuota" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" -}}
+    {{- if and (not (hasKey $derived $key)) (hasKey $tinyServiceValues $key) -}}
+      {{- $_ := set $derived $key (deepCopy (get $tinyServiceValues $key)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $derived | toJson -}}
+{{- end -}}
+
 {{- define "logfire.ffMaxCompactionJobSizeBytesDefault" -}}
 {{- $compactionWorker := dict "Values" .Values "serviceName" "logfire-ff-compaction-worker" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" $compactionWorker | fromJson -}}
-{{- $resources := get $effectiveServiceValues "resources" | default dict -}}
-{{- if $resources -}}
 {{- $effectiveResources := include "logfire.effectiveResources" $compactionWorker | fromJson -}}
 {{- $memory := get $effectiveResources "memoryRequest" -}}
 {{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
 {{- $jobSizeMi := min 512 (max 32 (div $memoryMi 16)) -}}
 {{- printf "%dMB" $jobSizeMi -}}
-{{- else -}}
-512MB
-{{- end -}}
 {{- end -}}
 
 {{- define "logfire.ffMaxCompactionJobSizeBytes" -}}
-{{- $maintenanceServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-maintenance-worker") | fromJson -}}
-{{- $compactionServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-compaction-worker") | fromJson -}}
+{{- $maintenanceServiceValues := include "logfire.ffDerivedServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-maintenance-worker") | fromJson -}}
+{{- $compactionServiceValues := include "logfire.ffDerivedServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-compaction-worker") | fromJson -}}
 {{- coalesce (get $compactionServiceValues "maxCompactionJobSizeBytes") (get $maintenanceServiceValues "maxCompactionJobSizeBytes") (include "logfire.ffMaxCompactionJobSizeBytesDefault" .) -}}
 {{- end -}}
 
@@ -60,26 +74,26 @@ Default query parallelism follows the computed FF IO thread count.
 Resolve query parallelism from explicit service values, falling back to the computed default.
 */}}
 {{- define "logfire.ffQueryParallelism" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- $effectiveServiceValues := include "logfire.ffDerivedServiceValues" . | fromJson -}}
 {{- $defaultQueryParallelism := include "logfire.ffQueryParallelismDefault" . -}}
 {{- get $effectiveServiceValues "queryParallelism" | default $defaultQueryParallelism -}}
 {{- end -}}
 
 {{/*
 Default ingest direct-file buffering.
-Keeps the in-memory direct-file submit buffer to roughly 1/8 of the pod memory
-request and caps concurrency at the platform value used by larger ingest pods.
+Sizes batch files from the pod memory request, then caps replay/submit
+concurrency from both memory and CPU so sub-core ingest pods do not overwhelm
+the downstream ingest-processor during disk replay.
 */}}
 {{- define "logfire.ffIngestDirectFileSettingsDefault" -}}
 {{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
-{{- $threadSettings := include "logfire.ffThreadSettings" . | fromJson -}}
+{{- $cpu := get $effectiveResources "cpuRequest" -}}
 {{- $memory := get $effectiveResources "memoryRequest" -}}
+{{- $cpuMilli := int (include "logfire.cpuMilli" $cpu) -}}
 {{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
-{{- $cpuCores := int (get $threadSettings "cpuCores") -}}
 {{- $bufferMi := min 8 (max 1 (div $memoryMi 256)) -}}
-{{- $memoryBudgetMi := max $bufferMi (div $memoryMi 8) -}}
-{{- $memoryConcurrency := max 1 (div $memoryBudgetMi $bufferMi) -}}
-{{- $cpuConcurrency := mul $cpuCores 32 -}}
+{{- $memoryConcurrency := max 4 (div $memoryMi 64) -}}
+{{- $cpuConcurrency := max 4 (div (add $cpuMilli 31) 32) -}}
 {{- $submitConcurrency := min 128 (max 1 (min $cpuConcurrency $memoryConcurrency)) -}}
 {{- dict "bufferMaxBytes" (printf "%dMB" $bufferMi) "submitConcurrency" $submitConcurrency | toJson -}}
 {{- end -}}
@@ -89,7 +103,7 @@ Resolve ingest direct-file buffering from explicit service values, falling back
 to computed defaults.
 */}}
 {{- define "logfire.ffIngestDirectFileSettings" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- $effectiveServiceValues := include "logfire.ffDerivedServiceValues" . | fromJson -}}
 {{- $defaults := include "logfire.ffIngestDirectFileSettingsDefault" . | fromJson -}}
 {{- $bufferMaxBytes := get $effectiveServiceValues "directFileBufferMaxBytes" | default (get $defaults "bufferMaxBytes") -}}
 {{- $submitConcurrency := get $effectiveServiceValues "directFileSubmitConcurrency" | default (get $defaults "submitConcurrency") -}}
@@ -101,7 +115,7 @@ Resolve query-api parallelism. When dedicated query-workers are enabled,
 default from query-worker sizing because query-api schedules work onto workers.
 */}}
 {{- define "logfire.ffQueryApiParallelism" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- $effectiveServiceValues := include "logfire.ffDerivedServiceValues" . | fromJson -}}
 {{- $queryParallelismDefaultServiceName := .serviceName -}}
 {{- if (get (get .Values "logfire-ff-query-worker" | default  dict) "enabled") -}}
 {{- $queryParallelismDefaultServiceName = "logfire-ff-query-worker" -}}
@@ -139,7 +153,7 @@ the process runtime, object store clients, decompression, and parquet writers.
   {{- if le $memoryMi 1024 -}}
     {{- $datafusionMemoryMi = max 128 (div $memoryMi 2) -}}
   {{- else -}}
-    {{- $datafusionMemoryMi = max 256 (div $memoryMi 8) -}}
+    {{- $datafusionMemoryMi = max 512 (div $memoryMi 8) -}}
   {{- end -}}
 {{- else -}}
 {{- $datafusionMemoryMi = max 512 (div (mul $memoryMi 3) 8) -}}
@@ -162,8 +176,8 @@ the pod memory request directly with a cap matching the previous chart default.
 
 {{/*
 Default background maintenance/compaction job concurrency.
-The runner gates CPU-heavy work to roughly half this value, so cpu+1 keeps
-small pods conservative while allowing larger workers to make progress.
+Sub-core workers stay conservative. Larger workers get enough queue parallelism
+to keep CPU-heavy phases fed while CPU concurrency still gates active compute.
 */}}
 {{- define "logfire.ffBackgroundJobParallelismDefault" -}}
 {{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
@@ -174,7 +188,7 @@ small pods conservative while allowing larger workers to make progress.
 {{- if lt $cpuMilli 1000 -}}
 1
 {{- else -}}
-{{- min 10 (max 3 (add $cpuCores 1)) -}}
+{{- min 10 (max 4 (mul $cpuCores 4)) -}}
 {{- end -}}
 {{- end -}}
 
@@ -183,7 +197,7 @@ Resolve background maintenance/compaction job concurrency from explicit service 
 falling back to the computed default.
 */}}
 {{- define "logfire.ffBackgroundJobParallelism" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- $effectiveServiceValues := include "logfire.ffDerivedServiceValues" . | fromJson -}}
 {{- $defaultJobParallelism := include "logfire.ffBackgroundJobParallelismDefault" . -}}
 {{- get $effectiveServiceValues "jobParallelism" | default $defaultJobParallelism -}}
 {{- end -}}
@@ -205,7 +219,7 @@ Resolve CPU-heavy maintenance concurrency from explicit service values, falling
 back to the computed default.
 */}}
 {{- define "logfire.ffBackgroundCpuConcurrency" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- $effectiveServiceValues := include "logfire.ffDerivedServiceValues" . | fromJson -}}
 {{- $defaultCpuConcurrency := include "logfire.ffBackgroundCpuConcurrencyDefault" . -}}
 {{- get $effectiveServiceValues "cpuConcurrency" | default $defaultCpuConcurrency -}}
 {{- end -}}
@@ -214,7 +228,7 @@ back to the computed default.
 Common execution env for background maintenance/compaction workers.
 */}}
 {{- define "logfire.ffBackgroundWorkerExecutionEnv" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- $effectiveServiceValues := include "logfire.ffDerivedServiceValues" . | fromJson -}}
 {{- $threadSettings := include "logfire.ffThreadSettings" . | fromJson -}}
 {{- $defaultDatafusionMemory := include "logfire.ffBackgroundDatafusionMemoryDefault" . -}}
 {{- $jobParallelism := include "logfire.ffBackgroundJobParallelism" . -}}

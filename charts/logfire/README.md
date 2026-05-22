@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.17](https://img.shields.io/badge/Version-0.13.17-informational?style=flat-square) ![AppVersion: c14595e4](https://img.shields.io/badge/AppVersion-c14595e4-informational?style=flat-square)
+![Version: 0.13.18](https://img.shields.io/badge/Version-0.13.18-informational?style=flat-square) ![AppVersion: c14595e4](https://img.shields.io/badge/AppVersion-c14595e4-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -514,9 +514,11 @@ logfire.info('Hello, {place}!', place='World')
 
 Logfire is designed to be horizontally scalable. You can adjust the replica counts and resources for each component to handle your specific workload.
 
-For customer deployments, we recommend starting with a built-in sizing preset. Use `sizingPreset: standard` for general production deployments, `sizingPreset: small` for lower-traffic deployments that still need room for ingest/query spikes, or `sizingPreset: tiny` for a very low-traffic instance with the smallest footprint. Presets apply workload resources, autoscaling, PDBs, and selected FusionFire execution settings; you can still override any individual workload after selecting the preset.
+For customer deployments, we recommend starting with a built-in sizing preset. Use `sizingPreset: standard` for general production deployments, `sizingPreset: small` for lower-traffic deployments that still need room for ingest/query spikes, or `sizingPreset: tiny` for a very low-traffic instance with the smallest footprint. Presets apply workload resources, autoscaling, PDBs, best-effort topology spreading for HA-sensitive workloads, and selected FusionFire execution settings; you can still override any individual workload after selecting the preset.
 
-`sizingPreset` only covers workload sizing. You still need to configure environment-specific prerequisites such as hostnames/TLS, image pull secrets, PostgreSQL, object storage URI and credentials, and any required `storageClassName` values if your cluster has no suitable default StorageClass.
+`sizingPreset` covers workload sizing and portable availability defaults. The `standard` preset keeps the public request path, query API, and ingest path at a minimum of three replicas; `small` keeps ingest and the edge service more available while preserving a smaller footprint; `tiny` intentionally favors the smallest resource footprint over high availability. You still need to configure environment-specific prerequisites such as hostnames/TLS, image pull secrets, PostgreSQL, object storage URI and credentials, and any required `storageClassName` values if your cluster has no suitable default StorageClass.
+
+If you do not set a sizing preset or per-workload resources, the chart does not render Kubernetes CPU/memory requests or limits. FusionFire still needs internal execution limits, so those derived settings use the `tiny` preset resource baseline without rendering the preset's Kubernetes resources.
 
 ```yaml
 sizingPreset: standard
