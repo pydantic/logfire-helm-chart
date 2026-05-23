@@ -42,13 +42,20 @@ Convert Kubernetes CPU quantity to integer cores using ceil, with minimum 1.
 {{/*
 Resolve effective resource requests/limits for a workload.
 Supports both legacy flat keys and nested requests/limits.
+When resources are omitted entirely, use the tiny preset's resources as the
+internal FusionFire baseline. These defaults do not render Kubernetes resources.
 */}}
 {{- define "logfire.effectiveResources" -}}
 {{- $serviceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
 {{- $resources := get $serviceValues "resources" | default dict -}}
+{{- if not $resources -}}
+  {{- $tinyPreset := get (.Values.sizingPresets | default dict) "tiny" | default dict -}}
+  {{- $tinyServiceValues := get $tinyPreset .serviceName | default dict -}}
+  {{- $resources = get $tinyServiceValues "resources" | default dict -}}
+{{- end -}}
 {{- $requests := get $resources "requests" | default dict -}}
 {{- $limits := get $resources "limits" | default dict -}}
-{{- $cpuRequest := coalesce (get $requests "cpu") (get $resources "cpu") (get $limits "cpu") "1" -}}
+{{- $cpuRequest := coalesce (get $requests "cpu") (get $resources "cpu") (get $limits "cpu") "500m" -}}
 {{- $memoryRequest := coalesce (get $requests "memory") (get $resources "memory") (get $limits "memory") "1Gi" -}}
 {{- $ephemeralStorageRequest := coalesce (get $requests "ephemeral-storage") (get $requests "ephemeralStorage") (get $resources "ephemeralStorage") (get $limits "ephemeral-storage") (get $limits "ephemeralStorage") -}}
 {{- $cpuLimit := coalesce (get $limits "cpu") $cpuRequest -}}

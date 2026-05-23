@@ -192,7 +192,7 @@ gateway:
 # -- Enable full in-cluster HTTPS with certificate verification.
 # This is independent from `ingress.tls` / `gateway.tls`.
 #
-# NOTE: Implementation is incremental; see the "In-cluster HTTPS (service-to-service)" section in the README for current coverage and testing guidance.
+# NOTE: Implementation is incremental; see the README's "In-cluster HTTPS" section for usage notes.
 inClusterTls:
   enabled: false
 
@@ -1678,7 +1678,7 @@ sizingPresets:
     logfire-ff-ingest-processor:
       resources:
         cpu: "350m"
-        memory: "384Mi"
+        memory: "512Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 6
@@ -1930,7 +1930,7 @@ sizingPresets:
         cpu: "500m"
         memory: "1Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 3
         maxReplicas: 12
         hpa:
           enabled: true
@@ -1938,18 +1938,44 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ff-ingest
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ff-ingest
     logfire-ff-ingest-processor:
       resources:
         cpu: "1"
         memory: "1Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 3
         maxReplicas: 12
         hpa:
           enabled: true
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ff-ingest-processor
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ff-ingest-processor
     logfire-backend:
       resources:
         cpu: "750m"
@@ -2077,7 +2103,7 @@ sizingPresets:
         cpu: "500m"
         memory: "512Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 6
         hpa:
           enabled: true
@@ -2085,6 +2111,19 @@ sizingPresets:
           cpuAverage: 40
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-service
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-service
     logfire-ff-cache-byte:
       resources:
         cpu: "500m"
@@ -2181,14 +2220,27 @@ sizingPresets:
         cpu: "100m"
         memory: "128Mi"
       autoscaling:
-        minReplicas: 1
-        maxReplicas: 3
+        minReplicas: 3
+        maxReplicas: 5
         hpa:
           enabled: true
           memAverage: 65
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-dex
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-dex
     logfire-ff-ingest:
       volumeClaimTemplates:
         storage: 16Gi
@@ -2196,7 +2248,7 @@ sizingPresets:
         cpu: "1"
         memory: "2Gi"
       autoscaling:
-        minReplicas: 2
+        minReplicas: 3
         maxReplicas: 24
         hpa:
           enabled: true
@@ -2204,31 +2256,70 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ff-ingest
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ff-ingest
     logfire-ff-ingest-processor:
       resources:
         cpu: "2"
         memory: "4Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 3
         maxReplicas: 24
         hpa:
           enabled: true
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ff-ingest-processor
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ff-ingest-processor
     logfire-backend:
       resources:
         cpu: "750m"
         memory: "1Gi"
       autoscaling:
-        minReplicas: 2
-        maxReplicas: 4
+        minReplicas: 3
+        maxReplicas: 6
         hpa:
           enabled: true
           memAverage: 65
           cpuAverage: 25
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-backend
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-backend
     logfire-ai-gateway:
       resources:
         requests:
@@ -2240,7 +2331,7 @@ sizingPresets:
           memory: "1Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 3
         maxReplicas: 6
         hpa:
           enabled: true
@@ -2248,25 +2339,51 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ai-gateway
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ai-gateway
     logfire-remote-mcp:
       resources:
         cpu: "250m"
         memory: "640Mi"
       autoscaling:
-        minReplicas: 1
-        maxReplicas: 3
+        minReplicas: 3
+        maxReplicas: 6
         hpa:
           enabled: true
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-remote-mcp
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-remote-mcp
     logfire-ff-query-api:
       resources:
         cpu: "2"
         memory: "8Gi"
         ephemeralStorage: "1Gi"
       autoscaling:
-        minReplicas: 2
+        minReplicas: 3
         maxReplicas: 8
         hpa:
           enabled: true
@@ -2274,6 +2391,19 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ff-query-api
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ff-query-api
       scratchVolume:
         storage: "6Gi"
     logfire-ff-query-worker:
@@ -2288,7 +2418,7 @@ sizingPresets:
         cpu: "125m"
         memory: "512Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 3
         maxReplicas: 6
         hpa:
           enabled: true
@@ -2296,19 +2426,45 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ff-crud-api
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-ff-crud-api
     logfire-frontend-service:
       resources:
         cpu: "100m"
         memory: "128Mi"
       autoscaling:
-        minReplicas: 1
-        maxReplicas: 3
+        minReplicas: 3
+        maxReplicas: 5
         hpa:
           enabled: true
           memAverage: 70
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-frontend-service
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-frontend-service
     logfire-worker:
       resources:
         requests:
@@ -2333,7 +2489,7 @@ sizingPresets:
         cpu: "1"
         memory: "1Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 3
         maxReplicas: 6
         hpa:
           enabled: true
@@ -2341,6 +2497,19 @@ sizingPresets:
           cpuAverage: 20
       pdb:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-service
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-service
     logfire-ff-cache-byte:
       resources:
         cpu: "1"

@@ -90,7 +90,7 @@ Determine if HPA is enabled maintaining backward compatibility with old values f
 
 {{/*
 Resolve effective service values using preset sizing defaults plus explicit overrides.
-Only sizing-related keys are inherited from presets.
+Only sizing and portable availability keys are inherited from presets.
 */}}
 {{- define "logfire.effectiveServiceValues" -}}
 {{- $serviceName := .serviceName -}}
@@ -104,7 +104,7 @@ Only sizing-related keys are inherited from presets.
   {{- end -}}
   {{- $presetValues := get $presets $presetName | default dict -}}
   {{- $presetServiceValues := get $presetValues $serviceName | default dict -}}
-  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "queryParallelism" "datafusionMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" -}}
+  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "queryParallelism" "datafusionMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" -}}
     {{- if hasKey $presetServiceValues $key -}}
       {{- $_ := set $merged $key (deepCopy (get $presetServiceValues $key)) -}}
     {{- end -}}
@@ -1023,7 +1023,7 @@ default-checksum
 {{- end -}}
 
 {{- define "logfire.podScheduling" -}}
-{{- $serviceValues := index .Values .serviceName | default dict -}}
+{{- $serviceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
 {{- $nodeSelector := merge (deepCopy ($serviceValues.nodeSelector | default dict)) (.Values.nodeSelector | default dict) -}}
 {{- $affinity := merge (deepCopy ($serviceValues.affinity | default dict)) (.Values.affinity | default dict) -}}
 {{- $tolerations := concat ($serviceValues.tolerations | default list) (.Values.tolerations | default list) -}}
