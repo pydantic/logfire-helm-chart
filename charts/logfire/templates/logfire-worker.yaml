@@ -122,6 +122,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-unsubscribe-secret") }}
                   key: logfire-unsubscribe-secret
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret") }}
+                  key: logfire-jwt-secret
             - name: DEFAULT_SUBSCRIPTION_PLAN
               value: non_stripe
             - name: DEFAULT_PERSONAL_SUBSCRIPTION_PLAN
