@@ -10,7 +10,7 @@ This repository and the chart source it contains are licensed under the MIT Lice
 ## Install Paths
 
 Use this README for the chart-level install flow and values reference.
-Use the [Self-Hosted Installation Guide](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/installation/) for background, architecture, and provider-specific procedures.
+Use the [Self-Hosted Production Requirements](https://docs.pydantic.dev/logfire/reference/self-hosted/installation/) for background, architecture, and provider-specific procedures.
 
 Choose one path:
 
@@ -348,7 +348,7 @@ Before diving deeper, verify these common configuration issues:
 
 ### Additional Resources
 
-* **Troubleshooting Guide**: If you encounter issues, your first stop should be the [Troubleshooting Self-Hosted guide](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/troubleshooting/), which includes common issues and steps for accessing internal logs.
+* **Troubleshooting Guide**: If you encounter issues, your first stop should be the [Troubleshooting Self-Hosted guide](https://docs.pydantic.dev/logfire/reference/self-hosted/troubleshooting/), which includes common issues and steps for accessing internal logs.
 
 * **GitHub Issues**: If your issue persists, please open up an issue with details about your deployment (Chart version, Kubernetes version, values file, any relevant error logs).
 
