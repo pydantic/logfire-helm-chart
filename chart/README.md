@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.18](https://img.shields.io/badge/Version-0.13.18-informational?style=flat-square) ![AppVersion: c14595e4](https://img.shields.io/badge/AppVersion-c14595e4-informational?style=flat-square)
+![Version: 0.13.19](https://img.shields.io/badge/Version-0.13.19-informational?style=flat-square) ![AppVersion: 83c3a09c](https://img.shields.io/badge/AppVersion-83c3a09c-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -10,7 +10,7 @@ This repository and the chart source it contains are licensed under the MIT Lice
 ## Install Paths
 
 Use this README for the chart-level install flow and values reference.
-Use the [Self-Hosted Installation Guide](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/installation/) for background, architecture, and provider-specific procedures.
+Use the [Self-Hosted Production Requirements](https://docs.pydantic.dev/logfire/reference/self-hosted/installation/) for background, architecture, and provider-specific procedures.
 
 Choose one path:
 
@@ -81,7 +81,8 @@ kubectl -n logfire port-forward svc/logfire-maildev 1080:1080
 ```
 
 Open Logfire at `http://localhost:8080` and MailDev at `http://localhost:1080`.
-The local values file sets `adminEmail: hello@example.dev`; use MailDev when resetting that account's password.
+MailDev is available for testing local email flows.
+Use the first-access step below to log in to the meta project.
 
 ### 3b. Production Starter
 
@@ -121,14 +122,9 @@ logfire-dex:
         password: PASSWORD
         ssl:
           mode: require
-
-smtp:
-  host: smtp.example.com
-  port: 587
-  username: logfire
-  password: PASSWORD
-  use_tls: true
 ```
+
+This configures Dex storage, but not an identity provider. Add at least one connector under `logfire-dex.config.connectors` as shown in [Authentication](#authentication).
 
 Install it:
 
@@ -138,19 +134,37 @@ helm upgrade --install logfire pydantic/logfire \
   --namespace logfire
 ```
 
-For real deployments, load sensitive values from Kubernetes Secrets, External Secrets, or your secret manager instead of committing plaintext passwords.
 Production clusters should have working HorizontalPodAutoscaler metrics before using the built-in presets.
 If your cluster has no default StorageClass, set the required `storageClassName` values for scratch and ingest volumes.
+
+### 4. First Access
+
+On first install, the chart creates the `logfire-meta` organization and stores a frontend access token in a Kubernetes Secret:
+
+```sh
+kubectl -n logfire get secret logfire-meta-frontend-token \
+  -o "jsonpath={.data.logfire-meta-frontend-token}" | base64 -d
+```
+
+Open the meta project with your hostname and token:
+
+```text
+https://logfire.example.com/logfire-meta/logfire-meta#token=LOGFIRE_META_FRONTEND_TOKEN
+```
+
+For local evaluation with the port-forward above, use `http://localhost:8080/logfire-meta/logfire-meta#token=LOGFIRE_META_FRONTEND_TOKEN`.
+
+After you have access, create an invite link from **Settings** > **Invite** and assign the **Admin** organization role.
 
 ## Production Checklist
 
 Before installing in production, confirm that you have:
 
 * Image pull credentials configured through `imagePullSecrets`.
-* A public hostname and TLS settings through `ingress.*` or `gateway.*`.
+* Public hostname and TLS values set through `ingress.*` or `gateway.*`, even if you expose the Service another way.
 * External PostgreSQL databases for `crud`, `ff`, and `dex`.
 * Object storage using `s3://`, `gs://`, or `az://`.
-* SMTP credentials for account and password-reset emails.
+* A Dex connector configured for your identity provider.
 * A sizing preset selected: `standard`, `small`, or `tiny`.
 
 ## Configuration Notes
@@ -158,6 +172,7 @@ Before installing in production, confirm that you have:
 ### Hostnames and Exposure
 
 Set at least one public hostname so the chart can generate correct public URLs and CORS settings.
+The hostname and TLS values are used by the application even when you expose `logfire-service` with infrastructure outside this chart.
 
 For a standard Ingress:
 
@@ -170,13 +185,11 @@ ingress:
   ingressClassName: nginx
 ```
 
-If you expose `logfire-service` directly instead of rendering an Ingress, keep `ingress.enabled: false` and still set `gateway.hostnames` and `gateway.tls`:
+If you expose `logfire-service` directly instead of rendering an Ingress or Gateway, keep `ingress.enabled: false` and still set the public hostname and TLS behavior:
 
 ```yaml
 ingress:
   enabled: false
-
-gateway:
   tls: true
   hostnames:
     - logfire.example.com
@@ -228,19 +241,6 @@ Do not enable bucket versioning. Logfire manages its own data lifecycle, and buc
 Logfire requires three separate PostgreSQL databases: `crud`, `ff`, and `dex`.
 They may run on the same PostgreSQL instance, but they must be separate databases to avoid schema collisions.
 Each database user needs owner permissions so migrations can run.
-
-### Email
-
-Configure SMTP so users can receive account and password-reset emails:
-
-```yaml
-smtp:
-  host: smtp.example.com
-  port: 587
-  username: logfire
-  password: PASSWORD
-  use_tls: true
-```
 
 ### AI
 
@@ -348,7 +348,7 @@ Before diving deeper, verify these common configuration issues:
 
 ### Additional Resources
 
-* **Troubleshooting Guide**: If you encounter issues, your first stop should be the [Troubleshooting Self-Hosted guide](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/troubleshooting/), which includes common issues and steps for accessing internal logs.
+* **Troubleshooting Guide**: If you encounter issues, your first stop should be the [Troubleshooting Self-Hosted guide](https://docs.pydantic.dev/logfire/reference/self-hosted/troubleshooting/), which includes common issues and steps for accessing internal logs.
 
 * **GitHub Issues**: If your issue persists, please open up an issue with details about your deployment (Chart version, Kubernetes version, values file, any relevant error logs).
 
