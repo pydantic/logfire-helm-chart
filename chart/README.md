@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.20](https://img.shields.io/badge/Version-0.13.20-informational?style=flat-square) ![AppVersion: 71e444d7](https://img.shields.io/badge/AppVersion-71e444d7-informational?style=flat-square)
+![Version: 0.13.21](https://img.shields.io/badge/Version-0.13.21-informational?style=flat-square) ![AppVersion: 71e444d7](https://img.shields.io/badge/AppVersion-71e444d7-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -480,11 +480,21 @@ Before diving deeper, verify these common configuration issues:
 | logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` | Storage provisioned for each pod |
 | logfire-ff-maintenance-scheduler | object | `{"env":[{"name":"RUST_LOG","value":"warn"}]}` | Environment overrides for the maintenance scheduler pod |
 | logfire-ff-query-api | object | `{"env":[{"name":"RUST_LOG","value":"warn"}]}` | Environment overrides for the query API pod |
-| logfire-redis.enabled | bool | `true` | Deploy Redis as part of this chart. Disable to use an external Redis instance. |
+| logfire-redis.affinity | object | `{}` | Affinity for the bundled Redis pod. |
+| logfire-redis.enabled | bool | `true` | Deploy Redis as part of this chart. Disable to use an external Redis instance.  The bundled Redis is a single-node instance for simple/self-contained installs. For production HA, disable this and set redisDsn to a managed Redis endpoint. |
 | logfire-redis.image | object | `{"pullPolicy":"IfNotPresent","repository":"redis","tag":"7.2"}` | Redis image configuration |
 | logfire-redis.image.pullPolicy | string | `"IfNotPresent"` | Redis image pull policy |
 | logfire-redis.image.repository | string | `"redis"` | Redis image repository |
 | logfire-redis.image.tag | string | `"7.2"` | Redis image tag |
+| logfire-redis.livenessProbe | object | `{"initialDelaySeconds":30,"periodSeconds":10,"tcpSocket":{"port":"redis"},"timeoutSeconds":1}` | Redis liveness probe. Override or set to null to disable. |
+| logfire-redis.nodeSelector | object | `{}` | Node selector for the bundled Redis pod. |
+| logfire-redis.pdb | object | `{}` | PodDisruptionBudget override for the bundled Redis pod. Defaults to minAvailable: 1 when empty. Example:   maxUnavailable: 0 |
+| logfire-redis.persistence | object | `{"accessModes":["ReadWriteOnce"],"annotations":{},"enabled":false,"existingClaim":"","size":"1Gi","storageClassName":""}` | Persistence for the bundled Redis data directory. This improves recovery across pod restarts but does not make Redis highly available. |
+| logfire-redis.podAnnotations | object | `{}` | Pod annotations for the bundled Redis pod. Example:   cluster-autoscaler.kubernetes.io/safe-to-evict: "false" |
+| logfire-redis.readinessProbe | object | `{"initialDelaySeconds":5,"periodSeconds":10,"tcpSocket":{"port":"redis"},"timeoutSeconds":1}` | Redis readiness probe. Override or set to null to disable. |
+| logfire-redis.resources | object | `{}` | Resource requests/limits. Supports the chart shorthand, for example:   cpu: "100m"   memory: "128Mi" or native requests/limits. |
+| logfire-redis.tolerations | list | `[]` | Tolerations for the bundled Redis pod. |
+| logfire-redis.topologySpreadConstraints | list | `[]` | Topology spread constraints for the bundled Redis pod. |
 | logfire-remote-mcp | object | `{"enabled":true}` | Autoscaling & resources for the `logfire-remote-mcp` pod |
 | logfire-remote-mcp.enabled | bool | `true` | Enable the remote MCP service. When disabled, the deployment is not rendered and the `/mcp` and `/.well-known/oauth-protected-resource/mcp` haproxy routes are removed. |
 | maildev | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"maildev/maildev","tag":"latest"}}` | MailDev image configuration (only used when `dev.deployMaildev` is true) |
