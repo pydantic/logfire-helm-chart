@@ -81,7 +81,7 @@ spec:
           livenessProbe:
             failureThreshold: 3
             httpGet:
-              path: /proxy/
+              path: /health
               port: {{ $gatewayPort }}
               scheme: HTTP
             initialDelaySeconds: 10
@@ -90,7 +90,7 @@ spec:
           readinessProbe:
             failureThreshold: 3
             httpGet:
-              path: /proxy/
+              path: /health
               port: {{ $gatewayPort }}
               scheme: HTTP
             initialDelaySeconds: 5

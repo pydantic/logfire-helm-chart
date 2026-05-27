@@ -151,7 +151,7 @@ stringData:
       balance roundrobin
       # Health checks
       option httpchk
-      http-check send meth GET uri /proxy/ hdr Host logfire-ai-gateway
+      http-check send meth GET uri /health hdr Host logfire-ai-gateway
       option http-server-close
       timeout connect 3s
       timeout server {{ $aiGatewayProxyTimeout }}

@@ -997,6 +997,8 @@ logfire-ff-cache-byte:
 #   # -- DataFusion memory limit. Defaults from CPU and memory resources: sub-core workers
 #   # use conservative memory fractions, larger workers use 3/8 of the pod memory limit.
 #   # datafusionMemory: "3072MB"
+#   # -- Record-batch memory limiter. Defaults to the computed DataFusion memory limit.
+#   # maintenanceRecordBatchMemory: "3072MB"
 #   # -- Maximum compressed input bytes to schedule into one compaction job.
 #   # Defaults from compaction-worker memory request when sizing is configured, bounded between 32MB and 512MB.
 #   # maxCompactionJobSizeBytes: "512MB"
@@ -1066,6 +1068,8 @@ logfire-ff-cache-byte:
 #   # -- DataFusion memory limit. Defaults from CPU and memory resources: sub-core workers
 #   # use conservative memory fractions, larger workers use 3/8 of the pod memory limit.
 #   # datafusionMemory: "3072MB"
+#   # -- Record-batch memory limiter. Defaults to the computed DataFusion memory limit.
+#   # maintenanceRecordBatchMemory: "3072MB"
 #   # -- Maximum compressed input bytes to schedule into one compaction job.
 #   # Defaults from compaction-worker memory request when sizing is configured, bounded between 32MB and 512MB.
 #   # maxCompactionJobSizeBytes: "512MB"

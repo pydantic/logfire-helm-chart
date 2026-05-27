@@ -26,7 +26,7 @@ autoscaling, PDBs, or scheduling rules.
 {{- if and (not (.Values.sizingPreset | default "")) (not (get $effectiveServiceValues "resources")) -}}
   {{- $tinyPreset := get (.Values.sizingPresets | default dict) "tiny" | default dict -}}
   {{- $tinyServiceValues := get $tinyPreset .serviceName | default dict -}}
-  {{- range $key := list "queryParallelism" "datafusionMemory" "spillToDiskQuota" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" -}}
+  {{- range $key := list "queryParallelism" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" -}}
     {{- if and (not (hasKey $derived $key)) (hasKey $tinyServiceValues $key) -}}
       {{- $_ := set $derived $key (deepCopy (get $tinyServiceValues $key)) -}}
     {{- end -}}
@@ -231,6 +231,8 @@ Common execution env for background maintenance/compaction workers.
 {{- $effectiveServiceValues := include "logfire.ffDerivedServiceValues" . | fromJson -}}
 {{- $threadSettings := include "logfire.ffThreadSettings" . | fromJson -}}
 {{- $defaultDatafusionMemory := include "logfire.ffBackgroundDatafusionMemoryDefault" . -}}
+{{- $datafusionMemory := get $effectiveServiceValues "datafusionMemory" | default $defaultDatafusionMemory -}}
+{{- $recordBatchMemory := get $effectiveServiceValues "maintenanceRecordBatchMemory" | default $datafusionMemory -}}
 {{- $jobParallelism := include "logfire.ffBackgroundJobParallelism" . -}}
 {{- $cpuConcurrency := include "logfire.ffBackgroundCpuConcurrency" . -}}
 {{- $cpuCores := int (get $threadSettings "cpuCores") -}}
@@ -240,7 +242,9 @@ Common execution env for background maintenance/compaction workers.
 - name: FF_DATAFUSION_THREADS
   value: {{ $dataFusionThreads | quote }}
 - name: FF_DATAFUSION_MEMORY_LIMIT
-  value: {{ (get $effectiveServiceValues "datafusionMemory" | default $defaultDatafusionMemory | quote) }}
+  value: {{ $datafusionMemory | quote }}
+- name: FF_MAINTENANCE_MAX_RECORD_BATCH_MEMORY
+  value: {{ $recordBatchMemory | quote }}
 - name: FF_ENABLE_SPILL_TO_DISK
   value: "true"
 - name: FF_TEMP_DIR

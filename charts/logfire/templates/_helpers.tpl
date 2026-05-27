@@ -104,7 +104,7 @@ Only sizing and portable availability keys are inherited from presets.
   {{- end -}}
   {{- $presetValues := get $presets $presetName | default dict -}}
   {{- $presetServiceValues := get $presetValues $serviceName | default dict -}}
-  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "queryParallelism" "datafusionMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" -}}
+  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "queryParallelism" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" -}}
     {{- if hasKey $presetServiceValues $key -}}
       {{- $_ := set $merged $key (deepCopy (get $presetServiceValues $key)) -}}
     {{- end -}}
