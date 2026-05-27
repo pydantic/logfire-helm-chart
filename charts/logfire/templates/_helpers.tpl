@@ -146,10 +146,14 @@ replicas: {{ dig "replicas" "1" $serviceValues }}
 {{- define "logfire.pdb" }}
 {{- $root := .root -}}
 {{- $serviceName := .serviceName -}}
-{{- include "logfire.validate.pdb" (dict "Values" $root.Values "serviceName" $serviceName) -}}
 {{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" $root.Values "serviceName" $serviceName) | fromJson -}}
-{{- if index $serviceValues "pdb" }}
-{{- with index $serviceValues "pdb" }}
+{{- $pdb := index $serviceValues "pdb" -}}
+{{- if hasKey . "pdb" -}}
+  {{- $pdb = .pdb -}}
+{{- end -}}
+{{- include "logfire.validate.pdb" (dict "Values" $root.Values "serviceName" $serviceName "pdb" $pdb) -}}
+{{- if $pdb }}
+{{- with $pdb }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

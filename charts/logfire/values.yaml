@@ -1492,9 +1492,10 @@ logfire-redis:
   # Example:
   #   cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
   podAnnotations: {}
-  # -- Optional PodDisruptionBudget for the bundled Redis pod.
+  # -- PodDisruptionBudget override for the bundled Redis pod.
+  # Defaults to minAvailable: 1 when empty.
   # Example:
-  #   minAvailable: 1
+  #   maxUnavailable: 0
   pdb: {}
 
 # -- Redis DSN. Change if using an external Redis instance.

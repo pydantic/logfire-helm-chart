@@ -488,7 +488,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-redis.image.tag | string | `"7.2"` | Redis image tag |
 | logfire-redis.livenessProbe | object | `{"initialDelaySeconds":30,"periodSeconds":10,"tcpSocket":{"port":"redis"},"timeoutSeconds":1}` | Redis liveness probe. Override or set to null to disable. |
 | logfire-redis.nodeSelector | object | `{}` | Node selector for the bundled Redis pod. |
-| logfire-redis.pdb | object | `{}` | Optional PodDisruptionBudget for the bundled Redis pod. Example:   minAvailable: 1 |
+| logfire-redis.pdb | object | `{}` | PodDisruptionBudget override for the bundled Redis pod. Defaults to minAvailable: 1 when empty. Example:   maxUnavailable: 0 |
 | logfire-redis.persistence | object | `{"accessModes":["ReadWriteOnce"],"annotations":{},"enabled":false,"existingClaim":"","size":"1Gi","storageClassName":""}` | Persistence for the bundled Redis data directory. This improves recovery across pod restarts but does not make Redis highly available. |
 | logfire-redis.podAnnotations | object | `{}` | Pod annotations for the bundled Redis pod. Example:   cluster-autoscaler.kubernetes.io/safe-to-evict: "false" |
 | logfire-redis.readinessProbe | object | `{"initialDelaySeconds":5,"periodSeconds":10,"tcpSocket":{"port":"redis"},"timeoutSeconds":1}` | Redis readiness probe. Override or set to null to disable. |

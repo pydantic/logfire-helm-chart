@@ -4,6 +4,10 @@
 {{- $persistence := get $redisValues "persistence" | default dict }}
 {{- $persistenceEnabled := get $persistence "enabled" | default false }}
 {{- $existingClaim := get $persistence "existingClaim" | default "" }}
+{{- $redisPdb := get $redisValues "pdb" | default dict }}
+{{- if not $redisPdb }}
+{{- $redisPdb = dict "minAvailable" 1 }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -121,5 +125,5 @@ spec:
           {{- else }}
           emptyDir: {}
           {{- end }}
-{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
+{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName "pdb" $redisPdb) }}
 {{- end }}
