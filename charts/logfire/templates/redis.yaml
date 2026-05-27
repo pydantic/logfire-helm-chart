@@ -1,6 +1,13 @@
 {{- $serviceName := "logfire-redis" }}
 {{- $redisValues := index .Values $serviceName | default dict }}
 {{- if $redisValues.enabled }}
+{{- $persistence := get $redisValues "persistence" | default dict }}
+{{- $persistenceEnabled := get $persistence "enabled" | default false }}
+{{- $existingClaim := get $persistence "existingClaim" | default "" }}
+{{- $redisPdb := get $redisValues "pdb" | default dict }}
+{{- if not $redisPdb }}
+{{- $redisPdb = dict "minAvailable" 1 }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -14,8 +21,32 @@ spec:
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
     - protocol: TCP
+      name: redis
       port: 6379
-      targetPort: 6379
+      targetPort: redis
+{{- if and $persistenceEnabled (not $existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  {{- with $persistence.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml (default (list "ReadWriteOnce") $persistence.accessModes) | nindent 4 }}
+  {{- with $persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ default "1Gi" $persistence.size | quote }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -40,6 +71,10 @@ spec:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
+      {{- with (include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | trim) }}
+      annotations:
+        {{- . | nindent 8 }}
+      {{- end }}
     spec:
       priorityClassName: {{ .Values.priorityClassName }}
       securityContext:
@@ -54,7 +89,20 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           ports:
-            - containerPort: 6379
+            - name: redis
+              containerPort: 6379
+          {{- with $redisValues.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $redisValues.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $redisValues.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- if (index .Values $serviceName | default dict).resources }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           {{ else }}
@@ -71,5 +119,11 @@ spec:
               name: data
       volumes:
         - name: data
+          {{- if $persistenceEnabled }}
+          persistentVolumeClaim:
+            claimName: {{ default $serviceName $existingClaim }}
+          {{- else }}
           emptyDir: {}
+          {{- end }}
+{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName "pdb" $redisPdb) }}
 {{- end }}
