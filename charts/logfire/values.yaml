@@ -1424,6 +1424,9 @@ haproxy:
 logfire-redis:
   # -- Deploy Redis as part of this chart.
   # Disable to use an external Redis instance.
+  #
+  # The bundled Redis is a single-node instance for simple/self-contained installs.
+  # For production HA, disable this and set redisDsn to a managed Redis endpoint.
   enabled: true
 
   # -- Redis image configuration
@@ -1434,6 +1437,65 @@ logfire-redis:
     tag: "7.2"
     # -- Redis image pull policy
     pullPolicy: IfNotPresent
+
+  # -- Resource requests/limits.
+  # Supports the chart shorthand, for example:
+  #   cpu: "100m"
+  #   memory: "128Mi"
+  # or native requests/limits.
+  resources: {}
+
+  # -- Redis liveness probe. Override or set to null to disable.
+  livenessProbe:
+    tcpSocket:
+      port: redis
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 1
+
+  # -- Redis readiness probe. Override or set to null to disable.
+  readinessProbe:
+    tcpSocket:
+      port: redis
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 1
+
+  # -- Redis startup probe. Disabled by default.
+  # startupProbe:
+  #   tcpSocket:
+  #     port: redis
+  #   failureThreshold: 30
+  #   periodSeconds: 2
+
+  # -- Persistence for the bundled Redis data directory.
+  # This improves recovery across pod restarts but does not make Redis highly available.
+  persistence:
+    enabled: false
+    existingClaim: ""
+    # Empty uses the cluster default StorageClass.
+    storageClassName: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 1Gi
+    annotations: {}
+
+  # -- Node selector for the bundled Redis pod.
+  nodeSelector: {}
+  # -- Affinity for the bundled Redis pod.
+  affinity: {}
+  # -- Tolerations for the bundled Redis pod.
+  tolerations: []
+  # -- Topology spread constraints for the bundled Redis pod.
+  topologySpreadConstraints: []
+  # -- Pod annotations for the bundled Redis pod.
+  # Example:
+  #   cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+  podAnnotations: {}
+  # -- Optional PodDisruptionBudget for the bundled Redis pod.
+  # Example:
+  #   minAvailable: 1
+  pdb: {}
 
 # -- Redis DSN. Change if using an external Redis instance.
 redisDsn: redis://logfire-redis:6379

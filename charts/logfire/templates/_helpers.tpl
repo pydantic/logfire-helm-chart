@@ -159,11 +159,11 @@ metadata:
     {{- include "logfire.labels" $root | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
 spec:
-  {{- with .maxUnavailable }}
-  maxUnavailable: {{ . }}
+  {{- if hasKey . "maxUnavailable" }}
+  maxUnavailable: {{ .maxUnavailable }}
   {{- end }}
-  {{- with .minAvailable }}
-  minAvailable: {{ . }}
+  {{- if hasKey . "minAvailable" }}
+  minAvailable: {{ .minAvailable }}
   {{- end }}
   selector:
     matchLabels:
