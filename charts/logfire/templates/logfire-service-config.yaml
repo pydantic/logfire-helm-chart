@@ -1,6 +1,9 @@
 {{- $ingestValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-ingest") | fromJson -}}
 {{- $ingestAutoscaling := get $ingestValues "autoscaling" | default dict -}}
 {{- $ingestMaxCount := coalesce (get $ingestAutoscaling "maxReplicas") (get $ingestValues "replicas") 1 -}}
+{{- $queryApiValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-query-api") | fromJson -}}
+{{- $queryApiAutoscaling := get $queryApiValues "autoscaling" | default dict -}}
+{{- $queryApiMaxCount := coalesce (get $queryApiAutoscaling "maxReplicas") (get $queryApiValues "replicas") 1 -}}
 {{- $aiGatewayValues := index .Values "logfire-ai-gateway" | default dict -}}
 {{- $aiGatewayProxyTimeout := get $aiGatewayValues "proxyTimeout" | default "600s" -}}
 {{- $remoteMcpValues := index .Values "logfire-remote-mcp" | default dict -}}
@@ -73,6 +76,7 @@ stringData:
       http-response set-header Access-Control-Allow-Origin "%[var(txn.origin)]" if { var(txn.is_origin_allowed) -m bool }
       
       acl path_ingest path_reg -i ^/v1/(traces|metrics|logs)$
+      acl path_query_v2 path /v2/query
       acl path_dex path_beg /auth-api
       acl path_backend path_reg -i ^/(ui-api|v1|api)/
       acl path_backend path_beg /.well-known/oauth-authorization-server /.well-known/openid-configuration
@@ -90,6 +94,7 @@ stringData:
 
 
       use_backend logfire-ingest if path_ingest
+      use_backend logfire-ff-query-api if path_query_v2
       use_backend logfire-dex if path_dex
       {{- if (get $aiGatewayValues "enabled") }}
       use_backend logfire-ai-gateway if path_ai_gateway
@@ -128,6 +133,20 @@ stringData:
       server-template logfire-ff-ingest 1-{{ $ingestMaxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check resolvers kubernetes inter 250ms hash-key addr ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $ingestSni }}) verifyhost {{ $ingestSni }} check-ssl
       {{- else }}
       server-template logfire-ff-ingest 1-{{ $ingestMaxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8012 check resolvers kubernetes inter 250ms hash-key addr
+      {{- end }}
+
+    backend logfire-ff-query-api
+      balance roundrobin
+      option httpchk GET /health
+      http-check expect status 200
+      timeout connect 3s
+      timeout server 50s
+
+      {{- $queryApiSni := printf "logfire-ff-query-api.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      server-template logfire-ff-query-api 1-{{ $queryApiMaxCount }} logfire-ff-query-api.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check resolvers kubernetes inter 250ms ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $queryApiSni }}) verifyhost {{ $queryApiSni }} check-ssl
+      {{- else }}
+      server-template logfire-ff-query-api 1-{{ $queryApiMaxCount }} logfire-ff-query-api.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8011 check resolvers kubernetes inter 250ms
       {{- end }}
 
     backend logfire-dex
