@@ -1600,12 +1600,24 @@ dev:
 cert-manager:
   installCRDs: true
 
-# -- MailDev image configuration (only used when `dev.deployMaildev` is true)
+# -- MailDev configuration (only used when `dev.deployMaildev` is true)
 maildev:
   image:
     repository: maildev/maildev
     tag: latest
     pullPolicy: IfNotPresent
+  # -- Pod SecurityContext for the MailDev pod. Defaults to the chart-wide `podSecurityContext` when unset.
+  podSecurityContext: {}
+  # -- Container SecurityContext for the MailDev container. Defaults to the chart-wide `securityContext` when unset.
+  # Set this when running under a restricted PodSecurity policy, e.g.:
+  #   runAsNonRoot: true
+  #   runAsUser: 1000
+  #   allowPrivilegeEscalation: false
+  #   capabilities:
+  #     drop: ["ALL"]
+  #   seccompProfile:
+  #     type: RuntimeDefault
+  securityContext: {}
 
 
 # ==============================================================================

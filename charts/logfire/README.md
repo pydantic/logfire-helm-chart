@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.21](https://img.shields.io/badge/Version-0.13.21-informational?style=flat-square) ![AppVersion: 71e444d7](https://img.shields.io/badge/AppVersion-71e444d7-informational?style=flat-square)
+![Version: 0.13.22](https://img.shields.io/badge/Version-0.13.22-informational?style=flat-square) ![AppVersion: 6248512d](https://img.shields.io/badge/AppVersion-6248512d-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -497,7 +497,9 @@ Before diving deeper, verify these common configuration issues:
 | logfire-redis.topologySpreadConstraints | list | `[]` | Topology spread constraints for the bundled Redis pod. |
 | logfire-remote-mcp | object | `{"enabled":true}` | Autoscaling & resources for the `logfire-remote-mcp` pod |
 | logfire-remote-mcp.enabled | bool | `true` | Enable the remote MCP service. When disabled, the deployment is not rendered and the `/mcp` and `/.well-known/oauth-protected-resource/mcp` haproxy routes are removed. |
-| maildev | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"maildev/maildev","tag":"latest"}}` | MailDev image configuration (only used when `dev.deployMaildev` is true) |
+| maildev | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"maildev/maildev","tag":"latest"},"podSecurityContext":{},"securityContext":{}}` | MailDev configuration (only used when `dev.deployMaildev` is true) |
+| maildev.podSecurityContext | object | `{}` | Pod SecurityContext for the MailDev pod. Defaults to the chart-wide `podSecurityContext` when unset. |
+| maildev.securityContext | object | `{}` | Container SecurityContext for the MailDev container. Defaults to the chart-wide `securityContext` when unset. Set this when running under a restricted PodSecurity policy, e.g.:   runAsNonRoot: true   runAsUser: 1000   allowPrivilegeEscalation: false   capabilities:     drop: ["ALL"]   seccompProfile:     type: RuntimeDefault |
 | minio.args[0] | string | `"server"` |  |
 | minio.args[1] | string | `"/data"` |  |
 | minio.auth.rootPassword | string | `"logfire-minio"` |  |

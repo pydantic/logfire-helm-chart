@@ -1335,6 +1335,10 @@ Dev Postgres helpers
     - -c
     - >-
       until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432; do echo "Waiting for postgres..."; sleep 2; done
+  {{- with $ctx.Values.securityContext }}
+  securityContext:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 {{- end -}}
 {{- end -}}
 
