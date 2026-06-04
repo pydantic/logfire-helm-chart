@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.22](https://img.shields.io/badge/Version-0.13.22-informational?style=flat-square) ![AppVersion: 6248512d](https://img.shields.io/badge/AppVersion-6248512d-informational?style=flat-square)
+![Version: 0.13.23](https://img.shields.io/badge/Version-0.13.23-informational?style=flat-square) ![AppVersion: 55e50fa2](https://img.shields.io/badge/AppVersion-55e50fa2-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -202,6 +202,7 @@ Set `gateway.create: true` to create a Gateway, or `gateway.create: false` to at
 
 Dex is used as the identity service for Logfire.
 When creating an OAuth app in your provider, set the redirect URI to `<logfire_url>/auth-api/callback`, for example `https://logfire.example.com/auth-api/callback`.
+Connector configuration is passed through to Dex; see the Dex [connector overview](https://dexidp.io/docs/connectors/) for supported providers and settings.
 
 Example GitHub connector using Kubernetes Secret references:
 
@@ -227,6 +228,21 @@ logfire-dex:
           clientID: $GITHUB_CLIENT_ID
           clientSecret: $GITHUB_CLIENT_SECRET
           getUserInfo: true
+```
+
+#### Organization Group Mappings
+
+Use `groupOrganizationMapping` to grant Logfire organization and project roles from identity-provider group IDs:
+
+```yaml
+groupOrganizationMapping:
+  - group_id: engineering
+    organization_roles:
+      - organization_name: logfire-meta
+        role: member
+        project_roles:
+          - project_name: logfire-meta
+            role: write
 ```
 
 ### Object Storage
