@@ -68,6 +68,8 @@ spec:
               port: 8003
             failureThreshold: 10
           env:
+            - name: MATERIALIZE_DASHBOARDS
+              value: "false"
             - name: LOGFIRE_SERVICE_NAME
               value: {{ $serviceName }}
             - name: LOGFIRE_SERVICE_VERSION

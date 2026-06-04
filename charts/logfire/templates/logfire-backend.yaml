@@ -110,6 +110,8 @@ spec:
             failureThreshold: 3
             successThreshold: 2
           env:
+            - name: MATERIALIZE_DASHBOARDS
+              value: "false"
             - name: APP_PORT
               value: "8000"
             - name: CRUD_PG_DSN
