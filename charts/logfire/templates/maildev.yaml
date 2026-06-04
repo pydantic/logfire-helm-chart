@@ -24,10 +24,20 @@ spec:
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" "maildev") | nindent 6 }}
       {{- $maildev := default (dict) .Values.maildev }}
       {{- $maildevImage := get $maildev "image" | default dict }}
+      {{- $maildevPodSecurityContext := get $maildev "podSecurityContext" | default .Values.podSecurityContext }}
+      {{- with $maildevPodSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: logfire-maildev
           image: {{ include "logfire.imageRef" (dict "image" $maildevImage "defaultRepository" "maildev/maildev" "defaultTag" "latest") }}
           imagePullPolicy: {{ default .Values.image.pullPolicy (get $maildevImage "pullPolicy") | quote }}
+          {{- $maildevSecurityContext := get $maildev "securityContext" | default .Values.securityContext }}
+          {{- with $maildevSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - containerPort: 1080
             - containerPort: 1025
