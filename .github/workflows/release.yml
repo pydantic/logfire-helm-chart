@@ -19,6 +19,20 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.ref }}
 
+      - name: Detect prerelease
+        id: prerelease
+        # SemVer prereleases carry a hyphen in the version, e.g. 0.13.24-rc.1.
+        # When the chart version is a prerelease, we adjust the GitHub Release flags
+        # so the RC does not become "latest".
+        run: |
+          version=$(sed -nE 's/^version:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' charts/logfire/Chart.yaml | head -1)
+          echo "tag=logfire-${version}" >> "$GITHUB_OUTPUT"
+          if [[ -n "$version" && "$version" == *-* ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
@@ -40,6 +54,33 @@ jobs:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         with:
           skip_existing: true
+          mark_as_latest: ${{ steps.prerelease.outputs.is_prerelease != 'true' }}
+
+      - name: Flag GitHub release as prerelease
+        if: steps.prerelease.outputs.is_prerelease == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          script: |
+            const tag = '${{ steps.prerelease.outputs.tag }}';
+            const { owner, repo } = context.repo;
+            try {
+              const { data: release } = await github.rest.repos.getReleaseByTag({ owner, repo, tag });
+              await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: release.id,
+                prerelease: true,
+                make_latest: 'false',
+              });
+              core.info(`Marked ${tag} as prerelease`);
+            } catch (error) {
+              if (error?.status === 404) {
+                core.info(`No GitHub release found for tag ${tag}; nothing to flag.`);
+                return;
+              }
+              throw error;
+            }
 
       - name: Update release notes from PR body
         uses: actions/github-script@v7
@@ -155,6 +196,10 @@ jobs:
             });
 
       - name: Update gh-pages README
+        # Pre-release commits land on main but the published docs should track the latest
+        # stable release — users without --devel are pinned to that, and an RC's README may
+        # document features that change or get reverted before the stable bump.
+        if: steps.prerelease.outputs.is_prerelease != 'true'
         run: |
           # Store the current README content
           README_CONTENT=$(cat charts/logfire/README.md)
