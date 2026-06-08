@@ -109,3 +109,30 @@ jobs:
       - name: Run chart testing
         if: steps.list-changed.outputs.changed == 'true'
         run: ct install --upgrade --config ci/ct.yaml
+
+      - name: Install chart for integration tests
+        if: steps.list-changed.outputs.changed == 'true'
+        run: |
+          helm dependency update charts/logfire
+          helm install lf charts/logfire \
+            -f charts/logfire/ci/ci-values.yaml \
+            --wait --timeout 10m
+
+      - name: Install uv
+        if: steps.list-changed.outputs.changed == 'true'
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run integration tests
+        if: steps.list-changed.outputs.changed == 'true'
+        run: |
+          kubectl port-forward -n default svc/logfire-service 8080:8080 &
+          PF_PID=$!
+          trap "kill ${PF_PID} 2>/dev/null || true" EXIT
+          for _ in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/ui-api/platform-config/ >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          META_FRONTEND_TOKEN=$(kubectl get secret logfire-tokens -n default -o jsonpath='{.data.logfire-meta-frontend-token}' | base64 -d) \
+            uv run --directory tests/integration pytest -v
