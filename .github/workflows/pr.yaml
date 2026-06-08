@@ -23,6 +23,12 @@ jobs:
         with:
           version: latest
 
+      - name: Install helm-unittest plugin
+        run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.1.1 --verify=false
+
+      - name: Run helm unittest
+        run: helm unittest charts/logfire
+
       - name: Set up python
         uses: actions/setup-python@v6
         with:

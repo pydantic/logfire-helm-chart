@@ -1,0 +1,96 @@
+suite: routing config routes
+templates:
+  - templates/logfire-service-config.yaml
+release:
+  name: lf
+  namespace: default
+tests:
+  - it: routes /v2/query to the query API backend
+    set:
+      sizingPreset: tiny
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "acl path_query_v2 path /v2/query"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "use_backend logfire-ff-query-api if path_query_v2"
+
+  - it: routes /v1/(traces|metrics|logs) to the ingest backend
+    set:
+      sizingPreset: tiny
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "acl path_ingest path_reg -i \\^/v1/\\(traces\\|metrics\\|logs\\)\\$"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "use_backend logfire-ingest if path_ingest"
+
+  - it: keeps /ui-api, /v1, /api on the backend (covers /v1/query)
+    set:
+      sizingPreset: tiny
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "acl path_backend path_reg -i \\^/\\(ui-api\\|v1\\|api\\)/"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "use_backend logfire-backend if path_backend"
+
+  - it: routes /auth-api to dex
+    set:
+      sizingPreset: tiny
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "acl path_dex path_beg /auth-api"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "use_backend logfire-dex if path_dex"
+
+  - it: adds the AI gateway routing when its subchart is enabled
+    set:
+      sizingPreset: tiny
+      logfire-ai-gateway:
+        enabled: true
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "acl path_ai_gateway path_beg /proxy"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "use_backend logfire-ai-gateway if path_ai_gateway"
+
+  - it: omits the AI gateway routing when its subchart is disabled
+    set:
+      sizingPreset: tiny
+      logfire-ai-gateway:
+        enabled: false
+    asserts:
+      - notMatchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "use_backend logfire-ai-gateway"
+
+  - it: adds the remote MCP routing when its subchart is enabled
+    set:
+      sizingPreset: tiny
+      logfire-remote-mcp:
+        enabled: true
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "acl path_remote_mcp path /mcp"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "use_backend logfire-remote-mcp if path_remote_mcp"
+
+  - it: omits the remote MCP routing when its subchart is disabled
+    set:
+      sizingPreset: tiny
+      logfire-remote-mcp:
+        enabled: false
+    asserts:
+      - notMatchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "use_backend logfire-remote-mcp"

@@ -1,0 +1,157 @@
+suite: sizing presets wire HPA bounds
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: ingest HPA uses tiny preset bounds
+    set:
+      sizingPreset: tiny
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - equal:
+          path: spec.minReplicas
+          value: 1
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.maxReplicas
+          value: 6
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+
+  - it: ingest HPA uses small preset bounds
+    set:
+      sizingPreset: small
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - equal:
+          path: spec.minReplicas
+          value: 3
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.maxReplicas
+          value: 12
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+
+  - it: ingest HPA uses standard preset bounds
+    set:
+      sizingPreset: standard
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - equal:
+          path: spec.minReplicas
+          value: 3
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.maxReplicas
+          value: 24
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+
+  - it: backend HPA uses tiny preset bounds
+    set:
+      sizingPreset: tiny
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - equal:
+          path: spec.minReplicas
+          value: 1
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.maxReplicas
+          value: 4
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+
+  - it: backend HPA uses standard preset bounds
+    set:
+      sizingPreset: standard
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - equal:
+          path: spec.minReplicas
+          value: 3
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.maxReplicas
+          value: 6
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+
+  - it: query-api HPA uses small preset bounds
+    set:
+      sizingPreset: small
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    asserts:
+      - equal:
+          path: spec.minReplicas
+          value: 1
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.maxReplicas
+          value: 8
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+
+  - it: service-level autoscaling overrides win over preset values
+    set:
+      sizingPreset: tiny
+      logfire-backend:
+        autoscaling:
+          minReplicas: 7
+          maxReplicas: 9
+          hpa:
+            enabled: true
+            cpuAverage: 60
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - equal:
+          path: spec.minReplicas
+          value: 7
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.maxReplicas
+          value: 9
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+
+  - it: unknown preset name fails the install
+    set:
+      sizingPreset: not-a-real-preset
+    asserts:
+      - failedTemplate:
+          errorMessage: 'Unknown sizingPreset "not-a-real-preset". Valid presets: dev, small, standard, tiny'
