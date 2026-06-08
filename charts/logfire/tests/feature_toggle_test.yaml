@@ -1,0 +1,115 @@
+suite: feature toggles add and remove resources
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: ai gateway Deployment renders when enabled
+    set:
+      logfire-ai-gateway:
+        enabled: true
+    templates:
+      - templates/logfire-ai-gateway.yaml
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: logfire-ai-gateway
+          any: true
+      - containsDocument:
+          kind: Service
+          apiVersion: v1
+          name: logfire-ai-gateway
+          any: true
+
+  - it: ai gateway Deployment is absent when disabled
+    set:
+      logfire-ai-gateway:
+        enabled: false
+    templates:
+      - templates/logfire-ai-gateway.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: remote MCP Deployment renders when enabled (default)
+    set:
+      logfire-remote-mcp:
+        enabled: true
+    templates:
+      - templates/logfire-remote-mcp.yaml
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: logfire-remote-mcp
+          any: true
+
+  - it: remote MCP Deployment is absent when disabled
+    set:
+      logfire-remote-mcp:
+        enabled: false
+    templates:
+      - templates/logfire-remote-mcp.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: maildev renders when dev.deployMaildev is true
+    set:
+      dev:
+        deployMaildev: true
+        deployPostgres: true
+      ingress:
+        maildevHostname: maildev.example.com
+    templates:
+      - templates/maildev.yaml
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          any: true
+      - containsDocument:
+          kind: Service
+          apiVersion: v1
+          any: true
+
+  - it: maildev is absent by default
+    templates:
+      - templates/maildev.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: ingress renders when ingress.enabled is true
+    set:
+      ingress:
+        enabled: true
+        hostnames:
+          - logfire.example.com
+    templates:
+      - templates/logfire-api-ingress.yaml
+    asserts:
+      - containsDocument:
+          kind: Ingress
+          apiVersion: networking.k8s.io/v1
+          any: true
+
+  - it: ingress is absent when ingress.enabled is false
+    set:
+      ingress:
+        enabled: false
+      gateway:
+        enabled: false
+        hostnames:
+          - logfire.example.com
+    templates:
+      - templates/logfire-api-ingress.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
