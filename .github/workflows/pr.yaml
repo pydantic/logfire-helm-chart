@@ -38,21 +38,11 @@ jobs:
       - name: Set up chart-testing
         uses: helm/chart-testing-action@v2.8.0
 
-      - name: Run chart-testing (list-changed)
-        id: list-changed
-        run: |
-          changed=$(ct list-changed --target-branch ${{ github.event.repository.default_branch }})
-          if [[ -n "$changed" ]]; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Chart linting
-        if: steps.list-changed.outputs.changed == 'true'
         run: ct lint --config ci/ct.yaml
 
       - name: Set up GCP auth
         id: auth
-        if: steps.list-changed.outputs.changed == 'true'
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
@@ -61,7 +51,6 @@ jobs:
           access_token_lifetime: 900s
 
       - name: Generate pull secret
-        if: steps.list-changed.outputs.changed == 'true'
         env:
           DOCKER_CONFIG: "."
           REPOSITORY: "us-docker.pkg.dev"
@@ -75,13 +64,11 @@ jobs:
           echo "${{ steps.auth.outputs.access_token }}" | docker login -u oauth2accesstoken --password-stdin "${REPOSITORY}"
 
       - name: Create Kind Cluster
-        if: steps.list-changed.outputs.changed == 'true'
         uses: helm/kind-action@v1
         with:
           config: 'ci/kind.yaml'
 
       - name: Create k8s secrets
-        if: steps.list-changed.outputs.changed == 'true'
         run: |
           kubectl create secret generic pg-dsns \
             --from-literal="postgresDsn=postgres://postgres:postgres@logfire-postgres:5432/crud" \
@@ -107,11 +94,9 @@ jobs:
             --from-literal="internalSecret=$(date +%s%N | sha256sum | head -c 32)"
 
       - name: Run chart testing
-        if: steps.list-changed.outputs.changed == 'true'
         run: ct install --upgrade --config ci/ct.yaml
 
       - name: Install chart for integration tests
-        if: steps.list-changed.outputs.changed == 'true'
         run: |
           helm dependency update charts/logfire
           helm install lf charts/logfire \
@@ -119,11 +104,9 @@ jobs:
             --wait --timeout 10m
 
       - name: Install uv
-        if: steps.list-changed.outputs.changed == 'true'
         uses: astral-sh/setup-uv@v5
 
       - name: Run integration tests
-        if: steps.list-changed.outputs.changed == 'true'
         run: |
           kubectl port-forward -n default svc/logfire-service 8080:8080 &
           PF_PID=$!
