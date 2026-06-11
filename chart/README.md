@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.23](https://img.shields.io/badge/Version-0.13.23-informational?style=flat-square) ![AppVersion: 55e50fa2](https://img.shields.io/badge/AppVersion-55e50fa2-informational?style=flat-square)
+![Version: 0.13.24](https://img.shields.io/badge/Version-0.13.24-informational?style=flat-square) ![AppVersion: 55e50fa2](https://img.shields.io/badge/AppVersion-55e50fa2-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -494,8 +494,8 @@ Before diving deeper, verify these common configuration issues:
 | logfire-ff-ingest.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-ingest.volumeClaimTemplates | object | `{"storage":"16Gi"}` | Configuration for the StatefulSet PersistentVolumeClaim template |
 | logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` | Storage provisioned for each pod |
-| logfire-ff-maintenance-scheduler | object | `{"env":[{"name":"RUST_LOG","value":"warn"}]}` | Environment overrides for the maintenance scheduler pod |
-| logfire-ff-query-api | object | `{"env":[{"name":"RUST_LOG","value":"warn"}]}` | Environment overrides for the query API pod |
+| logfire-ff-maintenance-scheduler | object | `{"env":[]}` | Environment overrides for the maintenance scheduler pod |
+| logfire-ff-query-api | object | `{"env":[]}` | Environment overrides for the query API pod |
 | logfire-redis.affinity | object | `{}` | Affinity for the bundled Redis pod. |
 | logfire-redis.enabled | bool | `true` | Deploy Redis as part of this chart. Disable to use an external Redis instance.  The bundled Redis is a single-node instance for simple/self-contained installs. For production HA, disable this and set redisDsn to a managed Redis endpoint. |
 | logfire-redis.image | object | `{"pullPolicy":"IfNotPresent","repository":"redis","tag":"7.2"}` | Redis image configuration |
