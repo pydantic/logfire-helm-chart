@@ -568,15 +568,11 @@ logfire-ff-ingest-processor:
 
 # -- Environment overrides for the query API pod
 logfire-ff-query-api:
-  env:
-    - name: RUST_LOG
-      value: warn
+  env: []
 
 # -- Environment overrides for the maintenance scheduler pod
 logfire-ff-maintenance-scheduler:
-  env:
-    - name: RUST_LOG
-      value: warn
+  env: []
 
 # -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
