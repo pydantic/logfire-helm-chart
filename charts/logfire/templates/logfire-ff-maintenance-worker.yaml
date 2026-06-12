@@ -52,7 +52,8 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
 {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
-            - fusionfire
+            {{- include "logfire.ffCommandWithTempDirCleanup" . | nindent 12 }}
+          args:
             - maintenance-worker
             - --host=0.0.0.0
             - --port=8013

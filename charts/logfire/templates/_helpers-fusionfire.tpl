@@ -268,3 +268,27 @@ Common execution env for background maintenance/compaction workers.
 "logfire-ff-migrations"
 {{- end -}}
 {{- end -}}
+
+{{/*
+Container command that sweeps stale FF_TEMP_DIR contents before starting fusionfire.
+
+The scratch volume (ephemeral PVC or emptyDir) is fresh when the pod is created but
+survives *container* restarts (e.g. OOM kills), and a SIGKILL skips tempfile's Drop
+cleanup - so a restarted container inherits orphaned scratch data that stays until
+the pod is deleted. Init containers only run at pod creation, so the sweep must run
+in the container command itself; keeping it in the chart (not the image entrypoint)
+means running the binary outside Kubernetes never deletes anything.
+
+The swept path comes from FF_TEMP_DIR at runtime so the script and the binary always
+agree on the location; workloads without FF_TEMP_DIR (e.g. the byte cache, whose
+/scratch mount holds reusable cache data) skip the sweep. `find` rather than a shell
+glob because tempfile names everything `.tmp*` and sh globs skip dotfiles.
+
+Emits the `command:` list entries; the fusionfire subcommand and flags stay in `args:`.
+*/}}
+{{- define "logfire.ffCommandWithTempDirCleanup" -}}
+- sh
+- -c
+- 'if [ -n "$FF_TEMP_DIR" ]; then find "$FF_TEMP_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} + || true; fi; exec fusionfire "$@"'
+- fusionfire
+{{- end -}}
