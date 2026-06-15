@@ -77,7 +77,8 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
-            - fusionfire
+            {{- include "logfire.ffCommandWithTempDirCleanup" . | nindent 12 }}
+          args:
             {{- if (get (get .Values "logfire-ff-query-worker" | default  dict) "enabled") }}
             - query
             {{- else }}
