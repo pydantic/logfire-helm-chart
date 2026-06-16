@@ -32,14 +32,6 @@ Accepts values like 1, 0.5, 750m.
 {{- end -}}
 
 {{/*
-Convert Kubernetes CPU quantity to integer cores using ceil, with minimum 1.
-*/}}
-{{- define "logfire.cpuCores" -}}
-{{- $cpuMilli := int (include "logfire.cpuMilli" .) -}}
-{{- max 1 (div (add $cpuMilli 999) 1000) -}}
-{{- end -}}
-
-{{/*
 Resolve effective resource requests/limits for a workload.
 Supports both legacy flat keys and nested requests/limits.
 When resources are omitted entirely, use the tiny preset's resources as the

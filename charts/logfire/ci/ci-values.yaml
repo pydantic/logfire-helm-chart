@@ -74,6 +74,10 @@ logfire-ff-ingest:
     storage: "1Gi"
 
 logfire-ff-cache-byte:
+  autoscaling:
+    minReplicas: 1
+  pdb:
+    minAvailable: 0
   scratchVolume:
     storageClassName: standard
     storage: "1Gi"

@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.25](https://img.shields.io/badge/Version-0.13.25-informational?style=flat-square) ![AppVersion: 55e50fa2](https://img.shields.io/badge/AppVersion-55e50fa2-informational?style=flat-square)
+![Version: 0.13.26](https://img.shields.io/badge/Version-0.13.26-informational?style=flat-square) ![AppVersion: 55e50fa2](https://img.shields.io/badge/AppVersion-55e50fa2-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -476,7 +476,9 @@ Before diving deeper, verify these common configuration issues:
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-cache-byte | object | `{"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
+| logfire-ff-cache-byte | object | `{"pdb":{"minAvailable":2},"replicas":3,"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
+| logfire-ff-cache-byte.pdb | object | `{"minAvailable":2}` | Keep at least two byte-cache pods serving during voluntary disruptions. |
+| logfire-ff-cache-byte.replicas | int | `3` | Number of byte-cache replicas when autoscaling is not configured. |
 | logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume |
 | logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |

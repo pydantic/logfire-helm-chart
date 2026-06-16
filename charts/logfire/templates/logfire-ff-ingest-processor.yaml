@@ -1,7 +1,6 @@
 {{- $serviceName := "logfire-ff-ingest-processor" }}
-{{- $threadSettings := include "logfire.ffThreadSettings" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
-{{- $cpuCores := int (get $threadSettings "cpuCores") -}}
-{{- $dataFusionThreads := int (get $threadSettings "dataFusionThreads") -}}
+{{- $ioThreads := include "logfire.ffIoThreads" (dict "Values" .Values "serviceName" $serviceName) -}}
+{{- $datafusionThreads := include "logfire.ffDatafusionThreads" (dict "Values" .Values "serviceName" $serviceName) -}}
 
 apiVersion: v1
 kind: Service
@@ -103,10 +102,11 @@ spec:
             - name: OTEL_TRACES_SAMPLER
               value: "parentbased_traceidratio"
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
+            {{- include "logfire.ffResourceEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
             - name: FF_IO_THREADS
-              value: {{ $cpuCores | quote }}
+              value: {{ $ioThreads | quote }}
             - name: FF_DATAFUSION_THREADS
-              value: {{ $dataFusionThreads | quote }}
+              value: {{ $datafusionThreads | quote }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:

@@ -1,9 +1,7 @@
 {{- $serviceName := "logfire-ff-maintenance-scheduler" }}
-{{- $effectiveServiceValues := include "logfire.ffDerivedServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
-{{- $threadSettings := include "logfire.ffThreadSettings" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
-{{- $defaultDatafusionMemory := include "logfire.ffMaintenanceSchedulerDatafusionMemoryDefault" (dict "Values" .Values "serviceName" $serviceName) -}}
-{{- $cpuCores := int (get $threadSettings "cpuCores") -}}
-{{- $dataFusionThreads := int (get $threadSettings "dataFusionThreads") -}}
+{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $ioThreads := include "logfire.ffIoThreads" (dict "Values" .Values "serviceName" $serviceName) -}}
+{{- $datafusionThreads := include "logfire.ffDatafusionThreads" (dict "Values" .Values "serviceName" $serviceName) -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -72,10 +70,11 @@ spec:
             - configMapRef:
                 name: logfire-ff-maintenance-config
           env:
+            {{- include "logfire.ffResourceEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
             - name: FF_IO_THREADS
-              value: {{ $cpuCores | quote }}
+              value: {{ $ioThreads | quote }}
             - name: FF_DATAFUSION_THREADS
-              value: {{ $dataFusionThreads | quote }}
+              value: {{ $datafusionThreads | quote }}
             - name: FF_COMPACTION_MAX_DAYS
               value: "3"
             - name: FF_MAX_PARTITIONS_PER_COMPACTION_SCAN
@@ -87,7 +86,7 @@ spec:
             - name: FF_MAINTENANCE_SCHEDULING_CONCURRENCY
               value: "1"
             - name: FF_DATAFUSION_MEMORY_LIMIT
-              value: {{ (get $effectiveServiceValues "datafusionMemory" | default $defaultDatafusionMemory | quote) }}
+              value: {{ (get $effectiveServiceValues "datafusionMemory" | default "auto" | quote) }}
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             - name: PG_DSN
               valueFrom:
