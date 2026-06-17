@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: depot-ubuntu-24.04-8
+    runs-on: depot-ubuntu-24.04-16
     permissions:
       id-token: write
       contents: read
@@ -21,7 +21,8 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
-          version: latest
+          # v4.2.1 hangs during kind/local-path uninstall waits in chart-testing.
+          version: v4.2.0
 
       - name: Install helm-unittest plugin
         run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.1.1 --verify=false

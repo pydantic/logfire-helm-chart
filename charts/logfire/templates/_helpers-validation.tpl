@@ -149,6 +149,20 @@ Validate gateway secret configuration
 
 
 {{/*
+Validate scratch volume configuration.
+*/}}
+{{- define "logfire.validate.scratchVolumes" -}}
+{{- range $serviceName := list "logfire-ff-cache-byte" "logfire-ff-compaction-worker" "logfire-ff-maintenance-worker" "logfire-ff-query-api" "logfire-ff-query-worker" -}}
+  {{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" $.Values "serviceName" $serviceName) | fromJson -}}
+  {{- $scratchVolume := get $serviceValues "scratchVolume" | default dict -}}
+  {{- if and $scratchVolume (not (get $scratchVolume "storage")) -}}
+    {{- fail (printf "%s.scratchVolume.storage is required when scratchVolume is configured. Omit %s.scratchVolume to use emptyDir scratch storage, or set scratchVolume.storage for an ephemeral PVC." $serviceName $serviceName) -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+
+{{/*
 Validate autoscaling configuration - warn if both HPA and KEDA are enabled
 */}}
 {{- define "logfire.validate.sizingPreset" -}}
@@ -323,6 +337,7 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.admin"
   "logfire.validate.redis"
   "logfire.validate.inClusterTls"
+  "logfire.validate.scratchVolumes"
   -}}
 {{- range $validator := $validators -}}
 {{- include $validator $root -}}

@@ -742,10 +742,10 @@ logfire-remote-mcp:
 #   service:
 #     # -- Service annotations
 #     annotations: {}
-#   # -- Parallelism per pod. Defaults to 2x computed FF_IO_THREADS.
+#   # -- Parallelism per pod. Defaults to FusionFire auto-config from effective CPU.
 #   # queryParallelism: 4
 #   # -- DataFusion memory limit when query-workers are disabled and query-api runs in query-worker mode.
-#   # Defaults to half of the pod memory request, with a 256MB floor.
+#   # Defaults to FusionFire auto-config from effective memory.
 #   # datafusionMemory: "4096MB"
 #   # -- Number of replicas
 #   replicas: 2
@@ -899,13 +899,13 @@ logfire-ff-cache-byte:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#   # -- Number of replicas
-#   replicas: 2
+  # -- Number of byte-cache replicas when autoscaling is not configured.
+  replicas: 3
 #   resources:
 #     cpu: "1"
 #     memory: "5Gi"
 #   autoscaling:
-#     minReplicas: 1
+#     minReplicas: 3
 #     maxReplicas: 6
 #     hpa:
 #       enabled: true
@@ -923,8 +923,10 @@ logfire-ff-cache-byte:
 #   tolerations: []
 #   pdb:
 #     maxUnavailable: 1
-#     minAvailable: 1
-# -- Cache byte ephemeral volume
+  # -- Keep at least two byte-cache pods serving during voluntary disruptions.
+  pdb:
+    minAvailable: 2
+  # -- Cache byte ephemeral volume
   scratchVolume:
     storage: 32Gi
     #  storageClassName: my-storage-class
@@ -982,18 +984,16 @@ logfire-ff-cache-byte:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#   # -- Compaction job concurrency. Defaults from CPU request: 1 for sub-core workers,
-#   # otherwise CPU cores + 1, bounded between 3 and 10.
+#   # -- Compaction job concurrency. Defaults to FusionFire auto-config from effective CPU.
 #   # jobParallelism: 3
-#   # -- CPU-heavy maintenance phase concurrency. Defaults to roughly 75% of CPU request, minimum 1.
+#   # -- CPU-heavy maintenance phase concurrency. Defaults to FusionFire auto-config from effective CPU.
 #   # cpuConcurrency: 2
 #   # -- Threshold for spilling parquet encode buffers to the scratch volume.
 #   # parquetSpoolThresholdBytes: "1MB"
 #   replicas: 2
-#   # -- DataFusion memory limit. Defaults from CPU and memory resources: sub-core workers
-#   # use conservative memory fractions, larger workers use 3/8 of the pod memory limit.
+#   # -- DataFusion memory limit. Defaults to FusionFire auto-config from effective memory.
 #   # datafusionMemory: "3072MB"
-#   # -- Record-batch memory limiter. Defaults to the computed DataFusion memory limit.
+#   # -- Record-batch memory limiter. Defaults to FusionFire auto-config from effective memory.
 #   # maintenanceRecordBatchMemory: "3072MB"
 #   # -- Maximum compressed input bytes to schedule into one compaction job.
 #   # Defaults from compaction-worker memory request when sizing is configured, bounded between 32MB and 512MB.
@@ -1053,18 +1053,16 @@ logfire-ff-cache-byte:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#   # -- Compaction job concurrency. Defaults from CPU request: 1 for sub-core workers,
-#   # otherwise CPU cores + 1, bounded between 3 and 10.
+#   # -- Compaction job concurrency. Defaults to FusionFire auto-config from effective CPU.
 #   # jobParallelism: 3
-#   # -- CPU-heavy maintenance phase concurrency. Defaults to roughly 75% of CPU request, minimum 1.
+#   # -- CPU-heavy maintenance phase concurrency. Defaults to FusionFire auto-config from effective CPU.
 #   # cpuConcurrency: 2
 #   # -- Threshold for spilling parquet encode buffers to the scratch volume.
 #   # parquetSpoolThresholdBytes: "1MB"
 #   replicas: 2
-#   # -- DataFusion memory limit. Defaults from CPU and memory resources: sub-core workers
-#   # use conservative memory fractions, larger workers use 3/8 of the pod memory limit.
+#   # -- DataFusion memory limit. Defaults to FusionFire auto-config from effective memory.
 #   # datafusionMemory: "3072MB"
-#   # -- Record-batch memory limiter. Defaults to the computed DataFusion memory limit.
+#   # -- Record-batch memory limiter. Defaults to FusionFire auto-config from effective memory.
 #   # maintenanceRecordBatchMemory: "3072MB"
 #   # -- Maximum compressed input bytes to schedule into one compaction job.
 #   # Defaults from compaction-worker memory request when sizing is configured, bounded between 32MB and 512MB.
@@ -1712,7 +1710,7 @@ sizingPresets:
         storage: "1Gi"
     logfire-ff-compaction-worker:
       resources:
-        cpu: "300m"
+        cpu: "1"
         memory: "768Mi"
       autoscaling:
         minReplicas: 1
@@ -1739,8 +1737,8 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-ingest:
       resources:
-        cpu: "250m"
-        memory: "512Mi"
+        cpu: "500m"
+        memory: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 6
@@ -1752,8 +1750,8 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-ingest-processor:
       resources:
-        cpu: "350m"
-        memory: "512Mi"
+        cpu: "1"
+        memory: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 6
@@ -1796,15 +1794,14 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-query-api:
-      queryParallelism: 4
       resources:
         requests:
-          cpu: "500m"
-          memory: "768Mi"
+          cpu: "1"
+          memory: "2Gi"
           ephemeral-storage: "1Gi"
         limits:
-          cpu: "1500m"
-          memory: "1Gi"
+          cpu: "2"
+          memory: "3Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -1903,14 +1900,14 @@ sizingPresets:
       scratchVolume:
         storage: "1Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 3
         maxReplicas: 6
         hpa:
           enabled: true
           memAverage: 65
           cpuAverage: 25
       pdb:
-        maxUnavailable: 1
+        minAvailable: 2
     logfire-ff-proxy-cache-byte:
       resources:
         cpu: "150m"
@@ -1926,8 +1923,8 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-maintenance-worker:
       resources:
-        cpu: "250m"
-        memory: "512Mi"
+        cpu: "1"
+        memory: "1Gi"
         ephemeralStorage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -1955,12 +1952,12 @@ sizingPresets:
     logfire-ff-compaction-worker:
       resources:
         requests:
-          cpu: "500m"
-          memory: "2Gi"
+          cpu: "1"
+          memory: "4Gi"
           ephemeral-storage: "1Gi"
         limits:
-          cpu: "1"
-          memory: "3Gi"
+          cpu: "2"
+          memory: "4Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -2081,7 +2078,6 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-query-api:
-      queryParallelism: 4
       resources:
         requests:
           cpu: "1"
@@ -2206,14 +2202,14 @@ sizingPresets:
       scratchVolume:
         storage: "4Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 3
         maxReplicas: 8
         hpa:
           enabled: true
           memAverage: 65
           cpuAverage: 25
       pdb:
-        maxUnavailable: 1
+        minAvailable: 2
     logfire-ff-proxy-cache-byte:
       resources:
         cpu: "500m"
@@ -2229,7 +2225,7 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-maintenance-worker:
       resources:
-        cpu: "500m"
+        cpu: "1"
         memory: "1Gi"
         ephemeralStorage: "1Gi"
       autoscaling:
@@ -2590,7 +2586,7 @@ sizingPresets:
         cpu: "1"
         memory: "5Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 3
         maxReplicas: 6
         hpa:
           enabled: true
@@ -2598,6 +2594,8 @@ sizingPresets:
           cpuAverage: 25
       scratchVolume:
         storage: 32Gi
+      pdb:
+        minAvailable: 2
     logfire-ff-proxy-cache-byte:
       resources:
         cpu: "750m"
