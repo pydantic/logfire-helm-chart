@@ -1,0 +1,75 @@
+suite: securityContext is applied to init and main containers
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  # deployPostgres injects the check-db-ready init container, giving us both an
+  # init container and a main container to assert against in a single template.
+  dev:
+    deployPostgres: true
+templates:
+  - templates/logfire-ff-migrations.yaml
+tests:
+  - it: applies the chart-wide securityContext to the check-db-ready init container
+    set:
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 1000
+        capabilities:
+          drop:
+            - ALL
+        seccompProfile:
+          type: RuntimeDefault
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers
+          any: true
+          content:
+            name: check-db-ready
+            securityContext:
+              allowPrivilegeEscalation: false
+              runAsNonRoot: true
+              runAsUser: 1000
+              capabilities:
+                drop:
+                  - ALL
+              seccompProfile:
+                type: RuntimeDefault
+
+  - it: applies the chart-wide securityContext to the main container
+    set:
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        runAsUser: 1000
+        capabilities:
+          drop:
+            - ALL
+        seccompProfile:
+          type: RuntimeDefault
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+
+  - it: omits securityContext on the check-db-ready init container when unset
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers
+          any: true
+          content:
+            name: check-db-ready
+      - notExists:
+          path: spec.template.spec.initContainers[0].securityContext
