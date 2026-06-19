@@ -1710,8 +1710,9 @@ sizingPresets:
         storage: "1Gi"
     logfire-ff-compaction-worker:
       resources:
-        cpu: "1"
-        memory: "768Mi"
+        requests:
+          cpu: "1"
+          memory: "768Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 2
@@ -1757,7 +1758,7 @@ sizingPresets:
         maxReplicas: 6
         hpa:
           enabled: true
-          cpuAverage: 60
+          cpuAverage: 45
       pdb:
         maxUnavailable: 1
     logfire-backend:
@@ -1923,9 +1924,10 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-maintenance-worker:
       resources:
-        cpu: "1"
-        memory: "1Gi"
-        ephemeralStorage: "1Gi"
+        requests:
+          cpu: "1"
+          memory: "1Gi"
+          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 3
@@ -1939,8 +1941,9 @@ sizingPresets:
         storage: "1Gi"
     logfire-ff-maintenance-scheduler:
       resources:
-        cpu: "100m"
-        memory: "192Mi"
+        requests:
+          cpu: "100m"
+          memory: "192Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 1
@@ -1955,21 +1958,21 @@ sizingPresets:
           cpu: "1"
           memory: "4Gi"
           ephemeral-storage: "1Gi"
-        limits:
-          cpu: "2"
-          memory: "4Gi"
-          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
-        maxReplicas: 4
+        maxReplicas: 8
         hpa:
           enabled: true
           memAverage: 70
-          cpuAverage: 80
+          cpuAverage: 90
       pdb:
         maxUnavailable: 1
+      datafusionThreads: "1"
+      cpuConcurrency: 1
+      jobParallelism: 4
+      spillToDiskQuota: "16GB"
       scratchVolume:
-        storage: "1Gi"
+        storage: "16Gi"
     logfire-otel-collector:
       resources:
         cpu: "150m"
@@ -2032,7 +2035,7 @@ sizingPresets:
         maxReplicas: 12
         hpa:
           enabled: true
-          cpuAverage: 60
+          cpuAverage: 45
       pdb:
         maxUnavailable: 1
       topologySpreadConstraints:
@@ -2225,9 +2228,10 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-maintenance-worker:
       resources:
-        cpu: "1"
-        memory: "1Gi"
-        ephemeralStorage: "1Gi"
+        requests:
+          cpu: "1"
+          memory: "1Gi"
+          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 6
@@ -2241,8 +2245,9 @@ sizingPresets:
         storage: "2Gi"
     logfire-ff-maintenance-scheduler:
       resources:
-        cpu: "250m"
-        memory: "256Mi"
+        requests:
+          cpu: "250m"
+          memory: "256Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 2
@@ -2254,24 +2259,24 @@ sizingPresets:
     logfire-ff-compaction-worker:
       resources:
         requests:
-          cpu: "1"
-          memory: "4Gi"
-          ephemeral-storage: "1Gi"
-        limits:
           cpu: "2"
           memory: "4Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
-        maxReplicas: 8
+        maxReplicas: 16
         hpa:
           enabled: true
           memAverage: 60
-          cpuAverage: 60
+          cpuAverage: 90
       pdb:
         maxUnavailable: 1
+      datafusionThreads: "2"
+      cpuConcurrency: 2
+      jobParallelism: 4
+      spillToDiskQuota: "32GB"
       scratchVolume:
-        storage: "2Gi"
+        storage: "32Gi"
     logfire-otel-collector:
       resources:
         cpu: "250m"
@@ -2349,7 +2354,7 @@ sizingPresets:
         maxReplicas: 24
         hpa:
           enabled: true
-          cpuAverage: 60
+          cpuAverage: 45
       pdb:
         maxUnavailable: 1
       topologySpreadConstraints:
@@ -2611,9 +2616,10 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-maintenance-worker:
       resources:
-        cpu: "2"
-        memory: "8Gi"
-        ephemeralStorage: "1Gi"
+        requests:
+          cpu: "2"
+          memory: "8Gi"
+          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 16
@@ -2627,8 +2633,9 @@ sizingPresets:
         storage: "4Gi"
     logfire-ff-maintenance-scheduler:
       resources:
-        cpu: "500m"
-        memory: "512Mi"
+        requests:
+          cpu: "500m"
+          memory: "512Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 3
@@ -2639,20 +2646,25 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-compaction-worker:
       resources:
-        cpu: "2"
-        memory: "8Gi"
-        ephemeralStorage: "1Gi"
+        requests:
+          cpu: "3"
+          memory: "8Gi"
+          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
-        maxReplicas: 16
+        maxReplicas: 32
         hpa:
           enabled: true
           memAverage: 50
-          cpuAverage: 40
+          cpuAverage: 90
       pdb:
         maxUnavailable: 1
+      datafusionThreads: "3"
+      cpuConcurrency: 3
+      jobParallelism: 4
+      spillToDiskQuota: "64GB"
       scratchVolume:
-        storage: "4Gi"
+        storage: "64Gi"
     logfire-otel-collector:
       resources:
         cpu: "1"
