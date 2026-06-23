@@ -104,7 +104,7 @@ Only sizing and portable availability keys are inherited from presets.
   {{- end -}}
   {{- $presetValues := get $presets $presetName | default dict -}}
   {{- $presetServiceValues := get $presetValues $serviceName | default dict -}}
-  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "queryParallelism" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" -}}
+  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "queryParallelism" "datafusionThreads" "ioThreads" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" -}}
     {{- if hasKey $presetServiceValues $key -}}
       {{- $_ := set $merged $key (deepCopy (get $presetServiceValues $key)) -}}
     {{- end -}}
@@ -188,6 +188,9 @@ spec:
 {{- fail (printf "resources.ephemeralStorageLimit is not supported for '%s'. Use resources.ephemeralStorage instead." .serviceName) -}}
 {{- end -}}
 {{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
+{{- $limits := get $resources "limits" | default dict -}}
+{{- $usesFlatResources := or (hasKey $resources "cpu") (hasKey $resources "memory") (hasKey $resources "ephemeralStorage") (hasKey $resources "ephemeral-storage") -}}
+{{- $renderLimits := or $usesFlatResources (not (empty $limits)) -}}
 {{- $cpuRequest := get $effectiveResources "cpuRequest" -}}
 {{- $memoryRequest := get $effectiveResources "memoryRequest" -}}
 {{- $ephemeralStorageRequest := get $effectiveResources "ephemeralStorageRequest" -}}
@@ -201,12 +204,14 @@ resources:
     {{- if $ephemeralStorageRequest }}
     ephemeral-storage: {{ $ephemeralStorageRequest }}
     {{- end }}
+  {{- if $renderLimits }}
   limits:
     memory: {{ $memoryLimit }}
     cpu: {{ $cpuLimit }}
     {{- if $ephemeralStorageLimit }}
     ephemeral-storage: {{ $ephemeralStorageLimit }}
     {{- end }}
+  {{- end }}
 {{- end -}}
 {{- end -}}
 
