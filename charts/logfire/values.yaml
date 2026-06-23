@@ -1960,7 +1960,7 @@ sizingPresets:
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
-        maxReplicas: 8
+        maxReplicas: 32
         hpa:
           enabled: true
           memAverage: 70
@@ -2264,7 +2264,7 @@ sizingPresets:
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
-        maxReplicas: 16
+        maxReplicas: 32
         hpa:
           enabled: true
           memAverage: 60
