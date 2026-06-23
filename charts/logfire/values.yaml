@@ -1956,7 +1956,7 @@ sizingPresets:
       resources:
         requests:
           cpu: "1"
-          memory: "4Gi"
+          memory: "2Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
