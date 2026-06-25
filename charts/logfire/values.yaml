@@ -998,7 +998,8 @@ logfire-ff-cache-byte:
 #   # -- Maximum compressed input bytes to schedule into one compaction job.
 #   # Defaults from compaction-worker memory request when sizing is configured, bounded between 32MB and 512MB.
 #   # maxCompactionJobSizeBytes: "512MB"
-#   spillToDiskQuota: "32GB"
+#   # -- DataFusion disk-spill quota. Defaults to half of scratchVolume.storage when scratchVolume is set.
+#   # spillToDiskQuota: "32GB"
 #   compactionTiers:
 #     - size_threshold_bytes: "1KB"
 #       count_threshold: 10
@@ -1067,7 +1068,8 @@ logfire-ff-cache-byte:
 #   # -- Maximum compressed input bytes to schedule into one compaction job.
 #   # Defaults from compaction-worker memory request when sizing is configured, bounded between 32MB and 512MB.
 #   # maxCompactionJobSizeBytes: "512MB"
-#   spillToDiskQuota: "32GB"
+#   # -- DataFusion disk-spill quota. Defaults to half of scratchVolume.storage when scratchVolume is set.
+#   # spillToDiskQuota: "32GB"
 #   compactionTiers:
 #     - size_threshold_bytes: "1KB"
 #       count_threshold: 10
@@ -1984,7 +1986,6 @@ sizingPresets:
           cpuAverage: 90
       pdb:
         maxUnavailable: 1
-      spillToDiskQuota: "16GB"
       scratchVolume:
         storage: "16Gi"
     logfire-otel-collector:
@@ -2285,7 +2286,6 @@ sizingPresets:
           cpuAverage: 90
       pdb:
         maxUnavailable: 1
-      spillToDiskQuota: "32GB"
       scratchVolume:
         storage: "32Gi"
     logfire-otel-collector:
@@ -2670,7 +2670,6 @@ sizingPresets:
           cpuAverage: 90
       pdb:
         maxUnavailable: 1
-      spillToDiskQuota: "64GB"
       scratchVolume:
         storage: "64Gi"
     logfire-otel-collector:
