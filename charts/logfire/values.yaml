@@ -1013,10 +1013,10 @@ logfire-ff-cache-byte:
 #     - size_threshold_bytes: "100MB"
 #       count_threshold: 10
 #   resources:
-#     cpu: "2"
-#     memory: "8Gi"
-#     # Optional: sets both requests+limits for container writable layer/logs
-#     ephemeralStorage: "2Gi"
+#     requests:
+#       cpu: "2"
+#       memory: "8Gi"
+#       ephemeral-storage: "2Gi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 16
@@ -1082,8 +1082,9 @@ logfire-ff-cache-byte:
 #     - size_threshold_bytes: "100MB"
 #       count_threshold: 10
 #   resources:
-#     cpu: "2"
-#     memory: "8Gi"
+#     requests:
+#       cpu: "2"
+#       memory: "8Gi"
 #   autoscaling:
 #     minReplicas: 1
 #     maxReplicas: 16
@@ -1494,6 +1495,22 @@ logfire-redis:
 
 # -- Redis DSN. Change if using an external Redis instance.
 redisDsn: redis://logfire-redis:6379
+
+# -- Redis settings for auth token caches. Empty DSN falls back to `redisDsn`.
+# Use a prefix only when sharing one Redis instance with other data.
+tokenRedis:
+  # -- Redis DSN for auth token caches.
+  dsn: ""
+  # -- Key prefix for auth token cache keys.
+  prefix: ""
+
+# -- Redis settings for usage, autocomplete, and rate limiting data. Empty DSN falls back to `redisDsn`.
+# Use a prefix only when sharing one Redis instance with other data.
+usageRedis:
+  # -- Redis DSN for usage, autocomplete, and rate limiting data.
+  dsn: ""
+  # -- Key prefix for usage keys.
+  prefix: ""
 
 
 # ==============================================================================
@@ -1967,9 +1984,6 @@ sizingPresets:
           cpuAverage: 90
       pdb:
         maxUnavailable: 1
-      datafusionThreads: "1"
-      cpuConcurrency: 1
-      jobParallelism: 4
       spillToDiskQuota: "16GB"
       scratchVolume:
         storage: "16Gi"
@@ -2271,9 +2285,6 @@ sizingPresets:
           cpuAverage: 90
       pdb:
         maxUnavailable: 1
-      datafusionThreads: "2"
-      cpuConcurrency: 2
-      jobParallelism: 4
       spillToDiskQuota: "32GB"
       scratchVolume:
         storage: "32Gi"
@@ -2659,9 +2670,6 @@ sizingPresets:
           cpuAverage: 90
       pdb:
         maxUnavailable: 1
-      datafusionThreads: "3"
-      cpuConcurrency: 3
-      jobParallelism: 4
       spillToDiskQuota: "64GB"
       scratchVolume:
         storage: "64Gi"

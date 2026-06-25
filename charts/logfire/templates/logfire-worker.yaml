@@ -81,6 +81,10 @@ spec:
                   key: postgresDsn
             - name: SHARED_REDIS_DSN
               value: {{ .Values.redisDsn }}
+            - name: TOKEN_REDIS_DSN
+              value: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "tokenRedis") }}
+            - name: TOKEN_REDIS_PREFIX
+              value: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "tokenRedis") | quote }}
             - name: REDIS_DSN
               value: {{ .Values.redisDsn }}
             - name: BACKEND_REDIS_DSN

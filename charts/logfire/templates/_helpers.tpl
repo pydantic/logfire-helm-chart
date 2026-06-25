@@ -80,6 +80,20 @@ Determine if HPA is enabled maintaining backward compatibility with old values f
 {{- end -}}
 {{- end -}}
 
+{{- define "logfire.redisDsnFor" -}}
+{{- $root := required "logfire.redisDsnFor: need .root" .root -}}
+{{- $valuesKey := required "logfire.redisDsnFor: need .valuesKey" .valuesKey -}}
+{{- $redisValues := get $root.Values $valuesKey | default dict -}}
+{{- get $redisValues "dsn" | default $root.Values.redisDsn -}}
+{{- end -}}
+
+{{- define "logfire.redisPrefixFor" -}}
+{{- $root := required "logfire.redisPrefixFor: need .root" .root -}}
+{{- $valuesKey := required "logfire.redisPrefixFor: need .valuesKey" .valuesKey -}}
+{{- $redisValues := get $root.Values $valuesKey | default dict -}}
+{{- get $redisValues "prefix" | default "" -}}
+{{- end -}}
+
 {{- define "logfire.keda.enabled" -}}
 {{- if hasKey . "keda" -}}
   {{- .keda.enabled  -}}
