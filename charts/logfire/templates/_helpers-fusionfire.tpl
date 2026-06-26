@@ -61,6 +61,44 @@ increase FusionFire auto-config on installs that render no Kubernetes resources.
 {{- end -}}
 
 {{/*
+Convert storage quantities used by scratchVolume.storage to whole GiB.
+*/}}
+{{- define "logfire.storageQuantityToGi" -}}
+{{- $quantity := required "logfire.storageQuantityToGi: storage quantity is required" . | toString | trim -}}
+{{- $unit := regexFind "[a-zA-Z]+$" $quantity | lower -}}
+{{- $valueText := regexReplaceAll "[a-zA-Z]+$" $quantity "" | trim -}}
+{{- $value := int $valueText -}}
+{{- if or (eq $unit "gi") (eq $unit "g") (eq $unit "gb") -}}
+{{- $value -}}
+{{- else if or (eq $unit "ti") (eq $unit "t") (eq $unit "tb") -}}
+{{- mul $value 1024 -}}
+{{- else if or (eq $unit "mi") (eq $unit "m") (eq $unit "mb") -}}
+{{- max 1 (div (add $value 1023) 1024) -}}
+{{- else -}}
+{{- fail (printf "unsupported scratchVolume.storage quantity %q; use Mi, Gi, or Ti" $quantity) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Resolve DataFusion disk-spill quota for background workers.
+Explicit spillToDiskQuota wins. Otherwise derive half of the scratch PVC size,
+leaving headroom for local scratch files, index merge scratch, and filesystem
+overhead. No quota is derived for emptyDir scratch storage.
+*/}}
+{{- define "logfire.ffSpillToDiskQuota" -}}
+{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- with (get $effectiveServiceValues "spillToDiskQuota") -}}
+{{- . -}}
+{{- else -}}
+{{- $scratchVolume := get $effectiveServiceValues "scratchVolume" | default dict -}}
+{{- with (get $scratchVolume "storage") -}}
+{{- $storageGi := int (include "logfire.storageQuantityToGi" .) -}}
+{{- printf "%dGB" (max 1 (div $storageGi 2)) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Expose effective Kubernetes resources to FusionFire so its auto-config formulas
 use the same resources Kubernetes enforces. When no preset/resources are set,
 the chart does not render Kubernetes resources, so use conservative synthetic
@@ -140,6 +178,7 @@ Common execution env for background maintenance/compaction workers.
 {{- $cpuConcurrency := get $effectiveServiceValues "cpuConcurrency" | default "auto" -}}
 {{- $ioThreads := include "logfire.ffIoThreads" . -}}
 {{- $datafusionThreads := include "logfire.ffDatafusionThreads" . -}}
+{{- $spillToDiskQuota := include "logfire.ffSpillToDiskQuota" . -}}
 {{- include "logfire.ffResourceEnv" . }}
 - name: FF_IO_THREADS
   value: {{ $ioThreads | quote }}
@@ -153,7 +192,7 @@ Common execution env for background maintenance/compaction workers.
   value: "true"
 - name: FF_TEMP_DIR
   value: /scratch/fusionfire
-{{- with (get $effectiveServiceValues "spillToDiskQuota") }}
+{{- with $spillToDiskQuota }}
 - name: FF_SPILL_TO_DISK_QUOTA
   value: {{ . | quote }}
 {{- end }}

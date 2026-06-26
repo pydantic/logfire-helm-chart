@@ -143,6 +143,10 @@ spec:
             value: {{ .Values.redisDsn }}
           - name: SHARED_REDIS_DSN
             value: {{ .Values.redisDsn }}
+          - name: TOKEN_REDIS_DSN
+            value: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "tokenRedis") }}
+          - name: TOKEN_REDIS_PREFIX
+            value: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "tokenRedis") | quote }}
           - name: FUSIONFIRE_QUERY_HOST
             value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
           - name: FUSIONFIRE_QUERY_PORT
