@@ -1819,10 +1819,6 @@ sizingPresets:
           cpu: "1"
           memory: "2Gi"
           ephemeral-storage: "1Gi"
-        limits:
-          cpu: "2"
-          memory: "3Gi"
-          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 6
@@ -1945,7 +1941,7 @@ sizingPresets:
       resources:
         requests:
           cpu: "1"
-          memory: "1Gi"
+          memory: "2Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -2101,10 +2097,6 @@ sizingPresets:
           cpu: "1"
           memory: "2Gi"
           ephemeral-storage: "1Gi"
-        limits:
-          cpu: "2"
-          memory: "3Gi"
-          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 8
@@ -2244,8 +2236,8 @@ sizingPresets:
     logfire-ff-maintenance-worker:
       resources:
         requests:
-          cpu: "1"
-          memory: "1Gi"
+          cpu: "2"
+          memory: "4Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -2466,9 +2458,10 @@ sizingPresets:
               app.kubernetes.io/component: logfire-remote-mcp
     logfire-ff-query-api:
       resources:
-        cpu: "2"
-        memory: "8Gi"
-        ephemeralStorage: "1Gi"
+        requests:
+          cpu: "2"
+          memory: "8Gi"
+          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 8
@@ -2628,7 +2621,7 @@ sizingPresets:
     logfire-ff-maintenance-worker:
       resources:
         requests:
-          cpu: "2"
+          cpu: "3"
           memory: "8Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
