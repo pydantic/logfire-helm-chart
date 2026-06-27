@@ -1941,7 +1941,7 @@ sizingPresets:
       resources:
         requests:
           cpu: "1"
-          memory: "2Gi"
+          memory: "6Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -2237,7 +2237,7 @@ sizingPresets:
       resources:
         requests:
           cpu: "2"
-          memory: "4Gi"
+          memory: "12Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -2622,7 +2622,7 @@ sizingPresets:
       resources:
         requests:
           cpu: "3"
-          memory: "8Gi"
+          memory: "18Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
