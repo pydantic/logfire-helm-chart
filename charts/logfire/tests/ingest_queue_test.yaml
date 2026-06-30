@@ -1,0 +1,23 @@
+suite: ingest queue configuration
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+templates:
+  - templates/logfire-ff-config.yaml
+  - templates/logfire-ff-ingest.yaml
+tests:
+  - it: configures direct-file idle buffering
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_INGEST_DIRECT_FILE_IDLE_BUFFER_TIME
+            value: "5s"
+        template: templates/logfire-ff-ingest.yaml
+        documentIndex: 1
