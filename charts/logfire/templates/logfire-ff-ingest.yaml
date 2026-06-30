@@ -112,6 +112,8 @@ spec:
               value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor:{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
             - name: FF_INGEST_DIRECT_FILE_BUFFER_MAX_BYTES
               value: {{ get $directFileSettings "bufferMaxBytes" | quote }}
+            - name: FF_INGEST_DIRECT_FILE_IDLE_BUFFER_TIME
+              value: "5s"
             - name: FF_DIRECT_FILE_INGEST_SUBMIT_CONCURRENCY
               value: {{ get $directFileSettings "submitConcurrency" | quote }}
             {{- include "logfire.ffResourceEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
