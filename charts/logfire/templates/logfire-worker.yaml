@@ -97,10 +97,6 @@ spec:
               value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
             - name: FUSIONFIRE_QUERY_PORT
               value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
-            - name: FUSIONFIRE_INGEST_HOST
-              value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor"
-            - name: FUSIONFIRE_INGEST_PORT
-              value: "{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
             - name: FUSIONFIRE_CRUD_HOST
               value: "{{ include "logfire.scheme" . }}://logfire-ff-crud-api"
             - name: FUSIONFIRE_CRUD_PORT
@@ -121,8 +117,6 @@ spec:
             {{- with (include "logfire.aiProviderEnv" $ | trim) }}
             {{- . | nindent 12 }}
             {{- end }}
-            - name: USAGE_TO_BUCKET_BUCKET_NAME
-              value: {{ .Values.objectStore.uri }}/usage
             - name: UNSUBSCRIBE_SECRET
               valueFrom:
                 secretKeyRef:
@@ -133,10 +127,6 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
-            - name: DEFAULT_SUBSCRIPTION_PLAN
-              value: non_stripe
-            - name: DEFAULT_PERSONAL_SUBSCRIPTION_PLAN
-              value: non_stripe
             - name: LOGFIRE_REGION
               value: {{ .Values.logfireRegion | default "local" }}
             - name: KNOWN_LOGFIRE_REGIONS
