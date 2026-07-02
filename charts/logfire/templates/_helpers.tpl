@@ -1128,16 +1128,12 @@ default-checksum
 {{- end -}}
 
 {{- define "logfire.rateLimits" -}}
-{{- if .Values.rateLimits -}}
-- name: SDK_V1_QUERY_RATE_LIMIT__PER_MINUTE
-  value: {{ (get (get .Values.rateLimits "queries"| default dict) "perMinute" | default 99999) | quote }}
-- name: SDK_V1_QUERY_RATE_LIMIT__PER_HOUR
-  value: {{ (get (get .Values.rateLimits "queries"| default dict) "perHour" | default 99999) | quote }}
-{{- else -}}
-- name: SDK_V1_QUERY_RATE_LIMIT__PER_MINUTE
-  value: "99999"
-- name: SDK_V1_QUERY_RATE_LIMIT__PER_HOUR
-  value: "99999"
+{{- with .Values.rateLimits -}}
+{{- $queries := get . "queries" | default dict -}}
+- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_V1_QUERY__PER_MINUTE
+  value: {{ (get $queries "perMinute" | default 99999) | quote }}
+- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_V1_QUERY__PER_HOUR
+  value: {{ (get $queries "perHour" | default 99999) | quote }}
 {{- end -}}
 {{- end -}}
 
