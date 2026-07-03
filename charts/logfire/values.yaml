@@ -921,11 +921,10 @@ logfire-ff-cache-byte:
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
+#   # -- PodDisruptionBudget for byte-cache pods.
 #   pdb:
 #     maxUnavailable: 1
-  # -- Keep at least two byte-cache pods serving during voluntary disruptions.
-  pdb:
-    minAvailable: 2
+  pdb: {}
   # -- Cache byte ephemeral volume
   scratchVolume:
     storage: 32Gi
@@ -1922,8 +1921,6 @@ sizingPresets:
           enabled: true
           memAverage: 65
           cpuAverage: 25
-      pdb:
-        minAvailable: 2
     logfire-ff-proxy-cache-byte:
       resources:
         cpu: "150m"
@@ -2218,8 +2215,6 @@ sizingPresets:
           enabled: true
           memAverage: 65
           cpuAverage: 25
-      pdb:
-        minAvailable: 2
     logfire-ff-proxy-cache-byte:
       resources:
         cpu: "500m"

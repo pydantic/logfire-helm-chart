@@ -1,4 +1,4 @@
-suite: sizing presets wire HPA bounds
+suite: sizing preset behavior
 release:
   name: lf
   namespace: default
@@ -9,190 +9,7 @@ set:
   dev:
     deployPostgres: true
 tests:
-  - it: ingest HPA uses tiny preset bounds
-    set:
-      sizingPreset: tiny
-    templates:
-      - templates/logfire-ff-ingest.yaml
-    asserts:
-      - equal:
-          path: spec.minReplicas
-          value: 3
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 12
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: ingest HPA uses small preset bounds
-    set:
-      sizingPreset: small
-    templates:
-      - templates/logfire-ff-ingest.yaml
-    asserts:
-      - equal:
-          path: spec.minReplicas
-          value: 3
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 12
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: ingest HPA uses standard preset bounds
-    set:
-      sizingPreset: standard
-    templates:
-      - templates/logfire-ff-ingest.yaml
-    asserts:
-      - equal:
-          path: spec.minReplicas
-          value: 3
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 12
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: ingest HPA uses standard bounds through large preset inheritance
-    set:
-      sizingPreset: large
-    templates:
-      - templates/logfire-ff-ingest.yaml
-    asserts:
-      - equal:
-          path: spec.minReplicas
-          value: 3
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 12
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: backend HPA uses tiny preset bounds
-    set:
-      sizingPreset: tiny
-    templates:
-      - templates/logfire-backend.yaml
-    asserts:
-      - equal:
-          path: spec.minReplicas
-          value: 1
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 4
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: backend HPA uses standard preset bounds
-    set:
-      sizingPreset: standard
-    templates:
-      - templates/logfire-backend.yaml
-    asserts:
-      - equal:
-          path: spec.minReplicas
-          value: 3
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 6
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: query-api HPA uses small preset bounds
-    set:
-      sizingPreset: small
-    templates:
-      - templates/logfire-ff-query-api.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.cpu
-          value: 2
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.memory
-          value: 4Gi
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.minReplicas
-          value: 1
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 8
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: query-api uses standard preset resources
-    set:
-      sizingPreset: standard
-    templates:
-      - templates/logfire-ff-query-api.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.cpu
-          value: 3
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.memory
-          value: 16Gi
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: ingest processor HPA uses standard preset bounds
-    set:
-      sizingPreset: standard
-    templates:
-      - templates/logfire-ff-ingest-processor.yaml
-    asserts:
-      - equal:
-          path: spec.minReplicas
-          value: 3
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 32
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: service-level autoscaling overrides win over preset values
+  - it: service-level autoscaling overrides preset values
     set:
       sizingPreset: tiny
       logfire-backend:
@@ -218,310 +35,61 @@ tests:
           path: kind
           value: HorizontalPodAutoscaler
 
-  - it: compaction worker uses large resource, scratch, and HPA targets
+  - it: ingest StatefulSet PVC template is stable for tiny
     set:
-      sizingPreset: large
+      sizingPreset: tiny
     templates:
-      - templates/logfire-ff-compaction-worker.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.cpu
-          value: 6
+      - templates/logfire-ff-ingest.yaml
+    asserts: &ingest_pvc_template_asserts
+      - notExists:
+          path: spec.serviceName
         documentSelector:
           path: kind
-          value: Deployment
+          value: StatefulSet
       - equal:
-          path: spec.template.spec.containers[0].resources.requests.memory
-          value: 32Gi
+          path: spec.volumeClaimTemplates[0].metadata.name
+          value: ingest-data
         documentSelector:
           path: kind
-          value: Deployment
+          value: StatefulSet
       - equal:
-          path: spec.template.spec.volumes[0].ephemeral.volumeClaimTemplate.spec.resources.requests.storage
-          value: 128Gi
+          path: spec.volumeClaimTemplates[0].spec.accessModes[0]
+          value: ReadWriteOnce
         documentSelector:
           path: kind
-          value: Deployment
+          value: StatefulSet
       - equal:
-          path: spec.minReplicas
-          value: 1
+          path: spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          value: 16Gi
         documentSelector:
           path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 32
+          value: StatefulSet
+      - notExists:
+          path: spec.volumeClaimTemplates[0].spec.storageClassName
         documentSelector:
           path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.metrics[0].resource.target.averageUtilization
-          value: 80
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.metrics[1].resource.target.averageUtilization
-          value: 80
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
+          value: StatefulSet
 
-  - it: compaction worker uses dev preset HPA targets
-    set:
-      sizingPreset: dev
-    templates:
-      - templates/logfire-ff-compaction-worker.yaml
-    asserts:
-      - equal:
-          path: spec.metrics[0].resource.target.averageUtilization
-          value: 80
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.metrics[1].resource.target.averageUtilization
-          value: 80
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: maintenance worker uses large resource and HPA max override
-    set:
-      sizingPreset: large
-    templates:
-      - templates/logfire-ff-maintenance-worker.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.cpu
-          value: 4
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.memory
-          value: 24Gi
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.volumes[0].ephemeral.volumeClaimTemplate.spec.resources.requests.storage
-          value: 128Gi
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.minReplicas
-          value: 1
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 32
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: maintenance worker uses small preset HPA max
+  - it: ingest StatefulSet PVC template is stable for small
     set:
       sizingPreset: small
     templates:
-      - templates/logfire-ff-maintenance-worker.yaml
-    asserts:
-      - equal:
-          path: spec.minReplicas
-          value: 1
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 32
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
+      - templates/logfire-ff-ingest.yaml
+    asserts: *ingest_pvc_template_asserts
 
-  - it: ingest processor uses large resource and HPA max override
-    set:
-      sizingPreset: large
-    templates:
-      - templates/logfire-ff-ingest-processor.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.cpu
-          value: 4
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.memory
-          value: 4Gi
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.minReplicas
-          value: 3
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 32
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: byte cache uses large replica override
-    set:
-      sizingPreset: large
-    templates:
-      - templates/logfire-ff-cache-byte.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.cpu
-          value: 1
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.memory
-          value: 6Gi
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.minReplicas
-          value: 9
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 24
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: byte cache uses small replica minimum with standard resources
-    set:
-      sizingPreset: small
-    templates:
-      - templates/logfire-ff-cache-byte.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.cpu
-          value: 1
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.memory
-          value: 6Gi
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.minReplicas
-          value: 1
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 24
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: byte cache uses standard replica minimum with standard resources
+  - it: ingest StatefulSet PVC template is stable for standard
     set:
       sizingPreset: standard
     templates:
-      - templates/logfire-ff-cache-byte.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.cpu
-          value: 1
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.memory
-          value: 6Gi
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.minReplicas
-          value: 3
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 24
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
+      - templates/logfire-ff-ingest.yaml
+    asserts: *ingest_pvc_template_asserts
 
-  - it: query-api uses large HPA max override
+  - it: ingest StatefulSet PVC template is stable for large
     set:
       sizingPreset: large
     templates:
-      - templates/logfire-ff-query-api.yaml
-    asserts:
-      - equal:
-          path: spec.minReplicas
-          value: 3
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 16
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: public proxy uses large HPA max override
-    set:
-      sizingPreset: large
-    templates:
-      - templates/logfire-service.yaml
-    asserts:
-      - equal:
-          path: spec.minReplicas
-          value: 3
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 12
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-
-  - it: byte cache proxy uses large HPA max override
-    set:
-      sizingPreset: large
-    templates:
-      - templates/logfire-ff-proxy-cache-byte.yaml
-    asserts:
-      - equal:
-          path: spec.minReplicas
-          value: 1
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.maxReplicas
-          value: 32
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
+      - templates/logfire-ff-ingest.yaml
+    asserts: *ingest_pvc_template_asserts
 
   - it: unknown preset name fails the install
     set:

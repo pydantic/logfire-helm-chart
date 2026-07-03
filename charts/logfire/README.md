@@ -477,8 +477,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-cache-byte | object | `{"pdb":{"minAvailable":2},"replicas":3,"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
-| logfire-ff-cache-byte.pdb | object | `{"minAvailable":2}` | Keep at least two byte-cache pods serving during voluntary disruptions. |
+| logfire-ff-cache-byte | object | `{"pdb":{},"replicas":3,"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
 | logfire-ff-cache-byte.replicas | int | `3` | Number of byte-cache replicas when autoscaling is not configured. |
 | logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume |
 | logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
