@@ -16,7 +16,7 @@ Use the [Self-Hosted Production Requirements](https://docs.pydantic.dev/logfire/
 Choose one path:
 
 * **Local evaluation**: use `values.dev.yaml`. It deploys development-grade PostgreSQL, MinIO, and MailDev in the cluster.
-* **Production**: create your own values file, connect external PostgreSQL and object storage, and start with one of the production sizing presets: `standard`, `small`, or `tiny`.
+* **Production**: create your own values file, connect external PostgreSQL and object storage, and start with one of the production sizing presets: `large`, `standard`, `small`, or `tiny`.
 
 > **Warning**: `values.dev.yaml` is only for local evaluation and testing. Do not use it for production deployments.
 
@@ -166,7 +166,7 @@ Before installing in production, confirm that you have:
 * External PostgreSQL databases for `crud`, `ff`, and `dex`.
 * Object storage using `s3://`, `gs://`, or `az://`.
 * A Dex connector configured for your identity provider.
-* A sizing preset selected: `standard`, `small`, or `tiny`.
+* A sizing preset selected: `large`, `standard`, `small`, or `tiny`.
 
 ## Configuration Notes
 
@@ -278,11 +278,12 @@ Start with a sizing preset instead of hand-sizing every workload:
 sizingPreset: standard
 ```
 
-Use `standard` for general production deployments, `small` for lower-traffic deployments that still need ingest and query headroom, or `tiny` for the smallest production footprint.
+Use `large` for higher-throughput deployments, `standard` for general production deployments, `small` for lower-traffic deployments that still need ingest and query headroom, or `tiny` for the smallest production footprint.
 Presets apply workload resources, autoscaling, PDBs, best-effort topology spreading for HA-sensitive workloads, and selected FusionFire execution settings.
 They do not configure environment-specific prerequisites such as hostnames, TLS, PostgreSQL, object storage, image pull secrets, or StorageClasses.
 
 The `standard` preset keeps the public request path, query API, and ingest path at a minimum of three replicas.
+The `large` preset inherits `standard` and increases selected FusionFire worker, ingest processor, and byte-cache capacity.
 The `small` preset keeps ingest and the edge service more available while preserving a smaller footprint.
 The `tiny` preset intentionally favors the smallest resource footprint over high availability.
 

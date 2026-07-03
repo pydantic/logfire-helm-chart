@@ -51,7 +51,7 @@ rateLimits: {}
 #    perHour: 60
 #    perMinute: 10
 
-# -- Workload sizing preset. Leave empty to skip preset sizing, or set to `standard`, `small`, or `tiny` to apply built-in customer sizing defaults.
+# -- Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults.
 sizingPreset: ""
 
 # ==============================================================================
@@ -1737,8 +1737,8 @@ sizingPresets:
         maxReplicas: 2
         hpa:
           enabled: true
-          memAverage: 65
-          cpuAverage: 20
+          memAverage: 80
+          cpuAverage: 80
       scratchVolume:
         storage: "1Gi"
   tiny:
@@ -1760,8 +1760,8 @@ sizingPresets:
         cpu: "500m"
         memory: "1Gi"
       autoscaling:
-        minReplicas: 1
-        maxReplicas: 6
+        minReplicas: 3
+        maxReplicas: 12
         hpa:
           enabled: true
           memAverage: 40
@@ -1773,8 +1773,8 @@ sizingPresets:
         cpu: "1"
         memory: "1Gi"
       autoscaling:
-        minReplicas: 1
-        maxReplicas: 6
+        minReplicas: 3
+        maxReplicas: 32
         hpa:
           enabled: true
           cpuAverage: 45
@@ -1911,13 +1911,13 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-cache-byte:
       resources:
-        cpu: "250m"
-        memory: "384Mi"
+        cpu: "1"
+        memory: "6Gi"
       scratchVolume:
         storage: "1Gi"
       autoscaling:
-        minReplicas: 3
-        maxReplicas: 6
+        minReplicas: 1
+        maxReplicas: 24
         hpa:
           enabled: true
           memAverage: 65
@@ -1945,7 +1945,7 @@ sizingPresets:
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
-        maxReplicas: 3
+        maxReplicas: 32
         hpa:
           enabled: true
           memAverage: 50
@@ -1978,8 +1978,8 @@ sizingPresets:
         maxReplicas: 32
         hpa:
           enabled: true
-          memAverage: 70
-          cpuAverage: 90
+          memAverage: 80
+          cpuAverage: 80
       pdb:
         maxUnavailable: 1
       scratchVolume:
@@ -2043,7 +2043,7 @@ sizingPresets:
         memory: "1Gi"
       autoscaling:
         minReplicas: 3
-        maxReplicas: 12
+        maxReplicas: 32
         hpa:
           enabled: true
           cpuAverage: 45
@@ -2094,8 +2094,8 @@ sizingPresets:
     logfire-ff-query-api:
       resources:
         requests:
-          cpu: "1"
-          memory: "2Gi"
+          cpu: "2"
+          memory: "4Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -2207,13 +2207,13 @@ sizingPresets:
               app.kubernetes.io/component: logfire-service
     logfire-ff-cache-byte:
       resources:
-        cpu: "500m"
-        memory: "1Gi"
+        cpu: "1"
+        memory: "6Gi"
       scratchVolume:
         storage: "4Gi"
       autoscaling:
-        minReplicas: 3
-        maxReplicas: 8
+        minReplicas: 1
+        maxReplicas: 24
         hpa:
           enabled: true
           memAverage: 65
@@ -2241,7 +2241,7 @@ sizingPresets:
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
-        maxReplicas: 6
+        maxReplicas: 32
         hpa:
           enabled: true
           memAverage: 50
@@ -2274,8 +2274,8 @@ sizingPresets:
         maxReplicas: 32
         hpa:
           enabled: true
-          memAverage: 60
-          cpuAverage: 90
+          memAverage: 80
+          cpuAverage: 80
       pdb:
         maxUnavailable: 1
       scratchVolume:
@@ -2328,7 +2328,7 @@ sizingPresets:
         memory: "2Gi"
       autoscaling:
         minReplicas: 3
-        maxReplicas: 24
+        maxReplicas: 12
         hpa:
           enabled: true
           memAverage: 40
@@ -2354,7 +2354,7 @@ sizingPresets:
         memory: "4Gi"
       autoscaling:
         minReplicas: 3
-        maxReplicas: 24
+        maxReplicas: 32
         hpa:
           enabled: true
           cpuAverage: 45
@@ -2459,8 +2459,8 @@ sizingPresets:
     logfire-ff-query-api:
       resources:
         requests:
-          cpu: "2"
-          memory: "8Gi"
+          cpu: "3"
+          memory: "16Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 3
@@ -2593,10 +2593,10 @@ sizingPresets:
     logfire-ff-cache-byte:
       resources:
         cpu: "1"
-        memory: "5Gi"
+        memory: "6Gi"
       autoscaling:
         minReplicas: 3
-        maxReplicas: 6
+        maxReplicas: 24
         hpa:
           enabled: true
           memAverage: 65
@@ -2626,7 +2626,7 @@ sizingPresets:
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
-        maxReplicas: 16
+        maxReplicas: 32
         hpa:
           enabled: true
           memAverage: 50
@@ -2659,8 +2659,8 @@ sizingPresets:
         maxReplicas: 32
         hpa:
           enabled: true
-          memAverage: 50
-          cpuAverage: 90
+          memAverage: 80
+          cpuAverage: 80
       pdb:
         maxUnavailable: 1
       scratchVolume:
@@ -2678,3 +2678,44 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+  large:
+    logfire-ff-ingest-processor:
+      resources:
+        cpu: "4"
+        memory: "4Gi"
+      autoscaling:
+        maxReplicas: 32
+    logfire-ff-query-api:
+      autoscaling:
+        maxReplicas: 16
+    logfire-service:
+      autoscaling:
+        maxReplicas: 12
+    logfire-ff-cache-byte:
+      autoscaling:
+        minReplicas: 9
+        maxReplicas: 24
+    logfire-ff-proxy-cache-byte:
+      autoscaling:
+        maxReplicas: 32
+    logfire-ff-maintenance-worker:
+      resources:
+        requests:
+          cpu: "4"
+          memory: "24Gi"
+      autoscaling:
+        maxReplicas: 32
+      scratchVolume:
+        storage: "128Gi"
+    logfire-ff-compaction-worker:
+      resources:
+        requests:
+          cpu: "6"
+          memory: "32Gi"
+      autoscaling:
+        maxReplicas: 32
+        hpa:
+          memAverage: 80
+          cpuAverage: 80
+      scratchVolume:
+        storage: "128Gi"
