@@ -40,6 +40,7 @@ jobs:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         with:
           skip_existing: true
+          mark_as_latest: ${{ github.ref_type != 'tag' }}
 
       - name: Update release notes from PR body
         uses: actions/github-script@v7
@@ -155,6 +156,7 @@ jobs:
             });
 
       - name: Update gh-pages README
+        if: github.ref_type != 'tag'
         run: |
           # Store the current README content
           README_CONTENT=$(cat charts/logfire/README.md)
