@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.28](https://img.shields.io/badge/Version-0.13.28-informational?style=flat-square) ![AppVersion: 4c2b710a](https://img.shields.io/badge/AppVersion-4c2b710a-informational?style=flat-square)
+![Version: 0.13.29](https://img.shields.io/badge/Version-0.13.29-informational?style=flat-square) ![AppVersion: 18c3a230](https://img.shields.io/badge/AppVersion-18c3a230-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -15,7 +15,7 @@ Use the [Self-Hosted Production Requirements](https://docs.pydantic.dev/logfire/
 Choose one path:
 
 * **Local evaluation**: use `values.dev.yaml`. It deploys development-grade PostgreSQL, MinIO, and MailDev in the cluster.
-* **Production**: create your own values file, connect external PostgreSQL and object storage, and start with one of the production sizing presets: `standard`, `small`, or `tiny`.
+* **Production**: create your own values file, connect external PostgreSQL and object storage, and start with one of the production sizing presets: `large`, `standard`, `small`, or `tiny`.
 
 > **Warning**: `values.dev.yaml` is only for local evaluation and testing. Do not use it for production deployments.
 
@@ -165,7 +165,7 @@ Before installing in production, confirm that you have:
 * External PostgreSQL databases for `crud`, `ff`, and `dex`.
 * Object storage using `s3://`, `gs://`, or `az://`.
 * A Dex connector configured for your identity provider.
-* A sizing preset selected: `standard`, `small`, or `tiny`.
+* A sizing preset selected: `large`, `standard`, `small`, or `tiny`.
 
 ## Configuration Notes
 
@@ -277,11 +277,12 @@ Start with a sizing preset instead of hand-sizing every workload:
 sizingPreset: standard
 ```
 
-Use `standard` for general production deployments, `small` for lower-traffic deployments that still need ingest and query headroom, or `tiny` for the smallest production footprint.
+Use `large` for higher-throughput deployments, `standard` for general production deployments, `small` for lower-traffic deployments that still need ingest and query headroom, or `tiny` for the smallest production footprint.
 Presets apply workload resources, autoscaling, PDBs, best-effort topology spreading for HA-sensitive workloads, and selected FusionFire execution settings.
 They do not configure environment-specific prerequisites such as hostnames, TLS, PostgreSQL, object storage, image pull secrets, or StorageClasses.
 
 The `standard` preset keeps the public request path, query API, and ingest path at a minimum of three replicas.
+The `large` preset inherits `standard` and increases selected FusionFire worker, ingest processor, and byte-cache capacity.
 The `small` preset keeps ingest and the edge service more available while preserving a smaller footprint.
 The `tiny` preset intentionally favors the smallest resource footprint over high availability.
 
@@ -476,8 +477,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-cache-byte | object | `{"pdb":{"minAvailable":2},"replicas":3,"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
-| logfire-ff-cache-byte.pdb | object | `{"minAvailable":2}` | Keep at least two byte-cache pods serving during voluntary disruptions. |
+| logfire-ff-cache-byte | object | `{"pdb":{},"replicas":3,"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
 | logfire-ff-cache-byte.replicas | int | `3` | Number of byte-cache replicas when autoscaling is not configured. |
 | logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume |
 | logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
@@ -569,7 +569,7 @@ Before diving deeper, verify these common configuration issues:
 | serviceAccount.create | bool | `false` | Create a ServiceAccount |
 | serviceAccount.name | string | `""` | Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template. If create is false and this is not set, the default ServiceAccount is used. |
 | serviceAccountName | string | `"default"` | DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility. @deprecated |
-| sizingPreset | string | `""` | Workload sizing preset. Leave empty to skip preset sizing, or set to `standard`, `small`, or `tiny` to apply built-in customer sizing defaults. |
+| sizingPreset | string | `""` | Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults. |
 | smtp.host | string | `nil` | SMTP server hostname |
 | smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | smtp.port | int | `25` | SMTP server port |
