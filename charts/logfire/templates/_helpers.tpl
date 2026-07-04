@@ -117,6 +117,9 @@ Only sizing and portable availability keys are inherited from presets.
     {{- fail (printf "Unknown sizingPreset %q. Valid presets: %s" $presetName ((keys $presets | sortAlpha) | join ", ")) -}}
   {{- end -}}
   {{- $presetValues := get $presets $presetName | default dict -}}
+  {{- if and (eq $presetName "large") (hasKey $presets "standard") -}}
+    {{- $presetValues = mergeOverwrite (deepCopy (get $presets "standard")) (deepCopy $presetValues) -}}
+  {{- end -}}
   {{- $presetServiceValues := get $presetValues $serviceName | default dict -}}
   {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "queryParallelism" "datafusionThreads" "ioThreads" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" -}}
     {{- if hasKey $presetServiceValues $key -}}
