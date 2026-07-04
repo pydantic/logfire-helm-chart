@@ -1,5 +1,5 @@
 remote: origin
-target-branch: main
+target-branch: chart-patch-base/0.11
 chart-dirs:
   - charts
 namespace: default
