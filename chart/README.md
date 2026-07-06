@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.29](https://img.shields.io/badge/Version-0.13.29-informational?style=flat-square) ![AppVersion: 18c3a230](https://img.shields.io/badge/AppVersion-18c3a230-informational?style=flat-square)
+![Version: 0.13.30](https://img.shields.io/badge/Version-0.13.30-informational?style=flat-square) ![AppVersion: 18c3a230](https://img.shields.io/badge/AppVersion-18c3a230-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -393,14 +393,11 @@ Before diving deeper, verify these common configuration issues:
 | ai.azureOpenAi.apiVersion | string | `nil` | Azure OpenAI API version |
 | ai.azureOpenAi.endpoint | string | `nil` | Azure OpenAI endpoint |
 | ai.chatModel | string | `nil` | AI provider+model string for chat-oriented workloads. Falls back to `ai.model` in the application when unset. |
-| ai.enterpriseChatModel | string | `nil` | Enterprise chat AI provider+model string. |
-| ai.enterpriseModel | string | `nil` | Enterprise default AI provider+model string. |
-| ai.enterpriseReasoningModel | string | `nil` | Enterprise reasoning AI provider+model string. Falls back to `ai.reasoningModel` in the worker when unset. |
 | ai.llmJudgeModel | string | `nil` | AI provider+model string for LLM-as-a-judge evaluation workloads. Falls back to `ai.model` in the application when unset. |
-| ai.model | string | `nil` | AI provider+model string. Prefix the model with the provider (e.g., `azure:gpt-4o`). See https://ai.pydantic.dev/models/ for more information. |
+| ai.model | string | `nil` | AI provider+model string. Prefix the model with the provider (e.g., `azure:gpt-4o`). Use `openai-chat:<model>` to use the Chat Completions API for OpenAI-compatible endpoints. See https://ai.pydantic.dev/models/ for more information. |
 | ai.openAi.apiKey | string | `nil` | OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | ai.openAi.baseUrl | string | `nil` | OpenAI base URL for custom endpoints (e.g., Azure OpenAI proxy, local models). |
-| ai.reasoningModel | string | `nil` | AI provider+model string for reasoning-oriented worker workloads such as workflows. |
+| ai.reasoningModel | string | `nil` | AI provider+model string for reasoning-oriented worker workloads such as workflows. Falls back to `ai.model` in the chart when unset. |
 | ai.vertexAi.anthropicBaseUrl | string | `nil` | Anthropic Vertex partner-models API base URL. |
 | ai.vertexAi.anthropicProjectId | string | `nil` | GCP project ID for Anthropic Vertex models. |
 | ai.vertexAi.region | string | `nil` | Vertex AI region |
