@@ -518,7 +518,7 @@ Render AI model environment variables shared across workloads.
 {{- end }}
 {{- end }}
 {{- if has "reasoning" $roles }}
-{{- with (get $ai "reasoningModel") }}
+{{- with ((get $ai "reasoningModel") | default (get $ai "model")) }}
 - name: AI_MODEL_REASONING
   value: {{ . }}
 {{- end }}
@@ -526,24 +526,6 @@ Render AI model environment variables shared across workloads.
 {{- with (get $ai "llmJudgeModel") }}
 - name: AI_MODEL_LLM_JUDGE
   value: {{ . }}
-{{- end }}
-{{- if has "enterprise-default" $roles }}
-{{- with (get $ai "enterpriseModel") }}
-- name: AI_ENTERPRISE_MODEL_DEFAULT
-  value: {{ . }}
-{{- end }}
-{{- end }}
-{{- if has "enterprise-chat" $roles }}
-{{- with (get $ai "enterpriseChatModel") }}
-- name: AI_ENTERPRISE_MODEL_CHAT
-  value: {{ . }}
-{{- end }}
-{{- end }}
-{{- if has "enterprise-reasoning" $roles }}
-{{- with (get $ai "enterpriseReasoningModel") }}
-- name: AI_ENTERPRISE_MODEL_REASONING
-  value: {{ . }}
-{{- end }}
 {{- end }}
 {{- end -}}
 

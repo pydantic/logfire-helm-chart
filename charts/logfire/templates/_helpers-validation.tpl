@@ -76,15 +76,12 @@ Validate AI configuration consistency - if model is set, required provider confi
   (dict "name" "ai.chatModel" "value" (get $ai "chatModel"))
   (dict "name" "ai.reasoningModel" "value" (get $ai "reasoningModel"))
   (dict "name" "ai.llmJudgeModel" "value" (get $ai "llmJudgeModel"))
-  (dict "name" "ai.enterpriseModel" "value" (get $ai "enterpriseModel"))
-  (dict "name" "ai.enterpriseChatModel" "value" (get $ai "enterpriseChatModel"))
-  (dict "name" "ai.enterpriseReasoningModel" "value" (get $ai "enterpriseReasoningModel"))
 -}}
 {{- range $models -}}
 {{- if .value -}}
   {{- $model := .value -}}
   {{- $name := .name -}}
-  {{- if hasPrefix "openai:" $model -}}
+  {{- if or (hasPrefix "openai:" $model) (hasPrefix "openai-chat:" $model) (hasPrefix "openai-responses:" $model) -}}
     {{- if not (get $openAi "apiKey") -}}
       {{- fail (printf "ai.openAi.apiKey is required when %s uses OpenAI model '%s'. Provide your OpenAI API key." $name $model) -}}
     {{- end -}}
