@@ -138,7 +138,7 @@ Validate gateway secret configuration
 {{- $ex := get .Values "existingGatewaySecret" | default dict -}}
 {{- if get $ex "enabled" -}}
   {{- if not (get $ex "name") -}}
-    {{- fail "existingGatewaySecret.name is required when existingGatewaySecret.enabled is true. Provide the name of your Kubernetes Secret containing 'key' (gateway encryption key) and 'internalSecret' (gatewa internal secret) keys." -}}
+    {{- fail "existingGatewaySecret.name is required when existingGatewaySecret.enabled is true. Provide the name of your Kubernetes Secret containing 'key' (gateway encryption key) and 'internalSecret' (gateway internal secret) keys." -}}
   {{- end -}}
 {{- end -}}
 {{- end -}}

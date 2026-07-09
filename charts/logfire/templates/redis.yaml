@@ -40,9 +40,7 @@ metadata:
 spec:
   accessModes:
     {{- toYaml (default (list "ReadWriteOnce") $persistence.accessModes) | nindent 4 }}
-  {{- with $persistence.storageClassName }}
-  storageClassName: {{ . | quote }}
-  {{- end }}
+  {{- include "logfire.storageClassName" (dict "root" . "values" $persistence) | nindent 2 }}
   resources:
     requests:
       storage: {{ default "1Gi" $persistence.size | quote }}
@@ -76,9 +74,10 @@ spec:
         {{- . | nindent 8 }}
       {{- end }}
     spec:
+      {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- end }}
+      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- $redisImage := get $redisValues "image" | default dict }}
       {{- $redisImagePullPolicy := default "IfNotPresent" (default .Values.image.pullPolicy $redisImage.pullPolicy) }}
@@ -86,8 +85,7 @@ spec:
         - name: redis
           image: {{ include "logfire.imageRef" (dict "image" $redisImage "defaultRepository" "redis" "defaultTag" "7.2") }}
           imagePullPolicy: {{ $redisImagePullPolicy | quote }}
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
           ports:
             - name: redis
               containerPort: 6379

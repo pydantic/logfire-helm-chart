@@ -23,18 +23,12 @@ spec:
         app.kubernetes.io/component: {{ printf "%s-incluster-tls-wait" .Release.Name }}
     spec:
       restartPolicy: Never
-      {{- with .Values.podSecurityContext }}
-      securityContext:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
       containers:
         - name: wait
           image: curlimages/curl:8.12.1
           imagePullPolicy: IfNotPresent
-          {{- with .Values.securityContext }}
-          securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
           command:
             - /bin/sh
             - -ec

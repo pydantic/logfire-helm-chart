@@ -5,6 +5,9 @@
 # -- Image pull secrets used by all pods
 imagePullSecrets: []
 
+# -- Default StorageClass for chart-managed PVCs. Set this when chart PVCs should use a specific class. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass.
+defaultStorageClassName: ""
+
 # -- Node selector applied to all workloads
 nodeSelector: {}
 
@@ -25,8 +28,8 @@ istio:
   #    You can still override per workload via `<workload>.podLabels`.
   disableSidecarOnKnownWorkloads: false
 
-# -- Kubernetes cluster domain for service discovery
-# clusterDomain: cluster.local
+# -- Kubernetes cluster domain for service discovery.
+clusterDomain: cluster.local
 
 # -- Starter admin email address
 adminEmail: hello@example.dev
@@ -251,7 +254,9 @@ postgresSecret:
   enabled: false
   # -- Name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for the Secret (e.g., for external secret managers).
+  # -- Optional workload annotations for external Secret reload controllers.
+  #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
+  #    Per-workload `annotations` override duplicate keys.
   annotations: {}
 
 # -- Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks)
@@ -1561,7 +1566,9 @@ existingSecret:
   enabled: false
   # -- Name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for the Secret (e.g., for external secret managers).
+  # -- Optional workload annotations for external Secret reload controllers.
+  #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
+  #    Per-workload `annotations` override duplicate keys.
   annotations: {}
 
 # -- Existing Secret for the AI Gateway with the following keys:
@@ -1572,7 +1579,9 @@ existingGatewaySecret:
   enabled: false
   # -- Name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for the Secret (e.g., for external secret managers).
+  # -- Optional workload annotations for external Secret reload controllers.
+  #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
+  #    Per-workload `annotations` override duplicate keys.
   annotations: {}
 
 # -- Existing Secret with the following keys:
@@ -1584,7 +1593,9 @@ adminSecret:
   enabled: false
   # -- Name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for the Secret (e.g., for external secret managers).
+  # -- Optional workload annotations for external Secret reload controllers.
+  #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
+  #    Per-workload `annotations` override duplicate keys.
   annotations: {}
 
 

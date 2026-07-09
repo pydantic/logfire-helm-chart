@@ -25,9 +25,10 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: logfire-ff-migrations
     spec:
+      {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- end }}
+      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
       serviceAccountName: {{ include "logfire.hookServiceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -42,8 +43,7 @@ spec:
         - name: logfire-ff-migrations
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
           command:
             - "fusionfire"
             - "migrate"

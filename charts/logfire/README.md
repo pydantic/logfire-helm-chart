@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.31](https://img.shields.io/badge/Version-0.13.31-informational?style=flat-square) ![AppVersion: 18c3a230](https://img.shields.io/badge/AppVersion-18c3a230-informational?style=flat-square)
+![Version: 0.13.32](https://img.shields.io/badge/Version-0.13.32-informational?style=flat-square) ![AppVersion: 18c3a230](https://img.shields.io/badge/AppVersion-18c3a230-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -97,6 +97,9 @@ imagePullSecrets:
 sizingPreset: standard
 adminEmail: sre@example.com
 
+# Optional: set a StorageClass for chart-managed PVCs:
+# defaultStorageClassName: fast-storage
+
 ingress:
   enabled: false
 
@@ -146,7 +149,7 @@ Before installing in production, confirm that you have:
 * A managed Redis endpoint configured through `redisDsn`.
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
-* A default StorageClass, or explicit storage classes for PVCs. See the commented `storageClassName` examples in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
+* StorageClass behavior chosen for chart-managed PVCs: use the cluster default, or set `defaultStorageClassName` in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
 
 Install with your production values file:
 
@@ -363,7 +366,7 @@ Before diving deeper, verify these common configuration issues:
 
 * **Object Storage Permissions**: Ensure the ServiceAccount (configured via `serviceAccount.annotations`) has read/write access to your object storage bucket. For AWS, this means the IAM role needs `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket` permissions. For GCP, the service account needs the `Storage Object Admin` role on the bucket.
 
-* **StorageClass Exists**: If you specify a `storageClassName` for `logfire-ff-ingest.volumeClaimTemplates` or any `<workload>.scratchVolume`, verify the StorageClass exists in your cluster:
+* **StorageClass Exists**: If you set `defaultStorageClassName` or any per-workload `storageClassName`, verify the StorageClass exists in your cluster:
   ```bash
   kubectl get storageclass
   ```
@@ -393,7 +396,7 @@ Before diving deeper, verify these common configuration issues:
 |-----|------|---------|-------------|
 | adminEmail | string | `"hello@example.dev"` | Starter admin email address |
 | adminSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-admin-password  - logfire-admin-totp-secret  - logfire-admin-totp-recovery-codes (string containing a JSON list) |
-| adminSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| adminSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | adminSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | adminSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | affinity | object | `{}` | Node/Pod affinity applied to all workloads |
@@ -413,16 +416,18 @@ Before diving deeper, verify these common configuration issues:
 | aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
 | aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
 | cert-manager | object | `{"installCRDs":true}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
+| clusterDomain | string | `"cluster.local"` | Kubernetes cluster domain for service discovery. |
+| defaultStorageClassName | string | `""` | Default StorageClass for chart-managed PVCs. Set this when chart PVCs should use a specific class. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass. |
 | dev.deployCertManager | bool | `false` | Deploy cert-manager (NOT for production; includes cluster-scoped resources). |
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
 | dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
 | existingGatewaySecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret for the AI Gateway with the following keys:  - key (gateway encryption key)  - internalSecret (gateway internal secret) |
-| existingGatewaySecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| existingGatewaySecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingGatewaySecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret  - logfire-mcp-oauth-client-secret |
-| existingSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| existingSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | extraObjects | list | `[]` | Additional Kubernetes objects to render with this release. Templating is supported. |
@@ -552,7 +557,7 @@ Before diving deeper, verify these common configuration issues:
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
 | postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
-| postgresSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| postgresSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | postgresSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
 | postgresSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | postgresql.auth.postgresPassword | string | `"postgres"` |  |

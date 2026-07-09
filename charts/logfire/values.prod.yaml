@@ -9,26 +9,9 @@ imagePullSecrets:
 sizingPreset: standard
 adminEmail: sre@example.com
 
-# If your cluster has no default StorageClass, set storage classes for the
-# PVC-backed volumes used by the selected sizing preset.
-# logfire-ff-ingest:
-#   volumeClaimTemplates:
-#     storageClassName: fast-storage
-# logfire-ff-query-api:
-#   scratchVolume:
-#     storageClassName: fast-storage
-# logfire-ff-query-worker:
-#   scratchVolume:
-#     storageClassName: fast-storage
-# logfire-ff-maintenance-worker:
-#   scratchVolume:
-#     storageClassName: fast-storage
-# logfire-ff-compaction-worker:
-#   scratchVolume:
-#     storageClassName: fast-storage
-# logfire-ff-cache-byte:
-#   scratchVolume:
-#     storageClassName: fast-storage
+# Optional: set a StorageClass for chart-managed PVCs used by the selected
+# sizing preset. Per-workload storageClassName values still take precedence.
+# defaultStorageClassName: fast-storage
 
 ingress:
   # Gateway API is enabled below; leave the default Ingress disabled.
