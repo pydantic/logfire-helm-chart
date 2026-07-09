@@ -16,7 +16,7 @@ Use the [Self-Hosted Production Requirements](https://docs.pydantic.dev/logfire/
 Choose one path:
 
 * **Local evaluation**: use `values.dev.yaml`. It deploys development-grade PostgreSQL, MinIO, and MailDev in the cluster.
-* **Production**: start from [values.prod.yaml](values.prod.yaml), replace the placeholders for your external services and routing, and adjust the sizing preset if needed.
+* **Production**: start from [charts/logfire/values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml), replace the placeholders for your external services and routing, and adjust the sizing preset if needed.
 
 > **Warning**: `values.dev.yaml` is only for local evaluation and testing. Do not use it for production deployments.
 
@@ -87,7 +87,7 @@ Use the first-access step below to log in to the meta project.
 
 ### 3b. Production Starter
 
-A minimal production overlay is checked in at [values.prod.yaml](values.prod.yaml). Use it as a starting point for production installs and replace the placeholder hostnames, credentials, and provider-specific settings.
+A minimal production overlay is checked in at [charts/logfire/values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml). Use it as a starting point for production installs and replace the placeholder hostnames, credentials, and provider-specific settings.
 
 The starter uses Gateway API, but the chart supports both Gateway API and Ingress. Use whichever routing interface your cluster standardizes on. The core shape is:
 
@@ -138,6 +138,17 @@ redisDsn: redis://redis.example.com:6379
 
 Configure an identity provider under `logfire-dex.config.connectors`; see [Authentication](#authentication).
 
+Before installing in production, confirm that you have:
+
+* Image pull credentials configured through `imagePullSecrets`.
+* Public hostname and TLS values set through `ingress.*` or `gateway.*`, even if you expose the Service another way.
+* External PostgreSQL databases for `crud`, `ff`, and `dex`.
+* Object storage using `s3://`, `gs://`, or `az://`.
+* A managed Redis endpoint configured through `redisDsn`.
+* A Dex connector configured for your identity provider.
+* HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
+* A default StorageClass, or explicit storage classes for PVCs. The ingest StatefulSet uses `logfire-ff-ingest.volumeClaimTemplates.storageClassName`; PVC-backed scratch volumes use `<workload>.scratchVolume.storageClassName`, for example `logfire-ff-query-api`, `logfire-ff-query-worker`, `logfire-ff-maintenance-worker`, `logfire-ff-compaction-worker`, or `logfire-ff-proxy-cache-byte`.
+
 Install with your production values file:
 
 ```sh
@@ -145,9 +156,6 @@ helm upgrade --install logfire pydantic/logfire \
   -f values.prod.yaml \
   --namespace logfire
 ```
-
-Production clusters should have working HorizontalPodAutoscaler metrics before using the built-in presets.
-If your cluster has no default StorageClass, set the required `storageClassName` values for scratch and ingest volumes.
 
 ### 4. First Access
 
@@ -167,17 +175,6 @@ https://logfire.example.com/logfire-meta/logfire-meta#token=LOGFIRE_META_FRONTEN
 For local evaluation with the port-forward above, use `http://localhost:8080/logfire-meta/logfire-meta#token=LOGFIRE_META_FRONTEND_TOKEN`.
 
 After you have access, create an invite link from **Settings** > **Invite** and assign the **Admin** organization role.
-
-## Production Checklist
-
-Before installing in production, confirm that you have:
-
-* Image pull credentials configured through `imagePullSecrets`.
-* Public hostname and TLS values set through `ingress.*` or `gateway.*`, even if you expose the Service another way.
-* External PostgreSQL databases for `crud`, `ff`, and `dex`.
-* Object storage using `s3://`, `gs://`, or `az://`.
-* A Dex connector configured for your identity provider.
-* A sizing preset selected: `large`, `standard`, `small`, or `tiny`.
 
 ## Configuration Notes
 
