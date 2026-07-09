@@ -5,6 +5,9 @@
 # -- Image pull secrets used by all pods
 imagePullSecrets: []
 
+# -- Default StorageClass for chart-managed PVCs. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass.
+defaultStorageClassName: ""
+
 # -- Node selector applied to all workloads
 nodeSelector: {}
 

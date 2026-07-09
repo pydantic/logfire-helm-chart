@@ -40,9 +40,7 @@ metadata:
 spec:
   accessModes:
     {{- toYaml (default (list "ReadWriteOnce") $persistence.accessModes) | nindent 4 }}
-  {{- with $persistence.storageClassName }}
-  storageClassName: {{ . | quote }}
-  {{- end }}
+  {{- include "logfire.storageClassName" (dict "root" . "values" $persistence) | nindent 2 }}
   resources:
     requests:
       storage: {{ default "1Gi" $persistence.size | quote }}
