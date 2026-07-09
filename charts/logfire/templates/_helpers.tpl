@@ -850,8 +850,32 @@ overrides are not provided.
 scratch-data
 {{- end -}}
 
+{{/*
+Render storageClassName for chart-managed PVCs.
+Non-empty component values win. Otherwise, defaultStorageClassName is used.
+A value of "-" renders storageClassName: "" to disable dynamic provisioning.
+*/}}
+{{- define "logfire.storageClassName" -}}
+{{- $root := .root -}}
+{{- $values := .values | default dict -}}
+{{- $storageClassName := "" -}}
+{{- $componentStorageClassName := default "" (get $values "storageClassName") -}}
+{{- if $componentStorageClassName -}}
+  {{- $storageClassName = $componentStorageClassName -}}
+{{- else if $root.Values.defaultStorageClassName -}}
+  {{- $storageClassName = $root.Values.defaultStorageClassName -}}
+{{- end -}}
+{{- $storageClassName = toString $storageClassName -}}
+{{- if eq $storageClassName "-" -}}
+storageClassName: ""
+{{- else if $storageClassName -}}
+storageClassName: {{ $storageClassName | quote }}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.scratchVolume" -}}
-{{- $scratchVolume := . -}}
+{{- $root := .root -}}
+{{- $scratchVolume := .scratchVolume | default dict -}}
 {{- if $scratchVolume -}}
 - name: {{ include "logfire.scratchVolumeName" . }}
   ephemeral:
@@ -863,9 +887,7 @@ scratch-data
       {{- end }}
       spec:
         accessModes: [ "ReadWriteOnce" ]
-        {{- if $scratchVolume.storageClassName }}
-        storageClassName: {{ $scratchVolume.storageClassName }}
-        {{- end }}
+        {{- include "logfire.storageClassName" (dict "root" $root "values" $scratchVolume) | nindent 8 }}
         resources:
           requests:
             storage: {{ $scratchVolume.storage }}
@@ -880,14 +902,13 @@ ingest-data
 {{- end -}}
 
 {{- define "logfire.ingestVolume" -}}
-{{- $ingestVolume := . -}}
+{{- $root := .root -}}
+{{- $ingestVolume := .ingestVolume | default dict -}}
 - metadata:
     name: {{ include "logfire.ingestVolumeName" . }}
   spec:
     accessModes: [ "ReadWriteOnce" ]
-    {{- if $ingestVolume.storageClassName }}
-    storageClassName: {{ $ingestVolume.storageClassName }}
-    {{- end }}
+    {{- include "logfire.storageClassName" (dict "root" $root "values" $ingestVolume) | nindent 4 }}
     resources:
       requests:
         storage: {{ $ingestVolume.storage }}

@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.31](https://img.shields.io/badge/Version-0.13.31-informational?style=flat-square) ![AppVersion: 18c3a230](https://img.shields.io/badge/AppVersion-18c3a230-informational?style=flat-square)
+![Version: 0.13.32](https://img.shields.io/badge/Version-0.13.32-informational?style=flat-square) ![AppVersion: 18c3a230](https://img.shields.io/badge/AppVersion-18c3a230-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -97,6 +97,9 @@ imagePullSecrets:
 sizingPreset: standard
 adminEmail: sre@example.com
 
+# If your cluster has no default StorageClass:
+# defaultStorageClassName: fast-storage
+
 ingress:
   enabled: false
 
@@ -146,7 +149,7 @@ Before installing in production, confirm that you have:
 * A managed Redis endpoint configured through `redisDsn`.
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
-* A default StorageClass, or explicit storage classes for PVCs. See the commented `storageClassName` examples in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
+* A default StorageClass, or set `defaultStorageClassName` in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
 
 Install with your production values file:
 
@@ -363,7 +366,7 @@ Before diving deeper, verify these common configuration issues:
 
 * **Object Storage Permissions**: Ensure the ServiceAccount (configured via `serviceAccount.annotations`) has read/write access to your object storage bucket. For AWS, this means the IAM role needs `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket` permissions. For GCP, the service account needs the `Storage Object Admin` role on the bucket.
 
-* **StorageClass Exists**: If you specify a `storageClassName` for `logfire-ff-ingest.volumeClaimTemplates` or any `<workload>.scratchVolume`, verify the StorageClass exists in your cluster:
+* **StorageClass Exists**: If you set `defaultStorageClassName` or any per-workload `storageClassName`, verify the StorageClass exists in your cluster:
   ```bash
   kubectl get storageclass
   ```
@@ -413,6 +416,7 @@ Before diving deeper, verify these common configuration issues:
 | aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
 | aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
 | cert-manager | object | `{"installCRDs":true}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
+| defaultStorageClassName | string | `""` | Default StorageClass for chart-managed PVCs. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass. |
 | dev.deployCertManager | bool | `false` | Deploy cert-manager (NOT for production; includes cluster-scoped resources). |
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
 | dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |

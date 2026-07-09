@@ -98,6 +98,9 @@ imagePullSecrets:
 sizingPreset: standard
 adminEmail: sre@example.com
 
+# If your cluster has no default StorageClass:
+# defaultStorageClassName: fast-storage
+
 ingress:
   enabled: false
 
@@ -147,7 +150,7 @@ Before installing in production, confirm that you have:
 * A managed Redis endpoint configured through `redisDsn`.
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
-* A default StorageClass, or explicit storage classes for PVCs. See the commented `storageClassName` examples in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
+* A default StorageClass, or set `defaultStorageClassName` in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
 
 Install with your production values file:
 
@@ -364,7 +367,7 @@ Before diving deeper, verify these common configuration issues:
 
 * **Object Storage Permissions**: Ensure the ServiceAccount (configured via `serviceAccount.annotations`) has read/write access to your object storage bucket. For AWS, this means the IAM role needs `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket` permissions. For GCP, the service account needs the `Storage Object Admin` role on the bucket.
 
-* **StorageClass Exists**: If you specify a `storageClassName` for `logfire-ff-ingest.volumeClaimTemplates` or any `<workload>.scratchVolume`, verify the StorageClass exists in your cluster:
+* **StorageClass Exists**: If you set `defaultStorageClassName` or any per-workload `storageClassName`, verify the StorageClass exists in your cluster:
   ```bash
   kubectl get storageclass
   ```
