@@ -15,7 +15,7 @@ Use the [Self-Hosted Production Requirements](https://docs.pydantic.dev/logfire/
 Choose one path:
 
 * **Local evaluation**: use `values.dev.yaml`. It deploys development-grade PostgreSQL, MinIO, and MailDev in the cluster.
-* **Production**: create your own values file, connect external PostgreSQL and object storage, and start with one of the production sizing presets: `large`, `standard`, `small`, or `tiny`.
+* **Production**: start from [values.prod.yaml](values.prod.yaml), replace the placeholders for your external services and routing, and adjust the sizing preset if needed.
 
 > **Warning**: `values.dev.yaml` is only for local evaluation and testing. Do not use it for production deployments.
 
@@ -86,7 +86,9 @@ Use the first-access step below to log in to the meta project.
 
 ### 3b. Production Starter
 
-Start with a small production values file and add environment-specific details from there:
+A minimal production overlay is checked in at [values.prod.yaml](values.prod.yaml). Use it as a starting point for production installs and replace the placeholder hostnames, credentials, and provider-specific settings.
+
+The starter uses Gateway API, but the chart supports both Gateway API and Ingress. Use whichever routing interface your cluster standardizes on. The core shape is:
 
 ```yaml
 imagePullSecrets:
@@ -96,22 +98,21 @@ sizingPreset: standard
 adminEmail: sre@example.com
 
 ingress:
+  enabled: false
+
+gateway:
   enabled: true
+  gatewayClassName: nginx
   tls: true
   hostnames:
     - logfire.example.com
-  ingressClassName: nginx
-
-objectStore:
-  uri: s3://logfire-prod
-  env:
-    AWS_DEFAULT_REGION: us-east-1
 
 postgresDsn: postgresql://logfire_crud:PASSWORD@postgres.example.com:5432/crud
 postgresFFDsn: postgresql://logfire_ff:PASSWORD@postgres.example.com:5432/ff
 
 logfire-dex:
   config:
+    enablePasswordDB: false
     storage:
       type: postgres
       config:
@@ -122,15 +123,25 @@ logfire-dex:
         password: PASSWORD
         ssl:
           mode: require
+
+objectStore:
+  uri: s3://logfire-prod
+  env:
+    AWS_DEFAULT_REGION: us-east-1
+
+logfire-redis:
+  enabled: false
+
+redisDsn: redis://redis.example.com:6379
 ```
 
-This configures Dex storage, but not an identity provider. Add at least one connector under `logfire-dex.config.connectors` as shown in [Authentication](#authentication).
+Configure an identity provider under `logfire-dex.config.connectors`; see [Authentication](#authentication).
 
-Install it:
+Install with your production values file:
 
 ```sh
 helm upgrade --install logfire pydantic/logfire \
-  -f values.production.yaml \
+  -f values.prod.yaml \
   --namespace logfire
 ```
 
