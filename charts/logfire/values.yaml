@@ -254,7 +254,9 @@ postgresSecret:
   enabled: false
   # -- Name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for the Secret (e.g., for external secret managers).
+  # -- Optional workload annotations for external Secret reload controllers.
+  #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
+  #    Per-workload `annotations` override duplicate keys.
   annotations: {}
 
 # -- Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks)
@@ -1564,7 +1566,9 @@ existingSecret:
   enabled: false
   # -- Name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for the Secret (e.g., for external secret managers).
+  # -- Optional workload annotations for external Secret reload controllers.
+  #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
+  #    Per-workload `annotations` override duplicate keys.
   annotations: {}
 
 # -- Existing Secret for the AI Gateway with the following keys:
@@ -1575,7 +1579,9 @@ existingGatewaySecret:
   enabled: false
   # -- Name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for the Secret (e.g., for external secret managers).
+  # -- Optional workload annotations for external Secret reload controllers.
+  #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
+  #    Per-workload `annotations` override duplicate keys.
   annotations: {}
 
 # -- Existing Secret with the following keys:
@@ -1587,7 +1593,9 @@ adminSecret:
   enabled: false
   # -- Name of the Kubernetes Secret resource.
   name: ""
-  # -- Optional annotations for the Secret (e.g., for external secret managers).
+  # -- Optional workload annotations for external Secret reload controllers.
+  #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
+  #    Per-workload `annotations` override duplicate keys.
   annotations: {}
 
 

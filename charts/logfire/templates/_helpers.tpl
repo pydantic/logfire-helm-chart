@@ -904,58 +904,44 @@ ingest-data
 {{- end -}}
 
 {{/*
-Annotations to allow existing logfire secrets reloading
+Workload metadata annotations.
+Secret annotation sources are used for external secret reload controllers. If
+the same key is set more than once, later sources win and per-workload
+annotations have final precedence.
 */}}
-{{- define "logfire.existingSecret.annotations" -}}
-{{- if and .Values.existingSecret.enabled (not (empty .Values.existingSecret.annotations)) -}}
-{{- toYaml .Values.existingSecret.annotations -}}
-{{- end }}
-{{- end }}
-
-{{/*
-Annotations to allow existing postgres secret reloading
-*/}}
-{{- define "logfire.postgresSecret.annotations" -}}
-{{- if and .Values.postgresSecret.enabled (not (empty .Values.postgresSecret.annotations)) -}}
-{{- toYaml .Values.postgresSecret.annotations -}}
-{{- end -}}
-{{- end }}
-
-{{/*
-Annotations to allow postgres, existing, and gateway secrets reloading
-*/}}
-{{- define "logfire.secretAnnotations" -}}
-{{- $postgresAnns := .Values.postgresSecret.annotations -}}
-{{- $existingAnns := .Values.existingSecret.annotations -}}
-{{- $gatewayAnns := (get .Values "existingGatewaySecret" | default dict).annotations -}}
-
+{{- define "logfire.workloadAnnotations" -}}
+{{- $values := .Values -}}
+{{- $serviceName := .serviceName -}}
+{{- $secretSources := .secretSources | default list -}}
 {{- $merged := dict -}}
-
-{{- if and .Values.postgresSecret.enabled $postgresAnns -}}
-  {{- $merged = merge $merged $postgresAnns -}}
+{{- range $secretSource := $secretSources }}
+  {{- if eq $secretSource "postgres" -}}
+    {{- if and $values.postgresSecret.enabled (not (empty $values.postgresSecret.annotations)) -}}
+      {{- $merged = mergeOverwrite $merged $values.postgresSecret.annotations -}}
+    {{- end -}}
+  {{- else if eq $secretSource "existing" -}}
+    {{- $existingSecret := get $values "existingSecret" | default dict -}}
+    {{- if and (get $existingSecret "enabled") (not (empty (get $existingSecret "annotations"))) -}}
+      {{- $merged = mergeOverwrite $merged (get $existingSecret "annotations") -}}
+    {{- end -}}
+  {{- else if eq $secretSource "gateway" -}}
+    {{- $gatewaySecret := get $values "existingGatewaySecret" | default dict -}}
+    {{- if and (index $values "logfire-ai-gateway" "enabled") (get $gatewaySecret "enabled") (not (empty (get $gatewaySecret "annotations"))) -}}
+      {{- $merged = mergeOverwrite $merged (get $gatewaySecret "annotations") -}}
+    {{- end -}}
+  {{- else if eq $secretSource "admin" -}}
+    {{- $adminSecret := get $values "adminSecret" | default dict -}}
+    {{- if and (get $adminSecret "enabled") (not (empty (get $adminSecret "annotations"))) -}}
+      {{- $merged = mergeOverwrite $merged (get $adminSecret "annotations") -}}
+    {{- end -}}
+  {{- end -}}
 {{- end -}}
-
-{{- /* Merge in the second set, overwriting any duplicate keys */ -}}
-{{- if and .Values.existingSecret.enabled $existingAnns -}}
-  {{- $merged = merge $merged $existingAnns -}}
+{{- $serviceValues := index $values $serviceName | default dict -}}
+{{- if $serviceValues.annotations -}}
+  {{- $merged = mergeOverwrite $merged $serviceValues.annotations -}}
 {{- end -}}
-
-{{- if and (index .Values "logfire-ai-gateway" "enabled") (get (get .Values "existingGatewaySecret" | default dict) "enabled") $gatewayAnns -}}
-  {{- $merged = merge $merged $gatewayAnns -}}
-{{- end -}}
-
 {{- if $merged -}}
-{{-   toYaml $merged -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Custom annotations for workloads
-*/}}
-{{- define "logfire.annotations" -}}
-{{- $serviceValues := index .Values .serviceName -}}
-{{- if and $serviceValues $serviceValues.annotations -}}
-{{- toYaml $serviceValues.annotations -}}
+{{- toYaml $merged -}}
 {{- end -}}
 {{- end -}}
 
@@ -1062,6 +1048,15 @@ default-checksum
   (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-encryption" "name" (include "logfire.gatewaySecretName" (dict "ctx" $ctx "secretName" "gateway-encryption") | trim) "key" "key"))
   (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-internal-secret" "name" (include "logfire.gatewaySecretName" (dict "ctx" $ctx "secretName" "gateway-internal-secret") | trim) "key" "internalSecret"))
   | join "\n" -}}
+{{- end -}}
+
+{{- define "logfire.adminSecretChecksumAnnotations" -}}
+{{- $ctx := required "logfire.adminSecretChecksumAnnotations: need .ctx" .ctx -}}
+{{- $lines := list -}}
+{{- range $secretName := list "logfire-admin-password" "logfire-admin-totp-secret" "logfire-admin-totp-recovery-codes" }}
+{{- $lines = append $lines (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "name" (include "logfire.adminSecretName" (dict "ctx" $ctx "secretName" $secretName) | trim) "key" $secretName)) -}}
+{{- end -}}
+{{- join "\n" $lines -}}
 {{- end -}}
 
 {{- define "logfire.backendMigrations.name" -}}

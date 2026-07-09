@@ -396,7 +396,7 @@ Before diving deeper, verify these common configuration issues:
 |-----|------|---------|-------------|
 | adminEmail | string | `"hello@example.dev"` | Starter admin email address |
 | adminSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-admin-password  - logfire-admin-totp-secret  - logfire-admin-totp-recovery-codes (string containing a JSON list) |
-| adminSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| adminSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | adminSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | adminSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | affinity | object | `{}` | Node/Pod affinity applied to all workloads |
@@ -423,11 +423,11 @@ Before diving deeper, verify these common configuration issues:
 | dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
 | existingGatewaySecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret for the AI Gateway with the following keys:  - key (gateway encryption key)  - internalSecret (gateway internal secret) |
-| existingGatewaySecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| existingGatewaySecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingGatewaySecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret  - logfire-mcp-oauth-client-secret |
-| existingSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| existingSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | extraObjects | list | `[]` | Additional Kubernetes objects to render with this release. Templating is supported. |
@@ -557,7 +557,7 @@ Before diving deeper, verify these common configuration issues:
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
 | postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
-| postgresSecret.annotations | object | `{}` | Optional annotations for the Secret (e.g., for external secret managers). |
+| postgresSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | postgresSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
 | postgresSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | postgresql.auth.postgresPassword | string | `"postgres"` |  |
