@@ -45,9 +45,7 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           command:
-            - "uv"
-            - "run"
-            - "--no-sync"
+            - "python"
             - "src/packages/logfire-db/logfire_db/migrations/main.py"
           env:
             - name: LOGFIRE_SEND_TO_LOGFIRE
