@@ -416,6 +416,7 @@ Before diving deeper, verify these common configuration issues:
 | aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
 | aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
 | cert-manager | object | `{"installCRDs":true}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
+| clusterDomain | string | `"cluster.local"` | Kubernetes cluster domain for service discovery. |
 | defaultStorageClassName | string | `""` | Default StorageClass for chart-managed PVCs. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass. |
 | dev.deployCertManager | bool | `false` | Deploy cert-manager (NOT for production; includes cluster-scoped resources). |
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |

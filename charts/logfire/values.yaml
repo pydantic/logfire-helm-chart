@@ -28,8 +28,8 @@ istio:
   #    You can still override per workload via `<workload>.podLabels`.
   disableSidecarOnKnownWorkloads: false
 
-# -- Kubernetes cluster domain for service discovery
-# clusterDomain: cluster.local
+# -- Kubernetes cluster domain for service discovery.
+clusterDomain: cluster.local
 
 # -- Starter admin email address
 adminEmail: hello@example.dev
