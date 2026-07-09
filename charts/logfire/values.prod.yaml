@@ -9,8 +9,8 @@ imagePullSecrets:
 sizingPreset: standard
 adminEmail: sre@example.com
 
-# If your cluster has no default StorageClass, set the default for
-# chart-managed PVCs used by the selected sizing preset.
+# Optional: set a StorageClass for chart-managed PVCs used by the selected
+# sizing preset. Per-workload storageClassName values still take precedence.
 # defaultStorageClassName: fast-storage
 
 ingress:

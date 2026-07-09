@@ -97,7 +97,7 @@ imagePullSecrets:
 sizingPreset: standard
 adminEmail: sre@example.com
 
-# If your cluster has no default StorageClass:
+# Optional: set a StorageClass for chart-managed PVCs:
 # defaultStorageClassName: fast-storage
 
 ingress:
@@ -149,7 +149,7 @@ Before installing in production, confirm that you have:
 * A managed Redis endpoint configured through `redisDsn`.
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
-* A default StorageClass, or set `defaultStorageClassName` in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
+* StorageClass behavior chosen for chart-managed PVCs: use the cluster default, or set `defaultStorageClassName` in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
 
 Install with your production values file:
 
@@ -417,7 +417,7 @@ Before diving deeper, verify these common configuration issues:
 | aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
 | cert-manager | object | `{"installCRDs":true}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
 | clusterDomain | string | `"cluster.local"` | Kubernetes cluster domain for service discovery. |
-| defaultStorageClassName | string | `""` | Default StorageClass for chart-managed PVCs. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass. |
+| defaultStorageClassName | string | `""` | Default StorageClass for chart-managed PVCs. Set this when chart PVCs should use a specific class. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass. |
 | dev.deployCertManager | bool | `false` | Deploy cert-manager (NOT for production; includes cluster-scoped resources). |
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
 | dev.deployMinio | bool | `false` | Use a local MinIO instance as object storage (NOT for production) |
