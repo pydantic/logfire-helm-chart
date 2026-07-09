@@ -16,7 +16,7 @@ Use the [Self-Hosted Production Requirements](https://docs.pydantic.dev/logfire/
 Choose one path:
 
 * **Local evaluation**: use `values.dev.yaml`. It deploys development-grade PostgreSQL, MinIO, and MailDev in the cluster.
-* **Production**: start from [charts/logfire/values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml), replace the placeholders for your external services and routing, and adjust the sizing preset if needed.
+* **Production**: start from [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml), replace the placeholders for your external services and routing, and adjust the sizing preset if needed.
 
 > **Warning**: `values.dev.yaml` is only for local evaluation and testing. Do not use it for production deployments.
 
@@ -87,7 +87,7 @@ Use the first-access step below to log in to the meta project.
 
 ### 3b. Production Starter
 
-A minimal production overlay is checked in at [charts/logfire/values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml). Use it as a starting point for production installs and replace the placeholder hostnames, credentials, and provider-specific settings.
+A minimal production overlay is checked in at [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml). Use it as a starting point for production installs and replace the placeholder hostnames, credentials, and provider-specific settings.
 
 The starter uses Gateway API, but the chart supports both Gateway API and Ingress. Use whichever routing interface your cluster standardizes on. The core shape is:
 
@@ -147,7 +147,7 @@ Before installing in production, confirm that you have:
 * A managed Redis endpoint configured through `redisDsn`.
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
-* A default StorageClass, or explicit storage classes for PVCs. The ingest StatefulSet uses `logfire-ff-ingest.volumeClaimTemplates.storageClassName`; PVC-backed scratch volumes use `<workload>.scratchVolume.storageClassName`, for example `logfire-ff-query-api`, `logfire-ff-query-worker`, `logfire-ff-maintenance-worker`, `logfire-ff-compaction-worker`, or `logfire-ff-proxy-cache-byte`.
+* A default StorageClass, or explicit storage classes for PVCs. See the commented `storageClassName` examples in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
 
 Install with your production values file:
 
@@ -364,7 +364,7 @@ Before diving deeper, verify these common configuration issues:
 
 * **Object Storage Permissions**: Ensure the ServiceAccount (configured via `serviceAccount.annotations`) has read/write access to your object storage bucket. For AWS, this means the IAM role needs `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket` permissions. For GCP, the service account needs the `Storage Object Admin` role on the bucket.
 
-* **StorageClass Exists**: If you specify a `storageClassName` for scratch or ingest volumes, verify the StorageClass exists in your cluster:
+* **StorageClass Exists**: If you specify a `storageClassName` for `logfire-ff-ingest.volumeClaimTemplates` or any `<workload>.scratchVolume`, verify the StorageClass exists in your cluster:
   ```bash
   kubectl get storageclass
   ```
