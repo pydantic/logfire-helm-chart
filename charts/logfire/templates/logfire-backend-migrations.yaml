@@ -43,9 +43,7 @@ spec:
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
           command:
-            - "uv"
-            - "run"
-            - "--no-sync"
+            - "python"
             - "src/packages/logfire-db/logfire_db/migrations/main.py"
           env:
             - name: LOGFIRE_SEND_TO_LOGFIRE
