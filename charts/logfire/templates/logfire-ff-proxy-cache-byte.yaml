@@ -50,7 +50,7 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
-        checksum/logfire-cache-byte-haproxy-config: {{ include "utils.secretChecksum" (dict "ctx" . "name" "logfire-cache-byte-haproxy-config" "key" "haproxy.cfg") }}
+        {{- include "logfire.secretChecksumAnnotation" (dict "ctx" . "annotationKey" "checksum/logfire-cache-byte-haproxy-config" "name" "logfire-cache-byte-haproxy-config" "key" "haproxy.cfg") | nindent 8 }}
         checksum/service-config: {{ include (print $.Template.BasePath "/logfire-service-config.yaml") . | sha256sum }}
         {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $proxyServiceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
@@ -64,15 +64,13 @@ spec:
       {{- end }}
       {{- end }}
       {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- $haproxy := default (dict) .Values.haproxy }}
       {{- $haproxyImage := get $haproxy "image" | default dict }}
       containers:
         - name: {{ $serviceName }}
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
           image: {{ include "logfire.imageRef" (dict "image" $haproxyImage "defaultRepository" "haproxy" "defaultTag" "3.2") }}
           imagePullPolicy: {{ default .Values.image.pullPolicy (get $haproxyImage "pullPolicy") | quote }}
           volumeMounts:

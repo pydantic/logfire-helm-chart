@@ -46,12 +46,11 @@ spec:
     metadata:
       annotations:
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
-        checksum/logfire-postgres-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresDsn" )}}
+        {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
         {{- end }}
         {{- $gwEx := get .Values "existingGatewaySecret" | default dict }}
         {{- if or (not (get $gwEx "enabled")) (empty (get $gwEx "annotations")) }}
-        checksum/gateway-encryption: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-encryption")) "key" "key" )}}
-        checksum/gateway-internal-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-internal-secret")) "key" "internalSecret" )}}
+        {{- include "logfire.gatewaySecretChecksumAnnotations" (dict "ctx" .) | nindent 8 }}
         {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
@@ -59,24 +58,12 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
     spec:
-      priorityClassName: {{ .Values.priorityClassName }}
-      serviceAccountName: {{ include "logfire.serviceAccountName" . }}
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-      {{- range . }}
-        - name: {{ . | quote }}
-      {{- end }}
-      {{- end }}
-      {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       containers:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.gatewayRepository | default "" }}{{ .Values.image.gatewayImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           livenessProbe:
             failureThreshold: 3

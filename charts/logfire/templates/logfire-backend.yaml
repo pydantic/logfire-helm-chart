@@ -41,23 +41,24 @@ spec:
     metadata:
       annotations:
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
-        checksum/logfire-dex-client-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-dex-client-secret" )) "key" "logfire-dex-client-secret" )}}
-        checksum/logfire-encryption-key: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-encryption-key" )) "key" "logfire-encryption-key" )}}
-        checksum/logfire-jwt-client-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret" )) "key" "logfire-jwt-secret" )}}
-        checksum/logfire-meta-frontend-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-frontend-token" )) "key" "logfire-meta-frontend-token" )}}
-        checksum/logfire-meta-write-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token" )) "key" "logfire-meta-write-token" )}}
-        checksum/logfire-unsubscribe-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-unsubscribe-secret" )) "key" "logfire-unsubscribe-secret" )}}
-        checksum/logfire-mcp-oauth-client-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-mcp-oauth-client-secret" )) "key" "logfire-mcp-oauth-client-secret" )}}
+        {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list
+          "logfire-dex-client-secret"
+          "logfire-encryption-key"
+          "logfire-jwt-secret"
+          "logfire-meta-frontend-token"
+          "logfire-meta-write-token"
+          "logfire-unsubscribe-secret"
+          "logfire-mcp-oauth-client-secret"
+        )) | nindent 8 }}
         {{- end }}
         {{- if (index .Values "logfire-ai-gateway" "enabled") }}
         {{- $gwEx := get .Values "existingGatewaySecret" | default dict }}
         {{- if or (not (get $gwEx "enabled")) (empty (get $gwEx "annotations")) }}
-        checksum/gateway-encryption: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-encryption")) "key" "key" )}}
-        checksum/gateway-internal-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-internal-secret")) "key" "internalSecret" )}}
+        {{- include "logfire.gatewaySecretChecksumAnnotations" (dict "ctx" .) | nindent 8 }}
         {{- end }}
         {{- end }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
-        checksum/logfire-postgres-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresDsn" )}}
+        {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
         {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
@@ -65,24 +66,12 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
     spec:
-      priorityClassName: {{ .Values.priorityClassName }}
-      serviceAccountName: {{ include "logfire.serviceAccountName" . }}
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-      {{- range . }}
-        - name: {{ . | quote }}
-      {{- end }}
-      {{- end }}
-      {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       containers:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command: ["python", "-m", "logfire_backend"]
           ports:

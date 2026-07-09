@@ -529,6 +529,34 @@ Render AI model environment variables shared across workloads.
 {{- end }}
 {{- end -}}
 
+{{- define "logfire.envValue" -}}
+{{- $value := .value -}}
+{{- $quote := .quote | default false -}}
+{{- $allowValueKey := .allowValueKey | default false -}}
+{{- if kindIs "map" $value -}}
+{{- $lines := list -}}
+{{- if and $allowValueKey (hasKey $value "value") -}}
+  {{- if kindIs "invalid" $value.value -}}
+    {{- $lines = append $lines "value:" -}}
+  {{- else -}}
+  {{- $renderedValue := ternary ($value.value | toString | quote) ($value.value | toString) $quote -}}
+  {{- $lines = append $lines (printf "value: %s" $renderedValue) -}}
+  {{- end -}}
+{{- end -}}
+{{- if hasKey $value "valueFrom" -}}
+  {{- $lines = append $lines (printf "valueFrom:\n%s" (toYaml $value.valueFrom | indent 2 | trimSuffix "\n")) -}}
+{{- end -}}
+{{- join "\n" $lines -}}
+{{- else }}
+{{- if kindIs "invalid" $value -}}
+{{- printf "value:" -}}
+{{- else -}}
+{{- $renderedValue := ternary ($value | toString | quote) ($value | toString) $quote -}}
+{{- printf "value: %s" $renderedValue -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{/*
 Render shared AI provider environment variables for workloads that construct AI clients.
 */}}
@@ -539,25 +567,11 @@ Render shared AI provider environment variables for workloads that construct AI 
 {{- $azureOpenAi := get $ai "azureOpenAi" | default dict -}}
 {{- with (get $openAi "apiKey") }}
 - name: OPENAI_API_KEY
-  {{- if kindIs "map" . }}
-  {{- if hasKey . "valueFrom" }}
-  valueFrom:
-    {{- toYaml .valueFrom | nindent 4 }}
-  {{- end }}
-  {{- else }}
-  value: {{ . }}
-  {{- end }}
+{{ include "logfire.envValue" (dict "value" .) | indent 2 }}
 {{- end }}
 {{- with (get $openAi "baseUrl") }}
 - name: OPENAI_BASE_URL
-  {{- if kindIs "map" . }}
-  {{- if hasKey . "valueFrom" }}
-  valueFrom:
-    {{- toYaml .valueFrom | nindent 4 }}
-  {{- end }}
-  {{- else }}
-  value: {{ . }}
-  {{- end }}
+{{ include "logfire.envValue" (dict "value" .) | indent 2 }}
 {{- end }}
 {{- with (get $vertexAi "region") }}
 - name: GOOGLE_CLOUD_LOCATION
@@ -581,14 +595,7 @@ Render shared AI provider environment variables for workloads that construct AI 
 {{- end }}
 {{- with (get $azureOpenAi "apiKey") }}
 - name: AZURE_OPENAI_API_KEY
-  {{- if kindIs "map" . }}
-  {{- if hasKey . "valueFrom" }}
-  valueFrom:
-    {{- toYaml .valueFrom | nindent 4 }}
-  {{- end }}
-  {{- else }}
-  value: {{ . }}
-  {{- end }}
+{{ include "logfire.envValue" (dict "value" .) | indent 2 }}
 {{- end }}
 {{- with (get $azureOpenAi "apiVersion") }}
 - name: OPENAI_API_VERSION
@@ -676,29 +683,11 @@ Gateway secret name
   value: {{ .Values.objectStore.uri }}
 {{- with .Values.objectStore.sseCKeyB64 }}
 - name: FF_S3_SSE_C_KEY_B64
-  {{- if kindIs "map" . }}
-  {{- if hasKey . "valueFrom" }}
-  valueFrom:
-    {{- toYaml .valueFrom | nindent 4 }}
-  {{- end }}
-  {{- else }}
-  value: {{ . | quote }}
-  {{- end }}
+{{ include "logfire.envValue" (dict "value" . "quote" true) | indent 2 }}
 {{- end }}
 {{- range $key, $value := .Values.objectStore.env }}
-{{- if kindIs "map" $value }}
 - name: {{ $key }}
-  {{- if hasKey $value "value" }}
-  value: {{ $value.value }}
-  {{- end }}
-  {{- if hasKey $value "valueFrom" }}
-  valueFrom:
-    {{- toYaml $value.valueFrom | nindent 4 }}
-  {{- end }}
-{{- else }}
-- name: {{ $key }}
-  value: {{ $value | toString | quote }}
-{{- end }}
+{{ include "logfire.envValue" (dict "value" $value "quote" (not (kindIs "map" $value)) "allowValueKey" true) | indent 2 }}
 {{- end }}
 {{- end -}}
 
@@ -1043,6 +1032,38 @@ default-checksum
 {{- end -}}
 {{- end -}}
 
+{{- define "logfire.secretChecksumAnnotation" -}}
+{{- $ctx := required "logfire.secretChecksumAnnotation: need .ctx" .ctx -}}
+{{- $name := required "logfire.secretChecksumAnnotation: need .name" .name -}}
+{{- $key := required "logfire.secretChecksumAnnotation: need .key" .key -}}
+{{- $annotationKey := .annotationKey | default (printf "checksum/%s" $key) -}}
+{{- printf "%s: %s" $annotationKey (include "utils.secretChecksum" (dict "ctx" $ctx "name" $name "key" $key) | trim) -}}
+{{- end -}}
+
+{{- define "logfire.postgresSecretChecksumAnnotation" -}}
+{{- $ctx := required "logfire.postgresSecretChecksumAnnotation: need .ctx" .ctx -}}
+{{- $key := .key | default "postgresDsn" -}}
+{{- $annotationKey := .annotationKey | default (eq $key "postgresFFDsn" | ternary "checksum/logfire-postgres-ff-dsn" "checksum/logfire-postgres-dsn") -}}
+{{- include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" $annotationKey "name" (include "logfire.postgresSecretName" $ctx) "key" $key) -}}
+{{- end -}}
+
+{{- define "logfire.logfireSecretChecksumAnnotations" -}}
+{{- $ctx := required "logfire.logfireSecretChecksumAnnotations: need .ctx" .ctx -}}
+{{- $lines := list -}}
+{{- range $secretName := required "logfire.logfireSecretChecksumAnnotations: need .secrets" .secrets }}
+{{- $lines = append $lines (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "name" (include "logfire.secretName" (dict "ctx" $ctx "secretName" $secretName) | trim) "key" $secretName)) -}}
+{{- end -}}
+{{- join "\n" $lines -}}
+{{- end -}}
+
+{{- define "logfire.gatewaySecretChecksumAnnotations" -}}
+{{- $ctx := required "logfire.gatewaySecretChecksumAnnotations: need .ctx" .ctx -}}
+{{- list
+  (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-encryption" "name" (include "logfire.gatewaySecretName" (dict "ctx" $ctx "secretName" "gateway-encryption") | trim) "key" "key"))
+  (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-internal-secret" "name" (include "logfire.gatewaySecretName" (dict "ctx" $ctx "secretName" "gateway-internal-secret") | trim) "key" "internalSecret"))
+  | join "\n" -}}
+{{- end -}}
+
 {{- define "logfire.backendMigrations.name" -}}
 {{- if .Values.dev.deployPostgres -}}
 "logfire-backend-migrations-{{ .Release.Revision }}"
@@ -1071,6 +1092,42 @@ default-checksum
 {{- $blocks = append $blocks (printf "topologySpreadConstraints:%s" (toYaml $topologySpreadConstraints | nindent 2 | trimSuffix "\n")) -}}
 {{- end -}}
 {{- join "\n" $blocks -}}
+{{- end -}}
+
+{{- define "logfire.securityContext" -}}
+{{- with . -}}
+securityContext:
+  {{- toYaml . | nindent 2 }}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.standardPodSpecFields" -}}
+{{- $ctx := required "logfire.standardPodSpecFields: need .ctx" .ctx -}}
+{{- $serviceName := required "logfire.standardPodSpecFields: need .serviceName" .serviceName -}}
+{{- $lines := list -}}
+{{- with ($ctx.Values.priorityClassName | default "") -}}
+  {{- $lines = append $lines (printf "priorityClassName: %s" .) -}}
+{{- end -}}
+{{- $lines = append $lines (printf "serviceAccountName: %s" (include "logfire.serviceAccountName" $ctx | trim)) -}}
+{{- with $ctx.Values.imagePullSecrets -}}
+  {{- $imagePullSecretLines := list "imagePullSecrets:" -}}
+  {{- range . -}}
+    {{- $imagePullSecretLines = append $imagePullSecretLines (printf "  - name: %s" (. | quote)) -}}
+  {{- end -}}
+  {{- $lines = append $lines (join "\n" $imagePullSecretLines) -}}
+{{- end -}}
+{{- $initContainers := include "logfire.initContainers" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
+{{- if $initContainers -}}
+  {{- $lines = append $lines $initContainers -}}
+{{- end -}}
+{{- with $ctx.Values.podSecurityContext -}}
+  {{- $lines = append $lines (include "logfire.securityContext" . | trim) -}}
+{{- end -}}
+{{- $podScheduling := include "logfire.podScheduling" (dict "Values" $ctx.Values "serviceName" $serviceName) | trim -}}
+{{- if $podScheduling -}}
+  {{- $lines = append $lines $podScheduling -}}
+{{- end -}}
+{{- join "\n" $lines -}}
 {{- end -}}
 
 {{- define "logfire.groupOrganizationMapping" -}}
@@ -1356,10 +1413,7 @@ Dev Postgres helpers
     - -c
     - >-
       until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432; do echo "Waiting for postgres..."; sleep 2; done
-  {{- with $ctx.Values.securityContext }}
-  securityContext:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+  {{- include "logfire.securityContext" $ctx.Values.securityContext | nindent 2 }}
 {{- end -}}
 {{- end -}}
 

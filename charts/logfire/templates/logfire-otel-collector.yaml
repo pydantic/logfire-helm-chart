@@ -106,11 +106,13 @@ spec:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/logfire-otel-collector-cfg.yaml") . | sha256sum }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
-        checksum/logfire-meta-write-token: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token" )) "key" "logfire-meta-write-token" )}}
+        {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-meta-write-token")) | nindent 8 }}
         {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
+      {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
       serviceAccountName: {{ $serviceName }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -119,8 +121,7 @@ spec:
       {{- end }}
       {{- end }}
       {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- $otelCollector := default (dict) .Values.otel_collector }}
       {{- $otelImage := get $otelCollector "image" | default dict }}
@@ -145,8 +146,7 @@ spec:
             {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
             - containerPort: {{ .Values.otel_collector.prometheus.port }}
             {{- end }}
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
           volumeMounts:
             - name: otel-collector-config
               mountPath: /etc/otel-collector

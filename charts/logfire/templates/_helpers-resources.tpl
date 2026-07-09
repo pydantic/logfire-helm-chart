@@ -107,23 +107,3 @@ Supports common binary and decimal suffixes plus plain bytes.
 {{- end -}}
 {{- int (floor $mi) -}}
 {{- end -}}
-
-{{/*
-Calculate memory assignments based on service memory request.
-*/}}
-{{- define "logfire.calculateMemory" -}}
-{{-   $dot := . -}}
-{{-   $values := get $dot "Values"  -}}
-{{-   $serviceName := get $dot "serviceName" -}}
-{{-   $percentage := get $dot "percentage" -}}
-{{-   $defaultMemory := get $dot "defaultMemory" | default "1Gi" -}}
-
-{{-   $effectiveResources := include "logfire.effectiveResources" (dict "Values" $values "serviceName" $serviceName) | fromJson -}}
-{{-   $memory := get $effectiveResources "memoryRequest" | default $defaultMemory -}}
-
-{{-   $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
-
-{{-   $calculatedMemory := div (mul $memoryMi (int $percentage)) 100 -}}
-
-{{-   $calculatedMemory | int -}}
-{{- end -}}

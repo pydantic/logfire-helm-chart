@@ -21,10 +21,10 @@ spec:
     metadata:
       annotations:
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
-        checksum/logfire-postgres-dsn: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.postgresSecretName" .) "key" "postgresDsn" )}}
+        {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
         {{- end }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
-        checksum/logfire-unsubscribe-secret: {{ include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.secretName" (dict "ctx" . "secretName" "logfire-unsubscribe-secret" )) "key" "logfire-unsubscribe-secret" )}}
+        {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-unsubscribe-secret")) | nindent 8 }}
         {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
@@ -32,25 +32,13 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
     spec:
-      priorityClassName: {{ .Values.priorityClassName }}
-      serviceAccountName: {{ include "logfire.serviceAccountName" . }}
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-      {{- range . }}
-        - name: {{ . | quote }}
-      {{- end }}
-      {{- end }}
-      {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
-      securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       containers:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.workerImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
-          securityContext:
-            {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
           command: [ "python", "-m", "logfire_worker" ]
           ports:
             - containerPort: 8003
@@ -148,23 +136,9 @@ spec:
             - name: SMTP_PORT
               value: {{ .Values.smtp.port | quote }}
             - name: SMTP_USERNAME
-              {{- if kindIs "map" .Values.smtp.username }}
-              {{- if hasKey .Values.smtp.username "valueFrom" }}
-              valueFrom:
-                {{- toYaml .Values.smtp.username.valueFrom | nindent 16 }}
-              {{- end }}
-              {{- else }}
-              value: {{ .Values.smtp.username }}
-              {{- end }}
+{{ include "logfire.envValue" (dict "value" .Values.smtp.username) | indent 14 }}
             - name: SMTP_PASSWORD
-              {{- if kindIs "map" .Values.smtp.password }}
-              {{- if hasKey .Values.smtp.password "valueFrom" }}
-              valueFrom:
-                {{- toYaml .Values.smtp.password.valueFrom | nindent 16 }}
-              {{- end }}
-              {{- else }}
-              value: {{ .Values.smtp.password }}
-              {{- end }}
+{{ include "logfire.envValue" (dict "value" .Values.smtp.password) | indent 14 }}
             - name: SMTP_USE_TLS
               value: {{ .Values.smtp.use_tls | quote }}
             {{ end }}
