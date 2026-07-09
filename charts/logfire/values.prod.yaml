@@ -1,0 +1,65 @@
+# Minimal production overlay.
+#
+# Copy this file and replace the placeholder hostnames, credentials, and
+# provider-specific settings before installing.
+
+imagePullSecrets:
+  - logfire-image-key
+
+sizingPreset: standard
+adminEmail: sre@example.com
+
+ingress:
+  # Gateway API is enabled below; leave the default Ingress disabled.
+  enabled: false
+
+gateway:
+  enabled: true
+  gatewayClassName: nginx
+  tls: true
+  hostnames:
+    - logfire.example.com
+
+# Helm writes these DSNs to a managed Secret. Argo CD users should set
+# postgresSecret.enabled=true and reference an externally managed Secret instead.
+postgresDsn: postgresql://logfire_crud:PASSWORD@postgres.example.com:5432/crud
+postgresFFDsn: postgresql://logfire_ff:PASSWORD@postgres.example.com:5432/ff
+
+postgresSecret:
+  enabled: false
+  # name: logfire-postgres-dsns
+
+# Helm can generate app/admin secrets for simple installs. Argo CD users should
+# set enabled=true and manage those Secrets outside this chart.
+existingSecret:
+  enabled: false
+  # name: logfire-tokens
+
+adminSecret:
+  enabled: false
+  # name: logfire-admin
+
+logfire-dex:
+  config:
+    enablePasswordDB: false
+    storage:
+      type: postgres
+      config:
+        host: postgres.example.com
+        port: 5432
+        user: logfire_dex
+        database: dex
+        password: PASSWORD
+        ssl:
+          mode: require
+
+objectStore:
+  uri: s3://logfire-prod
+  env:
+    AWS_DEFAULT_REGION: us-east-1
+
+logfire-redis:
+  # Use managed Redis in production; the bundled Redis is single-node.
+  enabled: false
+
+redisDsn: redis://redis.example.com:6379
