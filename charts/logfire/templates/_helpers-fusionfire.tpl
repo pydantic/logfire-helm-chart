@@ -137,6 +137,22 @@ Resolve query parallelism from explicit service values, falling back to FusionFi
 {{- end -}}
 
 {{/*
+Optional DataFusion query execution overrides. When omitted, FusionFire keeps
+its own defaults and auto-config behavior.
+*/}}
+{{- define "logfire.ffQueryExecutionEnv" -}}
+{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- if hasKey $effectiveServiceValues "datafusionTargetPartitions" }}
+- name: FF_DATAFUSION_TARGET_PARTITIONS
+  value: {{ get $effectiveServiceValues "datafusionTargetPartitions" | quote }}
+{{- end }}
+{{- if hasKey $effectiveServiceValues "datafusionBatchSize" }}
+- name: FF_DATAFUSION_BATCH_SIZE
+  value: {{ get $effectiveServiceValues "datafusionBatchSize" | quote }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Default ingest direct-file buffering.
 Sizes batch files from the pod memory request, then caps replay/submit
 concurrency from both memory and CPU so sub-core ingest pods do not overwhelm

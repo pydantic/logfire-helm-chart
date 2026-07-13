@@ -96,6 +96,7 @@ spec:
               value: {{ $datafusionThreads | quote }}
             - name: FF_DATAFUSION_MEMORY_LIMIT
               value: {{ (get $effectiveServiceValues "datafusionMemory" | default "auto" | quote) }}
+            {{- include "logfire.ffQueryExecutionEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
             - name: FF_IO_THREAD_STACK_SIZE
               value: "8MB"
             {{- end }}
