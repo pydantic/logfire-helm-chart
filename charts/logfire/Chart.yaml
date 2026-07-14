@@ -1,5 +1,5 @@
 apiVersion: v2
-version: 0.13.32
+version: 0.13.33
 name: logfire
 description: Helm chart for self-hosted Pydantic Logfire
 
