@@ -538,9 +538,12 @@ logfire-ff-ingest-processor:
     - name: RUST_LOG
       value: warn
 
+  # Ingest processing is bursty during traffic spikes and outage recovery.
+  # Configure requests without CPU/memory limits so the pod can use spare node capacity.
   # resources:
-  #   cpu: "2"
-  #   memory: "4Gi"
+  #   requests:
+  #     cpu: "2"
+  #     memory: "4Gi"
   # autoscaling:
   #   minReplicas: 2
   #   maxReplicas: 24
@@ -1777,8 +1780,9 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-ingest-processor:
       resources:
-        cpu: "1"
-        memory: "1Gi"
+        requests:
+          cpu: "1"
+          memory: "1Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 32
@@ -2044,8 +2048,9 @@ sizingPresets:
               app.kubernetes.io/component: logfire-ff-ingest
     logfire-ff-ingest-processor:
       resources:
-        cpu: "1"
-        memory: "1Gi"
+        requests:
+          cpu: "1"
+          memory: "1Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 32
@@ -2354,8 +2359,9 @@ sizingPresets:
               app.kubernetes.io/component: logfire-ff-ingest
     logfire-ff-ingest-processor:
       resources:
-        cpu: "2"
-        memory: "4Gi"
+        requests:
+          cpu: "2"
+          memory: "4Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 32
@@ -2411,7 +2417,7 @@ sizingPresets:
           ephemeral-storage: "1Gi"
         limits:
           cpu: "500m"
-          memory: "1Gi"
+          memory: "2Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 3
@@ -2687,8 +2693,9 @@ sizingPresets:
   large:
     logfire-ff-ingest-processor:
       resources:
-        cpu: "4"
-        memory: "4Gi"
+        requests:
+          cpu: "4"
+          memory: "4Gi"
       autoscaling:
         maxReplicas: 32
     logfire-ff-query-api:
