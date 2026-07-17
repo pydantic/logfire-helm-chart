@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.34-rc.1](https://img.shields.io/badge/Version-0.13.34--rc.1-informational?style=flat-square) ![AppVersion: 371ca6b7](https://img.shields.io/badge/AppVersion-371ca6b7-informational?style=flat-square)
+![Version: 0.13.34-rc.2](https://img.shields.io/badge/Version-0.13.34--rc.2-informational?style=flat-square) ![AppVersion: 371ca6b7](https://img.shields.io/badge/AppVersion-371ca6b7-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -521,6 +521,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-redis.podAnnotations | object | `{}` | Pod annotations for the bundled Redis pod. Example:   cluster-autoscaler.kubernetes.io/safe-to-evict: "false" |
 | logfire-redis.readinessProbe | object | `{"initialDelaySeconds":5,"periodSeconds":10,"tcpSocket":{"port":"redis"},"timeoutSeconds":1}` | Redis readiness probe. Override or set to null to disable. |
 | logfire-redis.resources | object | `{}` | Resource requests/limits. Supports the chart shorthand, for example:   cpu: "100m"   memory: "128Mi" or native requests/limits. |
+| logfire-redis.startupProbe | object | `{"failureThreshold":30,"periodSeconds":10,"tcpSocket":{"port":"redis"},"timeoutSeconds":1}` | Redis startup probe. Override or set to null to disable. |
 | logfire-redis.tolerations | list | `[]` | Tolerations for the bundled Redis pod. |
 | logfire-redis.topologySpreadConstraints | list | `[]` | Topology spread constraints for the bundled Redis pod. |
 | logfire-remote-mcp | object | `{"enabled":true}` | Autoscaling & resources for the `logfire-remote-mcp` pod |

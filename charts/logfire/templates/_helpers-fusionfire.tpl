@@ -6,6 +6,33 @@ Helpers specific to Fusionfire workloads and configuration.
 */}}
 
 {{/*
+Give Fusionfire processes enough time to initialize on constrained nodes before
+liveness checks can restart them. The health endpoint is checked immediately so
+fast starts are not delayed by a fixed initial delay.
+*/}}
+{{- define "logfire.ffStartupProbe" -}}
+httpGet:
+  path: /health
+  port: {{ .port }}
+periodSeconds: 10
+timeoutSeconds: 5
+failureThreshold: 30
+{{- end -}}
+
+{{/*
+Readiness can be checked immediately because failures do not restart the
+container. Use /ready so traffic only reaches a fully initialized process.
+*/}}
+{{- define "logfire.ffReadinessProbe" -}}
+httpGet:
+  path: /ready
+  port: {{ .port }}
+periodSeconds: 5
+timeoutSeconds: 5
+failureThreshold: 5
+{{- end -}}
+
+{{/*
 No-preset installs without workload resources still need a synthetic resource
 baseline for FusionFire auto-config, because no Kubernetes resources are
 rendered for the workload.

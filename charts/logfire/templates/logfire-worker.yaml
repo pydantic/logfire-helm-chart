@@ -53,6 +53,9 @@ spec:
             httpGet:
               path: /health
               port: 8003
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
             failureThreshold: 10
           env:
             - name: MATERIALIZE_DASHBOARDS

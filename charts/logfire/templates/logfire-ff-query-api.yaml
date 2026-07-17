@@ -136,14 +136,10 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 5
+          startupProbe:
+            {{- include "logfire.ffStartupProbe" (dict "port" 8011) | nindent 12 }}
           readinessProbe:
-            httpGet:
-              path: /health
-              port: 8011
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 5
+            {{- include "logfire.ffReadinessProbe" (dict "port" 8011) | nindent 12 }}
       volumes:
       {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 6 }}
       {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}

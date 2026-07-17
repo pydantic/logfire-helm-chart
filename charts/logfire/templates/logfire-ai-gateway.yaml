@@ -73,6 +73,15 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 30
             successThreshold: 1
+          startupProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /health
+              port: {{ $gatewayPort }}
+              scheme: HTTP
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 3
           readinessProbe:
             failureThreshold: 3
             httpGet:
