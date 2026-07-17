@@ -1426,8 +1426,10 @@ logfire-redis:
   # -- Deploy Redis as part of this chart.
   # Disable to use an external Redis instance.
   #
-  # The bundled Redis is a single-node instance for simple/self-contained installs.
-  # For production HA, disable this and set redisDsn to a managed Redis endpoint.
+  # The bundled Redis is a single-node instance intended for development, evaluation,
+  # and simple self-contained installs. It is not highly available, and upgrades that
+  # change its pod template cause a brief interruption while Redis is replaced.
+  # For production, disable this and set redisDsn to a managed Redis endpoint.
   enabled: true
 
   # -- Redis image configuration

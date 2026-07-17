@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.34-rc.2](https://img.shields.io/badge/Version-0.13.34--rc.2-informational?style=flat-square) ![AppVersion: 371ca6b7](https://img.shields.io/badge/AppVersion-371ca6b7-informational?style=flat-square)
+![Version: 0.13.34](https://img.shields.io/badge/Version-0.13.34-informational?style=flat-square) ![AppVersion: 371ca6b7](https://img.shields.io/badge/AppVersion-371ca6b7-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -509,7 +509,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-ff-maintenance-scheduler | object | `{"env":[]}` | Environment overrides for the maintenance scheduler pod |
 | logfire-ff-query-api | object | `{"env":[]}` | Environment overrides for the query API pod |
 | logfire-redis.affinity | object | `{}` | Affinity for the bundled Redis pod. |
-| logfire-redis.enabled | bool | `true` | Deploy Redis as part of this chart. Disable to use an external Redis instance.  The bundled Redis is a single-node instance for simple/self-contained installs. For production HA, disable this and set redisDsn to a managed Redis endpoint. |
+| logfire-redis.enabled | bool | `true` | Deploy Redis as part of this chart. Disable to use an external Redis instance.  The bundled Redis is a single-node instance intended for development, evaluation, and simple self-contained installs. It is not highly available, and upgrades that change its pod template cause a brief interruption while Redis is replaced. For production, disable this and set redisDsn to a managed Redis endpoint. |
 | logfire-redis.image | object | `{"pullPolicy":"IfNotPresent","repository":"redis","tag":"7.2"}` | Redis image configuration |
 | logfire-redis.image.pullPolicy | string | `"IfNotPresent"` | Redis image pull policy |
 | logfire-redis.image.repository | string | `"redis"` | Redis image repository |
