@@ -1,0 +1,311 @@
+suite: health probes protect workloads during initialization
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: gives the backend extra time to initialize
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 18
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: protects the Python worker during initialization
+    templates:
+      - templates/logfire-worker.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 10
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: protects the frontend during initialization
+    templates:
+      - templates/logfire-frontend-service.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 8
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: protects Dex during initialization
+    templates:
+      - templates/dex/deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /healthz/live
+              port: telemetry
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: protects HAProxy during initialization
+    templates:
+      - templates/logfire-service.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /stats
+              port: 8181
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: protects the remote MCP server during initialization
+    templates:
+      - templates/logfire-remote-mcp.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            failureThreshold: 30
+            httpGet:
+              path: /health
+              port: 8005
+              scheme: HTTP
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 3
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: protects the optional AI gateway during initialization
+    set:
+      logfire-ai-gateway:
+        enabled: true
+    templates:
+      - templates/logfire-ai-gateway.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            failureThreshold: 30
+            httpGet:
+              path: /health
+              port: 8788
+              scheme: HTTP
+            periodSeconds: 5
+            successThreshold: 1
+            timeoutSeconds: 3
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: protects bundled Redis during initialization
+    templates:
+      - templates/redis.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            tcpSocket:
+              port: redis
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 1
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: uses the standard startup probe for the Fusionfire CRUD API
+    templates:
+      - templates/logfire-ff-crud-api.yaml
+    asserts: &fusionfire_8011_startup_probe
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8011
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet:
+              path: /ready
+              port: 8011
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 5
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: uses the standard startup probe for the Fusionfire query API
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    asserts: *fusionfire_8011_startup_probe
+
+  - it: uses the standard startup probe for the optional Fusionfire query worker
+    set:
+      logfire-ff-query-worker:
+        enabled: true
+    templates:
+      - templates/logfire-ff-query-worker.yaml
+    asserts: *fusionfire_8011_startup_probe
+
+  - it: uses the standard startup probe for the Fusionfire compaction worker
+    templates:
+      - templates/logfire-ff-compaction-worker.yaml
+    asserts: &fusionfire_8013_startup_probe
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8013
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet:
+              path: /ready
+              port: 8013
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 5
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: uses the standard startup probe for the Fusionfire maintenance scheduler
+    templates:
+      - templates/logfire-ff-maintenance-scheduler.yaml
+    asserts: *fusionfire_8013_startup_probe
+
+  - it: uses the standard startup probe for the Fusionfire maintenance worker
+    templates:
+      - templates/logfire-ff-maintenance-worker.yaml
+    asserts: *fusionfire_8013_startup_probe
+
+  - it: uses the standard startup probe for Fusionfire ingest
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts: &fusionfire_8012_startup_probe
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8012
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet:
+              path: /ready
+              port: 8012
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 5
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: uses the standard startup probe for the Fusionfire ingest processor
+    templates:
+      - templates/logfire-ff-ingest-processor.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /health
+              port: 8012
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe
+          value:
+            httpGet:
+              path: /ready
+              port: 8012
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 5
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: uses the standard startup probe for the Fusionfire byte cache
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe
+          value:
+            httpGet:
+              path: /health
+              port: 9001
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+        documentSelector:
+          path: kind
+          value: Deployment

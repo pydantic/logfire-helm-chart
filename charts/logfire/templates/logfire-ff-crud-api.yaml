@@ -67,13 +67,9 @@ spec:
               path: /health
               port: 8011
           readinessProbe:
-            httpGet:
-              path: /ready
-              port: 8011
+            {{- include "logfire.ffReadinessProbe" (dict "port" 8011) | nindent 12 }}
           startupProbe:
-              httpGet:
-                path: /health
-                port: 8011
+            {{- include "logfire.ffStartupProbe" (dict "port" 8011) | nindent 12 }}
           lifecycle:
             preStop:
               exec:

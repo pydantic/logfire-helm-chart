@@ -115,6 +115,13 @@ spec:
             httpGet:
               path: /healthz/live
               port: telemetry
+          startupProbe:
+            httpGet:
+              path: /healthz/live
+              port: telemetry
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
           readinessProbe:
             httpGet:
               path: /healthz/ready

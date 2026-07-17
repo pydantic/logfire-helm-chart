@@ -109,11 +109,7 @@ spec:
               path: /health
               port: 9001
           startupProbe:
-            httpGet:
-              path: /health
-              port: 9001
-            failureThreshold: 30
-            periodSeconds: 10
+            {{- include "logfire.ffStartupProbe" (dict "port" 9001) | nindent 12 }}
           lifecycle:
             preStop:
               exec:

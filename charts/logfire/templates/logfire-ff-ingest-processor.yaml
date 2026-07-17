@@ -112,21 +112,9 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 5
           readinessProbe:
-            httpGet:
-              path: /ready
-              port: 8012
-            initialDelaySeconds: 0
-            periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 5
+            {{- include "logfire.ffReadinessProbe" (dict "port" 8012) | nindent 12 }}
           startupProbe:
-            httpGet:
-              path: /health
-              port: 8012
-            initialDelaySeconds: 30
-            timeoutSeconds: 5
-            periodSeconds: 10
-            failureThreshold: 30
+            {{- include "logfire.ffStartupProbe" (dict "port" 8012) | nindent 12 }}
           volumeMounts:
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
             {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}

@@ -1462,12 +1462,13 @@ logfire-redis:
     periodSeconds: 10
     timeoutSeconds: 1
 
-  # -- Redis startup probe. Disabled by default.
-  # startupProbe:
-  #   tcpSocket:
-  #     port: redis
-  #   failureThreshold: 30
-  #   periodSeconds: 2
+  # -- Redis startup probe. Override or set to null to disable.
+  startupProbe:
+    tcpSocket:
+      port: redis
+    failureThreshold: 30
+    periodSeconds: 10
+    timeoutSeconds: 1
 
   # -- Persistence for the bundled Redis data directory.
   # This improves recovery across pod restarts but does not make Redis highly available.
