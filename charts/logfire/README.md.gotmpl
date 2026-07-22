@@ -290,8 +290,19 @@ sizingPreset: standard
 ```
 
 Use `large` for higher-throughput deployments, `standard` for general production deployments, `small` for lower-traffic deployments that still need ingest and query headroom, or `tiny` for the smallest production footprint.
-Presets apply workload resources, autoscaling, PDBs, best-effort topology spreading for HA-sensitive workloads, and selected FusionFire execution settings.
+Presets apply workload resources, autoscaling, PDBs, and best-effort topology spreading for HA-sensitive workloads. FusionFire derives its execution settings from the effective resources.
 They do not configure environment-specific prerequisites such as hostnames, TLS, PostgreSQL, object storage, image pull secrets, or StorageClasses.
+
+Query API capacity is resource-oriented:
+
+| Preset | CPU request | Memory request | Query cost capacity per pod | Scratch | Replicas |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `tiny` | 1 | 2 GiB | 1 | 1 GiB | 1–6 |
+| `small` | 2 | 4 GiB | 2 | 2 GiB | 1–8 |
+| `standard` | 4 | 8 GiB | 4 | 6 GiB | 3–8 |
+| `large` | 4 | 8 GiB | 4 | 6 GiB | 3–16 |
+
+Query cost capacity defaults to the effective execution-worker CPU rounded up to a whole core. With separate query workers enabled, both the dispatcher and workers derive it from query-worker CPU. Advanced installations can override it with `logfire-ff-query-api.maxQueryCostPerPod`.
 
 The `standard` preset keeps the public request path, query API, and ingest path at a minimum of three replicas.
 The `large` preset inherits `standard` and increases selected FusionFire worker, ingest processor, and byte-cache capacity.
@@ -300,6 +311,7 @@ The `tiny` preset intentionally favors the smallest resource footprint over high
 
 If you do not set a sizing preset or per-workload resources, the chart does not render Kubernetes CPU/memory requests or limits.
 FusionFire still needs internal execution limits, so those derived settings use the `tiny` preset resource baseline without rendering the preset's Kubernetes resources.
+This increases some no-preset FusionFire budgets compared with earlier chart versions. Operators running constrained clusters should select a sizing preset or configure explicit workload resources.
 
 Override individual workloads only after selecting a preset:
 
@@ -313,7 +325,7 @@ logfire-worker:
     ephemeralStorage: "1Gi"
 ```
 
-If `resources.limits` is omitted, this chart defaults limits to the configured requests for Guaranteed QoS.
+Nested `resources.requests` do not add mandatory limits, allowing workloads to use spare node capacity. The legacy flat resource shorthand continues to use the configured values for both requests and limits.
 
 ## Advanced Configuration
 

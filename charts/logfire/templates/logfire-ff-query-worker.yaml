@@ -1,6 +1,7 @@
 {{- $serviceName := "logfire-ff-query-worker" }}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $queryParallelism := include "logfire.ffQueryParallelism" (dict "Values" .Values "serviceName" $serviceName) -}}
+{{- $maxCostPerWorker := include "logfire.ffMaxCostPerWorker" (dict "Values" .Values) -}}
 {{- $ioThreads := include "logfire.ffIoThreads" (dict "Values" .Values "serviceName" $serviceName) -}}
 {{- $datafusionThreads := include "logfire.ffDatafusionThreads" (dict "Values" .Values "serviceName" $serviceName) -}}
 {{- if (index .Values $serviceName | default dict).enabled }}
@@ -65,6 +66,8 @@ spec:
               value: /scratch/fusionfire
             - name: FF_QUERY_PARALLELISM
               value: {{ $queryParallelism | quote }}
+            - name: FF_MAX_COST_PER_WORKER
+              value: {{ $maxCostPerWorker | quote }}
             {{- include "logfire.ffResourceEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
             - name: FF_PG_POOL_MAX_CONNECTIONS
               value: "4"

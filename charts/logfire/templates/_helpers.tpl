@@ -121,7 +121,7 @@ Only sizing and portable availability keys are inherited from presets.
     {{- $presetValues = mergeOverwrite (deepCopy (get $presets "standard")) (deepCopy $presetValues) -}}
   {{- end -}}
   {{- $presetServiceValues := get $presetValues $serviceName | default dict -}}
-  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "queryParallelism" "datafusionThreads" "datafusionTargetPartitions" "datafusionBatchSize" "ioThreads" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" -}}
+  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "maxQueryCostPerPod" "queryParallelism" "datafusionThreads" "datafusionTargetPartitions" "datafusionBatchSize" "ioThreads" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" -}}
     {{- if hasKey $presetServiceValues $key -}}
       {{- $_ := set $merged $key (deepCopy (get $presetServiceValues $key)) -}}
     {{- end -}}
@@ -223,9 +223,13 @@ resources:
     {{- end }}
   {{- if $renderLimits }}
   limits:
+    {{- if or $usesFlatResources (hasKey $limits "memory") }}
     memory: {{ $memoryLimit }}
+    {{- end }}
+    {{- if or $usesFlatResources (hasKey $limits "cpu") }}
     cpu: {{ $cpuLimit }}
-    {{- if $ephemeralStorageLimit }}
+    {{- end }}
+    {{- if or (and $usesFlatResources $ephemeralStorageLimit) (hasKey $limits "ephemeral-storage") (hasKey $limits "ephemeralStorage") }}
     ephemeral-storage: {{ $ephemeralStorageLimit }}
     {{- end }}
   {{- end }}

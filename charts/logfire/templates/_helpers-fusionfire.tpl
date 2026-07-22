@@ -32,38 +32,6 @@ timeoutSeconds: 5
 failureThreshold: 5
 {{- end -}}
 
-{{/*
-No-preset installs without workload resources still need a synthetic resource
-baseline for FusionFire auto-config, because no Kubernetes resources are
-rendered for the workload.
-*/}}
-{{- define "logfire.ffUseNoPresetResourceFallback" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- if and (not (.Values.sizingPreset | default "")) (not (get $effectiveServiceValues "resources")) -}}
-true
-{{- end -}}
-{{- end -}}
-
-{{/*
-Conservative resource hints for no-preset/no-resource installs. Keep these
-independent from the sizing presets so preset resource changes do not silently
-increase FusionFire auto-config on installs that render no Kubernetes resources.
-*/}}
-{{- define "logfire.ffNoPresetResourceFallback" -}}
-{{- $fallbacks := dict
-  "logfire-ff-cache-byte" (dict "cpu" "250m" "memory" "384Mi")
-  "logfire-ff-compaction-worker" (dict "cpu" "1" "memory" "2Gi")
-  "logfire-ff-crud-api" (dict "cpu" "100m" "memory" "192Mi")
-  "logfire-ff-ingest" (dict "cpu" "250m" "memory" "512Mi")
-  "logfire-ff-ingest-processor" (dict "cpu" "350m" "memory" "512Mi")
-  "logfire-ff-maintenance-scheduler" (dict "cpu" "100m" "memory" "192Mi")
-  "logfire-ff-maintenance-worker" (dict "cpu" "1" "memory" "512Mi")
-  "logfire-ff-query-api" (dict "cpu" "500m" "memory" "768Mi")
-  "logfire-ff-query-worker" (dict "cpu" "500m" "memory" "768Mi")
--}}
-{{- get $fallbacks .serviceName | default (dict "cpu" "500m" "memory" "1Gi") | toJson -}}
-{{- end -}}
-
 {{- define "logfire.ffCompactionTiersValue" -}}
 {{- $maintenanceWorker := dict "Values" .Values "serviceName" "logfire-ff-maintenance-worker" -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" $maintenanceWorker | fromJson -}}
@@ -127,16 +95,14 @@ overhead. No quota is derived for emptyDir scratch storage.
 
 {{/*
 Expose effective Kubernetes resources to FusionFire so its auto-config formulas
-use the same resources Kubernetes enforces. When no preset/resources are set,
-the chart does not render Kubernetes resources, so use conservative synthetic
-inputs instead.
+use the same resources Kubernetes enforces. Effective resources fall back to
+the tiny preset for internal calculations when no preset/resources are set,
+without rendering Kubernetes resources.
 */}}
 {{- define "logfire.ffResourceEnv" -}}
 {{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
-{{- $useFallback := include "logfire.ffUseNoPresetResourceFallback" . -}}
-{{- $fallbackResources := include "logfire.ffNoPresetResourceFallback" . | fromJson -}}
-{{- $cpu := ternary (get $fallbackResources "cpu") (get $effectiveResources "cpuLimit") (not (empty $useFallback)) -}}
-{{- $memory := ternary (get $fallbackResources "memory") (get $effectiveResources "memoryLimit") (not (empty $useFallback)) -}}
+{{- $cpu := get $effectiveResources "cpuLimit" -}}
+{{- $memory := get $effectiveResources "memoryLimit" -}}
 {{- $cpuMilli := int (include "logfire.cpuMilli" $cpu) -}}
 {{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
 - name: FF_RESOURCE_CPU_CORES
@@ -156,11 +122,34 @@ inputs instead.
 {{- end -}}
 
 {{/*
-Resolve query parallelism from explicit service values, falling back to FusionFire auto-config.
+Resolve per-query DataFusion I/O parallelism independently for each service.
 */}}
 {{- define "logfire.ffQueryParallelism" -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
 {{- get $effectiveServiceValues "queryParallelism" | default "auto" -}}
+{{- end -}}
+
+{{/*
+Resolve worker query capacity consistently for the combined query-api deployment
+and optional remote query workers. An explicit query-api override wins.
+Otherwise, derive capacity from the execution worker's effective CPU limit (or
+request when no limit is configured), rounded up to whole cores.
+*/}}
+{{- define "logfire.ffMaxCostPerWorker" -}}
+{{- $queryApiValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-query-api") | fromJson -}}
+{{- $queryWorkerEnabled := get (get .Values "logfire-ff-query-worker" | default dict) "enabled" | default false -}}
+{{- $executionServiceName := ternary "logfire-ff-query-worker" "logfire-ff-query-api" $queryWorkerEnabled -}}
+{{- if hasKey $queryApiValues "maxQueryCostPerPod" -}}
+  {{- $override := toString (get $queryApiValues "maxQueryCostPerPod") -}}
+  {{- if not (regexMatch "^[1-9][0-9]*$" $override) -}}
+    {{- fail "logfire-ff-query-api.maxQueryCostPerPod must be a positive integer" -}}
+  {{- end -}}
+  {{- $override -}}
+{{- else -}}
+  {{- $effectiveResources := include "logfire.effectiveResources" (dict "Values" .Values "serviceName" $executionServiceName) | fromJson -}}
+  {{- $cpuMilli := int (include "logfire.cpuMilli" (get $effectiveResources "cpuLimit")) -}}
+  {{- max 1 (div (add $cpuMilli 999) 1000) -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

@@ -744,8 +744,10 @@ logfire-remote-mcp:
 #   service:
 #     # -- Service annotations
 #     annotations: {}
-#   # -- Parallelism per pod. Defaults to FusionFire auto-config from effective CPU.
-#   # queryParallelism: 4
+#   # -- Maximum query cost per execution pod. Defaults to the effective worker CPU rounded up.
+#   # maxQueryCostPerPod: 4
+#   # -- Per-query DataFusion I/O parallelism. Defaults to FusionFire auto-config from effective CPU.
+#   # queryParallelism: 32
 #   # -- DataFusion partitions used by query execution. Defaults to FusionFire's DataFusion thread count.
 #   # datafusionTargetPartitions: 4
 #   # -- Number of rows in each DataFusion execution batch. Defaults to FusionFire's built-in value.
@@ -756,8 +758,9 @@ logfire-remote-mcp:
 #   # -- Number of replicas
 #   replicas: 2
 #   resources:
-#     cpu: "2"
-#     memory: "8Gi"
+#     requests:
+#       cpu: "2"
+#       memory: "4Gi"
 #   autoscaling:
 #     minReplicas: 2
 #     maxReplicas: 8
@@ -1255,8 +1258,9 @@ logfire-ff-cache-byte:
 #   enabled: true
 #   replicas: 8
 #   resources:
-#     cpu: "500m"
-#     memory: "4Gi"
+#     requests:
+#       cpu: "500m"
+#       memory: "4Gi"
 #   autoscaling:
 #     minReplicas: 8
 #     maxReplicas: 128
@@ -1798,16 +1802,14 @@ sizingPresets:
       resources:
         requests:
           cpu: "750m"
-          memory: "768Mi"
-        limits:
-          cpu: "1"
           memory: "1Gi"
+        limits:
+          memory: "2Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
         hpa:
           enabled: true
-          memAverage: 80
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
@@ -1828,7 +1830,7 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-query-api:
-      datafusionTargetPartitions: 2
+      datafusionBatchSize: 4096
       resources:
         requests:
           cpu: "1"
@@ -1847,9 +1849,10 @@ sizingPresets:
         storage: "1Gi"
     logfire-ff-query-worker:
       resources:
-        cpu: "500m"
-        memory: "768Mi"
-        ephemeralStorage: "1Gi"
+        requests:
+          cpu: "500m"
+          memory: "768Mi"
+          ephemeral-storage: "1Gi"
       scratchVolume:
         storage: "1Gi"
     logfire-ff-crud-api:
@@ -1885,15 +1888,13 @@ sizingPresets:
           memory: "512Mi"
           ephemeral-storage: "1Gi"
         limits:
-          cpu: "1"
-          memory: "512Mi"
+          memory: "1Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
         hpa:
           enabled: true
-          memAverage: 65
           cpuAverage: 70
       pdb:
         maxUnavailable: 1
@@ -1920,7 +1921,6 @@ sizingPresets:
         maxReplicas: 4
         hpa:
           enabled: true
-          memAverage: 65
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
@@ -2077,14 +2077,16 @@ sizingPresets:
               app.kubernetes.io/component: logfire-ff-ingest-processor
     logfire-backend:
       resources:
-        cpu: "750m"
-        memory: "1Gi"
+        requests:
+          cpu: "750m"
+          memory: "1Gi"
+        limits:
+          memory: "2Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
         hpa:
           enabled: true
-          memAverage: 75
           cpuAverage: 50
       pdb:
         maxUnavailable: 1
@@ -2105,12 +2107,10 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-query-api:
-      datafusionTargetPartitions: 4
-      datafusionBatchSize: 4096
       resources:
         requests:
           cpu: "2"
-          memory: "8Gi"
+          memory: "4Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -2125,9 +2125,10 @@ sizingPresets:
         storage: "2Gi"
     logfire-ff-query-worker:
       resources:
-        cpu: "1"
-        memory: "2Gi"
-        ephemeralStorage: "1Gi"
+        requests:
+          cpu: "1"
+          memory: "2Gi"
+          ephemeral-storage: "1Gi"
       scratchVolume:
         storage: "2Gi"
     logfire-ff-crud-api:
@@ -2163,15 +2164,13 @@ sizingPresets:
           memory: "512Mi"
           ephemeral-storage: "1Gi"
         limits:
-          cpu: "1"
-          memory: "512Mi"
+          memory: "1Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 5
         hpa:
           enabled: true
-          memAverage: 65
           cpuAverage: 70
       pdb:
         maxUnavailable: 1
@@ -2203,7 +2202,6 @@ sizingPresets:
         maxReplicas: 6
         hpa:
           enabled: true
-          memAverage: 65
           cpuAverage: 40
       pdb:
         maxUnavailable: 1
@@ -2388,14 +2386,16 @@ sizingPresets:
               app.kubernetes.io/component: logfire-ff-ingest-processor
     logfire-backend:
       resources:
-        cpu: "750m"
-        memory: "1Gi"
+        requests:
+          cpu: "750m"
+          memory: "1Gi"
+        limits:
+          memory: "2Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 6
         hpa:
           enabled: true
-          memAverage: 65
           cpuAverage: 25
       pdb:
         maxUnavailable: 1
@@ -2470,13 +2470,10 @@ sizingPresets:
             matchLabels:
               app.kubernetes.io/component: logfire-remote-mcp
     logfire-ff-query-api:
-      queryParallelism: 32
-      datafusionTargetPartitions: 4
-      datafusionBatchSize: 4096
       resources:
         requests:
-          cpu: "3"
-          memory: "16Gi"
+          cpu: "4"
+          memory: "8Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 3
@@ -2504,9 +2501,10 @@ sizingPresets:
         storage: "6Gi"
     logfire-ff-query-worker:
       resources:
-        cpu: "500m"
-        memory: "4Gi"
-        ephemeralStorage: "1Gi"
+        requests:
+          cpu: "500m"
+          memory: "4Gi"
+          ephemeral-storage: "1Gi"
       scratchVolume:
         storage: "6Gi"
     logfire-ff-crud-api:
@@ -2568,15 +2566,13 @@ sizingPresets:
           memory: "512Mi"
           ephemeral-storage: "1Gi"
         limits:
-          cpu: "1"
-          memory: "512Mi"
+          memory: "1Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 5
         hpa:
           enabled: true
-          memAverage: 65
           cpuAverage: 70
       pdb:
         maxUnavailable: 1
@@ -2589,7 +2585,6 @@ sizingPresets:
         maxReplicas: 6
         hpa:
           enabled: true
-          memAverage: 65
           cpuAverage: 20
       pdb:
         maxUnavailable: 1
