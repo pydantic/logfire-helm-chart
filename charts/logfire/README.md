@@ -256,6 +256,10 @@ groupOrganizationMapping:
             role: write
 ```
 
+The mapping is authoritative for the organizations and projects it lists and is reconciled when a user signs in. Access in those scopes may be changed or removed; unlisted organizations and projects are left unchanged, and personal organization membership is preserved. When multiple matching groups grant roles in the same scope, the most permissive role is applied.
+
+Setting `groupOrganizationMapping` overrides mappings managed through the public Group Mappings API. The API reports `api_mapping_status: overridden_by_environment`, and update requests return HTTP 409.
+
 ### Object Storage
 
 Logfire requires object storage for data. Supported URI schemes are `s3://`, `gs://`, and `az://`.
