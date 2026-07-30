@@ -1,0 +1,142 @@
+suite: AI configuration
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: renders the regional and US multi-region locations in the backend
+    set:
+      ai:
+        vertexAi:
+          region: us-east4
+          multiRegionLocation: us
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GOOGLE_CLOUD_LOCATION
+            value: us-east4
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GOOGLE_CLOUD_MULTI_REGION_LOCATION
+            value: us
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: renders the regional and EU multi-region locations in the worker
+    set:
+      ai:
+        vertexAi:
+          region: europe-west4
+          multiRegionLocation: eu
+    templates:
+      - templates/logfire-worker.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GOOGLE_CLOUD_LOCATION
+            value: europe-west4
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GOOGLE_CLOUD_MULTI_REGION_LOCATION
+            value: eu
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: rejects an unsupported multi-region location
+    set:
+      ai:
+        vertexAi:
+          multiRegionLocation: global
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "ai.vertexAi.multiRegionLocation must be exactly 'us' or 'eu', got 'global'. Do not use 'global' as a data-residency workaround."
+
+  - it: requires a multi-region location for Gemini 3.5
+    set:
+      ai:
+        model: google-cloud:gemini-3.5-flash
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "ai.vertexAi.multiRegionLocation is required when ai.model contains Google Cloud model 'google-cloud:gemini-3.5-flash'. Set it to 'us' or 'eu'."
+
+  - it: requires a region for an ordinary Google Cloud model
+    set:
+      ai:
+        chatModel: google-cloud:gemini-2.5-flash
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "ai.vertexAi.region is required when ai.chatModel contains regional Google Cloud model 'google-cloud:gemini-2.5-flash'."
+
+  - it: requires a region for a regional fallback
+    set:
+      ai:
+        reasoningModel: "google-cloud:gemini-3.5-flash, google-cloud:gemini-2.5-flash"
+        vertexAi:
+          multiRegionLocation: eu
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "ai.vertexAi.region is required when ai.reasoningModel contains regional Google Cloud model 'google-cloud:gemini-2.5-flash'."
+
+  - it: requires a multi-region location in a mixed fallback chain
+    set:
+      ai:
+        llmJudgeModel: "google-cloud:gemini-3.5-flash,google-cloud:gemini-2.5-pro"
+        vertexAi:
+          region: europe-west4
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "ai.vertexAi.multiRegionLocation is required when ai.llmJudgeModel contains Google Cloud model 'google-cloud:gemini-3.5-flash'. Set it to 'us' or 'eu'."
+
+  - it: accepts a mixed fallback chain when both locations are configured
+    set:
+      ai:
+        model: "google-cloud:gemini-3.5-flash,google-cloud:gemini-2.5-flash"
+        vertexAi:
+          region: europe-west4
+          multiRegionLocation: eu
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: does not require a regional location for a pure Gemini 3.5 configuration
+    set:
+      ai:
+        model: google-cloud:gemini-3.5-flash
+        vertexAi:
+          multiRegionLocation: eu
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - hasDocuments:
+          count: 0

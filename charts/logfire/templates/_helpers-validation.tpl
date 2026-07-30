@@ -86,8 +86,15 @@ Validate AI configuration consistency - if model is set, required provider confi
   {{- $model := .value -}}
   {{- $name := .name -}}
   {{- range $fallback := splitList "," $model -}}
-    {{- if and (eq (trim $fallback) "google-cloud:gemini-3.5-flash") (not $multiRegionLocation) -}}
-      {{- fail (printf "ai.vertexAi.multiRegionLocation is required when %s contains Google Cloud model 'google-cloud:gemini-3.5-flash'. Set it to 'us' or 'eu'." $name) -}}
+    {{- $fallback = trim $fallback -}}
+    {{- if hasPrefix "google-cloud:" $fallback -}}
+      {{- if eq $fallback "google-cloud:gemini-3.5-flash" -}}
+        {{- if not $multiRegionLocation -}}
+          {{- fail (printf "ai.vertexAi.multiRegionLocation is required when %s contains Google Cloud model '%s'. Set it to 'us' or 'eu'." $name $fallback) -}}
+        {{- end -}}
+      {{- else if not (get $vertexAi "region") -}}
+        {{- fail (printf "ai.vertexAi.region is required when %s contains regional Google Cloud model '%s'." $name $fallback) -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
   {{- if or (hasPrefix "openai:" $model) (hasPrefix "openai-chat:" $model) (hasPrefix "openai-responses:" $model) -}}
