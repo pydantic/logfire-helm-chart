@@ -71,6 +71,10 @@ Validate AI configuration consistency - if model is set, required provider confi
 {{- $openAi := get $ai "openAi" | default dict -}}
 {{- $vertexAi := get $ai "vertexAi" | default dict -}}
 {{- $azureOpenAi := get $ai "azureOpenAi" | default dict -}}
+{{- $multiRegionLocation := get $vertexAi "multiRegionLocation" -}}
+{{- if and $multiRegionLocation (not (has $multiRegionLocation (list "us" "eu"))) -}}
+  {{- fail (printf "ai.vertexAi.multiRegionLocation must be exactly 'us' or 'eu', got '%s'. Do not use 'global' as a data-residency workaround." $multiRegionLocation) -}}
+{{- end -}}
 {{- $models := list
   (dict "name" "ai.model" "value" (get $ai "model"))
   (dict "name" "ai.chatModel" "value" (get $ai "chatModel"))
@@ -81,6 +85,11 @@ Validate AI configuration consistency - if model is set, required provider confi
 {{- if .value -}}
   {{- $model := .value -}}
   {{- $name := .name -}}
+  {{- range $fallback := splitList "," $model -}}
+    {{- if and (eq (trim $fallback) "google-cloud:gemini-3.5-flash") (not $multiRegionLocation) -}}
+      {{- fail (printf "ai.vertexAi.multiRegionLocation is required when %s contains Google Cloud model 'google-cloud:gemini-3.5-flash'. Set it to 'us' or 'eu'." $name) -}}
+    {{- end -}}
+  {{- end -}}
   {{- if or (hasPrefix "openai:" $model) (hasPrefix "openai-chat:" $model) (hasPrefix "openai-responses:" $model) -}}
     {{- if not (get $openAi "apiKey") -}}
       {{- fail (printf "ai.openAi.apiKey is required when %s uses OpenAI model '%s'. Provide your OpenAI API key." $name $model) -}}

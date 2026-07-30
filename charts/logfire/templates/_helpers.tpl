@@ -585,6 +585,10 @@ Render shared AI provider environment variables for workloads that construct AI 
   value: {{ . }}
 {{- end }}
 {{- end }}
+{{- with (get $vertexAi "multiRegionLocation") }}
+- name: GOOGLE_CLOUD_MULTI_REGION_LOCATION
+  value: {{ . }}
+{{- end }}
 {{- with (get $vertexAi "anthropicProjectId") }}
 - name: ANTHROPIC_VERTEX_PROJECT_ID
   value: {{ . }}
