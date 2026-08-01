@@ -328,8 +328,10 @@ ai:
     baseUrl:
 
   vertexAi:
-    # -- Vertex AI region
+    # -- Vertex AI region for regionally available models. Required when a configured model or fallback uses a regional `google-cloud:` model.
     region:
+    # -- Vertex AI multi-region location for models offered only through US/EU multi-regions. Allowed values are `us` and `eu`. This is optional unless a configured model or fallback is `google-cloud:gemini-3.5-flash`. Do not use `global` as a data-residency workaround.
+    multiRegionLocation:
     # -- GCP project ID for Anthropic Vertex models.
     anthropicProjectId:
     # -- Anthropic Vertex partner-models API base URL.
