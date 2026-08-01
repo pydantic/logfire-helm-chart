@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.37](https://img.shields.io/badge/Version-0.13.37-informational?style=flat-square) ![AppVersion: c4f2def9](https://img.shields.io/badge/AppVersion-c4f2def9-informational?style=flat-square)
+![Version: 0.13.38](https://img.shields.io/badge/Version-0.13.38-informational?style=flat-square) ![AppVersion: c4f2def9](https://img.shields.io/badge/AppVersion-c4f2def9-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -427,7 +427,8 @@ Before diving deeper, verify these common configuration issues:
 | ai.reasoningModel | string | `nil` | AI provider+model string for reasoning-oriented worker workloads such as workflows. Falls back to `ai.model` in the chart when unset. |
 | ai.vertexAi.anthropicBaseUrl | string | `nil` | Anthropic Vertex partner-models API base URL. |
 | ai.vertexAi.anthropicProjectId | string | `nil` | GCP project ID for Anthropic Vertex models. |
-| ai.vertexAi.region | string | `nil` | Vertex AI region |
+| ai.vertexAi.multiRegionLocation | string | `nil` | Vertex AI multi-region location for models offered only through US/EU multi-regions. Allowed values are `us` and `eu`. This is optional unless a configured model or fallback is `google-cloud:gemini-3.5-flash`. Do not use `global` as a data-residency workaround. |
+| ai.vertexAi.region | string | `nil` | Vertex AI region for regionally available models. Required when a configured model or fallback uses a regional `google-cloud:` model. |
 | aiGatewayOauth | object | `{"issuer":"","resourceUrl":""}` | AI gateway OAuth metadata configuration. If left empty, the chart derives self-hosted defaults from the primary Logfire URL:   resourceUrl = <logfire.url>/proxy   issuer      = <logfire.url> |
 | aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
 | aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
