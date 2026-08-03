@@ -116,6 +116,8 @@ spec:
                 name: {{ include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-internal-secret") }}
           - name: GATEWAY_REDIS_DSN
             value: {{ .Values.redisDsn }}
+          - name: SHARED_REDIS_DSN
+            value: {{ .Values.redisDsn }}
           - name: HOST_IP
             valueFrom:
               fieldRef:
