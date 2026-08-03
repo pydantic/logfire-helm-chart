@@ -3,6 +3,28 @@ entries:
   logfire:
   - apiVersion: v2
     appVersion: c4f2def9
+    created: "2026-08-03T18:39:18.747818948Z"
+    dependencies:
+    - condition: dev.deployPostgres
+      name: postgresql
+      repository: https://charts.bitnami.com/bitnami
+      version: 16.7.27
+    - condition: dev.deployMinio
+      name: minio
+      repository: https://charts.bitnami.com/bitnami
+      version: 17.0.21
+    - condition: dev.deployCertManager
+      name: cert-manager
+      repository: https://charts.jetstack.io
+      version: v1.19.2
+    description: Helm chart for self-hosted Pydantic Logfire
+    digest: a30050016950474addc3cfb6739181be17d73a6533a268ee594526054425fccc
+    name: logfire
+    urls:
+    - https://github.com/pydantic/logfire-helm-chart/releases/download/logfire-0.13.39/logfire-0.13.39.tgz
+    version: 0.13.39
+  - apiVersion: v2
+    appVersion: c4f2def9
     created: "2026-08-01T17:28:01.522412928Z"
     dependencies:
     - condition: dev.deployPostgres
@@ -2585,4 +2607,4 @@ entries:
     urls:
     - https://github.com/pydantic/logfire-helm-chart/releases/download/logfire-0.1.0/logfire-0.1.0.tgz
     version: 0.1.0
-generated: "2026-08-01T17:28:01.523213295Z"
+generated: "2026-08-03T18:39:18.748399113Z"
