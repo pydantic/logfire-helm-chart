@@ -754,6 +754,7 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- range $url := $logfireUrls -}}
   {{- $redirects = append $redirects (printf "%s/auth/code-callback" $url) -}}
   {{- $redirects = append $redirects (printf "%s/auth/link-provider-code-callback" $url) -}}
+  {{- $redirects = append $redirects (printf "%s/auth/authorize-device-token-sso-callback" $url) -}}
 {{- end -}}
 {{- $_ := set $client "redirectURIs" $redirects -}}
 {{- $_ := set $client "public" false -}}
