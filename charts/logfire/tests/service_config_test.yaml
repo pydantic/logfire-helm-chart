@@ -16,16 +16,19 @@ tests:
           path: stringData["haproxy.cfg"]
           pattern: "use_backend logfire-ff-query-api if path_query_v2"
 
-  - it: routes /v1/(traces|metrics|logs) to the ingest backend
+  - it: routes OTLP telemetry and Profiles to the ingest backend with CORS
     set:
       sizingPreset: tiny
     asserts:
       - matchRegex:
           path: stringData["haproxy.cfg"]
-          pattern: "acl path_ingest path_reg -i \\^/v1/\\(traces\\|metrics\\|logs\\)\\$"
+          pattern: "acl path_ingest path_reg -i \\^/\\(v1/\\(traces\\|metrics\\|logs\\)\\|v1development/profiles\\)\\$"
       - matchRegex:
           path: stringData["haproxy.cfg"]
           pattern: "use_backend logfire-ingest if path_ingest"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "acl cors_path_ingest path_reg -i \\^/\\(v1/\\(traces\\|metrics\\|logs\\)\\|v1development/profiles\\)\\$"
 
   - it: keeps /ui-api, /v1, /api on the backend (covers /v1/query)
     set:
