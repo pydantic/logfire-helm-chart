@@ -62,7 +62,7 @@ stringData:
       http-request set-header Connection Upgrade if is_websocket
       
       acl is_options method OPTIONS
-      acl cors_path_ingest path_reg -i ^/v1/(traces|metrics|logs)$
+      acl cors_path_ingest path_reg -i ^/(v1/(traces|metrics|logs)|v1development/profiles)$
       acl cors_path_api path_reg -i ^/(ui-api|v1|api)/
 
       # Capture request origin Header and check against list of valid urls
@@ -75,7 +75,7 @@ stringData:
       
       http-response set-header Access-Control-Allow-Origin "%[var(txn.origin)]" if { var(txn.is_origin_allowed) -m bool }
       
-      acl path_ingest path_reg -i ^/v1/(traces|metrics|logs)$
+      acl path_ingest path_reg -i ^/(v1/(traces|metrics|logs)|v1development/profiles)$
       acl path_query_v2 path /v2/query
       acl path_dex path_beg /auth-api
       acl path_backend path_reg -i ^/(ui-api|v1|api)/
