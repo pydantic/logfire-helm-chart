@@ -53,7 +53,7 @@ stringData:
       option http-keep-alive
       no option httpclose
       timeout http-keep-alive 60s
-      timeout client {{ ternary $aiGatewayProxyTimeout "80s" (get $aiGatewayValues "enabled") }}
+      timeout client {{ ternary $aiGatewayProxyTimeout "120s" (get $aiGatewayValues "enabled") }}
       http-request set-header Host %[req.hdr(Host)]
       http-request set-header X-Real-IP %[src]
 
@@ -192,7 +192,7 @@ stringData:
       http-check send meth GET uri /health hdr Host {{ include "logfire.primary_hostname" . }}
       option http-server-close
       timeout connect 3s
-      timeout server 50s
+      timeout server 120s
       http-check expect status 200
 
       {{- $remoteMcpSni := printf "logfire-remote-mcp.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
@@ -209,7 +209,7 @@ stringData:
       option httpchk GET /health
       option http-server-close
       timeout connect 3s
-      timeout server 50s
+      timeout server 120s
       http-check expect status 200
 
       {{- $backendSni := printf "logfire-backend.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
