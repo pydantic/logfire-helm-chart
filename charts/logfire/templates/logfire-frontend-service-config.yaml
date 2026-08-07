@@ -157,7 +157,11 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+                add_header Cross-Origin-Opener-Policy "same-origin" always;
+                add_header Referrer-Policy "no-referrer" always;
+                # Custom panels may fetch user-selected APIs, so `connect-src *` is intentional.
+                # The response sandbox keeps direct navigations in an opaque origin.
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self'; sandbox allow-scripts;" always;
             }
 
             # Serve the generated config file from the ephemeral directory:
@@ -169,7 +173,7 @@ data:
             }
 
             location /genai-prices/data.json {
-              rewrite /genai-prices/data.json /pydantic/genai-prices/main/prices/data.json  break;
+              rewrite /genai-prices/data.json /pydantic/genai-prices/main/prices/new_data/v2/data.json  break;
               proxy_pass https://raw.githubusercontent.com;
               proxy_redirect off;
 
@@ -316,7 +320,11 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+                add_header Cross-Origin-Opener-Policy "same-origin" always;
+                add_header Referrer-Policy "no-referrer" always;
+                # Custom panels may fetch user-selected APIs, so `connect-src *` is intentional.
+                # The response sandbox keeps direct navigations in an opaque origin.
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self'; sandbox allow-scripts;" always;
             }
 
             # Serve the generated config file from the ephemeral directory:
@@ -328,7 +336,7 @@ data:
             }
 
             location /genai-prices/data.json {
-              rewrite /genai-prices/data.json /pydantic/genai-prices/main/prices/data.json  break;
+              rewrite /genai-prices/data.json /pydantic/genai-prices/main/prices/new_data/v2/data.json  break;
               proxy_pass https://raw.githubusercontent.com;
               proxy_redirect off;
 

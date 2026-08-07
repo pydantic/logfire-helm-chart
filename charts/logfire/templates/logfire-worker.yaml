@@ -43,7 +43,7 @@ spec:
             - containerPort: 8003
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 8003
           readinessProbe:
             httpGet:
@@ -51,7 +51,7 @@ spec:
               port: 8003
           startupProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 8003
             periodSeconds: 10
             timeoutSeconds: 3
