@@ -96,6 +96,7 @@ spec:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresDsn
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
+            {{- include "logfire.ffByteCacheClientRoutingEnv" . | nindent 12 }}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end }}

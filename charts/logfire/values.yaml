@@ -901,6 +901,14 @@ logfire-remote-mcp:
 
 # -- Autoscaling & resources for the byte cache pods
 logfire-ff-cache-byte:
+  clientSideRouting:
+    # -- Route query byte-cache requests directly using EndpointSlice discovery.
+    # HAProxy remains for unmigrated consumers; stale zoneless discovery can use ClusterIP.
+    enabled: true
+    # -- Restrict direct routing to zone-local cache pods.
+    # Requires nodes/get cluster RBAC and adds soft zone/hostname spreading.
+    # Cache replicas must cover every query zone; local misses use durable storage.
+    zoneAware: false
 #   # -- Workload labels
 #   labels: {}
 #   # -- Workload annotations

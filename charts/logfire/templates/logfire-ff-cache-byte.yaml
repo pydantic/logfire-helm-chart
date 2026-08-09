@@ -1,5 +1,14 @@
 {{- $serviceName := "logfire-ff-cache-byte" }}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $routing := get (get .Values $serviceName | default dict) "clientSideRouting" | default dict -}}
+{{- $routingTopologySpreadConstraints := list -}}
+{{- if and (get $routing "enabled") (get $routing "zoneAware") -}}
+  {{- $selector := dict "matchLabels" (dict "app.kubernetes.io/component" $serviceName) -}}
+  {{- $routingTopologySpreadConstraints = list
+    (dict "maxSkew" 1 "topologyKey" "topology.kubernetes.io/zone" "whenUnsatisfiable" "ScheduleAnyway" "labelSelector" $selector)
+    (dict "maxSkew" 1 "topologyKey" "kubernetes.io/hostname" "whenUnsatisfiable" "ScheduleAnyway" "labelSelector" $selector)
+  -}}
+{{- end -}}
 ---
 apiVersion: v1
 kind: Service
@@ -62,7 +71,7 @@ spec:
       {{- end }}
       {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
-      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName "defaultTopologySpreadConstraints" $routingTopologySpreadConstraints) | nindent 6}}
       containers:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'

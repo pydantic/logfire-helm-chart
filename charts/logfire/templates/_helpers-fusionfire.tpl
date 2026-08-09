@@ -6,6 +6,30 @@ Helpers specific to Fusionfire workloads and configuration.
 */}}
 
 {{/*
+Configure query workloads to discover byte-cache pods directly. Keep these
+defaults before service-specific env so operators can explicitly override them.
+*/}}
+{{- define "logfire.ffByteCacheClientRoutingEnv" -}}
+{{- $routing := get (get .Values "logfire-ff-cache-byte" | default dict) "clientSideRouting" | default dict -}}
+{{- if get $routing "enabled" }}
+- name: FF_BYTE_CACHE_K8S_SERVICE
+  value: logfire-ff-cache-byte-internal
+- name: FF_BYTE_CACHE_K8S_NAMESPACE
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.namespace
+- name: FF_BYTE_CACHE_K8S_PORT_NAME
+  value: {{ ternary "https" "http" .Values.inClusterTls.enabled }}
+{{- if get $routing "zoneAware" }}
+- name: FF_NODE_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: spec.nodeName
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Give Fusionfire processes enough time to initialize on constrained nodes before
 liveness checks can restart them. The health endpoint is checked immediately so
 fast starts are not delayed by a fixed initial delay.
