@@ -15,6 +15,9 @@ tests:
       - matchRegex:
           path: stringData["haproxy.cfg"]
           pattern: "use_backend logfire-ff-query-api if path_query_v2"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "backend logfire-ff-query-api\\n  balance roundrobin\\n  option httpchk GET /health\\n  http-check expect status 200\\n  timeout connect 3s\\n  timeout server 120s"
 
   - it: routes /v1/(traces|metrics|logs) to the ingest backend
     set:
