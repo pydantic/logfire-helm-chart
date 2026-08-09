@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.40-rc.1](https://img.shields.io/badge/Version-0.13.40-rc.1-informational?style=flat-square) ![AppVersion: de12a70b](https://img.shields.io/badge/AppVersion-de12a70b-informational?style=flat-square)
+![Version: 0.13.40-rc.2](https://img.shields.io/badge/Version-0.13.40--rc.2-informational?style=flat-square) ![AppVersion: de12a70b](https://img.shields.io/badge/AppVersion-de12a70b-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -504,7 +504,9 @@ Before diving deeper, verify these common configuration issues:
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-cache-byte | object | `{"pdb":{},"replicas":3,"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
+| logfire-ff-cache-byte | object | `{"clientSideRouting":{"enabled":true,"zoneAware":false},"pdb":{},"replicas":3,"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
+| logfire-ff-cache-byte.clientSideRouting.enabled | bool | `true` | Route query byte-cache requests directly using EndpointSlice discovery. HAProxy remains for unmigrated consumers; stale zoneless discovery can use ClusterIP. |
+| logfire-ff-cache-byte.clientSideRouting.zoneAware | bool | `false` | Restrict direct routing to zone-local cache pods. Requires nodes/get cluster RBAC and adds soft zone/hostname spreading. Cache replicas must cover every query zone; local misses use durable storage. |
 | logfire-ff-cache-byte.replicas | int | `3` | Number of byte-cache replicas when autoscaling is not configured. |
 | logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume |
 | logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |

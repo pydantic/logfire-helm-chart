@@ -140,7 +140,7 @@ stringData:
       option httpchk GET /health
       http-check expect status 200
       timeout connect 3s
-      timeout server 50s
+      timeout server 120s
 
       {{- $queryApiSni := printf "logfire-ff-query-api.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
       {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}

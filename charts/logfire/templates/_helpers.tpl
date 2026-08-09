@@ -1076,12 +1076,30 @@ default-checksum
 {{- end -}}
 {{- end -}}
 
+{{/*
+Render global and service-level pod scheduling. Optional default topology spread
+constraints are appended only when the merged user/preset list does not already
+contain the same topologyKey.
+*/}}
 {{- define "logfire.podScheduling" -}}
 {{- $serviceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
 {{- $nodeSelector := merge (deepCopy ($serviceValues.nodeSelector | default dict)) (.Values.nodeSelector | default dict) -}}
 {{- $affinity := merge (deepCopy ($serviceValues.affinity | default dict)) (.Values.affinity | default dict) -}}
 {{- $tolerations := concat ($serviceValues.tolerations | default list) (.Values.tolerations | default list) -}}
 {{- $topologySpreadConstraints := concat ($serviceValues.topologySpreadConstraints | default list) (.Values.topologySpreadConstraints | default list) -}}
+{{- range (.defaultTopologySpreadConstraints | default list) -}}
+  {{- $defaultConstraint := . -}}
+  {{- $topologyKey := get $defaultConstraint "topologyKey" -}}
+  {{- $hasTopologyKey := false -}}
+  {{- range $topologySpreadConstraints -}}
+    {{- if eq (get . "topologyKey") $topologyKey -}}
+      {{- $hasTopologyKey = true -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $hasTopologyKey -}}
+    {{- $topologySpreadConstraints = append $topologySpreadConstraints $defaultConstraint -}}
+  {{- end -}}
+{{- end -}}
 {{- $blocks := list -}}
 {{- if $nodeSelector -}}
 {{- $blocks = append $blocks (printf "nodeSelector:%s" (toYaml $nodeSelector | nindent 2 | trimSuffix "\n")) -}}
