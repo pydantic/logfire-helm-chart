@@ -138,6 +138,10 @@ spec:
             value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
           - name: FUSIONFIRE_QUERY_PORT
             value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
+          - name: FUSIONFIRE_CRUD_HOST
+            value: "{{ include "logfire.scheme" . }}://logfire-ff-crud-api"
+          - name: FUSIONFIRE_CRUD_PORT
+            value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
           - name: LOGFIRE_REGION
             value: {{ .Values.logfireRegion | default "local" }}
           - name: ALLOWED_HOSTS
