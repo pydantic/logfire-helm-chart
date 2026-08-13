@@ -96,6 +96,10 @@ spec:
               value: "0.05"
             - name: FF_CACHE_LOCAL_DIR
               value: /scratch
+            {{- with (include "logfire.ffCacheDiskCapacity" (dict "Values" .Values "serviceName" $serviceName)) }}
+            - name: FF_CACHE_DISK_CAPACITY
+              value: {{ . | quote }}
+            {{- end }}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end }}

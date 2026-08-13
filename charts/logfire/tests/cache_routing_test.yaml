@@ -268,3 +268,127 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: derives disk-cache capacity from the scratch volume claim size
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_CACHE_DISK_CAPACITY
+            value: "26214MB"
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: scales derived disk-cache capacity with a custom scratch volume size
+    set:
+      logfire-ff-cache-byte:
+        scratchVolume:
+          storage: 10Gi
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_CACHE_DISK_CAPACITY
+            value: "8192MB"
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: keeps derived disk-cache capacity below sub-GiB scratch volumes
+    set:
+      logfire-ff-cache-byte:
+        scratchVolume:
+          storage: 500Mi
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_CACHE_DISK_CAPACITY
+            value: "400MB"
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: lets explicit cacheDiskCapacity override the derived value
+    set:
+      logfire-ff-cache-byte:
+        cacheDiskCapacity: "24GB"
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_CACHE_DISK_CAPACITY
+            value: "24GB"
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: omits disk-cache capacity for emptyDir scratch storage
+    set:
+      logfire-ff-cache-byte:
+        scratchVolume: null
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_CACHE_DISK_CAPACITY
+          any: true
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: derives disk-cache capacity from fractional scratch volume quantities
+    set:
+      logfire-ff-cache-byte:
+        scratchVolume:
+          storage: 1.5Gi
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_CACHE_DISK_CAPACITY
+            value: "1228MB"
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: treats decimal storage suffixes as powers of 1000
+    set:
+      logfire-ff-cache-byte:
+        scratchVolume:
+          storage: 1G
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_CACHE_DISK_CAPACITY
+            value: "762MB"
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: rejects scratch volume quantities below 1Mi
+    set:
+      logfire-ff-cache-byte:
+        scratchVolume:
+          storage: 512Ki
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'scratchVolume.storage "512Ki" is below the 1Mi minimum'

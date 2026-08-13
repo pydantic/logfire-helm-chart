@@ -64,7 +64,7 @@ Supports common binary and decimal suffixes plus plain bytes.
 {{- $memory := trim (toString .) -}}
 {{- $pattern := "^[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?([EPTGMK]i?|[numkKMGTEP])?$" -}}
 {{- if not (regexMatch $pattern $memory) -}}
-  {{- fail (printf "Invalid memory format '%s'. Use Kubernetes quantity format (e.g., '1536Mi', '1.5Gi', '2G')." $memory) -}}
+  {{- fail (printf "Invalid quantity format '%s'. Use Kubernetes quantity format (e.g., '1536Mi', '1.5Gi', '2G')." $memory) -}}
 {{- end -}}
 {{- $number := regexFind "^[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?" $memory -}}
 {{- $unit := regexReplaceAll "^[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?" $memory "" -}}
@@ -103,7 +103,7 @@ Supports common binary and decimal suffixes plus plain bytes.
 {{- else if eq $unit "E" -}}
   {{- $mi = divf (mulf $value 1000000000000000000.0) 1048576.0 -}}
 {{- else -}}
-  {{- fail (printf "Invalid memory format '%s'." $memory) -}}
+  {{- fail (printf "Invalid quantity format '%s'." $memory) -}}
 {{- end -}}
 {{- int (floor $mi) -}}
 {{- end -}}
