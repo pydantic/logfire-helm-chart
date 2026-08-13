@@ -80,22 +80,19 @@ failureThreshold: 5
 {{- end -}}
 
 {{/*
-Convert storage quantities used by scratchVolume.storage to whole GiB.
+Convert storage quantities used by scratchVolume.storage to whole MiB via the
+shared Kubernetes quantity parser (case-sensitive: decimal suffixes like G are
+powers of 1000, binary suffixes like Gi are powers of 1024), rounding down so
+derived sizes never exceed the volume. Quantities below 1Mi fail rather than
+rounding to zero.
 */}}
-{{- define "logfire.storageQuantityToGi" -}}
-{{- $quantity := required "logfire.storageQuantityToGi: storage quantity is required" . | toString | trim -}}
-{{- $unit := regexFind "[a-zA-Z]+$" $quantity | lower -}}
-{{- $valueText := regexReplaceAll "[a-zA-Z]+$" $quantity "" | trim -}}
-{{- $value := int $valueText -}}
-{{- if or (eq $unit "gi") (eq $unit "g") (eq $unit "gb") -}}
-{{- $value -}}
-{{- else if or (eq $unit "ti") (eq $unit "t") (eq $unit "tb") -}}
-{{- mul $value 1024 -}}
-{{- else if or (eq $unit "mi") (eq $unit "m") (eq $unit "mb") -}}
-{{- max 1 (div (add $value 1023) 1024) -}}
-{{- else -}}
-{{- fail (printf "unsupported scratchVolume.storage quantity %q; use Mi, Gi, or Ti" $quantity) -}}
+{{- define "logfire.storageQuantityToMi" -}}
+{{- $quantity := required "logfire.storageQuantityToMi: storage quantity is required" . | toString | trim -}}
+{{- $miInt := int (include "logfire.memoryToMi" $quantity) -}}
+{{- if lt $miInt 1 -}}
+{{- fail (printf "scratchVolume.storage %q is below the 1Mi minimum" $quantity) -}}
 {{- end -}}
+{{- $miInt -}}
 {{- end -}}
 
 {{/*
@@ -111,8 +108,27 @@ overhead. No quota is derived for emptyDir scratch storage.
 {{- else -}}
 {{- $scratchVolume := get $effectiveServiceValues "scratchVolume" | default dict -}}
 {{- with (get $scratchVolume "storage") -}}
-{{- $storageGi := int (include "logfire.storageQuantityToGi" .) -}}
-{{- printf "%dGB" (max 1 (div $storageGi 2)) -}}
+{{- $storageMi := int (include "logfire.storageQuantityToMi" .) -}}
+{{- printf "%dMB" (max 1 (div $storageMi 2)) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Byte-cache disk capacity. Explicit cacheDiskCapacity wins; otherwise 80% of
+the scratch volume size. Sized from the declared volume, not the filesystem:
+network filesystems can report effectively unlimited free space, and
+free-space sizing then OOMs the pod at startup. Not derived for emptyDir.
+*/}}
+{{- define "logfire.ffCacheDiskCapacity" -}}
+{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- with (get $effectiveServiceValues "cacheDiskCapacity") -}}
+{{- . -}}
+{{- else -}}
+{{- $scratchVolume := get $effectiveServiceValues "scratchVolume" | default dict -}}
+{{- with (get $scratchVolume "storage") -}}
+{{- $storageMi := int (include "logfire.storageQuantityToMi" .) -}}
+{{- printf "%dMB" (max 1 (div (mul $storageMi 4) 5)) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

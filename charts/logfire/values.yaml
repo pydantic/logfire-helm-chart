@@ -943,13 +943,17 @@ logfire-ff-cache-byte:
 #   pdb:
 #     maxUnavailable: 1
   pdb: {}
-  # -- Cache byte ephemeral volume
+  # -- Cache byte ephemeral volume. storage accepts Kubernetes quantities (e.g. 32Gi, 1.5Gi, 10G) of at least 1Mi.
   scratchVolume:
     storage: 32Gi
     #  storageClassName: my-storage-class
 
 #     labels:
 #       type: my-volume
+
+#   # -- Disk-cache capacity. Defaults to 80% of scratchVolume.storage.
+#   # Ignored by image tags older than de12a70b, which size from free space.
+#   cacheDiskCapacity: "24GB"
 
 
 # -- Autoscaling & resources for the byte proxy cache pods
@@ -1055,6 +1059,7 @@ logfire-ff-cache-byte:
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
+#   # -- Ephemeral scratch volume. storage accepts Kubernetes quantities (e.g. 32Gi, 1.5Gi, 10G) of at least 1Mi.
 #   scratchVolume:
 #     storageClassName: my-storage-class
 #     storage: 1Gi
@@ -1124,6 +1129,7 @@ logfire-ff-cache-byte:
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
+#   # -- Ephemeral scratch volume. storage accepts Kubernetes quantities (e.g. 32Gi, 1.5Gi, 10G) of at least 1Mi.
 #   scratchVolume:
 #     storageClassName: my-storage-class
 #     storage: 1Gi

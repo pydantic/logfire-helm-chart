@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.40-rc.3](https://img.shields.io/badge/Version-0.13.40--rc.3-informational?style=flat-square) ![AppVersion: de12a70b](https://img.shields.io/badge/AppVersion-de12a70b-informational?style=flat-square)
+![Version: 0.13.40-rc.4](https://img.shields.io/badge/Version-0.13.40--rc.4-informational?style=flat-square) ![AppVersion: de12a70b](https://img.shields.io/badge/AppVersion-de12a70b-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -508,7 +508,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-ff-cache-byte.clientSideRouting.enabled | bool | `true` | Route query byte-cache requests directly using EndpointSlice discovery. HAProxy remains for unmigrated consumers; stale zoneless discovery can use ClusterIP. |
 | logfire-ff-cache-byte.clientSideRouting.zoneAware | bool | `false` | Restrict direct routing to zone-local cache pods. Requires nodes/get cluster RBAC and adds soft zone/hostname spreading. Cache replicas must cover every query zone; local misses use durable storage. |
 | logfire-ff-cache-byte.replicas | int | `3` | Number of byte-cache replicas when autoscaling is not configured. |
-| logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume |
+| logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume. storage accepts Kubernetes quantities (e.g. 32Gi, 1.5Gi, 10G) of at least 1Mi. |
 | logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
