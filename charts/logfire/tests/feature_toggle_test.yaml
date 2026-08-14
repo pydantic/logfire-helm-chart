@@ -29,7 +29,7 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content:
-            name: GATEWAY_PROJECT_OTEL_BASE_URL
+            name: GATEWAY_INGEST_BASE_URL
             value: http://logfire-ff-ingest:8012
         documentSelector:
           path: kind
@@ -50,7 +50,7 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content:
-            name: GATEWAY_PROJECT_OTEL_BASE_URL
+            name: GATEWAY_INGEST_BASE_URL
             value: https://logfire-ff-ingest:8443
         documentSelector:
           path: kind
