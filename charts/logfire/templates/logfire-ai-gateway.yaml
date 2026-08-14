@@ -147,6 +147,8 @@ spec:
           {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
           - name: IN_CLUSTER_CA_BUNDLE_PATH
             value: /etc/logfire/incluster-ca/ca.crt
+          - name: NODE_EXTRA_CA_CERTS
+            value: /etc/logfire/incluster-ca/ca.crt
           - name: HTTPS_PORT
             value: "{{ .Values.inClusterTls.httpsPort }}"
           - name: TLS_CERT_PATH

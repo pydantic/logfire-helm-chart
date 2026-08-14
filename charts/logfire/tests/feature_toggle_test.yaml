@@ -55,6 +55,14 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: NODE_EXTRA_CA_CERTS
+            value: /etc/logfire/incluster-ca/ca.crt
+        documentSelector:
+          path: kind
+          value: Deployment
 
   - it: ai gateway Deployment is absent when disabled
     set:
