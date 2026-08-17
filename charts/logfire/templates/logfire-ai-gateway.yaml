@@ -127,6 +127,8 @@ spec:
             value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName) | quote }}
           - name: LOGFIRE_BASE_URL
             value: http://logfire-otel-collector:4318
+          - name: GATEWAY_INGEST_BASE_URL
+            value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest:{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
           - name: ON_PREM
             value: "true"
           - name: LOGFIRE_SERVICE_NAME
@@ -144,6 +146,8 @@ spec:
             value: {{ include "logfire.gatewayOauthIssuer" . | trim | quote }}
           {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
           - name: IN_CLUSTER_CA_BUNDLE_PATH
+            value: /etc/logfire/incluster-ca/ca.crt
+          - name: NODE_EXTRA_CA_CERTS
             value: /etc/logfire/incluster-ca/ca.crt
           - name: HTTPS_PORT
             value: "{{ .Values.inClusterTls.httpsPort }}"
