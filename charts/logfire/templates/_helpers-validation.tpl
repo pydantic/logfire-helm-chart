@@ -333,6 +333,17 @@ Validate that both Ingress and Gateway are not enabled simultaneously
 Master validation template - runs all validations
 Call this from templates that need to ensure configuration is valid.
 */}}
+{{/*
+Validate the OTLP/gRPC ingest listener does not collide with the in-cluster HTTPS port
+*/}}
+{{- define "logfire.validate.grpcIngest" -}}
+{{- if and (include "logfire.grpcIngest.enabled" . | eq "true") (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+  {{- if eq (int .Values.inClusterTls.httpsPort) (int (include "logfire.grpcIngest.haproxyPort" .)) -}}
+    {{- fail (printf "inClusterTls.httpsPort must not be %s when grpcIngest.enabled is true: that port is reserved for the OTLP/gRPC listener on logfire-service." (include "logfire.grpcIngest.haproxyPort" .)) -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.validateConfig" -}}
 {{- $root := . -}}
 {{- $validators := list
@@ -341,6 +352,7 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.ingress"
   "logfire.validate.gateway"
   "logfire.validate.ingressGatewayConflict"
+  "logfire.validate.grpcIngest"
   "logfire.validate.postgres"
   "logfire.validate.dexStorage"
   "logfire.validate.ai"

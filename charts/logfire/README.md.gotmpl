@@ -349,6 +349,31 @@ CA bundle requirements by mode:
 For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
 When working from this repository, run `helm dependency update charts/logfire` to fetch dependency charts.
 
+### OTLP/gRPC Ingest
+
+OTLP over HTTP (`/v1/traces`, `/v1/metrics`, `/v1/logs`) is always routed. To also accept OTLP over gRPC, enable:
+
+```yaml
+grpcIngest:
+  enabled: true
+```
+
+This gives `logfire-service` a dedicated HTTP/2 listener on port 8444 that proxies OTLP/gRPC traces, metrics, and logs to the ingest pods, and routes the OTLP collector gRPC methods to it from the chart-managed Ingress or HTTPRoute.
+
+gRPC needs HTTP/2 end to end, so whatever fronts `logfire-service` must be able to forward HTTP/2 to the gRPC port:
+
+* **ingress-nginx**: handled automatically; the chart renders a dedicated Ingress (`logfire-ingress-grpc`) with the appropriate `backend-protocol` annotation. ingress-nginx only serves gRPC on TLS listeners, so `ingress.tls` must be enabled.
+* **Gateway API**: the chart adds an HTTPRoute rule targeting the gRPC Service port, whose `appProtocol` (`kubernetes.io/h2c` by default, `HTTP2` when `inClusterTls.enabled` is true, overridable via `grpcIngest.appProtocol`) tells the controller to speak HTTP/2 towards the backend. Controllers that need explicit backend TLS configuration (e.g. a `BackendTLSPolicy`) must be configured accordingly when `inClusterTls.enabled` is true.
+* **Custom exposure**: route the OTLP collector gRPC method paths (`/opentelemetry.proto.collector.<trace|logs|metrics>.v1.*`) to `logfire-service` port 8444 over HTTP/2.
+
+SDKs then need no special port or path; point the standard OTLP environment at your public endpoint:
+
+```sh
+OTEL_EXPORTER_OTLP_ENDPOINT=https://logfire.example.com
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <your write token>"
+```
+
 ### Istio Compatibility
 
 If you run Istio and see protocol or mTLS sidecar issues on HAProxy, migration, or infrastructure workloads, enable:

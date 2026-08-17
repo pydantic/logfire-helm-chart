@@ -34,6 +34,22 @@ spec:
     {{- toYaml $hosts | nindent 4 }}
   {{- end }}
   rules:
+    {{- if (include "logfire.grpcIngest.enabled" . | eq "true") }}
+    # OTLP/gRPC addresses a method as /<proto package>.<Service>/<Method>.
+    # PathPrefix matches on path element boundaries rather than as a string, and
+    # the package and service form a single element, so each collector service has
+    # to be named in full: a shared "/opentelemetry.proto.collector." prefix would
+    # match nothing.
+    - matches:
+        {{- range include "logfire.grpcIngest.collectorServices" . | fromJsonArray }}
+        - path:
+            type: PathPrefix
+            value: /{{ . }}
+        {{- end }}
+      backendRefs:
+        - name: logfire-service
+          port: {{ include "logfire.grpcIngest.haproxyPort" . }}
+    {{- end }}
     - matches:
         {{- if .Values.gateway.matches }}
         {{- toYaml .Values.gateway.matches | nindent 8 }}

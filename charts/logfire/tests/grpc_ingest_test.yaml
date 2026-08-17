@@ -1,0 +1,344 @@
+suite: OTLP/gRPC ingest
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: renders no gRPC plumbing by default
+    set:
+      sizingPreset: tiny
+    templates:
+      - templates/logfire-service-config.yaml
+    asserts:
+      - notMatchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "frontend grpc-in"
+      - notMatchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "backend logfire-ingest-grpc"
+
+  - it: keeps gRPC ports off the services by default
+    set:
+      sizingPreset: tiny
+    templates:
+      - templates/logfire-service.yaml
+      - templates/logfire-ff-ingest.yaml
+      # rendered because logfire-ff-ingest.yaml embeds its checksum
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - notContains:
+          path: spec.ports
+          content:
+            name: grpc
+            port: 8444
+            targetPort: 8444
+            protocol: TCP
+            appProtocol: kubernetes.io/h2c
+        documentSelector:
+          path: kind
+          value: Service
+        template: templates/logfire-service.yaml
+      - notContains:
+          path: spec.ports
+          content:
+            name: grpc
+            port: 4317
+            targetPort: grpc
+        documentSelector:
+          path: kind
+          value: Service
+        template: templates/logfire-ff-ingest.yaml
+
+  - it: renders no gRPC Ingress by default
+    set:
+      sizingPreset: tiny
+      ingress:
+        enabled: true
+    templates:
+      - templates/logfire-api-ingress.yaml
+    asserts:
+      - hasDocuments:
+          count: 1
+
+  - it: adds an h2-only cleartext listener and h2 upstream when enabled
+    set:
+      sizingPreset: tiny
+      grpcIngest:
+        enabled: true
+    templates:
+      - templates/logfire-service-config.yaml
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "frontend grpc-in\\n"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "bind :8444 proto h2"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "default_backend logfire-ingest-grpc"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "server-template logfire-ff-ingest 1-\\d+ logfire-ff-ingest\\.default\\.svc\\.cluster\\.local\\.:4317 check resolvers kubernetes inter 250ms hash-key addr proto h2"
+      # gRPC upstream serves no HTTP health route; must not inherit an HTTP check
+      - notMatchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "backend logfire-ingest-grpc\\n(.*\\n)*?\\s+option httpchk(.*\\n)*?backend logfire-ff-query-api"
+
+  - it: terminates TLS on the gRPC listener and verifies the upstream when in-cluster TLS is enabled
+    set:
+      sizingPreset: tiny
+      grpcIngest:
+        enabled: true
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-service-config.yaml
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "bind :8444 ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "logfire-ff-ingest\\.default\\.svc\\.cluster\\.local\\.:4317 check resolvers kubernetes inter 250ms hash-key addr ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str\\(logfire-ff-ingest\\.default\\.svc\\.cluster\\.local\\) verifyhost logfire-ff-ingest\\.default\\.svc\\.cluster\\.local alpn h2 check-ssl"
+
+  - it: exposes the gRPC ports on logfire-service and the ingest pods when enabled
+    set:
+      sizingPreset: tiny
+      grpcIngest:
+        enabled: true
+    templates:
+      - templates/logfire-service.yaml
+      - templates/logfire-ff-ingest.yaml
+      # rendered because logfire-ff-ingest.yaml embeds its checksum
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - contains:
+          path: spec.ports
+          content:
+            name: grpc
+            port: 8444
+            targetPort: 8444
+            protocol: TCP
+            appProtocol: kubernetes.io/h2c
+        documentSelector:
+          path: kind
+          value: Service
+        template: templates/logfire-service.yaml
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            containerPort: 8444
+        documentSelector:
+          path: kind
+          value: Deployment
+        template: templates/logfire-service.yaml
+      - contains:
+          path: spec.ports
+          content:
+            name: grpc
+            port: 4317
+            targetPort: grpc
+        documentSelector:
+          path: kind
+          value: Service
+        template: templates/logfire-ff-ingest.yaml
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            name: grpc
+            containerPort: 4317
+        documentSelector:
+          path: kind
+          value: StatefulSet
+        template: templates/logfire-ff-ingest.yaml
+
+  - it: marks the gRPC Service port for HTTP/2 over TLS when in-cluster TLS is enabled
+    set:
+      sizingPreset: tiny
+      grpcIngest:
+        enabled: true
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-service.yaml
+    asserts:
+      - contains:
+          path: spec.ports
+          content:
+            name: grpc
+            port: 8444
+            targetPort: 8444
+            protocol: TCP
+            appProtocol: HTTP2
+        documentSelector:
+          path: kind
+          value: Service
+
+  - it: honours an explicit appProtocol override
+    set:
+      sizingPreset: tiny
+      grpcIngest:
+        enabled: true
+        appProtocol: custom-protocol
+    templates:
+      - templates/logfire-service.yaml
+    asserts:
+      - contains:
+          path: spec.ports
+          content:
+            name: grpc
+            port: 8444
+            targetPort: 8444
+            protocol: TCP
+            appProtocol: custom-protocol
+        documentSelector:
+          path: kind
+          value: Service
+
+  - it: renders a dedicated gRPC Ingress with the collector service routes
+    set:
+      sizingPreset: tiny
+      ingress:
+        enabled: true
+        hostnames:
+          - logfire.example.com
+      grpcIngest:
+        enabled: true
+    templates:
+      - templates/logfire-api-ingress.yaml
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
+          value: GRPC
+        documentSelector:
+          path: metadata.name
+          value: logfire-ingress-grpc
+      - contains:
+          path: spec.rules[0].http.paths
+          content:
+            path: /opentelemetry.proto.collector.trace.v1.TraceService
+            pathType: Prefix
+            backend:
+              service:
+                name: logfire-service
+                port:
+                  number: 8444
+        documentSelector:
+          path: metadata.name
+          value: logfire-ingress-grpc
+      - contains:
+          path: spec.rules[0].http.paths
+          content:
+            path: /opentelemetry.proto.collector.logs.v1.LogsService
+            pathType: Prefix
+            backend:
+              service:
+                name: logfire-service
+                port:
+                  number: 8444
+        documentSelector:
+          path: metadata.name
+          value: logfire-ingress-grpc
+      - contains:
+          path: spec.rules[0].http.paths
+          content:
+            path: /opentelemetry.proto.collector.metrics.v1.MetricsService
+            pathType: Prefix
+            backend:
+              service:
+                name: logfire-service
+                port:
+                  number: 8444
+        documentSelector:
+          path: metadata.name
+          value: logfire-ingress-grpc
+
+  - it: uses GRPCS towards the backend on the gRPC Ingress when in-cluster TLS is enabled
+    set:
+      sizingPreset: tiny
+      ingress:
+        enabled: true
+        hostnames:
+          - logfire.example.com
+      grpcIngest:
+        enabled: true
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-api-ingress.yaml
+    asserts:
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
+          value: GRPCS
+        documentSelector:
+          path: metadata.name
+          value: logfire-ingress-grpc
+
+  - it: routes the collector gRPC services to the gRPC port on the HTTPRoute
+    set:
+      sizingPreset: tiny
+      ingress:
+        enabled: false
+      gateway:
+        enabled: true
+        gatewayClassName: istio
+        hostnames:
+          - logfire.example.com
+      grpcIngest:
+        enabled: true
+    templates:
+      - templates/logfire-gateway-httproute.yaml
+    asserts:
+      - contains:
+          path: spec.rules
+          content:
+            matches:
+              - path:
+                  type: PathPrefix
+                  value: /opentelemetry.proto.collector.trace.v1.TraceService
+              - path:
+                  type: PathPrefix
+                  value: /opentelemetry.proto.collector.logs.v1.LogsService
+              - path:
+                  type: PathPrefix
+                  value: /opentelemetry.proto.collector.metrics.v1.MetricsService
+            backendRefs:
+              - name: logfire-service
+                port: 8444
+        documentSelector:
+          path: metadata.name
+          value: logfire-httproute
+
+  - it: fails when the in-cluster HTTPS port collides with the gRPC listener
+    set:
+      sizingPreset: tiny
+      grpcIngest:
+        enabled: true
+      inClusterTls:
+        enabled: true
+        httpsPort: 8444
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "inClusterTls.httpsPort must not be 8444"

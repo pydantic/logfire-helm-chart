@@ -23,6 +23,11 @@ spec:
   - name: http
     port: 8012
     targetPort: http
+  {{- if (include "logfire.grpcIngest.enabled" . | eq "true") }}
+  - name: grpc
+    port: {{ include "logfire.grpcIngest.backendPort" . }}
+    targetPort: grpc
+  {{- end }}
   {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
   clusterIP: None
 ---
@@ -75,6 +80,12 @@ spec:
           ports:
             - name: http
               containerPort: 8012
+            {{- if (include "logfire.grpcIngest.enabled" . | eq "true") }}
+            # The server binds its OTLP/gRPC listener on this port regardless; this
+            # only exposes it. TLS-wrapped whenever in-cluster TLS is enabled.
+            - name: grpc
+              containerPort: {{ include "logfire.grpcIngest.backendPort" . }}
+            {{- end }}
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
           lifecycle:
             preStop:

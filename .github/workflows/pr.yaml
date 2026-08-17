@@ -111,7 +111,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          kubectl port-forward -n default svc/logfire-service 8080:8080 &
+          kubectl port-forward -n default svc/logfire-service 8080:8080 8444:8444 &
           PF_PID=$!
           trap "kill ${PF_PID} 2>/dev/null || true" EXIT
           for _ in $(seq 1 30); do

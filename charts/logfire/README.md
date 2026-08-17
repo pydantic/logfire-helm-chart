@@ -348,6 +348,31 @@ CA bundle requirements by mode:
 For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
 When working from this repository, run `helm dependency update charts/logfire` to fetch dependency charts.
 
+### OTLP/gRPC Ingest
+
+OTLP over HTTP (`/v1/traces`, `/v1/metrics`, `/v1/logs`) is always routed. To also accept OTLP over gRPC, enable:
+
+```yaml
+grpcIngest:
+  enabled: true
+```
+
+This gives `logfire-service` a dedicated HTTP/2 listener on port 8444 that proxies OTLP/gRPC traces, metrics, and logs to the ingest pods, and routes the OTLP collector gRPC methods to it from the chart-managed Ingress or HTTPRoute.
+
+gRPC needs HTTP/2 end to end, so whatever fronts `logfire-service` must be able to forward HTTP/2 to the gRPC port:
+
+* **ingress-nginx**: handled automatically; the chart renders a dedicated Ingress (`logfire-ingress-grpc`) with the appropriate `backend-protocol` annotation. ingress-nginx only serves gRPC on TLS listeners, so `ingress.tls` must be enabled.
+* **Gateway API**: the chart adds an HTTPRoute rule targeting the gRPC Service port, whose `appProtocol` (`kubernetes.io/h2c` by default, `HTTP2` when `inClusterTls.enabled` is true, overridable via `grpcIngest.appProtocol`) tells the controller to speak HTTP/2 towards the backend. Controllers that need explicit backend TLS configuration (e.g. a `BackendTLSPolicy`) must be configured accordingly when `inClusterTls.enabled` is true.
+* **Custom exposure**: route the OTLP collector gRPC method paths (`/opentelemetry.proto.collector.<trace|logs|metrics>.v1.*`) to `logfire-service` port 8444 over HTTP/2.
+
+SDKs then need no special port or path; point the standard OTLP environment at your public endpoint:
+
+```sh
+OTEL_EXPORTER_OTLP_ENDPOINT=https://logfire.example.com
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <your write token>"
+```
+
 ### Istio Compatibility
 
 If you run Istio and see protocol or mTLS sidecar issues on HAProxy, migration, or infrastructure workloads, enable:
@@ -468,6 +493,9 @@ Before diving deeper, verify these common configuration issues:
 | gateway.tls | string | nil (uses ingress.tls) | Enable TLS/HTTPS for the Gateway listener. If not set, falls back to ingress.tls for backward compatibility. Also overrides the app's public URL scheme/CORS behavior (http vs https URLs) whenever set. |
 | gateway.tlsSecretName | string | nil (uses ingress.secretName) | TLS Secret name for the Gateway listener certificate. If not set, falls back to ingress.secretName for backward compatibility. |
 | groupOrganizationMapping | list | `[]` | List of mapping to automatically assign members of OIDC group to logfire roles |
+| grpcIngest | object | `{"appProtocol":"","enabled":false,"ingressAnnotations":{}}` | OTLP/gRPC ingest support. When enabled, `logfire-service` gets a dedicated HTTP/2 listener on port 8444 that proxies OTLP/gRPC (traces, metrics, logs) to the ingest pods, and the chart-managed Ingress / HTTPRoute (whichever is enabled) routes the OTLP collector gRPC methods to that port. gRPC needs HTTP/2 end to end: whatever fronts `logfire-service` must be able to forward HTTP/2 to the gRPC port. With ingress-nginx the chart sets the `backend-protocol` annotation automatically; other controllers may need extra configuration (e.g. a BackendTLSPolicy when `inClusterTls.enabled` is true). SDKs then only need `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` pointed at the regular public endpoint; no extra port or path. |
+| grpcIngest.appProtocol | string | "" (auto) | `appProtocol` set on the gRPC port of the `logfire-service` Service, used by Gateway/Ingress controllers to select HTTP/2 towards the backend. Defaults to `kubernetes.io/h2c` (cleartext HTTP/2), or `HTTP2` (HTTP/2 over TLS, e.g. for GKE Gateway) when `inClusterTls.enabled` is true. |
+| grpcIngest.ingressAnnotations | object | `{}` | Annotations for the dedicated gRPC Ingress resource (only rendered when `ingress.enabled` is true). The main `ingress.annotations` are deliberately not copied here since backend-protocol style annotations differ per protocol. |
 | haproxy | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.2"}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks) |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |

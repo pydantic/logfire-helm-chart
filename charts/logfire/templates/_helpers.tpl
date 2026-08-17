@@ -1232,6 +1232,55 @@ In-cluster TLS helpers
 {{- .Values.inClusterTls.enabled | default false -}}
 {{- end -}}
 
+{{- define "logfire.grpcIngest.enabled" -}}
+{{- dig "enabled" false (.Values.grpcIngest | default dict) -}}
+{{- end -}}
+
+{{/*
+Port of the dedicated OTLP/gRPC listener on logfire-service (HAProxy).
+gRPC needs HTTP/2 end to end and load balancers generally negotiate one protocol
+per Service port, so gRPC gets a listener of its own instead of sharing the
+HTTP frontend.
+*/}}
+{{- define "logfire.grpcIngest.haproxyPort" -}}8444{{- end -}}
+
+{{/*
+Port of the OTLP/gRPC listener on the ingest pods. This must stay at the server's
+default OTLP/gRPC port: the ingest entrypoint is not passed an explicit gRPC port,
+so it binds the default.
+*/}}
+{{- define "logfire.grpcIngest.backendPort" -}}4317{{- end -}}
+
+{{/*
+appProtocol for the gRPC Service port on logfire-service. Controllers use this to
+select HTTP/2 towards the backend. `kubernetes.io/h2c` is the standard value for
+cleartext HTTP/2; `HTTP2` (h2 over TLS, e.g. GKE) applies when the listener serves
+TLS via inClusterTls.
+*/}}
+{{- define "logfire.grpcIngest.appProtocol" -}}
+{{- $explicit := dig "appProtocol" "" (.Values.grpcIngest | default dict) -}}
+{{- if $explicit -}}
+{{- $explicit -}}
+{{- else if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+HTTP2
+{{- else -}}
+kubernetes.io/h2c
+{{- end -}}
+{{- end -}}
+
+{{/*
+OTLP collector gRPC service names, as a JSON array. A gRPC method path is
+/<proto package>.<Service>/<Method>; the package and service form a single path
+element, so route matches must name each service in full.
+*/}}
+{{- define "logfire.grpcIngest.collectorServices" -}}
+{{- list
+  "opentelemetry.proto.collector.trace.v1.TraceService"
+  "opentelemetry.proto.collector.logs.v1.LogsService"
+  "opentelemetry.proto.collector.metrics.v1.MetricsService"
+| toJson -}}
+{{- end -}}
+
 {{- define "logfire.inClusterTls.secretNamePrefix" -}}
 {{- if .Values.inClusterTls.secretNamePrefix -}}
 {{- .Values.inClusterTls.secretNamePrefix -}}

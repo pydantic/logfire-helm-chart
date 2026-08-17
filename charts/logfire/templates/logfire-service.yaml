@@ -17,6 +17,15 @@ spec:
   - name: http
     port: 8080
     targetPort: 8080
+  {{- if (include "logfire.grpcIngest.enabled" . | eq "true") }}
+  # The only port HTTP/2 is spoken to. The ports above stay HTTP/1.1-compatible,
+  # which keeps existing ingest traffic unchanged.
+  - name: grpc
+    port: {{ include "logfire.grpcIngest.haproxyPort" . }}
+    targetPort: {{ include "logfire.grpcIngest.haproxyPort" . }}
+    protocol: TCP
+    appProtocol: {{ include "logfire.grpcIngest.appProtocol" . }}
+  {{- end }}
   {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" .Values.inClusterTls.httpsPort) | nindent 2 }}
   type: ClusterIP
 ---
@@ -78,6 +87,9 @@ spec:
                   - "5"
           ports:
             - containerPort: 8080
+            {{- if (include "logfire.grpcIngest.enabled" . | eq "true") }}
+            - containerPort: {{ include "logfire.grpcIngest.haproxyPort" . }} # OTLP/gRPC
+            {{- end }}
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
             - containerPort: 8181 # Stats port
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
