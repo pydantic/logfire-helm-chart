@@ -86,6 +86,10 @@ spec:
               value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
             - name: FUSIONFIRE_QUERY_PORT
               value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
+            - name: FUSIONFIRE_INGEST_HOST
+              value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor"
+            - name: FUSIONFIRE_INGEST_PORT
+              value: "{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
             - name: FUSIONFIRE_CRUD_HOST
               value: "{{ include "logfire.scheme" . }}://logfire-ff-crud-api"
             - name: FUSIONFIRE_CRUD_PORT
