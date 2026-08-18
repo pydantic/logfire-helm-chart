@@ -219,6 +219,13 @@ grpcIngest:
   # the automatic nginx `backend-protocol` value.
   ingressAnnotations: {}
 
+  # -- Filters for the gRPC HTTPRoute rule (only used when `gateway.enabled` is
+  # true). When unset, the rule inherits `gateway.filters` minus URLRewrite and
+  # RequestRedirect, which would rewrite or redirect the OTLP RPC method paths
+  # and break exports. Set this (even to `[]`) to take full control instead.
+  # @default -- nil (inherit the gRPC-safe subset of gateway.filters)
+  filters:
+
 
 # ==============================================================================
 # In-cluster TLS (service-to-service)

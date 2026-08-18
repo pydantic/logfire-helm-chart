@@ -403,6 +403,113 @@ tests:
           path: metadata.name
           value: logfire-httproute
 
+  - it: keeps path-rewriting filters off the gRPC HTTPRoute rule
+    set:
+      sizingPreset: tiny
+      ingress:
+        enabled: false
+      gateway:
+        enabled: true
+        gatewayClassName: istio
+        hostnames:
+          - logfire.example.com
+        filters:
+          - type: RequestHeaderModifier
+            requestHeaderModifier:
+              add:
+                - name: X-Edge-Auth
+                  value: enforced
+          - type: URLRewrite
+            urlRewrite:
+              path:
+                type: ReplacePrefixMatch
+                replacePrefixMatch: /app
+      grpcIngest:
+        enabled: true
+    templates:
+      - templates/logfire-gateway-httproute.yaml
+    asserts:
+      # gRPC rule: safe filter inherited, URLRewrite dropped
+      - contains:
+          path: spec.rules
+          content:
+            matches:
+              - path:
+                  type: PathPrefix
+                  value: /opentelemetry.proto.collector.trace.v1.TraceService
+              - path:
+                  type: PathPrefix
+                  value: /opentelemetry.proto.collector.logs.v1.LogsService
+              - path:
+                  type: PathPrefix
+                  value: /opentelemetry.proto.collector.metrics.v1.MetricsService
+            filters:
+              - type: RequestHeaderModifier
+                requestHeaderModifier:
+                  add:
+                    - name: X-Edge-Auth
+                      value: enforced
+            backendRefs:
+              - name: logfire-service
+                port: 8444
+        documentSelector:
+          path: metadata.name
+          value: logfire-httproute
+      # catch-all rule: keeps the full filter list including URLRewrite
+      - contains:
+          path: spec.rules[1].filters
+          content:
+            type: URLRewrite
+            urlRewrite:
+              path:
+                type: ReplacePrefixMatch
+                replacePrefixMatch: /app
+        documentSelector:
+          path: metadata.name
+          value: logfire-httproute
+
+  - it: lets grpcIngest.filters take full control of the gRPC rule filters
+    set:
+      sizingPreset: tiny
+      ingress:
+        enabled: false
+      gateway:
+        enabled: true
+        gatewayClassName: istio
+        hostnames:
+          - logfire.example.com
+        filters:
+          - type: RequestHeaderModifier
+            requestHeaderModifier:
+              add:
+                - name: X-Edge-Auth
+                  value: enforced
+      grpcIngest:
+        enabled: true
+        filters: []
+    templates:
+      - templates/logfire-gateway-httproute.yaml
+    asserts:
+      - contains:
+          path: spec.rules
+          content:
+            matches:
+              - path:
+                  type: PathPrefix
+                  value: /opentelemetry.proto.collector.trace.v1.TraceService
+              - path:
+                  type: PathPrefix
+                  value: /opentelemetry.proto.collector.logs.v1.LogsService
+              - path:
+                  type: PathPrefix
+                  value: /opentelemetry.proto.collector.metrics.v1.MetricsService
+            backendRefs:
+              - name: logfire-service
+                port: 8444
+        documentSelector:
+          path: metadata.name
+          value: logfire-httproute
+
   - it: routes the collector gRPC services to the gRPC port on the HTTPRoute
     set:
       sizingPreset: tiny
