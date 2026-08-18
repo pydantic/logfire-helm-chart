@@ -60,10 +60,21 @@ tests:
     asserts:
       - matchRegex:
           path: stringData["haproxy.cfg"]
-          pattern: "acl path_ai_gateway path_beg /proxy"
+          pattern: "acl path_ai_gateway path /proxy\\n"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "acl path_ai_gateway path_beg /proxy/"
       - matchRegex:
           path: stringData["haproxy.cfg"]
           pattern: "use_backend logfire-ai-gateway if path_ai_gateway"
+      # Only the /proxy segment is matched; sibling paths such as hashed
+      # frontend assets (/proxy-<hash>.js) stay on the default backend.
+      - notMatchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "path_beg /proxy "
+      - notMatchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "path_beg /proxy\\n"
 
   - it: omits the AI gateway routing when its subchart is disabled
     set:

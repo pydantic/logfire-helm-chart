@@ -83,7 +83,10 @@ stringData:
       acl path_backend path -i /.well-known/oauth-protected-resource/v1
       acl path_backend path_beg /integrations/
       {{- if (get $aiGatewayValues "enabled") }}
-      acl path_ai_gateway path_beg /proxy /.well-known/oauth-protected-resource/proxy
+      acl path_ai_gateway path /proxy
+      acl path_ai_gateway path_beg /proxy/
+      acl path_ai_gateway path /.well-known/oauth-protected-resource/proxy
+      acl path_ai_gateway path_beg /.well-known/oauth-protected-resource/proxy/
       {{- end }}
       {{- if $remoteMcpEnabled }}
       acl path_remote_mcp path /mcp
