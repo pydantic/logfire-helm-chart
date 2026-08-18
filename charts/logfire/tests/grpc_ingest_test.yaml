@@ -291,6 +291,118 @@ tests:
           path: metadata.name
           value: logfire-ingress-grpc
 
+  - it: inherits access-control annotations from the main Ingress and corrects the backend protocol
+    set:
+      sizingPreset: tiny
+      ingress:
+        enabled: true
+        hostnames:
+          - logfire.example.com
+        annotations:
+          nginx.ingress.kubernetes.io/whitelist-source-range: 10.0.0.0/8
+          nginx.ingress.kubernetes.io/auth-url: https://auth.example.com/verify
+          nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+      grpcIngest:
+        enabled: true
+    templates:
+      - templates/logfire-api-ingress.yaml
+    asserts:
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/whitelist-source-range"]
+          value: 10.0.0.0/8
+        documentSelector:
+          path: metadata.name
+          value: logfire-ingress-grpc
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/auth-url"]
+          value: https://auth.example.com/verify
+        documentSelector:
+          path: metadata.name
+          value: logfire-ingress-grpc
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
+          value: GRPC
+        documentSelector:
+          path: metadata.name
+          value: logfire-ingress-grpc
+
+  - it: lets grpcIngest.ingressAnnotations override inherited and automatic annotations
+    set:
+      sizingPreset: tiny
+      ingress:
+        enabled: true
+        hostnames:
+          - logfire.example.com
+        annotations:
+          nginx.ingress.kubernetes.io/whitelist-source-range: 10.0.0.0/8
+      grpcIngest:
+        enabled: true
+        ingressAnnotations:
+          nginx.ingress.kubernetes.io/backend-protocol: GRPCS
+          nginx.ingress.kubernetes.io/whitelist-source-range: 10.1.0.0/16
+    templates:
+      - templates/logfire-api-ingress.yaml
+    asserts:
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
+          value: GRPCS
+        documentSelector:
+          path: metadata.name
+          value: logfire-ingress-grpc
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/whitelist-source-range"]
+          value: 10.1.0.0/16
+        documentSelector:
+          path: metadata.name
+          value: logfire-ingress-grpc
+
+  - it: applies gateway filters to the gRPC HTTPRoute rule
+    set:
+      sizingPreset: tiny
+      ingress:
+        enabled: false
+      gateway:
+        enabled: true
+        gatewayClassName: istio
+        hostnames:
+          - logfire.example.com
+        filters:
+          - type: RequestHeaderModifier
+            requestHeaderModifier:
+              add:
+                - name: X-Edge-Auth
+                  value: enforced
+      grpcIngest:
+        enabled: true
+    templates:
+      - templates/logfire-gateway-httproute.yaml
+    asserts:
+      - contains:
+          path: spec.rules
+          content:
+            matches:
+              - path:
+                  type: PathPrefix
+                  value: /opentelemetry.proto.collector.trace.v1.TraceService
+              - path:
+                  type: PathPrefix
+                  value: /opentelemetry.proto.collector.logs.v1.LogsService
+              - path:
+                  type: PathPrefix
+                  value: /opentelemetry.proto.collector.metrics.v1.MetricsService
+            filters:
+              - type: RequestHeaderModifier
+                requestHeaderModifier:
+                  add:
+                    - name: X-Edge-Auth
+                      value: enforced
+            backendRefs:
+              - name: logfire-service
+                port: 8444
+        documentSelector:
+          path: metadata.name
+          value: logfire-httproute
+
   - it: routes the collector gRPC services to the gRPC port on the HTTPRoute
     set:
       sizingPreset: tiny

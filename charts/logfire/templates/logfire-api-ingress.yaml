@@ -51,14 +51,16 @@ spec:
 {{- /*
 OTLP/gRPC needs HTTP/2 towards the backend, and ingress-nginx selects the backend
 protocol per Ingress resource, so the gRPC routes get an Ingress of their own.
-The main `ingress.annotations` are deliberately not inherited: backend-protocol
-style annotations differ per protocol, and controller add-ons (e.g. cert-manager
-ingress-shim) should act on the main Ingress only.
+It inherits the main `ingress.annotations` so host-level access controls (IP
+allowlists, external auth, ...) keep covering the gRPC paths. On top of that the
+backend protocol is corrected for gRPC, and `grpcIngest.ingressAnnotations`
+overrides both for protocol-specific tuning.
 */}}
-{{- $grpcAnnotations := deepCopy (dig "ingressAnnotations" (dict) (.Values.grpcIngest | default dict)) -}}
-{{- if and (or (eq $ingressClassName "") (contains "nginx" $ingressClassName)) (not (hasKey $grpcAnnotations "nginx.ingress.kubernetes.io/backend-protocol")) -}}
+{{- $grpcAnnotations := deepCopy (.Values.ingress.annotations | default dict) -}}
+{{- if or (eq $ingressClassName "") (contains "nginx" $ingressClassName) -}}
   {{- $_ := set $grpcAnnotations "nginx.ingress.kubernetes.io/backend-protocol" (ternary "GRPCS" "GRPC" (include "logfire.inClusterTls.enabled" . | eq "true")) -}}
-{{- end }}
+{{- end -}}
+{{- $grpcAnnotations = merge (deepCopy (dig "ingressAnnotations" (dict) (.Values.grpcIngest | default dict))) $grpcAnnotations }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress

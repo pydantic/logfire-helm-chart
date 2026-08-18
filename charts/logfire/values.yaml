@@ -213,8 +213,10 @@ grpcIngest:
   appProtocol: ""
 
   # -- Annotations for the dedicated gRPC Ingress resource (only rendered when
-  # `ingress.enabled` is true). The main `ingress.annotations` are deliberately not
-  # copied here since backend-protocol style annotations differ per protocol.
+  # `ingress.enabled` is true). The gRPC Ingress inherits the main
+  # `ingress.annotations` so host-level access controls keep covering the gRPC
+  # paths; keys set here take precedence over both the inherited annotations and
+  # the automatic nginx `backend-protocol` value.
   ingressAnnotations: {}
 
 
