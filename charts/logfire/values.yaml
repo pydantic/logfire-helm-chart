@@ -189,6 +189,45 @@ gateway:
 
 
 # ==============================================================================
+# OTLP/gRPC ingest
+# ==============================================================================
+
+# -- OTLP/gRPC ingest support.
+# When enabled, `logfire-service` gets a dedicated HTTP/2 listener on port 8444 that
+# proxies OTLP/gRPC (traces, metrics, logs) to the ingest pods, and the chart-managed
+# Ingress / HTTPRoute (whichever is enabled) routes the OTLP collector gRPC methods
+# to that port. gRPC needs HTTP/2 end to end: whatever fronts `logfire-service` must
+# be able to forward HTTP/2 to the gRPC port. With ingress-nginx the chart sets the
+# `backend-protocol` annotation automatically; other controllers may need extra
+# configuration (e.g. a BackendTLSPolicy when `inClusterTls.enabled` is true).
+# SDKs then only need `OTEL_EXPORTER_OTLP_PROTOCOL=grpc` pointed at the regular
+# public endpoint; no extra port or path.
+grpcIngest:
+  enabled: false
+
+  # -- `appProtocol` set on the gRPC port of the `logfire-service` Service, used by
+  # Gateway/Ingress controllers to select HTTP/2 towards the backend.
+  # Defaults to `kubernetes.io/h2c` (cleartext HTTP/2), or `HTTP2` (HTTP/2 over TLS,
+  # e.g. for GKE Gateway) when `inClusterTls.enabled` is true.
+  # @default -- "" (auto)
+  appProtocol: ""
+
+  # -- Annotations for the dedicated gRPC Ingress resource (only rendered when
+  # `ingress.enabled` is true). The gRPC Ingress inherits the main
+  # `ingress.annotations` so host-level access controls keep covering the gRPC
+  # paths; keys set here take precedence over both the inherited annotations and
+  # the automatic nginx `backend-protocol` value.
+  ingressAnnotations: {}
+
+  # -- Filters for the gRPC HTTPRoute rule (only used when `gateway.enabled` is
+  # true). When unset, the rule inherits `gateway.filters` minus URLRewrite and
+  # RequestRedirect, which would rewrite or redirect the OTLP RPC method paths
+  # and break exports. Set this (even to `[]`) to take full control instead.
+  # @default -- nil (inherit the gRPC-safe subset of gateway.filters)
+  filters:
+
+
+# ==============================================================================
 # In-cluster TLS (service-to-service)
 # ==============================================================================
 

@@ -12,6 +12,10 @@ ingress:
   - logfire.example.com
   maildevHostname: maildev.example.com
 
+# -- exercise the OTLP/gRPC ingest path end to end
+grpcIngest:
+  enabled: true
+
 objectStore:
   uri: s3://logfire
   env:

@@ -134,6 +134,47 @@ stringData:
       {{- else }}
       server-template logfire-ff-ingest 1-{{ $ingestMaxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:8012 check resolvers kubernetes inter 250ms hash-key addr
       {{- end }}
+    {{- if (include "logfire.grpcIngest.enabled" . | eq "true") }}
+
+    # OTLP/gRPC gets a listener of its own rather than sharing http-in: gRPC needs
+    # HTTP/2 end to end, and load balancers generally negotiate one protocol per
+    # backend port, so sharing would promote all ingest traffic to HTTP/2.
+    frontend grpc-in
+      # h2 only: gRPC has no HTTP/1.1 representation, so a client that cannot use
+      # HTTP/2 has nothing to fall back to and should fail here, not mid-stream.
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      bind :{{ include "logfire.grpcIngest.haproxyPort" . }} ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2
+      {{- else }}
+      bind :{{ include "logfire.grpcIngest.haproxyPort" . }} proto h2
+      {{- end }}
+      log stdout local0 info
+      option httplog
+      timeout client 120s
+      default_backend logfire-ingest-grpc
+
+    backend logfire-ingest-grpc
+      # Same affinity as the HTTP ingest backend: consistent hash over the
+      # authorization header, path, and query.
+      http-request set-var-fmt(txn.auth_hash) "%[req.hdr(authorization)]"
+      http-request set-var-fmt(txn.path_hash) "%[path]"
+      http-request set-var-fmt(txn.query_hash) "%[query]"
+      http-request set-var-fmt(txn.hash) "%[var(txn.auth_hash)] %[var(txn.path_hash)] %[var(txn.query_hash)]"
+      balance hash var(txn.hash)
+      hash-type consistent
+      hash-balance-factor 150
+      # A TCP/TLS connect check rather than `option httpchk`: the upstream port
+      # serves only the OTLP gRPC services, so it answers no HTTP health route and
+      # a request check would mark every pod down.
+      timeout connect 3s
+      timeout server 50s
+      retries 4
+      option redispatch 2
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      server-template logfire-ff-ingest 1-{{ $ingestMaxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ include "logfire.grpcIngest.backendPort" . }} check resolvers kubernetes inter 250ms hash-key addr ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $ingestSni }}) verifyhost {{ $ingestSni }} alpn h2 check-ssl
+      {{- else }}
+      server-template logfire-ff-ingest 1-{{ $ingestMaxCount }} logfire-ff-ingest.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ include "logfire.grpcIngest.backendPort" . }} check resolvers kubernetes inter 250ms hash-key addr proto h2
+      {{- end }}
+    {{- end }}
 
     backend logfire-ff-query-api
       balance roundrobin
