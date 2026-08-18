@@ -174,6 +174,49 @@ tests:
           path: kind
           value: ClusterRoleBinding
 
+  - it: binds routing RBAC to the service account used by query workloads
+    set:
+      serviceAccount:
+        name: routing-test-sa
+      logfire-ff-query-worker:
+        enabled: true
+      logfire-ff-cache-byte:
+        clientSideRouting:
+          zoneAware: true
+    templates:
+      - templates/logfire-ff-cache-routing-rbac.yaml
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-query-worker.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: routing-test-sa
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: routing-test-sa
+        template: templates/logfire-ff-query-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: subjects[0].name
+          value: routing-test-sa
+        template: templates/logfire-ff-cache-routing-rbac.yaml
+        documentSelector:
+          path: kind
+          value: RoleBinding
+      - equal:
+          path: subjects[0].name
+          value: routing-test-sa
+        template: templates/logfire-ff-cache-routing-rbac.yaml
+        documentSelector:
+          path: kind
+          value: ClusterRoleBinding
+
   - it: omits routing RBAC when client routing is disabled
     set:
       logfire-ff-cache-byte:
