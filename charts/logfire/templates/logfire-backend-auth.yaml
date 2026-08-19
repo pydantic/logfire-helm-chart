@@ -1,19 +1,7 @@
-{{- /*
-The backend's `auth` deployment profile: the same image as `logfire-backend` on a different
-entrypoint module, serving only the cluster-internal `/internal/*` credential lookups plus the
-health probes.
-
-Not optional, and deliberately has no `enabled` toggle: FusionFire resolves every write and read
-token through `FF_BACKEND_SERVICE_URL`, which points here, and `logfire-backend` serves no
-`/internal/*` route. Without this workload, ingest and query cannot authenticate a token.
-
-No ingress route reaches it either. These endpoints answer "is this token valid, and which
-organization/project is it for" with no authentication of their own, so exposing them on the
-public entry point would turn them into a token-validation oracle. In-cluster callers reach it
-over this ClusterIP Service instead; `logfire-service` (haproxy) has no backend for it.
-*/}}
 {{- $serviceName := "logfire-backend-auth" }}
 {{- $servicePort := 8000 }}
+{{- $imageTagOwner := "logfire-backend" }}
+{{- if dig "image" "tag" "" (index .Values $serviceName | default dict) }}{{- $imageTagOwner = $serviceName }}{{- end }}
 {{- include "logfire.validate.autoscaling" (dict "Values" .Values "serviceName" $serviceName) -}}
 {{- include "logfire.validate.pdb" (dict "Values" .Values "serviceName" $serviceName) -}}
 apiVersion: v1
@@ -71,7 +59,7 @@ spec:
       {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       containers:
         - name: {{ $serviceName }}
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $imageTagOwner "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           command: ["python", "-m", "logfire_backend.profiles.auth"]
           {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
@@ -81,10 +69,6 @@ spec:
               protocol: TCP
               name: "http"
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
-          {{- /*
-          A tighter startup budget than `logfire-backend`: this profile imports a fraction of the
-          route tree, so a boot that takes as long as the catch-all's is a signal, not normal.
-          */}}
           startupProbe:
             httpGet:
               path: /health/live
@@ -113,9 +97,9 @@ spec:
             - name: LOGFIRE_SERVICE_NAME
               value: {{ $serviceName }}
             - name: LOGFIRE_SERVICE_VERSION
-              value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName) | quote }}
+              value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $imageTagOwner) | quote }}
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | quote }}
+              value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $imageTagOwner "codeWorkDir" "/app") | quote }}
             - name: COLLECTOR_OTLP_GRPC_HOST
               value: http://logfire-otel-collector:4317
             - name: ON_PREM
@@ -130,10 +114,6 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
-            {{- /*
-            The token caches this profile writes are the ones FusionFire reads, so the DSN and
-            prefix have to be the same pair `logfire-backend` and the FusionFire workloads use.
-            */}}
             - name: REDIS_DSN
               value: {{ .Values.redisDsn }}
             - name: SHARED_REDIS_DSN

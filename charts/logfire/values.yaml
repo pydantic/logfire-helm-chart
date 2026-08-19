@@ -620,10 +620,7 @@ logfire-ff-maintenance-scheduler:
 #     minAvailable: 1
 
 
-# -- Autoscaling & resources for the `logfire-backend-auth` pod, the backend's `auth`
-# profile. It serves the cluster-internal `/internal/*` credential lookups that FusionFire
-# resolves every write and read token through, and `logfire-backend` serves none of them, so
-# this workload is always deployed and cannot be turned off.
+# -- Autoscaling & resources for the `logfire-backend-auth` pod
 # logfire-backend-auth:
 #   # -- Workload labels
 #   labels: {}

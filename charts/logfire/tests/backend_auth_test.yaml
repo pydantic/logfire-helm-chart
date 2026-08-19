@@ -119,3 +119,44 @@ tests:
         documentSelector:
           path: metadata.name
           value: logfire-backend-auth-incluster-tls
+
+  - it: follows the backend image tag, so both entrypoints run one image
+    set:
+      logfire-backend:
+        image:
+          tag: pinned-backend
+    templates:
+      - templates/logfire-backend-auth.yaml
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ":pinned-backend$"
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOGFIRE_SERVICE_VERSION
+            value: pinned-backend
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: an explicit auth image tag overrides the backend one
+    set:
+      logfire-backend:
+        image:
+          tag: pinned-backend
+      logfire-backend-auth:
+        image:
+          tag: pinned-auth
+    templates:
+      - templates/logfire-backend-auth.yaml
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ":pinned-auth$"
+        documentSelector:
+          path: kind
+          value: Deployment

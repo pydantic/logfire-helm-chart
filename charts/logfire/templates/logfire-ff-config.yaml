@@ -39,7 +39,6 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-ff-config
 data:
-  # `/internal/*` is served by the backend's `auth` profile alone, never by `logfire-backend`.
   FF_BACKEND_SERVICE_URL: "{{ include "logfire.scheme" . }}://logfire-backend-auth:{{ include "logfire.port" (dict "port" 8000 "root" .) }}"
   FF_DISTRIBUTED_CHANCE: "0"
   FF_RETRY_FAILED_DISTRIBUTED_QUERIES: "false"
@@ -87,7 +86,6 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-ff-config
 data:
-  # `/internal/*` is served by the backend's `auth` profile alone, never by `logfire-backend`.
   FF_BACKEND_SERVICE_URL: "{{ include "logfire.scheme" . }}://logfire-backend-auth:{{ include "logfire.port" (dict "port" 8000 "root" .) }}"
   FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
   FF_FAILOVER_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}/_ingest_failover
