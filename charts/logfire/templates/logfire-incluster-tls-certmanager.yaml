@@ -9,6 +9,7 @@
 
 {{- $certServices := list
   (dict "serviceName" "logfire-backend")
+  (dict "serviceName" "logfire-backend-auth")
   (dict "serviceName" "logfire-service")
   (dict "serviceName" "logfire-frontend-service")
   (dict "serviceName" "logfire-dex")

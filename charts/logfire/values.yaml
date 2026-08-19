@@ -620,6 +620,45 @@ logfire-ff-maintenance-scheduler:
 #     minAvailable: 1
 
 
+# -- Autoscaling & resources for the `logfire-backend-auth` pod, the backend's `auth`
+# profile. It serves the cluster-internal `/internal/*` credential lookups that FusionFire
+# resolves every write and read token through, and `logfire-backend` serves none of them, so
+# this workload is always deployed and cannot be turned off.
+# logfire-backend-auth:
+#   # -- Workload labels
+#   labels: {}
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
+#   # -- Number of replicas
+#   replicas: 2
+#   # -- Resource requests/limits
+#   resources:
+#     cpu: "200m"
+#     memory: "512Mi"
+#   # -- Autoscaler settings
+#   autoscaling:
+#     minReplicas: 2
+#     maxReplicas: 4
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 60
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+#   # -- Additional environment variables
+#   env: []
+
 # -- Autoscaling & resources for the `logfire-ai-gateway` pod
 # @default -- disabled
 logfire-ai-gateway:
@@ -1814,6 +1853,21 @@ sizingPresets:
           cpuAverage: 45
       pdb:
         maxUnavailable: 1
+    logfire-backend-auth:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "384Mi"
+        limits:
+          memory: "768Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 4
+        hpa:
+          enabled: true
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
     logfire-backend:
       resources:
         requests:
@@ -2091,6 +2145,21 @@ sizingPresets:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: logfire-ff-ingest-processor
+    logfire-backend-auth:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "384Mi"
+        limits:
+          memory: "768Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 4
+        hpa:
+          enabled: true
+          cpuAverage: 50
+      pdb:
+        maxUnavailable: 1
     logfire-backend:
       resources:
         requests:
@@ -2400,6 +2469,34 @@ sizingPresets:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: logfire-ff-ingest-processor
+    logfire-backend-auth:
+      resources:
+        requests:
+          cpu: "200m"
+          memory: "512Mi"
+        limits:
+          memory: "1Gi"
+      autoscaling:
+        minReplicas: 3
+        maxReplicas: 6
+        hpa:
+          enabled: true
+          cpuAverage: 50
+      pdb:
+        maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-backend-auth
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-backend-auth
     logfire-backend:
       resources:
         requests:
