@@ -1413,6 +1413,7 @@ Dev Postgres helpers
 {{- $serviceName := .serviceName -}}
 {{- if and $ctx.Values.dev.deployPostgres (has $serviceName (list
   "logfire-backend"
+  "logfire-backend-auth"
   "logfire-worker"
   "logfire-dex"
   "logfire-backend-migrations"

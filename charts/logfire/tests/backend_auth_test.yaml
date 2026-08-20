@@ -1,0 +1,162 @@
+suite: backend auth profile serves the internal endpoints
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: renders the auth profile Deployment and Service on the auth entrypoint
+    templates:
+      - templates/logfire-backend-auth.yaml
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: logfire-backend-auth
+          any: true
+      - containsDocument:
+          kind: Service
+          apiVersion: v1
+          name: logfire-backend-auth
+          any: true
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: ["python", "-m", "logfire_backend.profiles.auth"]
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: FusionFire resolves tokens against the auth profile, not the catch-all backend
+    templates:
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_BACKEND_SERVICE_URL
+          value: http://logfire-backend-auth:8000
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config
+      - equal:
+          path: data.FF_BACKEND_SERVICE_URL
+          value: http://logfire-backend-auth:8000
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-config
+
+  - it: FusionFire reaches the auth profile over HTTPS when in-cluster TLS is on
+    set:
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_BACKEND_SERVICE_URL
+          value: https://logfire-backend-auth:8443
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config
+      - equal:
+          path: data.FF_BACKEND_SERVICE_URL
+          value: https://logfire-backend-auth:8443
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-config
+
+  - it: the auth profile shares the token cache and JWT secret with the backend
+    templates:
+      - templates/logfire-backend-auth.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TOKEN_REDIS_DSN
+            value: redis://logfire-redis:6379
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JWT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: logfire-jwt-secret
+                key: logfire-jwt-secret
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ON_PREM
+            value: "true"
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: gets an in-cluster certificate of its own
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+      dev:
+        deployCertManager: true
+    templates:
+      - templates/logfire-incluster-tls-certmanager.yaml
+    asserts:
+      - equal:
+          path: spec.secretName
+          value: lf-logfire-backend-auth-tls
+        documentSelector:
+          path: metadata.name
+          value: logfire-backend-auth-incluster-tls
+
+  - it: follows the backend image tag, so both entrypoints run one image
+    set:
+      logfire-backend:
+        image:
+          tag: pinned-backend
+    templates:
+      - templates/logfire-backend-auth.yaml
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ":pinned-backend$"
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOGFIRE_SERVICE_VERSION
+            value: pinned-backend
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: an explicit auth image tag overrides the backend one
+    set:
+      logfire-backend:
+        image:
+          tag: pinned-backend
+      logfire-backend-auth:
+        image:
+          tag: pinned-auth
+    templates:
+      - templates/logfire-backend-auth.yaml
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ":pinned-auth$"
+        documentSelector:
+          path: kind
+          value: Deployment

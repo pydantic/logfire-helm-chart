@@ -1,0 +1,161 @@
+{{- $serviceName := "logfire-backend-auth" }}
+{{- $servicePort := 8000 }}
+{{- $imageTagOwner := "logfire-backend" }}
+{{- if dig "image" "tag" "" (index .Values $serviceName | default dict) }}{{- $imageTagOwner = $serviceName }}{{- end }}
+{{- include "logfire.validate.autoscaling" (dict "Values" .Values "serviceName" $serviceName) -}}
+{{- include "logfire.validate.pdb" (dict "Values" .Values "serviceName" $serviceName) -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  annotations:
+    {{- include "logfire.serviceAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+  - port: {{ $servicePort }}
+    targetPort: {{ $servicePort }}
+    name: "http"
+  {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  annotations:
+    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres" "existing")) | nindent 4 }}
+spec:
+  {{- include "logfire.replicas" (dict "Values" .Values "serviceName" $serviceName) | nindent 2 }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  template:
+    metadata:
+      annotations:
+        {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
+        {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
+        {{- end }}
+        {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
+        {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-jwt-secret")) | nindent 8 }}
+        {{- end }}
+        {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+    spec:
+      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
+      containers:
+        - name: {{ $serviceName }}
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $imageTagOwner "Chart" .Chart) }}'
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          command: ["python", "-m", "logfire_backend.profiles.auth"]
+          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
+          ports:
+            - containerPort: {{ $servicePort }}
+              protocol: TCP
+              name: "http"
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: {{ $servicePort }}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: {{ $servicePort }}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ $servicePort }}
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 2
+          env:
+            - name: APP_PORT
+              value: {{ $servicePort | quote }}
+            - name: LOGFIRE_SERVICE_NAME
+              value: {{ $serviceName }}
+            - name: LOGFIRE_SERVICE_VERSION
+              value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $imageTagOwner) | quote }}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $imageTagOwner "codeWorkDir" "/app") | quote }}
+            - name: COLLECTOR_OTLP_GRPC_HOST
+              value: http://logfire-otel-collector:4317
+            - name: ON_PREM
+              value: "true"
+            - name: CRUD_PG_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}
+                  key: postgresDsn
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret") }}
+                  key: logfire-jwt-secret
+            - name: REDIS_DSN
+              value: {{ .Values.redisDsn }}
+            - name: SHARED_REDIS_DSN
+              value: {{ .Values.redisDsn }}
+            - name: TOKEN_REDIS_DSN
+              value: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "tokenRedis") }}
+            - name: TOKEN_REDIS_PREFIX
+              value: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "tokenRedis") | quote }}
+            - name: FRONTEND_HOST
+              value: {{ include "logfire.url" . | quote }}
+            {{- with (include "logfire.intakeOauthResourceUrl" . | trim) }}
+            - name: INTAKE_OAUTH_RESOURCE_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if (index .Values "logfire-ai-gateway" "enabled") }}
+            - name: GATEWAY_OAUTH_RESOURCE_URL
+              value: {{ include "logfire.gatewayOauthResourceUrl" . | trim | quote }}
+            {{- end }}
+            {{- include "logfire.rateLimits" . | nindent 12 }}
+            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+            - name: LOGFIRE_CA_PATH
+              value: /etc/logfire/incluster-ca/ca.crt
+            - name: HTTPS_PORT
+              value: "{{ .Values.inClusterTls.httpsPort }}"
+            - name: TLS_CERT_PATH
+              value: "/etc/tls/tls.crt"
+            - name: "TLS_KEY_PATH"
+              value: "/etc/tls/tls.key"
+            {{- end }}
+            {{- with (index .Values $serviceName | default dict).env }}
+              {{- . | toYaml | nindent 12 }}
+            {{- end }}
+          {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+          volumeMounts:
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
+          {{- end }}
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      volumes:
+        {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 30
+{{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
+{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
