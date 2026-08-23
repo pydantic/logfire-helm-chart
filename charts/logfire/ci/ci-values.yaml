@@ -12,6 +12,10 @@ ingress:
   - logfire.example.com
   maildevHostname: maildev.example.com
 
+# Exercise HTTPS public-URL rendering while the Kind ingress itself remains HTTP.
+gateway:
+  tls: true
+
 objectStore:
   uri: s3://logfire
   env:

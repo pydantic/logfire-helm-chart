@@ -15,37 +15,63 @@ set:
     hostnames:
       - logfire.example.com
 tests:
-  - it: registers the Gateway CLI as a public PKCE client when the AI gateway is enabled
+  - it: does not statically register the Gateway CLI for a TLS CIMD deployment
     set:
       logfire-ai-gateway:
         enabled: true
     templates:
       - templates/logfire-backend.yaml
     asserts:
-      - matchRegex:
+      - notMatchRegex:
           path: spec.template.spec.containers[0].env[?(@.name == "BOOTSTRAPPED_ORGANIZATIONS")].value
+          pattern: 'logfire-gateway\.json'
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: serves the Gateway CLI client metadata document when TLS and the AI gateway are enabled
+    set:
+      logfire-ai-gateway:
+        enabled: true
+    templates:
+      - templates/logfire-frontend-service-config.yaml
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'location = /clients/logfire-gateway\.json'
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-nginx-config
+      - matchRegex:
+          path: data["nginx.conf"]
           pattern: '"client_id":"https://logfire\.example\.com/clients/logfire-gateway\.json"'
         documentSelector:
-          path: kind
-          value: Deployment
+          path: metadata.name
+          value: logfire-frontend-nginx-config
       - matchRegex:
-          path: spec.template.spec.containers[0].env[?(@.name == "BOOTSTRAPPED_ORGANIZATIONS")].value
-          pattern: '"allowed_scopes":\["project:gateway_proxy"\]'
+          path: data["nginx.conf"]
+          pattern: '"grant_types":\["authorization_code","refresh_token","urn:ietf:params:oauth:grant-type:device_code"\]'
         documentSelector:
-          path: kind
-          value: Deployment
+          path: metadata.name
+          value: logfire-frontend-nginx-config
       - matchRegex:
-          path: spec.template.spec.containers[0].env[?(@.name == "BOOTSTRAPPED_ORGANIZATIONS")].value
-          pattern: '"client_type":"public".*"grant_types":\["authorization_code","refresh_token","urn:ietf:params:oauth:grant-type:device_code"\].*"require_pkce":true'
+          path: data["nginx.conf"]
+          pattern: '"token_endpoint_auth_method":"none"'
         documentSelector:
-          path: kind
-          value: Deployment
+          path: metadata.name
+          value: logfire-frontend-nginx-config
       - matchRegex:
-          path: spec.template.spec.containers[0].env[?(@.name == "BOOTSTRAPPED_ORGANIZATIONS")].value
-          pattern: '"redirect_uris":\["http://127\.0\.0\.1/callback","http://localhost/callback"\]'
+          path: data["nginx.conf"]
+          pattern: '"client_uri":"https://pydantic\.dev/docs/ai/overview/gateway/"'
         documentSelector:
-          path: kind
-          value: Deployment
+          path: metadata.name
+          value: logfire-frontend-nginx-config
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: '"logo_uri":"https://logfire\.pydantic\.dev/clients/logfire-gateway\.svg"'
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-nginx-config
 
   - it: does not register the Gateway CLI when the AI gateway is disabled
     set:
@@ -60,6 +86,20 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: does not serve client metadata when the AI gateway is disabled
+    set:
+      logfire-ai-gateway:
+        enabled: false
+    templates:
+      - templates/logfire-frontend-service-config.yaml
+    asserts:
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'logfire-gateway\.json'
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-nginx-config
 
   - it: does not enable OAuth clients for a non-local plaintext deployment
     set:
@@ -78,6 +118,24 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: does not serve CIMD over plaintext
+    set:
+      logfire-ai-gateway:
+        enabled: true
+      gateway:
+        tls: false
+        hostnames:
+          - logfire.example.com
+    templates:
+      - templates/logfire-frontend-service-config.yaml
+    asserts:
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'logfire-gateway\.json'
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-nginx-config
 
   - it: registers the Gateway CLI for local plaintext development
     set:

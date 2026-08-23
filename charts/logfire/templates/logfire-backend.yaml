@@ -1,5 +1,9 @@
 {{- $serviceName := "logfire-backend" }}
 {{- $oauthEnabled := or (include "logfire.effective_tls" . | eq "true") (eq (include "logfire.primary_hostname" .) "localhost") }}
+{{- $gatewayStaticOauthEnabled := and
+  (not (include "logfire.effective_tls" . | eq "true"))
+  (eq (include "logfire.primary_hostname" .) "localhost")
+-}}
 {{- $oauthClients := list }}
 {{- if $oauthEnabled }}
   {{- $oauthClients = append $oauthClients (dict
@@ -9,7 +13,7 @@
     "redirect_uris" (list (printf "%s/mcp/oauth/callback" (include "logfire.url" .)))
     "allowed_scopes" (list "project:read" "project:write" "project:write_token" "project:read_dashboard" "project:write_dashboard" "project:read_alert" "project:write_alert" "project:read_variables" "project:write_variables" "organization:create_project" "organization:read_channel" "organization:write_channel")
   ) }}
-  {{- if (index .Values "logfire-ai-gateway" "enabled") }}
+  {{- if and $gatewayStaticOauthEnabled (index .Values "logfire-ai-gateway" "enabled") }}
     {{- $oauthClients = append $oauthClients (dict
       "client_id" (printf "%s/clients/logfire-gateway.json" (include "logfire.url" .))
       "client_name" "Logfire Gateway CLI"
