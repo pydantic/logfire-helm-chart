@@ -14,6 +14,27 @@ async def test_oidc_discovery(client: httpx.AsyncClient) -> None:
     assert body.get("token_endpoint"), body
 
 
+async def test_gateway_client_metadata_document(client: httpx.AsyncClient) -> None:
+    response = await client.get("/clients/logfire-gateway.json")
+    assert response.is_success, response.text
+    assert response.headers["content-type"].startswith("application/json")
+
+    body = response.json()
+    assert body == {
+        "client_id": "https://logfire.example.com/clients/logfire-gateway.json",
+        "client_name": "Logfire Gateway CLI",
+        "grant_types": [
+            "authorization_code",
+            "refresh_token",
+            "urn:ietf:params:oauth:grant-type:device_code",
+        ],
+        "redirect_uris": ["http://127.0.0.1/callback", "http://localhost/callback"],
+        "response_types": ["code"],
+        "scope": "project:gateway_proxy",
+        "token_endpoint_auth_method": "none",
+    }
+
+
 @pytest.mark.parametrize(
     "path",
     ["/internal/write-tokens/get-state", "/internal/read-tokens/get-state"],

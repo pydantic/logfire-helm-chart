@@ -1,6 +1,17 @@
 {{- $tls := include "logfire.effective_tls" . | eq "true" -}}
 {{- $hostnames := include "logfire.all_hostnames_string" . | splitList " " -}}
 {{- $wsProtocol := $tls | default false | ternary "wss" "ws" -}}
+{{- $gatewayCimdEnabled := and $tls (index .Values "logfire-ai-gateway" "enabled") -}}
+{{- $gatewayClientId := printf "%s/clients/logfire-gateway.json" (include "logfire.url" .) -}}
+{{- $gatewayClientMetadata := dict
+  "client_id" $gatewayClientId
+  "client_name" "Logfire Gateway CLI"
+  "redirect_uris" (list "http://127.0.0.1/callback" "http://localhost/callback")
+  "grant_types" (list "authorization_code" "refresh_token" "urn:ietf:params:oauth:grant-type:device_code")
+  "response_types" (list "code")
+  "token_endpoint_auth_method" "none"
+  "scope" "project:gateway_proxy"
+-}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -98,6 +109,16 @@ data:
                 add_header Content-Type text/plain;
                 return 200 "ok\n";
             }
+
+            {{- if $gatewayCimdEnabled }}
+            # OAuth Client ID Metadata Document used by the Gateway CLI.
+            location = /clients/logfire-gateway.json {
+                default_type application/json;
+                add_header Cache-Control "public, max-age=300";
+                add_header X-Content-Type-Options "nosniff" always;
+                return 200 '{{ $gatewayClientMetadata | toJson }}';
+            }
+            {{- end }}
 
             # Enhanced JSON view render worker. This worker executes saved/transpiled
             # view code, so it gets a tighter policy than the main app chunks.
@@ -261,6 +282,16 @@ data:
                 add_header Content-Type text/plain;
                 return 200 "ok\n";
             }
+
+            {{- if $gatewayCimdEnabled }}
+            # OAuth Client ID Metadata Document used by the Gateway CLI.
+            location = /clients/logfire-gateway.json {
+                default_type application/json;
+                add_header Cache-Control "public, max-age=300";
+                add_header X-Content-Type-Options "nosniff" always;
+                return 200 '{{ $gatewayClientMetadata | toJson }}';
+            }
+            {{- end }}
 
             # Enhanced JSON view render worker. This worker executes saved/transpiled
             # view code, so it gets a tighter policy than the main app chunks.

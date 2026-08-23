@@ -47,6 +47,38 @@ tests:
           path: kind
           value: Deployment
 
+  - it: serves the Gateway CLI client metadata document when TLS and the AI gateway are enabled
+    set:
+      logfire-ai-gateway:
+        enabled: true
+    templates:
+      - templates/logfire-frontend-service-config.yaml
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'location = /clients/logfire-gateway\.json'
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-nginx-config
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: '"client_id":"https://logfire\.example\.com/clients/logfire-gateway\.json"'
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-nginx-config
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: '"grant_types":\["authorization_code","refresh_token","urn:ietf:params:oauth:grant-type:device_code"\]'
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-nginx-config
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: '"token_endpoint_auth_method":"none"'
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-nginx-config
+
   - it: does not register the Gateway CLI when the AI gateway is disabled
     set:
       logfire-ai-gateway:
@@ -60,6 +92,20 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: does not serve client metadata when the AI gateway is disabled
+    set:
+      logfire-ai-gateway:
+        enabled: false
+    templates:
+      - templates/logfire-frontend-service-config.yaml
+    asserts:
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'logfire-gateway\.json'
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-nginx-config
 
   - it: does not enable OAuth clients for a non-local plaintext deployment
     set:
@@ -78,6 +124,24 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: does not serve CIMD over plaintext
+    set:
+      logfire-ai-gateway:
+        enabled: true
+      gateway:
+        tls: false
+        hostnames:
+          - logfire.example.com
+    templates:
+      - templates/logfire-frontend-service-config.yaml
+    asserts:
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'logfire-gateway\.json'
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-nginx-config
 
   - it: registers the Gateway CLI for local plaintext development
     set:
