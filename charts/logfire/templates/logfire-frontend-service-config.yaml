@@ -11,6 +11,8 @@
   "response_types" (list "code")
   "token_endpoint_auth_method" "none"
   "scope" "project:gateway_proxy"
+  "client_uri" "https://pydantic.dev/docs/ai/overview/gateway/"
+  "logo_uri" "https://logfire.pydantic.dev/clients/logfire-gateway.svg"
 -}}
 apiVersion: v1
 kind: ConfigMap

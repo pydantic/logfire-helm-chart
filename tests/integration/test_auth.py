@@ -23,6 +23,7 @@ async def test_gateway_client_metadata_document(client: httpx.AsyncClient) -> No
     assert body == {
         "client_id": "https://logfire.example.com/clients/logfire-gateway.json",
         "client_name": "Logfire Gateway CLI",
+        "client_uri": "https://pydantic.dev/docs/ai/overview/gateway/",
         "grant_types": [
             "authorization_code",
             "refresh_token",
@@ -30,6 +31,7 @@ async def test_gateway_client_metadata_document(client: httpx.AsyncClient) -> No
         ],
         "redirect_uris": ["http://127.0.0.1/callback", "http://localhost/callback"],
         "response_types": ["code"],
+        "logo_uri": "https://logfire.pydantic.dev/clients/logfire-gateway.svg",
         "scope": "project:gateway_proxy",
         "token_endpoint_auth_method": "none",
     }
