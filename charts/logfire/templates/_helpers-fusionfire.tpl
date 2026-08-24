@@ -193,18 +193,59 @@ request when no limit is configured), rounded up to whole cores.
 {{- end -}}
 
 {{/*
-Optional DataFusion query execution overrides. When omitted, FusionFire keeps
-its own defaults and auto-config behavior.
+Render the complete FusionFire query execution environment shared by the query
+intake and remote query worker adapters. The caller owns workload topology and
+states whether this process executes DataFusion queries; this module owns the
+resulting settings and preserves each adapter's established environment order.
 */}}
 {{- define "logfire.ffQueryExecutionEnv" -}}
+{{- $serviceName := required "logfire.ffQueryExecutionEnv: need .serviceName" .serviceName -}}
+{{- $adapter := required "logfire.ffQueryExecutionEnv: need .adapter" .adapter -}}
+{{- if not (has $adapter (list "query-intake" "query-worker")) -}}
+  {{- fail (printf "logfire.ffQueryExecutionEnv: unknown adapter %q" $adapter) -}}
+{{- end -}}
+{{- $executesQueries := .executesQueries | default false -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- if hasKey $effectiveServiceValues "datafusionTargetPartitions" }}
+{{- $queryParallelism := include "logfire.ffQueryParallelism" . -}}
+{{- $maxCostPerWorker := include "logfire.ffMaxCostPerWorker" (dict "Values" .Values) -}}
+- name: FF_ENABLE_SPILL_TO_DISK
+  value: "true"
+- name: FF_TEMP_DIR
+  value: /scratch/fusionfire
+- name: FF_QUERY_PARALLELISM
+  value: {{ $queryParallelism | quote }}
+- name: FF_MAX_COST_PER_WORKER
+  value: {{ $maxCostPerWorker | quote }}
+{{ include "logfire.ffResourceEnv" . }}
+{{- if eq $adapter "query-worker" }}
+- name: FF_PG_POOL_MAX_CONNECTIONS
+  value: "4"
+{{- end }}
+{{- if $executesQueries }}
+- name: FF_IO_THREADS
+  value: {{ include "logfire.ffIoThreads" . | quote }}
+- name: FF_DATAFUSION_THREADS
+  value: {{ include "logfire.ffDatafusionThreads" . | quote }}
+- name: FF_DATAFUSION_MEMORY_LIMIT
+  value: {{ get $effectiveServiceValues "datafusionMemory" | default "auto" | quote }}
+{{- if and (eq $adapter "query-intake") (hasKey $effectiveServiceValues "datafusionTargetPartitions") }}
 - name: FF_DATAFUSION_TARGET_PARTITIONS
   value: {{ get $effectiveServiceValues "datafusionTargetPartitions" | quote }}
 {{- end }}
-{{- if hasKey $effectiveServiceValues "datafusionBatchSize" }}
+{{- if and (eq $adapter "query-intake") (hasKey $effectiveServiceValues "datafusionBatchSize") }}
 - name: FF_DATAFUSION_BATCH_SIZE
   value: {{ get $effectiveServiceValues "datafusionBatchSize" | quote }}
+{{- end }}
+{{- if eq $adapter "query-worker" }}
+- name: FF_DATAFUSION_THREAD_STACK_SIZE
+  value: "8MB"
+{{- end }}
+- name: FF_IO_THREAD_STACK_SIZE
+  value: "8MB"
+{{- end }}
+{{- if eq $adapter "query-intake" }}
+- name: FF_DATAFUSION_THREAD_STACK_SIZE
+  value: "8MB"
 {{- end }}
 {{- end -}}
 
