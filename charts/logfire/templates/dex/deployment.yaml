@@ -48,7 +48,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/dex/secret.yaml") . | sha256sum }}
+        checksum/config: {{ include "logfire.configChecksum" (include (print $.Template.BasePath "/dex/secret.yaml") .) }}
         {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:

@@ -44,6 +44,9 @@ jobs:
       - name: Chart linting
         run: ct lint --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH"
 
+      - name: Check version-stable configuration checksums
+        run: ci/check-version-stable-checksums.sh
+
       - name: Set up GCP auth
         id: auth
         uses: google-github-actions/auth@v2
