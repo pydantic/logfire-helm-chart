@@ -67,19 +67,6 @@ spec:
   {{- end }}
 {{- end}}
 
-{{/*
-Determine if HPA is enabled maintaining backward compatibility with old values format
-*/}}
-{{- define "logfire.hpa.enabled" -}}
-{{- if hasKey . "hpa" -}}
-  {{- .hpa.enabled  -}}
-{{- else if or .memAverage .cpuAverage .extraMetrics -}}
-  {{- true -}}
-{{- else -}}
-  {{- false -}}
-{{- end -}}
-{{- end -}}
-
 {{- define "logfire.redisDsnFor" -}}
 {{- $root := required "logfire.redisDsnFor: need .root" .root -}}
 {{- $valuesKey := required "logfire.redisDsnFor: need .valuesKey" .valuesKey -}}
@@ -92,14 +79,6 @@ Determine if HPA is enabled maintaining backward compatibility with old values f
 {{- $valuesKey := required "logfire.redisPrefixFor: need .valuesKey" .valuesKey -}}
 {{- $redisValues := get $root.Values $valuesKey | default dict -}}
 {{- get $redisValues "prefix" | default "" -}}
-{{- end -}}
-
-{{- define "logfire.keda.enabled" -}}
-{{- if hasKey . "keda" -}}
-  {{- .keda.enabled  -}}
-{{- else -}}
-  {{- false -}}
-{{- end -}}
 {{- end -}}
 
 {{/*
@@ -132,28 +111,61 @@ Only sizing and portable availability keys are inherited from presets.
 {{- end -}}
 
 {{/*
+Normalize and validate autoscaling while preserving legacy values and the
+historical distinction between an absent autoscaling key and an empty one.
+HPA and KEDA are the two adapters behind this seam.
+*/}}
+{{- define "logfire.effectiveAutoscaling" -}}
+{{- $serviceName := required "logfire.effectiveAutoscaling: need .serviceName" .serviceName -}}
+{{- $serviceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
+{{- $hasConfig := hasKey $serviceValues "autoscaling" -}}
+{{- $autoscaling := get $serviceValues "autoscaling" | default dict -}}
+{{- $hpaEnabled := false -}}
+{{- if hasKey $autoscaling "hpa" -}}
+  {{- $hpaEnabled = get (get $autoscaling "hpa" | default dict) "enabled" | default false -}}
+{{- else if or (get $autoscaling "memAverage") (get $autoscaling "cpuAverage") (get $autoscaling "extraMetrics") -}}
+  {{- $hpaEnabled = true -}}
+{{- end -}}
+{{- $kedaEnabled := get (get $autoscaling "keda" | default dict) "enabled" | default false -}}
+{{- $cpuAverage := dig "hpa" "cpuAverage" (get $autoscaling "cpuAverage") $autoscaling -}}
+{{- $memAverage := dig "hpa" "memAverage" (get $autoscaling "memAverage") $autoscaling -}}
+{{- $extraMetrics := dig "hpa" "extraMetrics" (get $autoscaling "extraMetrics") $autoscaling -}}
+{{- if and $hpaEnabled $kedaEnabled -}}
+  {{- fail (printf "Both HPA and KEDA are enabled for '%s'. Only one autoscaler should be enabled at a time to avoid conflicts." $serviceName) -}}
+{{- end -}}
+{{- if and $hpaEnabled (not (or $cpuAverage $memAverage $extraMetrics)) -}}
+  {{- fail (printf "HPA is enabled for '%s', but no metrics are configured. Set autoscaling.hpa.cpuAverage, autoscaling.hpa.memAverage, or autoscaling.hpa.extraMetrics (or the backward-compatible top-level equivalents)." $serviceName) -}}
+{{- end -}}
+{{- if and (get $autoscaling "minReplicas") (get $autoscaling "maxReplicas") (gt (int (get $autoscaling "minReplicas")) (int (get $autoscaling "maxReplicas"))) -}}
+  {{- fail (printf "autoscaling.minReplicas (%d) cannot be greater than autoscaling.maxReplicas (%d) for '%s'." (int (get $autoscaling "minReplicas")) (int (get $autoscaling "maxReplicas")) $serviceName) -}}
+{{- end -}}
+{{- dict "hasConfig" $hasConfig "config" $autoscaling "hpaEnabled" $hpaEnabled "kedaEnabled" $kedaEnabled | toJson -}}
+{{- end -}}
+
+{{/*
 Render spec.replicas only when autoscaling is not configured for the workload.
 */}}
 {{- define "logfire.replicas" -}}
 {{- $serviceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- if not (hasKey $serviceValues "autoscaling") -}}
+{{- $effectiveAutoscaling := include "logfire.effectiveAutoscaling" . | fromJson -}}
+{{- if not (get $effectiveAutoscaling "hasConfig") -}}
 replicas: {{ dig "replicas" "1" $serviceValues }}
 {{- end -}}
 {{- end -}}
 
 {{- define "logfire.autoscaler" }}
-{{- include "logfire.validate.autoscaling" (dict "Values" .Values "serviceName" .serviceName) -}}
-{{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" .serviceName) | fromJson -}}
-{{- if index $serviceValues "autoscaling" }}
+{{- $effectiveAutoscaling := include "logfire.effectiveAutoscaling" . | fromJson -}}
+{{- $autoscaling := get $effectiveAutoscaling "config" | default dict -}}
+{{- if $autoscaling }}
 {{- $kind := (not (eq .serviceName "logfire-ff-ingest") | ternary "Deployment" "StatefulSet" ) }}
-{{- with index $serviceValues "autoscaling" }}
-  {{- $ctx := deepCopy . -}}
+{{- with $autoscaling }}
+  {{- $ctx := deepCopy $autoscaling -}}
   {{- $_ := set $ctx "serviceName" $.serviceName -}}
   {{- $_ := set $ctx "kind" $kind -}}
-  {{- if include "logfire.hpa.enabled" . | eq "true" }}
+  {{- if get $effectiveAutoscaling "hpaEnabled" }}
     {{- template "logfire.hpa" $ctx }}
   {{- end }}
-  {{- if include "logfire.keda.enabled" . | eq "true" }}
+  {{- if get $effectiveAutoscaling "kedaEnabled" }}
     {{- template "logfire.keda" $ctx }}
   {{- end }}
 {{- end }}
@@ -168,7 +180,9 @@ replicas: {{ dig "replicas" "1" $serviceValues }}
 {{- if hasKey . "pdb" -}}
   {{- $pdb = .pdb -}}
 {{- end -}}
-{{- include "logfire.validate.pdb" (dict "Values" $root.Values "serviceName" $serviceName "pdb" $pdb) -}}
+{{- if and (hasKey ($pdb | default dict) "minAvailable") (hasKey ($pdb | default dict) "maxUnavailable") -}}
+  {{- fail (printf "pdb.minAvailable and pdb.maxUnavailable are mutually exclusive for '%s'. Specify only one." $serviceName) -}}
+{{- end -}}
 {{- if $pdb }}
 {{- with $pdb }}
 ---
