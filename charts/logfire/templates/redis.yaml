@@ -69,7 +69,7 @@ spec:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
-      {{- with (include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | trim) }}
+      {{- with (include "logfire.podAnnotations" (dict "ctx" . "serviceName" $serviceName) | trim) }}
       annotations:
         {{- . | nindent 8 }}
       {{- end }}

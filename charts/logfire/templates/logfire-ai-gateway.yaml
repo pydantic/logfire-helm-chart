@@ -33,7 +33,7 @@ metadata:
     {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   annotations:
-    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres" "gateway")) | nindent 4 }}
+    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
 spec:
   {{- include "logfire.replicas" (dict "Values" .Values "serviceName" $serviceName) | nindent 2 }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
@@ -44,14 +44,7 @@ spec:
   template:
     metadata:
       annotations:
-        {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
-        {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
-        {{- end }}
-        {{- $gwEx := get .Values "existingGatewaySecret" | default dict }}
-        {{- if or (not (get $gwEx "enabled")) (empty (get $gwEx "annotations")) }}
-        {{- include "logfire.gatewaySecretChecksumAnnotations" (dict "ctx" .) | nindent 8 }}
-        {{- end }}
-        {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
+        {{- include "logfire.podAnnotations" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}

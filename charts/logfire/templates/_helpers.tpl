@@ -922,55 +922,135 @@ ingest-data
 {{- end -}}
 
 {{/*
-Workload metadata annotations.
-Secret annotation sources are used for external secret reload controllers. If
-the same key is set more than once, later sources win and per-workload
-annotations have final precedence.
+Resolve the logical Secret dependencies that control each workload's rollout.
+The profile is the single source of truth for both external-secret annotations
+and checksum fallbacks. Existing dependency gaps are intentionally preserved;
+this helper is behavior-preserving.
 */}}
-{{- define "logfire.workloadAnnotations" -}}
-{{- $values := .Values -}}
-{{- $serviceName := .serviceName -}}
-{{- $secretSources := .secretSources | default list -}}
-{{- $merged := dict -}}
-{{- range $secretSource := $secretSources }}
-  {{- if eq $secretSource "postgres" -}}
-    {{- if and $values.postgresSecret.enabled (not (empty $values.postgresSecret.annotations)) -}}
-      {{- $merged = mergeOverwrite $merged $values.postgresSecret.annotations -}}
-    {{- end -}}
-  {{- else if eq $secretSource "existing" -}}
-    {{- $existingSecret := get $values "existingSecret" | default dict -}}
-    {{- if and (get $existingSecret "enabled") (not (empty (get $existingSecret "annotations"))) -}}
-      {{- $merged = mergeOverwrite $merged (get $existingSecret "annotations") -}}
-    {{- end -}}
-  {{- else if eq $secretSource "gateway" -}}
-    {{- $gatewaySecret := get $values "existingGatewaySecret" | default dict -}}
-    {{- if and (index $values "logfire-ai-gateway" "enabled") (get $gatewaySecret "enabled") (not (empty (get $gatewaySecret "annotations"))) -}}
-      {{- $merged = mergeOverwrite $merged (get $gatewaySecret "annotations") -}}
-    {{- end -}}
-  {{- else if eq $secretSource "admin" -}}
-    {{- $adminSecret := get $values "adminSecret" | default dict -}}
-    {{- if and (get $adminSecret "enabled") (not (empty (get $adminSecret "annotations"))) -}}
-      {{- $merged = mergeOverwrite $merged (get $adminSecret "annotations") -}}
-    {{- end -}}
-  {{- end -}}
+{{- define "logfire.secretDependencies.profile" -}}
+{{- $serviceName := required "logfire.secretDependencies.profile: need .serviceName" .serviceName -}}
+{{- $postgres := dict "source" "postgres" "key" "postgresDsn" -}}
+{{- $ffPostgres := dict "source" "postgres" "key" "postgresFFDsn" -}}
+{{- $gateway := list
+  (dict "source" "gateway" "secretName" "gateway-encryption" "key" "key" "annotationKey" "checksum/gateway-encryption")
+  (dict "source" "gateway" "secretName" "gateway-internal-secret" "key" "internalSecret" "annotationKey" "checksum/gateway-internal-secret") -}}
+{{- $backend := list -}}
+{{- range $key := list "logfire-dex-client-secret" "logfire-encryption-key" "logfire-jwt-secret" "logfire-meta-frontend-token" "logfire-meta-write-token" "logfire-unsubscribe-secret" "logfire-mcp-oauth-client-secret" -}}
+  {{- $backend = append $backend (dict "source" "existing" "key" $key) -}}
 {{- end -}}
-{{- $serviceValues := index $values $serviceName | default dict -}}
-{{- if $serviceValues.annotations -}}
-  {{- $merged = mergeOverwrite $merged $serviceValues.annotations -}}
+{{- $backend = concat $backend $gateway (list $postgres) -}}
+{{- range $key := list "logfire-admin-password" "logfire-admin-totp-secret" "logfire-admin-totp-recovery-codes" -}}
+  {{- $backend = append $backend (dict "source" "admin" "key" $key) -}}
 {{- end -}}
-{{- if $merged -}}
-{{- toYaml $merged -}}
+{{- $profiles := dict
+  "logfire-backend" $backend
+  "logfire-worker" (list $postgres (dict "source" "existing" "key" "logfire-unsubscribe-secret"))
+  "logfire-backend-auth" (list $postgres (dict "source" "existing" "key" "logfire-jwt-secret"))
+  "logfire-remote-mcp" (list $postgres (dict "source" "existing" "key" "logfire-mcp-oauth-client-secret"))
+  "logfire-otel-collector" (list (dict "source" "existing" "key" "logfire-meta-write-token"))
+  "logfire-ai-gateway" (concat (list $postgres) $gateway)
+  "logfire-ff-crud-api" (list (dict "source" "postgres" "key" "postgresFFDsn" "annotationKey" "checksum/logfire-postgres-dsn")) -}}
+{{- range $name := list "logfire-ff-compaction-worker" "logfire-ff-ingest" "logfire-ff-ingest-processor" "logfire-ff-maintenance-scheduler" "logfire-ff-maintenance-worker" "logfire-ff-query-api" "logfire-ff-query-worker" -}}
+  {{- $_ := set $profiles $name (list $ffPostgres) -}}
+{{- end -}}
+{{- $dependencies := get $profiles $serviceName | default list -}}
+{{- dict "dependencies" $dependencies | toJson -}}
+{{- end -}}
+
+{{/* Whether a logical Secret source is active for this render. */}}
+{{- define "logfire.secretDependencies.sourceActive" -}}
+{{- if eq .source "gateway" -}}
+{{- get (get .Values "logfire-ai-gateway" | default dict) "enabled" | default false -}}
+{{- else -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/* External-controller annotations for a logical Secret source. */}}
+{{- define "logfire.secretDependencies.externalAnnotations" -}}
+{{- $sourceValues := dict -}}
+{{- if eq .source "postgres" -}}
+  {{- $sourceValues = .Values.postgresSecret -}}
+{{- else if eq .source "existing" -}}
+  {{- $sourceValues = get .Values "existingSecret" | default dict -}}
+{{- else if eq .source "gateway" -}}
+  {{- $sourceValues = get .Values "existingGatewaySecret" | default dict -}}
+{{- else if eq .source "admin" -}}
+  {{- $sourceValues = get .Values "adminSecret" | default dict -}}
+{{- end -}}
+{{- if and (include "logfire.secretDependencies.sourceActive" . | eq "true") (get $sourceValues "enabled") (not (empty (get $sourceValues "annotations"))) -}}
+{{- get $sourceValues "annotations" | toJson -}}
+{{- else -}}
+{}
 {{- end -}}
 {{- end -}}
 
 {{/*
-Custom annotations for workloads pods
+Workload metadata annotations. Secret sources are derived from the workload
+profile. Later sources win and per-workload annotations have final precedence.
+*/}}
+{{- define "logfire.workloadAnnotations" -}}
+{{- $values := .Values -}}
+{{- $serviceName := required "logfire.workloadAnnotations: need .serviceName" .serviceName -}}
+{{- $profile := include "logfire.secretDependencies.profile" (dict "serviceName" $serviceName) | fromJson -}}
+{{- $dependencies := get $profile "dependencies" | default list -}}
+{{- $merged := dict -}}
+{{- range $source := list "postgres" "existing" "gateway" "admin" -}}
+  {{- $hasSource := false -}}
+  {{- range $dependencies -}}{{- if eq (get . "source") $source -}}{{- $hasSource = true -}}{{- end -}}{{- end -}}
+  {{- if $hasSource -}}
+    {{- $annotations := include "logfire.secretDependencies.externalAnnotations" (dict "Values" $values "source" $source) | fromJson -}}
+    {{- if $annotations -}}{{- $merged = mergeOverwrite $merged $annotations -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $serviceValues := index $values $serviceName | default dict -}}
+{{- if $serviceValues.annotations -}}{{- $merged = mergeOverwrite $merged $serviceValues.annotations -}}{{- end -}}
+{{- if $merged -}}{{- toYaml $merged -}}{{- end -}}
+{{- end -}}
+
+{{/*
+Render a workload Secret dependency checksum.
+*/}}
+{{- define "logfire.secretDependencies.checksum" -}}
+{{- $ctx := required "logfire.secretDependencies.checksum: need .ctx" .ctx -}}
+{{- $dependency := required "logfire.secretDependencies.checksum: need .dependency" .dependency -}}
+{{- $source := get $dependency "source" -}}
+{{- $key := get $dependency "key" -}}
+{{- $name := "" -}}
+{{- if eq $source "postgres" -}}
+  {{- $name = include "logfire.postgresSecretName" $ctx | trim -}}
+{{- else if eq $source "existing" -}}
+  {{- $name = include "logfire.secretName" (dict "ctx" $ctx "secretName" $key) | trim -}}
+{{- else if eq $source "gateway" -}}
+  {{- $name = include "logfire.gatewaySecretName" (dict "ctx" $ctx "secretName" (get $dependency "secretName")) | trim -}}
+{{- else if eq $source "admin" -}}
+  {{- $name = include "logfire.adminSecretName" (dict "ctx" $ctx "secretName" $key) | trim -}}
+{{- end -}}
+{{- $annotationKey := get $dependency "annotationKey" | default (eq $source "postgres" | ternary (eq $key "postgresFFDsn" | ternary "checksum/logfire-postgres-ff-dsn" "checksum/logfire-postgres-dsn") (printf "checksum/%s" $key)) -}}
+{{- printf "%s: %s" $annotationKey (include "utils.secretChecksum" (dict "ctx" $ctx "name" $name "key" $key) | trim) -}}
+{{- end -}}
+
+{{/*
+Pod metadata annotations. Secret checksums are derived from the same profile as
+external-controller annotations, then custom pod annotations are appended.
 */}}
 {{- define "logfire.podAnnotations" -}}
-{{- $serviceValues := index .Values .serviceName -}}
-{{- if and $serviceValues $serviceValues.podAnnotations -}}
-{{- toYaml $serviceValues.podAnnotations -}}
+{{- $ctx := required "logfire.podAnnotations: need .ctx" .ctx -}}
+{{- $serviceName := required "logfire.podAnnotations: need .serviceName" .serviceName -}}
+{{- $profile := include "logfire.secretDependencies.profile" (dict "serviceName" $serviceName) | fromJson -}}
+{{- $lines := list -}}
+{{- range (get $profile "dependencies" | default list) -}}
+  {{- $source := get . "source" -}}
+  {{- $externalAnnotations := include "logfire.secretDependencies.externalAnnotations" (dict "Values" $ctx.Values "source" $source) | fromJson -}}
+  {{- if and (include "logfire.secretDependencies.sourceActive" (dict "Values" $ctx.Values "source" $source) | eq "true") (empty $externalAnnotations) -}}
+    {{- $lines = append $lines (include "logfire.secretDependencies.checksum" (dict "ctx" $ctx "dependency" .)) -}}
+  {{- end -}}
 {{- end -}}
+{{- $serviceValues := index $ctx.Values $serviceName | default dict -}}
+{{- if $serviceValues.podAnnotations -}}
+  {{- $lines = append $lines (toYaml $serviceValues.podAnnotations) -}}
+{{- end -}}
+{{- join "\n" $lines -}}
 {{- end -}}
 
 {{/*
@@ -1042,39 +1122,6 @@ default-checksum
 {{- $key := required "logfire.secretChecksumAnnotation: need .key" .key -}}
 {{- $annotationKey := .annotationKey | default (printf "checksum/%s" $key) -}}
 {{- printf "%s: %s" $annotationKey (include "utils.secretChecksum" (dict "ctx" $ctx "name" $name "key" $key) | trim) -}}
-{{- end -}}
-
-{{- define "logfire.postgresSecretChecksumAnnotation" -}}
-{{- $ctx := required "logfire.postgresSecretChecksumAnnotation: need .ctx" .ctx -}}
-{{- $key := .key | default "postgresDsn" -}}
-{{- $annotationKey := .annotationKey | default (eq $key "postgresFFDsn" | ternary "checksum/logfire-postgres-ff-dsn" "checksum/logfire-postgres-dsn") -}}
-{{- include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" $annotationKey "name" (include "logfire.postgresSecretName" $ctx) "key" $key) -}}
-{{- end -}}
-
-{{- define "logfire.logfireSecretChecksumAnnotations" -}}
-{{- $ctx := required "logfire.logfireSecretChecksumAnnotations: need .ctx" .ctx -}}
-{{- $lines := list -}}
-{{- range $secretName := required "logfire.logfireSecretChecksumAnnotations: need .secrets" .secrets }}
-{{- $lines = append $lines (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "name" (include "logfire.secretName" (dict "ctx" $ctx "secretName" $secretName) | trim) "key" $secretName)) -}}
-{{- end -}}
-{{- join "\n" $lines -}}
-{{- end -}}
-
-{{- define "logfire.gatewaySecretChecksumAnnotations" -}}
-{{- $ctx := required "logfire.gatewaySecretChecksumAnnotations: need .ctx" .ctx -}}
-{{- list
-  (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-encryption" "name" (include "logfire.gatewaySecretName" (dict "ctx" $ctx "secretName" "gateway-encryption") | trim) "key" "key"))
-  (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-internal-secret" "name" (include "logfire.gatewaySecretName" (dict "ctx" $ctx "secretName" "gateway-internal-secret") | trim) "key" "internalSecret"))
-  | join "\n" -}}
-{{- end -}}
-
-{{- define "logfire.adminSecretChecksumAnnotations" -}}
-{{- $ctx := required "logfire.adminSecretChecksumAnnotations: need .ctx" .ctx -}}
-{{- $lines := list -}}
-{{- range $secretName := list "logfire-admin-password" "logfire-admin-totp-secret" "logfire-admin-totp-recovery-codes" }}
-{{- $lines = append $lines (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "name" (include "logfire.adminSecretName" (dict "ctx" $ctx "secretName" $secretName) | trim) "key" $secretName)) -}}
-{{- end -}}
-{{- join "\n" $lines -}}
 {{- end -}}
 
 {{- define "logfire.backendMigrations.name" -}}
