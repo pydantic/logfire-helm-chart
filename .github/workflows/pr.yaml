@@ -45,7 +45,11 @@ jobs:
         run: ct lint --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH"
 
       - name: Check version-stable configuration checksums
-        run: ci/check-version-stable-checksums.sh
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo add jetstack https://charts.jetstack.io
+          helm dependency build charts/logfire
+          ci/check-version-stable-checksums.sh
 
       - name: Set up GCP auth
         id: auth
