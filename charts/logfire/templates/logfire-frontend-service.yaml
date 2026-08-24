@@ -45,7 +45,7 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
-        checksum/service-config: {{ include (print $.Template.BasePath "/logfire-frontend-service-config.yaml") . | sha256sum }}
+        checksum/service-config: {{ include "logfire.configChecksum" (include (print $.Template.BasePath "/logfire-frontend-service-config.yaml") .) }}
         {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:

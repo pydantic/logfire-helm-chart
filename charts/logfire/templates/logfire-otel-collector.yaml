@@ -103,7 +103,7 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/logfire-otel-collector-cfg.yaml") . | sha256sum }}
+        checksum/config: {{ include "logfire.configChecksum" (include (print $.Template.BasePath "/logfire-otel-collector-cfg.yaml") .) }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
         {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-meta-write-token")) | nindent 8 }}
         {{- end }}

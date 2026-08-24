@@ -414,6 +414,15 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
+Hash rendered configuration without the chart-version label. The label is
+resource metadata and must not restart workloads during a version-only chart
+promotion.
+*/}}
+{{- define "logfire.configChecksum" -}}
+{{- regexReplaceAll `(?m)(^metadata:\n(?:^[ \t]+[^\n]*\n)*?^[ \t]+labels:\n)[ \t]+helm[.]sh/chart:[^\n]*\n` . `${1}` | sha256sum -}}
+{{- end }}
+
+{{/*
 Selector labels
 */}}
 {{- define "logfire.selectorLabels" -}}
