@@ -162,14 +162,6 @@ without rendering Kubernetes resources.
 {{- end -}}
 
 {{/*
-Resolve per-query DataFusion I/O parallelism independently for each service.
-*/}}
-{{- define "logfire.ffQueryParallelism" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- get $effectiveServiceValues "queryParallelism" | default "auto" -}}
-{{- end -}}
-
-{{/*
 Resolve worker query capacity consistently for the combined query-api deployment
 and optional remote query workers. An explicit query-api override wins.
 Otherwise, derive capacity from the execution worker's effective CPU limit (or
@@ -206,7 +198,7 @@ preserves the established environment order.
 {{- end -}}
 {{- $executesQueries := ne $role "intake" -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- $queryParallelism := include "logfire.ffQueryParallelism" . -}}
+{{- $queryParallelism := get $effectiveServiceValues "queryParallelism" | default "auto" -}}
 {{- $maxCostPerWorker := include "logfire.ffMaxCostPerWorker" (dict "Values" .Values) -}}
 - name: FF_ENABLE_SPILL_TO_DISK
   value: "true"
