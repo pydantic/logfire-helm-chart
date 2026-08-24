@@ -47,3 +47,11 @@ if cmp -s "$tmp_dir/base-checksums" "$tmp_dir/config-change-checksums"; then
   echo "A configuration change did not alter workload configuration checksums" >&2
   exit 1
 fi
+
+render "$tmp_dir/base" --set-string 'otel_collector.exporter.headers.helm\.sh/chart=before' | checksums >"$tmp_dir/header-before-checksums"
+render "$tmp_dir/base" --set-string 'otel_collector.exporter.headers.helm\.sh/chart=after' | checksums >"$tmp_dir/header-after-checksums"
+
+if cmp -s "$tmp_dir/header-before-checksums" "$tmp_dir/header-after-checksums"; then
+  echo "A user configuration key named helm.sh/chart was excluded from workload configuration checksums" >&2
+  exit 1
+fi
