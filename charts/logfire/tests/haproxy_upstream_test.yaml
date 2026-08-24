@@ -1,0 +1,43 @@
+suite: HAProxy upstream TLS policy
+release:
+  name: lf
+  namespace: observability
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: renders verified TLS upstreams and preserves the Dex exception
+    set:
+      inClusterTls:
+        enabled: true
+        httpsPort: 9443
+        caBundle:
+          existingConfigMap:
+            name: ca
+            key: ca.crt
+    templates:
+      - templates/logfire-service-config.yaml
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "server logfire-backend logfire-backend\\.observability\\.svc\\.cluster\\.local\\.:9443 check resolvers kubernetes ssl verify required ca-file /usr/local/etc/haproxy/ca/ca\\.crt sni str\\(logfire-backend\\.observability\\.svc\\.cluster\\.local\\) verifyhost logfire-backend\\.observability\\.svc\\.cluster\\.local check-ssl"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "server logfire-dex .* verifyhost logfire-dex\\.observability\\.svc\\.cluster\\.local\\n"
+
+  - it: connects to the internal cache name using the cache certificate identity
+    set:
+      inClusterTls:
+        enabled: true
+        httpsPort: 9443
+        caBundle:
+          existingConfigMap:
+            name: ca
+            key: ca.crt
+    templates:
+      - templates/logfire-ff-proxy-cache-byte-config.yaml
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "server-template logfire-ff-cache-byte 1-[0-9]+ logfire-ff-cache-byte-internal\\.observability\\.svc\\.cluster\\.local\\.:9443 .* sni str\\(logfire-ff-cache-byte\\.observability\\.svc\\.cluster\\.local\\) verifyhost logfire-ff-cache-byte\\.observability\\.svc\\.cluster\\.local check-ssl"

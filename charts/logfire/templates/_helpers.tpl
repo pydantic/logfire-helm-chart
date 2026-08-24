@@ -1288,6 +1288,25 @@ In-cluster TLS helpers
 {{- .Values.inClusterTls.enabled | default false -}}
 {{- end -}}
 
+{{/*
+Render one HAProxy upstream server declaration. This module owns cluster DNS,
+cleartext/TLS port selection, SNI, CA verification, and certificate identity.
+Callers retain balancing, health checks, retries, and other backend policy.
+*/}}
+{{- define "logfire.inClusterTls.haproxyUpstream" -}}
+{{- $ctx := required "logfire.inClusterTls.haproxyUpstream: need .ctx" .ctx -}}
+{{- $name := required "logfire.inClusterTls.haproxyUpstream: need .name" .name -}}
+{{- $serviceName := required "logfire.inClusterTls.haproxyUpstream: need .serviceName" .serviceName -}}
+{{- $cleartextPort := required "logfire.inClusterTls.haproxyUpstream: need .cleartextPort" .cleartextPort -}}
+{{- $certificateServiceName := .certificateServiceName | default $serviceName -}}
+{{- $clusterDomain := $ctx.Values.clusterDomain | default "cluster.local" -}}
+{{- $host := printf "%s.%s.svc.%s" $serviceName $ctx.Release.Namespace $clusterDomain -}}
+{{- $certificateHost := printf "%s.%s.svc.%s" $certificateServiceName $ctx.Release.Namespace $clusterDomain -}}
+{{- $checkSsl := true -}}
+{{- if hasKey . "checkSsl" -}}{{- $checkSsl = .checkSsl -}}{{- end -}}
+{{- if .replicas -}}server-template {{ $name }} 1-{{ .replicas }}{{- else -}}server {{ $name }}{{- end }} {{ $host }}.:{{ ternary $ctx.Values.inClusterTls.httpsPort $cleartextPort (include "logfire.inClusterTls.enabled" $ctx | eq "true") }}{{ with .options }} {{ . }}{{ end }}{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") }} ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $certificateHost }}) verifyhost {{ $certificateHost }}{{ if $checkSsl }} check-ssl{{ end }}{{- end -}}
+{{- end -}}
+
 {{- define "logfire.inClusterTls.secretNamePrefix" -}}
 {{- if .Values.inClusterTls.secretNamePrefix -}}
 {{- .Values.inClusterTls.secretNamePrefix -}}

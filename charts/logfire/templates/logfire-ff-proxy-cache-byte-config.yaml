@@ -73,9 +73,4 @@ stringData:
       retries 4
       option redispatch 2
 
-      {{- $cacheByteSni := printf "logfire-ff-cache-byte.%s.svc.%s" .Release.Namespace (.Values.clusterDomain | default "cluster.local") -}}
-      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-      server-template logfire-ff-cache-byte 1-{{ $cacheByteMaxCount }} logfire-ff-cache-byte-internal.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:{{ .Values.inClusterTls.httpsPort }} check resolvers kubernetes inter 250ms hash-key addr ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $cacheByteSni }}) verifyhost {{ $cacheByteSni }} check-ssl
-      {{- else }}
-      server-template logfire-ff-cache-byte 1-{{ $cacheByteMaxCount }} logfire-ff-cache-byte-internal.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}.:9001 check resolvers kubernetes inter 250ms hash-key addr
-      {{- end }}
+      {{- include "logfire.inClusterTls.haproxyUpstream" (dict "ctx" . "name" "logfire-ff-cache-byte" "serviceName" "logfire-ff-cache-byte-internal" "certificateServiceName" "logfire-ff-cache-byte" "cleartextPort" 9001 "replicas" $cacheByteMaxCount "options" "check resolvers kubernetes inter 250ms hash-key addr") | nindent 6 }}
