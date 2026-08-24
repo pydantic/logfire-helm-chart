@@ -1,6 +1,7 @@
 {{- $serviceName := "logfire-ff-query-api" }}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $remoteQueryWorkerEnabled := get (get .Values "logfire-ff-query-worker" | default dict) "enabled" | default false -}}
+{{- $queryExecutionRole := ternary "intake" "combined" $remoteQueryWorkerEnabled -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -80,7 +81,7 @@ spec:
                 name: logfire-ff-query-config
           env:
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
-            {{- include "logfire.ffQueryExecutionEnv" (dict "Values" .Values "serviceName" $serviceName "adapter" "query-intake" "executesQueries" (not $remoteQueryWorkerEnabled)) | nindent 12 }}
+            {{- include "logfire.ffQueryExecutionEnv" (dict "Values" .Values "serviceName" $serviceName "role" $queryExecutionRole) | nindent 12 }}
             {{- if $remoteQueryWorkerEnabled }}
             - name: FF_TLS_CLIENT_SNI_HOSTNAME
               value: "logfire-ff-query-worker"

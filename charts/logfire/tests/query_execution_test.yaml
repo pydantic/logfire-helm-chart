@@ -13,11 +13,7 @@ tests:
     set:
       logfire-ff-query-api:
         queryParallelism: "7"
-        maxQueryCostPerPod: 9
         ioThreads: "5"
-        datafusionThreads: "6"
-        datafusionMemory: 3Gi
-        datafusionTargetPartitions: 4
         datafusionBatchSize: 2048
     templates:
       - templates/logfire-ff-query-api.yaml
@@ -30,23 +26,7 @@ tests:
           value: Deployment
       - contains:
           path: spec.template.spec.containers[0].env
-          content: {name: FF_MAX_COST_PER_WORKER, value: "9"}
-        documentSelector: *deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
           content: {name: FF_IO_THREADS, value: "5"}
-        documentSelector: *deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: {name: FF_DATAFUSION_THREADS, value: "6"}
-        documentSelector: *deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: {name: FF_DATAFUSION_MEMORY_LIMIT, value: 3Gi}
-        documentSelector: *deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: {name: FF_DATAFUSION_TARGET_PARTITIONS, value: "4"}
         documentSelector: *deployment
       - contains:
           path: spec.template.spec.containers[0].env
@@ -60,17 +40,9 @@ tests:
     templates:
       - templates/logfire-ff-query-api.yaml
     asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: {name: FF_QUERY_PARALLELISM, value: auto}
-        documentSelector: *deployment
       - notContains:
           path: spec.template.spec.containers[0].env
           content: {name: FF_IO_THREADS}
-        documentSelector: *deployment
-      - notContains:
-          path: spec.template.spec.containers[0].env
-          content: {name: FF_DATAFUSION_MEMORY_LIMIT}
         documentSelector: *deployment
       - contains:
           path: spec.template.spec.containers[0].env
@@ -81,10 +53,7 @@ tests:
     set:
       logfire-ff-query-worker:
         enabled: true
-        queryParallelism: "3"
         ioThreads: "2"
-        datafusionThreads: "4"
-        datafusionMemory: 5Gi
         resources:
           cpu: "2500m"
           memory: 6Gi
@@ -93,27 +62,11 @@ tests:
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
-          content: {name: FF_QUERY_PARALLELISM, value: "3"}
-        documentSelector: *deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
           content: {name: FF_MAX_COST_PER_WORKER, value: "3"}
         documentSelector: *deployment
       - contains:
           path: spec.template.spec.containers[0].env
-          content: {name: FF_RESOURCE_CPU_CORES, value: "2.500"}
-        documentSelector: *deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
           content: {name: FF_IO_THREADS, value: "2"}
-        documentSelector: *deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: {name: FF_DATAFUSION_THREADS, value: "4"}
-        documentSelector: *deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: {name: FF_DATAFUSION_MEMORY_LIMIT, value: 5Gi}
         documentSelector: *deployment
       - contains:
           path: spec.template.spec.containers[0].env
