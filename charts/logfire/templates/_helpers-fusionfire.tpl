@@ -162,14 +162,6 @@ without rendering Kubernetes resources.
 {{- end -}}
 
 {{/*
-Resolve per-query DataFusion I/O parallelism independently for each service.
-*/}}
-{{- define "logfire.ffQueryParallelism" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- get $effectiveServiceValues "queryParallelism" | default "auto" -}}
-{{- end -}}
-
-{{/*
 Resolve worker query capacity consistently for the combined query-api deployment
 and optional remote query workers. An explicit query-api override wins.
 Otherwise, derive capacity from the execution worker's effective CPU limit (or
@@ -193,18 +185,59 @@ request when no limit is configured), rounded up to whole cores.
 {{- end -}}
 
 {{/*
-Optional DataFusion query execution overrides. When omitted, FusionFire keeps
-its own defaults and auto-config behavior.
+Render the complete FusionFire query execution environment shared by the query
+intake and remote query worker adapters. The caller owns workload topology and
+passes its resulting role; this module owns the settings for that role and
+preserves the established environment order.
 */}}
 {{- define "logfire.ffQueryExecutionEnv" -}}
+{{- $serviceName := required "logfire.ffQueryExecutionEnv: need .serviceName" .serviceName -}}
+{{- $role := required "logfire.ffQueryExecutionEnv: need .role" .role -}}
+{{- if not (has $role (list "combined" "intake" "worker")) -}}
+  {{- fail (printf "logfire.ffQueryExecutionEnv: unknown role %q" $role) -}}
+{{- end -}}
+{{- $executesQueries := ne $role "intake" -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- if hasKey $effectiveServiceValues "datafusionTargetPartitions" }}
+{{- $queryParallelism := get $effectiveServiceValues "queryParallelism" | default "auto" -}}
+{{- $maxCostPerWorker := include "logfire.ffMaxCostPerWorker" (dict "Values" .Values) -}}
+- name: FF_ENABLE_SPILL_TO_DISK
+  value: "true"
+- name: FF_TEMP_DIR
+  value: /scratch/fusionfire
+- name: FF_QUERY_PARALLELISM
+  value: {{ $queryParallelism | quote }}
+- name: FF_MAX_COST_PER_WORKER
+  value: {{ $maxCostPerWorker | quote }}
+{{ include "logfire.ffResourceEnv" . }}
+{{- if eq $role "worker" }}
+- name: FF_PG_POOL_MAX_CONNECTIONS
+  value: "4"
+{{- end }}
+{{- if $executesQueries }}
+- name: FF_IO_THREADS
+  value: {{ include "logfire.ffIoThreads" . | quote }}
+- name: FF_DATAFUSION_THREADS
+  value: {{ include "logfire.ffDatafusionThreads" . | quote }}
+- name: FF_DATAFUSION_MEMORY_LIMIT
+  value: {{ get $effectiveServiceValues "datafusionMemory" | default "auto" | quote }}
+{{- if and (eq $role "combined") (hasKey $effectiveServiceValues "datafusionTargetPartitions") }}
 - name: FF_DATAFUSION_TARGET_PARTITIONS
   value: {{ get $effectiveServiceValues "datafusionTargetPartitions" | quote }}
 {{- end }}
-{{- if hasKey $effectiveServiceValues "datafusionBatchSize" }}
+{{- if and (eq $role "combined") (hasKey $effectiveServiceValues "datafusionBatchSize") }}
 - name: FF_DATAFUSION_BATCH_SIZE
   value: {{ get $effectiveServiceValues "datafusionBatchSize" | quote }}
+{{- end }}
+{{- if eq $role "worker" }}
+- name: FF_DATAFUSION_THREAD_STACK_SIZE
+  value: "8MB"
+{{- end }}
+- name: FF_IO_THREAD_STACK_SIZE
+  value: "8MB"
+{{- end }}
+{{- if ne $role "worker" }}
+- name: FF_DATAFUSION_THREAD_STACK_SIZE
+  value: "8MB"
 {{- end }}
 {{- end -}}
 
