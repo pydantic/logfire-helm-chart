@@ -44,6 +44,9 @@ jobs:
       - name: Chart linting
         run: ct lint --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH"
 
+      - name: Check Secret rollout dependencies
+        run: ruby ci/check-secret-rollout-dependencies.rb
+
       - name: Check version-stable configuration checksums
         run: |
           helm repo add bitnami https://charts.bitnami.com/bitnami
