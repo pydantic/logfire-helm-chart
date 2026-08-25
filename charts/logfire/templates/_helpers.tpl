@@ -67,10 +67,12 @@ spec:
   {{- end }}
 {{- end}}
 
-{{/* Determine whether HPA is enabled, including the legacy metrics format. */}}
+{{/*
+Determine if HPA is enabled maintaining backward compatibility with old values format
+*/}}
 {{- define "logfire.hpa.enabled" -}}
 {{- if hasKey . "hpa" -}}
-  {{- .hpa.enabled -}}
+  {{- .hpa.enabled  -}}
 {{- else if or .memAverage .cpuAverage .extraMetrics -}}
   {{- true -}}
 {{- else -}}
@@ -94,7 +96,7 @@ spec:
 
 {{- define "logfire.keda.enabled" -}}
 {{- if hasKey . "keda" -}}
-  {{- .keda.enabled -}}
+  {{- .keda.enabled  -}}
 {{- else -}}
   {{- false -}}
 {{- end -}}
@@ -893,33 +895,35 @@ ingest-data
 {{- end -}}
 
 {{/*
-Render workload annotations. Secret annotations are included only for sources
-used by the workload, and workload-specific values take precedence.
+Workload metadata annotations.
+Secret annotation sources are used for external secret reload controllers. If
+the same key is set more than once, later sources win and per-workload
+annotations have final precedence.
 */}}
 {{- define "logfire.workloadAnnotations" -}}
 {{- $values := .Values -}}
 {{- $serviceName := .serviceName -}}
 {{- $secretSources := .secretSources | default list -}}
 {{- $merged := dict -}}
-{{- range $source := $secretSources }}
-  {{- if eq $source "postgres" -}}
+{{- range $secretSource := $secretSources }}
+  {{- if eq $secretSource "postgres" -}}
     {{- if and $values.postgresSecret.enabled (not (empty $values.postgresSecret.annotations)) -}}
       {{- $merged = mergeOverwrite $merged $values.postgresSecret.annotations -}}
     {{- end -}}
-  {{- else if eq $source "existing" -}}
-    {{- $secret := get $values "existingSecret" | default dict -}}
-    {{- if and (get $secret "enabled") (not (empty (get $secret "annotations"))) -}}
-      {{- $merged = mergeOverwrite $merged (get $secret "annotations") -}}
+  {{- else if eq $secretSource "existing" -}}
+    {{- $existingSecret := get $values "existingSecret" | default dict -}}
+    {{- if and (get $existingSecret "enabled") (not (empty (get $existingSecret "annotations"))) -}}
+      {{- $merged = mergeOverwrite $merged (get $existingSecret "annotations") -}}
     {{- end -}}
-  {{- else if eq $source "gateway" -}}
-    {{- $secret := get $values "existingGatewaySecret" | default dict -}}
-    {{- if and (index $values "logfire-ai-gateway" "enabled") (get $secret "enabled") (not (empty (get $secret "annotations"))) -}}
-      {{- $merged = mergeOverwrite $merged (get $secret "annotations") -}}
+  {{- else if eq $secretSource "gateway" -}}
+    {{- $gatewaySecret := get $values "existingGatewaySecret" | default dict -}}
+    {{- if and (index $values "logfire-ai-gateway" "enabled") (get $gatewaySecret "enabled") (not (empty (get $gatewaySecret "annotations"))) -}}
+      {{- $merged = mergeOverwrite $merged (get $gatewaySecret "annotations") -}}
     {{- end -}}
-  {{- else if eq $source "admin" -}}
-    {{- $secret := get $values "adminSecret" | default dict -}}
-    {{- if and (get $secret "enabled") (not (empty (get $secret "annotations"))) -}}
-      {{- $merged = mergeOverwrite $merged (get $secret "annotations") -}}
+  {{- else if eq $secretSource "admin" -}}
+    {{- $adminSecret := get $values "adminSecret" | default dict -}}
+    {{- if and (get $adminSecret "enabled") (not (empty (get $adminSecret "annotations"))) -}}
+      {{- $merged = mergeOverwrite $merged (get $adminSecret "annotations") -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
@@ -933,11 +937,11 @@ used by the workload, and workload-specific values take precedence.
 {{- end -}}
 
 {{/*
-Render workload-specific pod annotations.
+Custom annotations for workloads pods
 */}}
 {{- define "logfire.podAnnotations" -}}
-{{- $serviceValues := index .Values .serviceName | default dict -}}
-{{- if $serviceValues.podAnnotations -}}
+{{- $serviceValues := index .Values .serviceName -}}
+{{- if and $serviceValues $serviceValues.podAnnotations -}}
 {{- toYaml $serviceValues.podAnnotations -}}
 {{- end -}}
 {{- end -}}

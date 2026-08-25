@@ -164,7 +164,6 @@ request when no limit is configured), rounded up to whole cores.
 Render the FusionFire query environment for an intake, worker, or combined role.
 */}}
 {{- define "logfire.ffQueryExecutionEnv" -}}
-{{- $serviceName := required "logfire.ffQueryExecutionEnv: need .serviceName" .serviceName -}}
 {{- $role := required "logfire.ffQueryExecutionEnv: need .role" .role -}}
 {{- if not (has $role (list "combined" "intake" "worker")) -}}
   {{- fail (printf "logfire.ffQueryExecutionEnv: unknown role %q" $role) -}}
