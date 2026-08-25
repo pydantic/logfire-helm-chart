@@ -953,14 +953,18 @@ Return the Secrets used by a workload.
 {{- end -}}
 {{- $profiles := dict
   "logfire-backend" $backend
-  "logfire-worker" (list $postgres (dict "source" "existing" "key" "logfire-unsubscribe-secret"))
+  "logfire-worker" (list $postgres (dict "source" "existing" "key" "logfire-unsubscribe-secret") (dict "source" "existing" "key" "logfire-jwt-secret"))
+  "logfire-dex" (list (dict "source" "existing" "key" "logfire-dex-client-secret"))
   "logfire-backend-auth" (list $postgres (dict "source" "existing" "key" "logfire-jwt-secret"))
-  "logfire-remote-mcp" (list $postgres (dict "source" "existing" "key" "logfire-mcp-oauth-client-secret"))
+  "logfire-remote-mcp" (list $postgres (dict "source" "existing" "key" "logfire-jwt-secret"))
   "logfire-otel-collector" (list (dict "source" "existing" "key" "logfire-meta-write-token"))
-  "logfire-ai-gateway" (concat (list $postgres) $gateway)
+  "logfire-ai-gateway" (concat (list $postgres (dict "source" "existing" "key" "logfire-jwt-secret")) $gateway)
   "logfire-ff-crud-api" (list (dict "source" "postgres" "key" "postgresFFDsn" "annotationKey" "checksum/logfire-postgres-dsn")) -}}
-{{- range $name := list "logfire-ff-compaction-worker" "logfire-ff-ingest" "logfire-ff-ingest-processor" "logfire-ff-maintenance-scheduler" "logfire-ff-maintenance-worker" "logfire-ff-query-api" "logfire-ff-query-worker" -}}
+{{- range $name := list "logfire-ff-compaction-worker" "logfire-ff-ingest" "logfire-ff-ingest-processor" "logfire-ff-maintenance-scheduler" "logfire-ff-maintenance-worker" -}}
   {{- $_ := set $profiles $name (list $ffPostgres) -}}
+{{- end -}}
+{{- range $name := list "logfire-ff-query-api" "logfire-ff-query-worker" -}}
+  {{- $_ := set $profiles $name (list $ffPostgres $postgres) -}}
 {{- end -}}
 {{- $dependencies := get $profiles $serviceName | default list -}}
 {{- dict "dependencies" $dependencies | toJson -}}
