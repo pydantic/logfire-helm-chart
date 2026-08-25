@@ -111,9 +111,7 @@ Only sizing and portable availability keys are inherited from presets.
 {{- end -}}
 
 {{/*
-Normalize and validate autoscaling while preserving legacy values and the
-historical distinction between an absent autoscaling key and an empty one.
-HPA and KEDA are the two adapters behind this seam.
+Return normalized and validated autoscaling settings.
 */}}
 {{- define "logfire.effectiveAutoscaling" -}}
 {{- $serviceName := required "logfire.effectiveAutoscaling: need .serviceName" .serviceName -}}
@@ -936,10 +934,7 @@ ingest-data
 {{- end -}}
 
 {{/*
-Resolve the logical Secret dependencies that control each workload's rollout.
-The profile is the single source of truth for both external-secret annotations
-and checksum fallbacks. Existing dependency gaps are intentionally preserved;
-this helper is behavior-preserving.
+Return the Secrets used by a workload.
 */}}
 {{- define "logfire.secretDependencies.profile" -}}
 {{- $serviceName := required "logfire.secretDependencies.profile: need .serviceName" .serviceName -}}
@@ -971,7 +966,7 @@ this helper is behavior-preserving.
 {{- dict "dependencies" $dependencies | toJson -}}
 {{- end -}}
 
-{{/* Whether a logical Secret source is active for this render. */}}
+{{/* Return whether a Secret source is enabled. */}}
 {{- define "logfire.secretDependencies.sourceActive" -}}
 {{- if eq .source "gateway" -}}
 {{- get (get .Values "logfire-ai-gateway" | default dict) "enabled" | default false -}}
@@ -980,7 +975,7 @@ true
 {{- end -}}
 {{- end -}}
 
-{{/* External-controller annotations for a logical Secret source. */}}
+{{/* Return annotations from an enabled external Secret source. */}}
 {{- define "logfire.secretDependencies.externalAnnotations" -}}
 {{- $sourceValues := dict -}}
 {{- if eq .source "postgres" -}}
@@ -1000,8 +995,7 @@ true
 {{- end -}}
 
 {{/*
-Workload metadata annotations. Secret sources are derived from the workload
-profile. Later sources win and per-workload annotations have final precedence.
+Render workload annotations. Workload-specific values take precedence.
 */}}
 {{- define "logfire.workloadAnnotations" -}}
 {{- $values := .Values -}}
@@ -1023,7 +1017,7 @@ profile. Later sources win and per-workload annotations have final precedence.
 {{- end -}}
 
 {{/*
-Render a workload Secret dependency checksum.
+Render the checksum annotation for one Secret dependency.
 */}}
 {{- define "logfire.secretDependencies.checksum" -}}
 {{- $ctx := required "logfire.secretDependencies.checksum: need .ctx" .ctx -}}
@@ -1045,8 +1039,7 @@ Render a workload Secret dependency checksum.
 {{- end -}}
 
 {{/*
-Pod metadata annotations. Secret checksums are derived from the same profile as
-external-controller annotations, then custom pod annotations are appended.
+Render pod annotations and checksums for managed Secrets.
 */}}
 {{- define "logfire.podAnnotations" -}}
 {{- $ctx := required "logfire.podAnnotations: need .ctx" .ctx -}}
@@ -1303,9 +1296,7 @@ In-cluster TLS helpers
 {{- end -}}
 
 {{/*
-Render one HAProxy upstream server declaration. This module owns cluster DNS,
-cleartext/TLS port selection, SNI, CA verification, and certificate identity.
-Callers retain balancing, health checks, retries, and other backend policy.
+Render an HAProxy server line, including in-cluster TLS when enabled.
 */}}
 {{- define "logfire.inClusterTls.haproxyUpstream" -}}
 {{- $ctx := required "logfire.inClusterTls.haproxyUpstream: need .ctx" .ctx -}}

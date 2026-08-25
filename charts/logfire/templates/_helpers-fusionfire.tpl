@@ -185,10 +185,7 @@ request when no limit is configured), rounded up to whole cores.
 {{- end -}}
 
 {{/*
-Render the complete FusionFire query execution environment shared by the query
-intake and remote query worker adapters. The caller owns workload topology and
-passes its resulting role; this module owns the settings for that role and
-preserves the established environment order.
+Render the FusionFire query environment for an intake, worker, or combined role.
 */}}
 {{- define "logfire.ffQueryExecutionEnv" -}}
 {{- $serviceName := required "logfire.ffQueryExecutionEnv: need .serviceName" .serviceName -}}
