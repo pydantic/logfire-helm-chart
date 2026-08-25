@@ -120,11 +120,11 @@ Return normalized and validated autoscaling settings.
 {{- $autoscaling := get $serviceValues "autoscaling" | default dict -}}
 {{- $hpaEnabled := false -}}
 {{- if hasKey $autoscaling "hpa" -}}
-  {{- $hpaEnabled = get (get $autoscaling "hpa" | default dict) "enabled" | default false -}}
+  {{- $hpaEnabled = eq (toString (get (get $autoscaling "hpa" | default dict) "enabled" | default false)) "true" -}}
 {{- else if or (get $autoscaling "memAverage") (get $autoscaling "cpuAverage") (get $autoscaling "extraMetrics") -}}
   {{- $hpaEnabled = true -}}
 {{- end -}}
-{{- $kedaEnabled := get (get $autoscaling "keda" | default dict) "enabled" | default false -}}
+{{- $kedaEnabled := eq (toString (get (get $autoscaling "keda" | default dict) "enabled" | default false)) "true" -}}
 {{- $cpuAverage := dig "hpa" "cpuAverage" (get $autoscaling "cpuAverage") $autoscaling -}}
 {{- $memAverage := dig "hpa" "memAverage" (get $autoscaling "memAverage") $autoscaling -}}
 {{- $extraMetrics := dig "hpa" "extraMetrics" (get $autoscaling "extraMetrics") $autoscaling -}}
