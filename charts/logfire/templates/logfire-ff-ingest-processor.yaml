@@ -1,6 +1,7 @@
 {{- $serviceName := "logfire-ff-ingest-processor" }}
-{{- $ioThreads := include "logfire.ffIoThreads" (dict "Values" .Values "serviceName" $serviceName) -}}
-{{- $datafusionThreads := include "logfire.ffDatafusionThreads" (dict "Values" .Values "serviceName" $serviceName) -}}
+{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $ioThreads := get $effectiveServiceValues "ioThreads" | default "auto" -}}
+{{- $datafusionThreads := get $effectiveServiceValues "datafusionThreads" | default "auto" -}}
 
 apiVersion: v1
 kind: Service
@@ -31,7 +32,7 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   annotations:
-    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
+    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres")) | nindent 4 }}
 spec:
   {{- include "logfire.replicas" (dict "Values" .Values "serviceName" $serviceName) | nindent 2 }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
@@ -49,7 +50,10 @@ spec:
       annotations:
         checksum/ff-config: {{ include "logfire.configChecksum" (include (print $.Template.BasePath "/logfire-ff-config.yaml") .) }}
         {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
-        {{- include "logfire.podAnnotations" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
+        {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
+        {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresFFDsn") | nindent 8 }}
+        {{- end }}
+        {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       containers:

@@ -188,6 +188,29 @@ Validate autoscaling configuration - warn if both HPA and KEDA are enabled
 {{- end -}}
 {{- end -}}
 
+{{/* Validate autoscaling configuration for one workload. */}}
+{{- define "logfire.validate.autoscaling" -}}
+{{- $serviceName := .serviceName -}}
+{{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $autoscaling := $serviceValues.autoscaling | default dict -}}
+{{- if $autoscaling -}}
+  {{- $hpaEnabled := include "logfire.hpa.enabled" $autoscaling | eq "true" -}}
+  {{- $kedaEnabled := include "logfire.keda.enabled" $autoscaling | eq "true" -}}
+  {{- $cpuAverage := dig "hpa" "cpuAverage" $autoscaling.cpuAverage $autoscaling -}}
+  {{- $memAverage := dig "hpa" "memAverage" $autoscaling.memAverage $autoscaling -}}
+  {{- $extraMetrics := dig "hpa" "extraMetrics" $autoscaling.extraMetrics $autoscaling -}}
+  {{- if and $hpaEnabled $kedaEnabled -}}
+    {{- fail (printf "Both HPA and KEDA are enabled for '%s'. Only one autoscaler should be enabled at a time to avoid conflicts." $serviceName) -}}
+  {{- end -}}
+  {{- if and $hpaEnabled (not (or $cpuAverage $memAverage $extraMetrics)) -}}
+    {{- fail (printf "HPA is enabled for '%s', but no metrics are configured. Set autoscaling.hpa.cpuAverage, autoscaling.hpa.memAverage, or autoscaling.hpa.extraMetrics (or the backward-compatible top-level equivalents)." $serviceName) -}}
+  {{- end -}}
+  {{- if and $autoscaling.minReplicas $autoscaling.maxReplicas (gt (int $autoscaling.minReplicas) (int $autoscaling.maxReplicas)) -}}
+    {{- fail (printf "autoscaling.minReplicas (%d) cannot be greater than autoscaling.maxReplicas (%d) for '%s'." (int $autoscaling.minReplicas) (int $autoscaling.maxReplicas) $serviceName) -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{/*
 Validate email/admin configuration
 */}}

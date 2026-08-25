@@ -56,27 +56,13 @@ timeoutSeconds: 5
 failureThreshold: 5
 {{- end -}}
 
-{{- define "logfire.ffCompactionTiersValue" -}}
-{{- $maintenanceWorker := dict "Values" .Values "serviceName" "logfire-ff-maintenance-worker" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" $maintenanceWorker | fromJson -}}
-{{- if (get $effectiveServiceValues "compactionTiers") -}}
-{{- get $effectiveServiceValues "compactionTiers" | toJson -}}
-{{- end -}}
-{{- end -}}
-
-{{- define "logfire.ffMaxCompactionJobSizeBytesDefault" -}}
-{{- $compactionWorker := dict "Values" .Values "serviceName" "logfire-ff-compaction-worker" -}}
-{{- $effectiveResources := include "logfire.effectiveResources" $compactionWorker | fromJson -}}
-{{- $memory := get $effectiveResources "memoryRequest" -}}
-{{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
-{{- $jobSizeMi := min 512 (max 32 (div $memoryMi 16)) -}}
-{{- printf "%dMB" $jobSizeMi -}}
-{{- end -}}
-
 {{- define "logfire.ffMaxCompactionJobSizeBytes" -}}
 {{- $maintenanceServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-maintenance-worker") | fromJson -}}
 {{- $compactionServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-compaction-worker") | fromJson -}}
-{{- coalesce (get $compactionServiceValues "maxCompactionJobSizeBytes") (get $maintenanceServiceValues "maxCompactionJobSizeBytes") (include "logfire.ffMaxCompactionJobSizeBytesDefault" .) -}}
+{{- $effectiveResources := include "logfire.effectiveResources" (dict "Values" .Values "serviceName" "logfire-ff-compaction-worker") | fromJson -}}
+{{- $memoryMi := int (include "logfire.memoryToMi" (get $effectiveResources "memoryRequest")) -}}
+{{- $default := printf "%dMB" (min 512 (max 32 (div $memoryMi 16))) -}}
+{{- coalesce (get $compactionServiceValues "maxCompactionJobSizeBytes") (get $maintenanceServiceValues "maxCompactionJobSizeBytes") $default -}}
 {{- end -}}
 
 {{/*
@@ -151,16 +137,6 @@ without rendering Kubernetes resources.
   value: {{ mul $memoryMi 1048576 | quote }}
 {{- end -}}
 
-{{- define "logfire.ffIoThreads" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- get $effectiveServiceValues "ioThreads" | default "auto" -}}
-{{- end -}}
-
-{{- define "logfire.ffDatafusionThreads" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- get $effectiveServiceValues "datafusionThreads" | default "auto" -}}
-{{- end -}}
-
 {{/*
 Resolve worker query capacity consistently for the combined query-api deployment
 and optional remote query workers. An explicit query-api override wins.
@@ -212,9 +188,9 @@ Render the FusionFire query environment for an intake, worker, or combined role.
 {{- end }}
 {{- if $executesQueries }}
 - name: FF_IO_THREADS
-  value: {{ include "logfire.ffIoThreads" . | quote }}
+  value: {{ get $effectiveServiceValues "ioThreads" | default "auto" | quote }}
 - name: FF_DATAFUSION_THREADS
-  value: {{ include "logfire.ffDatafusionThreads" . | quote }}
+  value: {{ get $effectiveServiceValues "datafusionThreads" | default "auto" | quote }}
 - name: FF_DATAFUSION_MEMORY_LIMIT
   value: {{ get $effectiveServiceValues "datafusionMemory" | default "auto" | quote }}
 {{- if and (eq $role "combined") (hasKey $effectiveServiceValues "datafusionTargetPartitions") }}
@@ -239,33 +215,19 @@ Render the FusionFire query environment for an intake, worker, or combined role.
 {{- end -}}
 
 {{/*
-Default ingest direct-file buffering.
-Sizes batch files from the pod memory request, then caps replay/submit
-concurrency from both memory and CPU so sub-core ingest pods do not overwhelm
-the downstream ingest-processor during disk replay.
-*/}}
-{{- define "logfire.ffIngestDirectFileSettingsDefault" -}}
-{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
-{{- $cpu := get $effectiveResources "cpuRequest" -}}
-{{- $memory := get $effectiveResources "memoryRequest" -}}
-{{- $cpuMilli := int (include "logfire.cpuMilli" $cpu) -}}
-{{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
-{{- $bufferMi := min 8 (max 1 (div $memoryMi 256)) -}}
-{{- $memoryConcurrency := max 4 (div $memoryMi 64) -}}
-{{- $cpuConcurrency := max 4 (div (add $cpuMilli 31) 32) -}}
-{{- $submitConcurrency := min 128 (max 1 (min $cpuConcurrency $memoryConcurrency)) -}}
-{{- dict "bufferMaxBytes" (printf "%dMB" $bufferMi) "submitConcurrency" $submitConcurrency | toJson -}}
-{{- end -}}
-
-{{/*
-Resolve ingest direct-file buffering from explicit service values, falling back
-to computed defaults.
+Resolve ingest direct-file buffering from explicit values or pod resources.
 */}}
 {{- define "logfire.ffIngestDirectFileSettings" -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- $defaults := include "logfire.ffIngestDirectFileSettingsDefault" . | fromJson -}}
-{{- $bufferMaxBytes := get $effectiveServiceValues "directFileBufferMaxBytes" | default (get $defaults "bufferMaxBytes") -}}
-{{- $submitConcurrency := get $effectiveServiceValues "directFileSubmitConcurrency" | default (get $defaults "submitConcurrency") -}}
+{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
+{{- $cpuMilli := int (include "logfire.cpuMilli" (get $effectiveResources "cpuRequest")) -}}
+{{- $memoryMi := int (include "logfire.memoryToMi" (get $effectiveResources "memoryRequest")) -}}
+{{- $defaultBuffer := printf "%dMB" (min 8 (max 1 (div $memoryMi 256))) -}}
+{{- $memoryConcurrency := max 4 (div $memoryMi 64) -}}
+{{- $cpuConcurrency := max 4 (div (add $cpuMilli 31) 32) -}}
+{{- $defaultConcurrency := min 128 (max 1 (min $cpuConcurrency $memoryConcurrency)) -}}
+{{- $bufferMaxBytes := get $effectiveServiceValues "directFileBufferMaxBytes" | default $defaultBuffer -}}
+{{- $submitConcurrency := get $effectiveServiceValues "directFileSubmitConcurrency" | default $defaultConcurrency -}}
 {{- dict "bufferMaxBytes" $bufferMaxBytes "submitConcurrency" $submitConcurrency | toJson -}}
 {{- end -}}
 
@@ -278,8 +240,8 @@ Common execution env for background maintenance/compaction workers.
 {{- $recordBatchMemory := get $effectiveServiceValues "maintenanceRecordBatchMemory" | default $datafusionMemory -}}
 {{- $jobParallelism := get $effectiveServiceValues "jobParallelism" | default "auto" -}}
 {{- $cpuConcurrency := get $effectiveServiceValues "cpuConcurrency" | default "auto" -}}
-{{- $ioThreads := include "logfire.ffIoThreads" . -}}
-{{- $datafusionThreads := include "logfire.ffDatafusionThreads" . -}}
+{{- $ioThreads := get $effectiveServiceValues "ioThreads" | default "auto" -}}
+{{- $datafusionThreads := get $effectiveServiceValues "datafusionThreads" | default "auto" -}}
 {{- $spillToDiskQuota := include "logfire.ffSpillToDiskQuota" . -}}
 {{- include "logfire.ffResourceEnv" . }}
 - name: FF_IO_THREADS
@@ -304,14 +266,6 @@ Common execution env for background maintenance/compaction workers.
   value: {{ (get $effectiveServiceValues "parquetSpoolThresholdBytes" | default "1MB" | quote) }}
 - name: FF_COMPACTION_JOB_PARALLELISM
   value: {{ $jobParallelism | quote }}
-{{- end -}}
-
-{{- define "logfire.ffMigrations.name" -}}
-{{- if .Values.dev.deployPostgres -}}
-"logfire-ff-migrations-{{ .Release.Revision }}"
-{{- else -}}
-"logfire-ff-migrations"
-{{- end -}}
 {{- end -}}
 
 {{/*

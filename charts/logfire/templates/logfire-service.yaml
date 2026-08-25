@@ -44,7 +44,7 @@ spec:
       annotations:
         checksum/service-config: {{ include "logfire.configChecksum" (include (print $.Template.BasePath "/logfire-service-config.yaml") .) }}
         {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
-        {{- include "logfire.podAnnotations" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
+        {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       serviceAccountName: {{ include "logfire.serviceAccountName" . }}
       {{- with .Values.imagePullSecrets }}

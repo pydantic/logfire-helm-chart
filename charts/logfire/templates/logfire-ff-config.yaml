@@ -1,3 +1,4 @@
+{{- $maintenanceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-maintenance-worker") | fromJson -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -70,8 +71,8 @@ metadata:
 data:
   FF_CACHE_OBJECT_STORE_HTTP_HEADERS: x-ff-no-warm-cache=1
   FF_COMPACTION_LOOP_BACKOFF_DELAY: "1s"
-  {{- with (include "logfire.ffCompactionTiersValue" .) }}
-  FF_COMPACTION_TIERS: {{ . | squote }}
+  {{- with (get $maintenanceValues "compactionTiers") }}
+  FF_COMPACTION_TIERS: {{ . | toJson | squote }}
   {{- end }}
   FF_MAX_COMPACTION_JOB_SIZE_BYTES: {{ include "logfire.ffMaxCompactionJobSizeBytes" . | quote }}
   FF_INGEST_MAX_TIME_SKEW: "120s"

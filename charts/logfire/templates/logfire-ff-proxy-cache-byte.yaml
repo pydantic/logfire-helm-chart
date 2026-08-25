@@ -53,7 +53,7 @@ spec:
         {{- include "logfire.secretChecksumAnnotation" (dict "ctx" . "annotationKey" "checksum/logfire-cache-byte-haproxy-config" "name" "logfire-cache-byte-haproxy-config" "key" "haproxy.cfg") | nindent 8 }}
         checksum/service-config: {{ include "logfire.configChecksum" (include (print $.Template.BasePath "/logfire-service-config.yaml") .) }}
         {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $proxyServiceName) | nindent 8 }}
-        {{- include "logfire.podAnnotations" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
+        {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       terminationGracePeriodSeconds: 120
       serviceAccountName: {{ include "logfire.serviceAccountName" . }}
