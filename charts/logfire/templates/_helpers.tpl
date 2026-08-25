@@ -1237,6 +1237,22 @@ In-cluster TLS helpers
 ================================================================================
 */}}
 
+{{/*
+Whether this deployment has an SMTP server behind it, which is what decides if the producers
+queue transactional email at all. Derived from the SMTP configuration rather than a separate
+switch, so the two cannot disagree: `emails_enabled` without a reachable server would fill the
+queue with tasks that can only fail at delivery, and a configured server that no producer knows
+about sends nothing. `logfire-task-runner` is what drains that queue, so it is deployed on the
+same condition.
+*/}}
+{{- define "logfire.emailsEnabled" -}}
+{{- if or .Values.dev.deployMaildev .Values.smtp.host -}}
+true
+{{- else -}}
+false
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.inClusterTls.enabled" -}}
 {{- .Values.inClusterTls.enabled | default false -}}
 {{- end -}}
@@ -1424,6 +1440,7 @@ Dev Postgres helpers
   "logfire-backend"
   "logfire-backend-auth"
   "logfire-worker"
+  "logfire-task-runner"
   "logfire-dex"
   "logfire-backend-migrations"
   "logfire-ff-migrations"

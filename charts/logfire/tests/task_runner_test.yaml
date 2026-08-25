@@ -1,0 +1,148 @@
+suite: transactional email delivery
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  # Without SMTP nothing downstream can deliver, so the producers must not queue and there is
+  # nothing for a runner to drain. Deploying one anyway would idle against an empty queue.
+  - it: no SMTP deploys no task runner and leaves the producers queueing nothing
+    templates:
+      - templates/logfire-task-runner.yaml
+      - templates/logfire-backend.yaml
+      - templates/logfire-backend-auth.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/logfire-task-runner.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "false"
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "false"
+        template: templates/logfire-worker.yaml
+
+  # The queue only drains if something runs `logfire_task_runner`; without this deployment a
+  # self-hosted install queues transactional email that is never delivered.
+  - it: configuring SMTP deploys the runner that drains the queue
+    set:
+      smtp:
+        host: smtp.example.com
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: logfire-task-runner
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: ["python", "-m", "logfire_task_runner"]
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].containerPort
+          value: 8005
+      # Liveness must not touch the database, or one Postgres blip restarts every pod at once.
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /health/live
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe.httpGet.path
+          value: /health
+
+  # The runner is the only workload that delivers these emails, so it needs the credentials
+  # rather than just the producers' enable flag.
+  - it: the runner receives the SMTP credentials and the database
+    set:
+      smtp:
+        host: smtp.example.com
+        port: 587
+        username: mailer
+        password: hunter2
+        use_tls: true
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SMTP_SERVER
+            value: smtp.example.com
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SMTP_PORT
+            value: "587"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SMTP_USE_TLS
+            value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CRUD_PG_DSN
+            valueFrom:
+              secretKeyRef:
+                name: lf-logfire-pg
+                key: postgresDsn
+
+  # A producer that queues while `EMAILS_ENABLED` is false would drop the email silently, so the
+  # flag has to follow the same condition that deploys the runner.
+  - it: configuring SMTP turns the producers on
+    set:
+      smtp:
+        host: smtp.example.com
+    templates:
+      - templates/logfire-backend.yaml
+      - templates/logfire-backend-auth.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "true"
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "true"
+        template: templates/logfire-backend-auth.yaml
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "true"
+        template: templates/logfire-worker.yaml
+
+  # The dev overlay points at maildev instead of a real server, and has to reach the same state.
+  - it: the maildev overlay deploys the runner pointed at maildev
+    set:
+      dev:
+        deployMaildev: true
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: logfire-task-runner
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SMTP_SERVER
+            value: logfire-maildev
