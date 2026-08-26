@@ -60,6 +60,44 @@ tests:
           path: spec.template.spec.containers[0].startupProbe.httpGet.path
           value: /health
 
+  # The runner calls absurd.create_queue() before it serves and exits 1 until that schema
+  # exists, so without this wait it crash-loops against a database the migrations Job has not
+  # reached yet. That Job is only a Helm hook when the bundled Postgres is off, so nothing
+  # else orders the two.
+  - it: the runner waits for the absurd schema before starting
+    set:
+      smtp:
+        host: smtp.example.com
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers
+          content:
+            name: wait-for-absurd-schema
+          any: true
+      - matchRegex:
+          path: spec.template.spec.initContainers[?(@.name=="wait-for-absurd-schema")].command[2]
+          pattern: schema_name = 'absurd'
+
+  # With the bundled Postgres the server wait comes first: psql cannot check for the schema
+  # until the server accepts connections at all.
+  - it: the dev Postgres wait comes before the schema wait
+    set:
+      smtp:
+        host: smtp.example.com
+      dev:
+        deployPostgres: true
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: check-db-ready
+      - equal:
+          path: spec.template.spec.initContainers[1].name
+          value: wait-for-absurd-schema
+
   # The runner is the only workload that delivers these emails, so it needs the credentials
   # rather than just the producers' enable flag.
   - it: the runner receives the SMTP credentials and the database

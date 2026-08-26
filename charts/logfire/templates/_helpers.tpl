@@ -1469,11 +1469,39 @@ Dev Postgres helpers
 {{/*
 Merge initContainers from values with dev Postgres wait initContainer.
 */}}
+{{/*
+`logfire-task-runner` calls `absurd.create_queue()` before it serves, so it exits 1 and
+crash-loops until the `absurd` schema exists. That schema is installed by
+`logfire-backend-migrations`, which is only a Helm hook when the bundled Postgres is off
+(see the annotations on that Job), so nothing otherwise orders the two. Waiting here makes
+the dependency explicit rather than leaving it to scheduling order.
+*/}}
+{{- define "logfire.absurdSchemaReady.initContainer" -}}
+- name: wait-for-absurd-schema
+  image: postgres:17
+  command:
+    - sh
+    - -c
+    - >-
+      until psql "$CRUD_PG_DSN" -tAc "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'absurd'" | grep -q 1; do echo "Waiting for the absurd schema..."; sleep 2; done
+  env:
+    - name: CRUD_PG_DSN
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "logfire.postgresSecretName" . }}
+          key: postgresDsn
+  {{- include "logfire.securityContext" .Values.securityContext | nindent 2 }}
+{{- end -}}
+
 {{- define "logfire.initContainers" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := required "logfire.initContainers: serviceName is required" .serviceName -}}
 {{- $userInit := (index $ctx.Values $serviceName | default dict).initContainers -}}
 {{- $devInit := include "logfire.dev.waitForPostgres.initContainers" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
+{{- $absurdInit := "" -}}
+{{- if eq $serviceName "logfire-task-runner" -}}
+  {{- $absurdInit = include "logfire.absurdSchemaReady.initContainer" $ctx | trim -}}
+{{- end -}}
 {{- $userHasCheckDbReady := dict "value" false -}}
 {{- range $userInit }}
   {{- if eq .name "check-db-ready" }}
@@ -1481,10 +1509,13 @@ Merge initContainers from values with dev Postgres wait initContainer.
   {{- end -}}
 {{- end -}}
 {{- $includeDevInit := and $devInit (not $userHasCheckDbReady.value) -}}
-{{- if or $includeDevInit $userInit -}}
+{{- if or $includeDevInit $userInit $absurdInit -}}
 initContainers:
 {{- if $includeDevInit }}
 {{ $devInit | nindent 2 }}
+{{- end }}
+{{- if $absurdInit }}
+{{ $absurdInit | nindent 2 }}
 {{- end }}
 {{- with $userInit }}
 {{ toYaml . | nindent 2 }}
