@@ -1021,7 +1021,12 @@ default-checksum
 {{- $ctx := required "logfire.postgresSecretChecksumAnnotation: need .ctx" .ctx -}}
 {{- $key := .key | default "postgresDsn" -}}
 {{- $annotationKey := .annotationKey | default (eq $key "postgresFFDsn" | ternary "checksum/logfire-postgres-ff-dsn" "checksum/logfire-postgres-dsn") -}}
+{{- if $ctx.Values.postgresSecret.enabled -}}
 {{- include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" $annotationKey "name" (include "logfire.postgresSecretName" $ctx) "key" $key) -}}
+{{- else -}}
+{{- $value := eq $key "postgresFFDsn" | ternary $ctx.Values.postgresFFDsn $ctx.Values.postgresDsn -}}
+{{- printf "%s: %s" $annotationKey ($value | b64enc | sha256sum) -}}
+{{- end -}}
 {{- end -}}
 
 {{- define "logfire.logfireSecretChecksumAnnotations" -}}
