@@ -174,7 +174,7 @@ spec:
             - name: DEX_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-dex-client-secret") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-dex-client-secret") }}
                   key: logfire-dex-client-secret
             - name: ON_PREM
               value: "true"
@@ -191,12 +191,12 @@ spec:
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
             - name: ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-encryption-key") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-encryption-key") }}
                   key: logfire-encryption-key
             - name: FUSIONFIRE_QUERY_HOST
               value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
@@ -225,12 +225,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: key
-                  name: {{ include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-encryption") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingGatewaySecret "secretName" "gateway-encryption") }}
             - name: GATEWAY_INTERNAL_SECRET
               valueFrom:
                 secretKeyRef:
                   key: internalSecret
-                  name: {{ include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-internal-secret") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingGatewaySecret "secretName" "gateway-internal-secret") }}
             {{- end }}
             - name: MIN_DATE_USAGE_CHART  # TODO: make this optional?
               value: "2025-01-01"
@@ -250,39 +250,39 @@ spec:
             - name: META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-meta-write-token") }}
                   key: logfire-meta-write-token
             - name: META_FRONTEND_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-frontend-token") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-meta-frontend-token") }}
                   key: logfire-meta-frontend-token
             - name: UNSUBSCRIBE_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-unsubscribe-secret") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-unsubscribe-secret") }}
                   key: logfire-unsubscribe-secret
             - name: ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.adminSecretName" (dict "ctx" . "secretName" "logfire-admin-password") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.adminSecret "secretName" "logfire-admin-password") }}
                   key: logfire-admin-password
             - name: ADMIN_TOTP_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.adminSecretName" (dict "ctx" . "secretName" "logfire-admin-totp-secret") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.adminSecret "secretName" "logfire-admin-totp-secret") }}
                   key: logfire-admin-totp-secret
             - name: ADMIN_TOTP_RECOVERY_CODES
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.adminSecretName" (dict "ctx" . "secretName" "logfire-admin-totp-recovery-codes") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.adminSecret "secretName" "logfire-admin-totp-recovery-codes") }}
                   key: logfire-admin-totp-recovery-codes
             {{- /* MCP OAuth2 is not supported without TLS for hostnames different than localhost */ -}}
             {{- if $oauthEnabled }}
             - name: MCP_OAUTH_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-mcp-oauth-client-secret") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-mcp-oauth-client-secret") }}
                   key: logfire-mcp-oauth-client-secret
             {{- end }}
             {{- include "logfire.groupOrganizationMapping" . | nindent 12 }}

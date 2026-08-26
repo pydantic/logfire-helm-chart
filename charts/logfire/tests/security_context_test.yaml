@@ -13,7 +13,7 @@ set:
 templates:
   - templates/logfire-ff-migrations.yaml
 tests:
-  - it: applies the chart-wide securityContext to the check-db-ready init container
+  - it: applies the chart-wide securityContext to init and main containers
     set:
       securityContext:
         allowPrivilegeEscalation: false
@@ -39,19 +39,6 @@ tests:
                   - ALL
               seccompProfile:
                 type: RuntimeDefault
-
-  - it: applies the chart-wide securityContext to the main container
-    set:
-      securityContext:
-        allowPrivilegeEscalation: false
-        runAsNonRoot: true
-        runAsUser: 1000
-        capabilities:
-          drop:
-            - ALL
-        seccompProfile:
-          type: RuntimeDefault
-    asserts:
       - equal:
           path: spec.template.spec.containers[0].securityContext
           value:

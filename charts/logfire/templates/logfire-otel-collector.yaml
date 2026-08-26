@@ -154,7 +154,7 @@ spec:
             - name: LOGFIRE_META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-meta-write-token") }}
                   key: logfire-meta-write-token
             {{- if and (not (get $envState "hasOtelResourceAttributes")) $collectorResourceAttributes }}
             - name: OTEL_RESOURCE_ATTRIBUTES
