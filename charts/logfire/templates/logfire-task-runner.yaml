@@ -1,7 +1,5 @@
 {{- $serviceName := "logfire-task-runner" }}
 {{- if (include "logfire.emailsEnabled" . | eq "true") }}
-{{- include "logfire.validate.autoscaling" (dict "Values" .Values "serviceName" $serviceName) -}}
-{{- include "logfire.validate.pdb" (dict "Values" .Values "serviceName" $serviceName) -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
