@@ -1518,10 +1518,17 @@ the dependency explicit rather than leaving it to scheduling order.
   {{- $absurdInit = include "logfire.absurdSchemaReady.initContainer" $ctx | trim -}}
 {{- end -}}
 {{- $userHasCheckDbReady := dict "value" false -}}
+{{- $userHasAbsurdWait := dict "value" false -}}
 {{- range $userInit }}
   {{- if eq .name "check-db-ready" }}
     {{- $_ := set $userHasCheckDbReady "value" true -}}
   {{- end -}}
+  {{- if eq .name "wait-for-absurd-schema" }}
+    {{- $_ := set $userHasAbsurdWait "value" true -}}
+  {{- end -}}
+{{- end -}}
+{{- if $userHasAbsurdWait.value -}}
+  {{- $absurdInit = "" -}}
 {{- end -}}
 {{- $includeDevInit := and $devInit (not $userHasCheckDbReady.value) -}}
 {{- if or $includeDevInit $userInit $absurdInit -}}

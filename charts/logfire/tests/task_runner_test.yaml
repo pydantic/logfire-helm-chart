@@ -105,6 +105,28 @@ tests:
           path: spec.template.spec.initContainers[1].name
           value: wait-for-absurd-schema
 
+  # Duplicate initContainer names make Kubernetes reject the Pod outright, so an operator who
+  # supplies their own wait must replace ours rather than collide with it. Same guard the chart
+  # already gives `check-db-ready`.
+  - it: an operator supplied wait replaces the generated one
+    set:
+      smtp:
+        host: smtp.example.com
+      logfire-task-runner:
+        initContainers:
+          - name: wait-for-absurd-schema
+            image: my-own-image:1
+            command: ["true"]
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.initContainers
+          count: 1
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: my-own-image:1
+
   # The runner is the only workload that delivers these emails, so it needs the credentials
   # rather than just the producers' enable flag.
   - it: the runner receives the SMTP credentials and the database
