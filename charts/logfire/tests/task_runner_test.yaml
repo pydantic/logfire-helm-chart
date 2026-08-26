@@ -68,6 +68,8 @@ tests:
     set:
       smtp:
         host: smtp.example.com
+      image:
+        repository: my-registry.example/
     templates:
       - templates/logfire-task-runner.yaml
     asserts:
@@ -79,9 +81,14 @@ tests:
       - matchRegex:
           path: spec.template.spec.initContainers[?(@.name=="wait-for-absurd-schema")].command[2]
           pattern: schema_name = 'absurd'
+      # The wait runs on every install, air-gapped ones included, so it has to reuse the image
+      # the runner already needs rather than reaching for a second registry.
+      - matchRegex:
+          path: spec.template.spec.initContainers[?(@.name=="wait-for-absurd-schema")].image
+          pattern: "^my-registry\\.example/python-prod:"
 
-  # With the bundled Postgres the server wait comes first: psql cannot check for the schema
-  # until the server accepts connections at all.
+  # With the bundled Postgres the server wait comes first. The schema wait tolerates a
+  # server that is not up yet, but ordering it second keeps the failure legible.
   - it: the dev Postgres wait comes before the schema wait
     set:
       smtp:

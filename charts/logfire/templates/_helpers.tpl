@@ -1478,12 +1478,27 @@ the dependency explicit rather than leaving it to scheduling order.
 */}}
 {{- define "logfire.absurdSchemaReady.initContainer" -}}
 - name: wait-for-absurd-schema
-  image: postgres:17
+  image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" "logfire-task-runner" "Chart" .Chart) }}'
+  imagePullPolicy: "{{ .Values.image.pullPolicy }}"
   command:
-    - sh
+    - python
     - -c
-    - >-
-      until psql "$CRUD_PG_DSN" -tAc "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'absurd'" | grep -q 1; do echo "Waiting for the absurd schema..."; sleep 2; done
+    - |
+      import os, time, psycopg
+
+      dsn = os.environ["CRUD_PG_DSN"]
+      while True:
+          try:
+              with psycopg.connect(dsn) as conn:
+                  found = conn.execute(
+                      "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'absurd'"
+                  ).fetchone()
+              if found:
+                  break
+              print("Waiting for the absurd schema...", flush=True)
+          except psycopg.OperationalError as exc:
+              print(f"Waiting for postgres: {exc}", flush=True)
+          time.sleep(2)
   env:
     - name: CRUD_PG_DSN
       valueFrom:
