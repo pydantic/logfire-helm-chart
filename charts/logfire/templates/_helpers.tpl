@@ -168,7 +168,9 @@ replicas: {{ dig "replicas" "1" $serviceValues }}
 {{- if hasKey . "pdb" -}}
   {{- $pdb = .pdb -}}
 {{- end -}}
-{{- include "logfire.validate.pdb" (dict "Values" $root.Values "serviceName" $serviceName "pdb" $pdb) -}}
+{{- if and (hasKey ($pdb | default dict) "minAvailable") (hasKey ($pdb | default dict) "maxUnavailable") -}}
+  {{- fail (printf "pdb.minAvailable and pdb.maxUnavailable are mutually exclusive for '%s'. Specify only one." $serviceName) -}}
+{{- end -}}
 {{- if $pdb }}
 {{- with $pdb }}
 ---
@@ -656,40 +658,11 @@ Create Postgres secret name
 {{- end }}
 {{- end -}}
 
-{{/*
-Logfire secret name
-*/}}
-{{- define "logfire.secretName" -}}
-{{- $ctx := required "logfire.secretName: need .ctx" .ctx -}}
-{{- $ex := get $ctx.Values "existingSecret" | default dict -}}
-{{- if and (get $ex "enabled") (get $ex "name") -}}
-    {{ get $ex "name" }}
-{{- else }}
-{{- .secretName }}
-{{- end }}
-{{- end -}}
-
-{{/*
-Logfire secret name
-*/}}
-{{- define "logfire.adminSecretName" -}}
-{{- $ctx := required "logfire.adminSecretName: need .ctx" .ctx -}}
-{{- $ex := get $ctx.Values "adminSecret" | default dict -}}
-{{- if and (get $ex "enabled") (get $ex "name") -}}
-    {{ get $ex "name" }}
-{{- else }}
-{{- .secretName }}
-{{- end }}
-{{- end -}}
-
-{{/*
-Gateway secret name
-*/}}
-{{- define "logfire.gatewaySecretName" -}}
-{{- $ctx := required "logfire.gatewaySecretName: need .ctx" .ctx -}}
-{{- $ex := get $ctx.Values "existingGatewaySecret" | default dict -}}
-{{- if and (get $ex "enabled") (get $ex "name") -}}
-    {{ get $ex "name" }}
+{{/* Use an external Secret name when configured, otherwise the managed name. */}}
+{{- define "logfire.externalSecretName" -}}
+{{- $external := .external | default dict -}}
+{{- if and (get $external "enabled") (get $external "name") -}}
+{{- get $external "name" -}}
 {{- else }}
 {{- .secretName }}
 {{- end }}
@@ -1048,14 +1021,20 @@ default-checksum
 {{- $ctx := required "logfire.postgresSecretChecksumAnnotation: need .ctx" .ctx -}}
 {{- $key := .key | default "postgresDsn" -}}
 {{- $annotationKey := .annotationKey | default (eq $key "postgresFFDsn" | ternary "checksum/logfire-postgres-ff-dsn" "checksum/logfire-postgres-dsn") -}}
+{{- if $ctx.Values.postgresSecret.enabled -}}
 {{- include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" $annotationKey "name" (include "logfire.postgresSecretName" $ctx) "key" $key) -}}
+{{- else -}}
+{{- $value := eq $key "postgresFFDsn" | ternary $ctx.Values.postgresFFDsn $ctx.Values.postgresDsn -}}
+{{- printf "%s: %s" $annotationKey ($value | b64enc | sha256sum) -}}
+{{- end -}}
 {{- end -}}
 
 {{- define "logfire.logfireSecretChecksumAnnotations" -}}
 {{- $ctx := required "logfire.logfireSecretChecksumAnnotations: need .ctx" .ctx -}}
 {{- $lines := list -}}
 {{- range $secretName := required "logfire.logfireSecretChecksumAnnotations: need .secrets" .secrets }}
-{{- $lines = append $lines (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "name" (include "logfire.secretName" (dict "ctx" $ctx "secretName" $secretName) | trim) "key" $secretName)) -}}
+  {{- $name := include "logfire.externalSecretName" (dict "external" $ctx.Values.existingSecret "secretName" $secretName) | trim -}}
+  {{- $lines = append $lines (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "name" $name "key" $secretName)) -}}
 {{- end -}}
 {{- join "\n" $lines -}}
 {{- end -}}
@@ -1063,8 +1042,8 @@ default-checksum
 {{- define "logfire.gatewaySecretChecksumAnnotations" -}}
 {{- $ctx := required "logfire.gatewaySecretChecksumAnnotations: need .ctx" .ctx -}}
 {{- list
-  (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-encryption" "name" (include "logfire.gatewaySecretName" (dict "ctx" $ctx "secretName" "gateway-encryption") | trim) "key" "key"))
-  (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-internal-secret" "name" (include "logfire.gatewaySecretName" (dict "ctx" $ctx "secretName" "gateway-internal-secret") | trim) "key" "internalSecret"))
+  (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-encryption" "name" (include "logfire.externalSecretName" (dict "external" $ctx.Values.existingGatewaySecret "secretName" "gateway-encryption") | trim) "key" "key"))
+  (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-internal-secret" "name" (include "logfire.externalSecretName" (dict "external" $ctx.Values.existingGatewaySecret "secretName" "gateway-internal-secret") | trim) "key" "internalSecret"))
   | join "\n" -}}
 {{- end -}}
 
@@ -1072,16 +1051,19 @@ default-checksum
 {{- $ctx := required "logfire.adminSecretChecksumAnnotations: need .ctx" .ctx -}}
 {{- $lines := list -}}
 {{- range $secretName := list "logfire-admin-password" "logfire-admin-totp-secret" "logfire-admin-totp-recovery-codes" }}
-{{- $lines = append $lines (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "name" (include "logfire.adminSecretName" (dict "ctx" $ctx "secretName" $secretName) | trim) "key" $secretName)) -}}
+  {{- $name := include "logfire.externalSecretName" (dict "external" $ctx.Values.adminSecret "secretName" $secretName) | trim -}}
+  {{- $lines = append $lines (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "name" $name "key" $secretName)) -}}
 {{- end -}}
 {{- join "\n" $lines -}}
 {{- end -}}
 
-{{- define "logfire.backendMigrations.name" -}}
-{{- if .Values.dev.deployPostgres -}}
-"logfire-backend-migrations-{{ .Release.Revision }}"
+{{- define "logfire.migrationJobName" -}}
+{{- $name := required "logfire.migrationJobName: need .name" .name -}}
+{{- $ctx := required "logfire.migrationJobName: need .ctx" .ctx -}}
+{{- if $ctx.Values.dev.deployPostgres -}}
+{{- printf "%s-%d" $name $ctx.Release.Revision | quote -}}
 {{- else -}}
-"logfire-backend-migrations"
+{{- $name | quote -}}
 {{- end -}}
 {{- end -}}
 
@@ -1241,25 +1223,26 @@ In-cluster TLS helpers
 {{- .Values.inClusterTls.enabled | default false -}}
 {{- end -}}
 
-{{- define "logfire.inClusterTls.secretNamePrefix" -}}
-{{- if .Values.inClusterTls.secretNamePrefix -}}
-{{- .Values.inClusterTls.secretNamePrefix -}}
-{{- else -}}
-{{- .Release.Name -}}
-{{- end -}}
+{{/*
+Render an HAProxy server line, including in-cluster TLS when enabled.
+*/}}
+{{- define "logfire.inClusterTls.haproxyUpstream" -}}
+{{- $ctx := required "logfire.inClusterTls.haproxyUpstream: need .ctx" .ctx -}}
+{{- $name := required "logfire.inClusterTls.haproxyUpstream: need .name" .name -}}
+{{- $serviceName := required "logfire.inClusterTls.haproxyUpstream: need .serviceName" .serviceName -}}
+{{- $cleartextPort := required "logfire.inClusterTls.haproxyUpstream: need .cleartextPort" .cleartextPort -}}
+{{- $certificateServiceName := .certificateServiceName | default $serviceName -}}
+{{- $clusterDomain := $ctx.Values.clusterDomain | default "cluster.local" -}}
+{{- $host := printf "%s.%s.svc.%s" $serviceName $ctx.Release.Namespace $clusterDomain -}}
+{{- $certificateHost := printf "%s.%s.svc.%s" $certificateServiceName $ctx.Release.Namespace $clusterDomain -}}
+{{- $checkSsl := true -}}
+{{- if hasKey . "checkSsl" -}}{{- $checkSsl = .checkSsl -}}{{- end -}}
+{{- if .replicas -}}server-template {{ $name }} 1-{{ .replicas }}{{- else -}}server {{ $name }}{{- end }} {{ $host }}.:{{ ternary $ctx.Values.inClusterTls.httpsPort $cleartextPort (include "logfire.inClusterTls.enabled" $ctx | eq "true") }}{{ with .options }} {{ . }}{{ end }}{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") }} ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $certificateHost }}) verifyhost {{ $certificateHost }}{{ if $checkSsl }} check-ssl{{ end }}{{- end -}}
 {{- end -}}
 
 {{- define "logfire.inClusterTls.secretName" -}}
-{{- $prefix := include "logfire.inClusterTls.secretNamePrefix" .ctx -}}
+{{- $prefix := .ctx.Values.inClusterTls.secretNamePrefix | default .ctx.Release.Name -}}
 {{- printf "%s-%s-tls" $prefix .serviceName -}}
-{{- end -}}
-
-{{- define "logfire.inClusterTls.caBundle.isConfigMap" -}}
-{{- if and (include "logfire.inClusterTls.enabled" . | eq "true") (.Values.inClusterTls.caBundle.existingConfigMap.name) -}}
-true
-{{- else -}}
-false
-{{- end -}}
 {{- end -}}
 
 {{- define "logfire.inClusterTls.certs.mode" -}}
@@ -1363,7 +1346,7 @@ false
 {{- $caBundleSecretName := dig "existingSecret" "name" "" $ctx.Values.inClusterTls.caBundle -}}
 {{- $autoIssuer := include "logfire.inClusterTls.certs.certManager.autoIssuer" $ctx | eq "true" -}}
 - name: {{ $volumeName }}
-  {{- if (include "logfire.inClusterTls.caBundle.isConfigMap" $ctx | eq "true") }}
+  {{- if $ctx.Values.inClusterTls.caBundle.existingConfigMap.name }}
   configMap:
     name: {{ $ctx.Values.inClusterTls.caBundle.existingConfigMap.name }}
     items:

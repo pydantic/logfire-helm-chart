@@ -218,21 +218,6 @@ Validate autoscaling configuration - warn if both HPA and KEDA are enabled
 {{- end -}}
 
 {{/*
-Validate PDB configuration - minAvailable and maxUnavailable are mutually exclusive
-*/}}
-{{- define "logfire.validate.pdb" -}}
-{{- $serviceName := .serviceName -}}
-{{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
-{{- $pdb := $serviceValues.pdb | default dict -}}
-{{- if hasKey . "pdb" -}}
-  {{- $pdb = .pdb | default dict -}}
-{{- end -}}
-{{- if and (hasKey $pdb "minAvailable") (hasKey $pdb "maxUnavailable") -}}
-  {{- fail (printf "pdb.minAvailable and pdb.maxUnavailable are mutually exclusive for '%s'. Specify only one." $serviceName) -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
 Validate email/admin configuration
 */}}
 {{- define "logfire.validate.admin" -}}

@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.43-rc.1](https://img.shields.io/badge/Version-0.13.43--rc.1-informational?style=flat-square) ![AppVersion: 4ae3e48d](https://img.shields.io/badge/AppVersion-4ae3e48d-informational?style=flat-square)
+![Version: 0.13.43-rc.2](https://img.shields.io/badge/Version-0.13.43--rc.2-informational?style=flat-square) ![AppVersion: 4ae3e48d](https://img.shields.io/badge/AppVersion-4ae3e48d-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -331,6 +331,22 @@ logfire-worker:
 Nested `resources.requests` do not add mandatory limits, allowing workloads to use spare node capacity. The legacy flat resource shorthand continues to use the configured values for both requests and limits.
 
 ## Advanced Configuration
+
+### External Secrets and Automatic Reloads
+
+For Argo CD deployments, use the chart's existing-Secret options with an external secret controller. Updating a Kubernetes Secret does not restart pods that consume its values through environment variables, so configure a reload controller such as [Reloader](https://github.com/stakater/Reloader) as well.
+
+Add the reload controller's workload annotations to the relevant Secret values. The chart copies them only to workloads that consume that Secret and omits its Helm checksum annotations, leaving rotation to the reload controller:
+
+```yaml
+postgresSecret:
+  enabled: true
+  name: logfire-postgres
+  annotations:
+    reloader.stakater.com/auto: "true"
+```
+
+The same `annotations` pattern is supported by `existingSecret`, `adminSecret`, and `existingGatewaySecret`. The chart does not install a reload controller.
 
 ### In-cluster HTTPS
 

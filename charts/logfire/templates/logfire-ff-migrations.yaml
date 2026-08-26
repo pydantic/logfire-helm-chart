@@ -2,7 +2,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "logfire.ffMigrations.name" . }}
+  name: {{ include "logfire.migrationJobName" (dict "ctx" . "name" "logfire-ff-migrations") }}
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}

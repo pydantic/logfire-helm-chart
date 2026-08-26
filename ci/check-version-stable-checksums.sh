@@ -25,7 +25,11 @@ render() {
 }
 
 checksums() {
-  awk '/checksum\/(config|ff-config|service-config):/ { print }' | sort
+  awk '/checksum\/(config|ff-config|service-config|logfire-cache-byte-haproxy-config):/ { print }' | sort
+}
+
+haproxy_checksum() {
+  awk '/checksum\/logfire-cache-byte-haproxy-config:/ { print }'
 }
 
 render "$tmp_dir/base" | checksums >"$tmp_dir/base-checksums"
@@ -45,6 +49,19 @@ render "$tmp_dir/base" --set-string redisDsn=redis://changed:6379 | checksums >"
 
 if cmp -s "$tmp_dir/base-checksums" "$tmp_dir/config-change-checksums"; then
   echo "A configuration change did not alter workload configuration checksums" >&2
+  exit 1
+fi
+
+render "$tmp_dir/base" | haproxy_checksum >"$tmp_dir/haproxy-checksum"
+render "$tmp_dir/base" --set logfire-ff-cache-byte.autoscaling.maxReplicas=9 | haproxy_checksum >"$tmp_dir/haproxy-change-checksum"
+
+if [[ ! -s "$tmp_dir/haproxy-checksum" ]]; then
+  echo "No HAProxy configuration checksum annotation was rendered" >&2
+  exit 1
+fi
+
+if cmp -s "$tmp_dir/haproxy-checksum" "$tmp_dir/haproxy-change-checksum"; then
+  echo "An HAProxy configuration change did not alter its workload checksum" >&2
   exit 1
 fi
 

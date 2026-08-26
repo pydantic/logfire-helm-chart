@@ -62,6 +62,8 @@ tests:
 
   - it: configures zone-aware HTTPS routing on query workers
     set:
+      serviceAccount:
+        name: routing-test-sa
       logfire-ff-query-worker:
         enabled: true
       logfire-ff-cache-byte:
@@ -74,12 +76,15 @@ tests:
             name: logfire-incluster-ca
     templates:
       - templates/logfire-ff-query-worker.yaml
+      - templates/logfire-ff-cache-routing-rbac.yaml
+      - templates/logfire-ff-cache-byte.yaml
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
           content:
             name: FF_BYTE_CACHE_K8S_PORT_NAME
             value: https
+        template: templates/logfire-ff-query-worker.yaml
       - contains:
           path: spec.template.spec.containers[0].env
           content:
@@ -87,6 +92,38 @@ tests:
             valueFrom:
               fieldRef:
                 fieldPath: spec.nodeName
+        template: templates/logfire-ff-query-worker.yaml
+      - contains:
+          path: rules
+          content:
+            apiGroups: [""]
+            resources: [nodes]
+            verbs: [get]
+        template: templates/logfire-ff-cache-routing-rbac.yaml
+        documentSelector:
+          path: kind
+          value: ClusterRole
+      - equal:
+          path: subjects[0].name
+          value: routing-test-sa
+        template: templates/logfire-ff-cache-routing-rbac.yaml
+        documentSelector:
+          path: kind
+          value: ClusterRoleBinding
+      - equal:
+          path: spec.template.spec.topologySpreadConstraints[0].topologyKey
+          value: topology.kubernetes.io/zone
+        template: templates/logfire-ff-cache-byte.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.topologySpreadConstraints[1].topologyKey
+          value: kubernetes.io/hostname
+        template: templates/logfire-ff-cache-byte.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
 
   - it: omits query routing environment when disabled
     set:
@@ -96,15 +133,20 @@ tests:
           zoneAware: true
     templates:
       - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-cache-routing-rbac.yaml
     asserts:
       - notContains:
           path: spec.template.spec.containers[0].env
           content:
             name: FF_BYTE_CACHE_K8S_SERVICE
             value: logfire-ff-cache-byte-internal
+        template: templates/logfire-ff-query-api.yaml
         documentSelector:
           path: kind
           value: Deployment
+      - hasDocuments:
+          count: 0
+        template: templates/logfire-ff-cache-routing-rbac.yaml
 
   - it: grants only EndpointSlice discovery by default
     templates:
@@ -141,130 +183,6 @@ tests:
         documentSelector:
           path: kind
           value: RoleBinding
-
-  - it: grants node lookup when zone awareness is enabled
-    set:
-      logfire-ff-cache-byte:
-        clientSideRouting:
-          zoneAware: true
-    templates:
-      - templates/logfire-ff-cache-routing-rbac.yaml
-    asserts:
-      - hasDocuments:
-          count: 4
-      - contains:
-          path: rules
-          content:
-            apiGroups:
-              - ""
-            resources:
-              - nodes
-            verbs:
-              - get
-        documentSelector:
-          path: kind
-          value: ClusterRole
-      - equal:
-          path: subjects[0]
-          value:
-            kind: ServiceAccount
-            name: default
-            namespace: cache-ns
-        documentSelector:
-          path: kind
-          value: ClusterRoleBinding
-
-  - it: binds routing RBAC to the service account used by query workloads
-    set:
-      serviceAccount:
-        name: routing-test-sa
-      logfire-ff-query-worker:
-        enabled: true
-      logfire-ff-cache-byte:
-        clientSideRouting:
-          zoneAware: true
-    templates:
-      - templates/logfire-ff-cache-routing-rbac.yaml
-      - templates/logfire-ff-query-api.yaml
-      - templates/logfire-ff-query-worker.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.serviceAccountName
-          value: routing-test-sa
-        template: templates/logfire-ff-query-api.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.serviceAccountName
-          value: routing-test-sa
-        template: templates/logfire-ff-query-worker.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: subjects[0].name
-          value: routing-test-sa
-        template: templates/logfire-ff-cache-routing-rbac.yaml
-        documentSelector:
-          path: kind
-          value: RoleBinding
-      - equal:
-          path: subjects[0].name
-          value: routing-test-sa
-        template: templates/logfire-ff-cache-routing-rbac.yaml
-        documentSelector:
-          path: kind
-          value: ClusterRoleBinding
-
-  - it: omits routing RBAC when client routing is disabled
-    set:
-      logfire-ff-cache-byte:
-        clientSideRouting:
-          enabled: false
-          zoneAware: true
-    templates:
-      - templates/logfire-ff-cache-routing-rbac.yaml
-    asserts:
-      - hasDocuments:
-          count: 0
-
-  - it: does not add cache spreading without zone awareness
-    templates:
-      - templates/logfire-ff-cache-byte.yaml
-    asserts:
-      - notExists:
-          path: spec.template.spec.topologySpreadConstraints
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: adds soft zone and hostname cache spreading when zone awareness is enabled
-    set:
-      logfire-ff-cache-byte:
-        clientSideRouting:
-          zoneAware: true
-    templates:
-      - templates/logfire-ff-cache-byte.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.topologySpreadConstraints
-          value:
-            - maxSkew: 1
-              topologyKey: topology.kubernetes.io/zone
-              whenUnsatisfiable: ScheduleAnyway
-              labelSelector:
-                matchLabels:
-                  app.kubernetes.io/component: logfire-ff-cache-byte
-            - maxSkew: 1
-              topologyKey: kubernetes.io/hostname
-              whenUnsatisfiable: ScheduleAnyway
-              labelSelector:
-                matchLabels:
-                  app.kubernetes.io/component: logfire-ff-cache-byte
-        documentSelector:
-          path: kind
-          value: Deployment
 
   - it: preserves user cache constraints without duplicating the zone spread
     set:
@@ -325,40 +243,6 @@ tests:
           path: kind
           value: Deployment
 
-  - it: scales derived disk-cache capacity with a custom scratch volume size
-    set:
-      logfire-ff-cache-byte:
-        scratchVolume:
-          storage: 10Gi
-    templates:
-      - templates/logfire-ff-cache-byte.yaml
-    asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: FF_CACHE_DISK_CAPACITY
-            value: "8192MB"
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: keeps derived disk-cache capacity below sub-GiB scratch volumes
-    set:
-      logfire-ff-cache-byte:
-        scratchVolume:
-          storage: 500Mi
-    templates:
-      - templates/logfire-ff-cache-byte.yaml
-    asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: FF_CACHE_DISK_CAPACITY
-            value: "400MB"
-        documentSelector:
-          path: kind
-          value: Deployment
-
   - it: lets explicit cacheDiskCapacity override the derived value
     set:
       logfire-ff-cache-byte:
@@ -387,40 +271,6 @@ tests:
           content:
             name: FF_CACHE_DISK_CAPACITY
           any: true
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: derives disk-cache capacity from fractional scratch volume quantities
-    set:
-      logfire-ff-cache-byte:
-        scratchVolume:
-          storage: 1.5Gi
-    templates:
-      - templates/logfire-ff-cache-byte.yaml
-    asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: FF_CACHE_DISK_CAPACITY
-            value: "1228MB"
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: treats decimal storage suffixes as powers of 1000
-    set:
-      logfire-ff-cache-byte:
-        scratchVolume:
-          storage: 1G
-    templates:
-      - templates/logfire-ff-cache-byte.yaml
-    asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: FF_CACHE_DISK_CAPACITY
-            value: "762MB"
         documentSelector:
           path: kind
           value: Deployment

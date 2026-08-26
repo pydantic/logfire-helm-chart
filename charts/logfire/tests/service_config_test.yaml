@@ -5,7 +5,7 @@ release:
   name: lf
   namespace: default
 tests:
-  - it: routes /v2/query to the query API backend
+  - it: routes core paths to their backends
     set:
       sizingPreset: tiny
     asserts:
@@ -18,33 +18,18 @@ tests:
       - matchRegex:
           path: stringData["haproxy.cfg"]
           pattern: "backend logfire-ff-query-api\\n  balance roundrobin\\n  option httpchk GET /health\\n  http-check expect status 200\\n  timeout connect 3s\\n  timeout server 120s"
-
-  - it: routes /v1/(traces|metrics|logs) to the ingest backend
-    set:
-      sizingPreset: tiny
-    asserts:
       - matchRegex:
           path: stringData["haproxy.cfg"]
           pattern: "acl path_ingest path_reg -i \\^/v1/\\(traces\\|metrics\\|logs\\)\\$"
       - matchRegex:
           path: stringData["haproxy.cfg"]
           pattern: "use_backend logfire-ingest if path_ingest"
-
-  - it: keeps /ui-api, /v1, /api on the backend (covers /v1/query)
-    set:
-      sizingPreset: tiny
-    asserts:
       - matchRegex:
           path: stringData["haproxy.cfg"]
           pattern: "acl path_backend path_reg -i \\^/\\(ui-api\\|v1\\|api\\)/"
       - matchRegex:
           path: stringData["haproxy.cfg"]
           pattern: "use_backend logfire-backend if path_backend"
-
-  - it: routes /auth-api to dex
-    set:
-      sizingPreset: tiny
-    asserts:
       - matchRegex:
           path: stringData["haproxy.cfg"]
           pattern: "acl path_dex path_beg /auth-api"
