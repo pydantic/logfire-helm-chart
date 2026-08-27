@@ -242,6 +242,8 @@ spec:
               value: {{ .Values.logfireRegion | default "local" }}
             - name: KNOWN_LOGFIRE_REGIONS
               value: '[{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}]'
+            - name: EMAILS_ENABLED
+              value: {{ include "logfire.emailsEnabled" . | quote }}
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
             {{- include "logfire.rateLimits" . | nindent 12 }}

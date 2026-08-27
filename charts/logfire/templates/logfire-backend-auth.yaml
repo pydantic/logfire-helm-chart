@@ -120,6 +120,8 @@ spec:
               value: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "tokenRedis") }}
             - name: TOKEN_REDIS_PREFIX
               value: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "tokenRedis") | quote }}
+            - name: EMAILS_ENABLED
+              value: {{ include "logfire.emailsEnabled" . | quote }}
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
             {{- with (include "logfire.intakeOauthResourceUrl" . | trim) }}

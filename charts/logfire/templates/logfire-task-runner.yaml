@@ -1,4 +1,5 @@
-{{- $serviceName := "logfire-worker" }}
+{{- $serviceName := "logfire-task-runner" }}
+{{- if (include "logfire.emailsEnabled" . | eq "true") }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -8,7 +9,7 @@ metadata:
     {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   annotations:
-    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres" "existing")) | nindent 4 }}
+    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres")) | nindent 4 }}
 spec:
   {{- include "logfire.replicas" (dict "Values" .Values "serviceName" $serviceName) | nindent 2 }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
@@ -22,9 +23,6 @@ spec:
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
         {{- end }}
-        {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
-        {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-unsubscribe-secret" "logfire-jwt-secret")) | nindent 8 }}
-        {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
@@ -34,31 +32,27 @@ spec:
       {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       containers:
         - name: {{ $serviceName }}
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.workerImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
+          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
-          command: [ "python", "-m", "logfire_worker" ]
+          command: [ "python", "-m", "logfire_task_runner" ]
           ports:
-            - containerPort: 8003
+            - containerPort: 8005
+          # Liveness is process-only so a Postgres blip cannot crash-loop every pod at once;
+          # startup uses /health, which does reach the database.
           livenessProbe:
             httpGet:
               path: /health/live
-              port: 8003
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8003
+              port: 8005
           startupProbe:
             httpGet:
-              path: /health/live
-              port: 8003
+              path: /health
+              port: 8005
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 11
           env:
-            - name: MATERIALIZE_DASHBOARDS
-              value: "false"
             - name: LOGFIRE_SERVICE_NAME
               value: {{ $serviceName }}
             - name: LOGFIRE_SERVICE_VERSION
@@ -68,64 +62,18 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresDsn
-            - name: SHARED_REDIS_DSN
-              value: {{ .Values.redisDsn }}
-            - name: TOKEN_REDIS_DSN
-              value: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "tokenRedis") }}
-            - name: TOKEN_REDIS_PREFIX
-              value: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "tokenRedis") | quote }}
-            - name: REDIS_DSN
-              value: {{ .Values.redisDsn }}
-            - name: BACKEND_REDIS_DSN
-              value: {{ .Values.redisDsn }}
-            - name: OTEL_TRACES_SAMPLER
-              value: parentbased_traceidratio
-            - name: OTEL_TRACES_SAMPLER_ARG
-              value: "0.05"
-            - name: FUSIONFIRE_QUERY_HOST
-              value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
-            - name: FUSIONFIRE_QUERY_PORT
-              value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
-            - name: FUSIONFIRE_INGEST_HOST
-              value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor"
-            - name: FUSIONFIRE_INGEST_PORT
-              value: "{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
-            - name: FUSIONFIRE_CRUD_HOST
-              value: "{{ include "logfire.scheme" . }}://logfire-ff-crud-api"
-            - name: FUSIONFIRE_CRUD_PORT
-              value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
-            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-            - name: LOGFIRE_CA_PATH
-              value: /etc/logfire/incluster-ca/ca.crt
-            {{- end }}
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | quote }}
             - name: COLLECTOR_OTLP_GRPC_HOST
               value: http://logfire-otel-collector:4317
-            - name: EMAILS_ENABLED
-              value: {{ include "logfire.emailsEnabled" . | quote }}
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
-            {{- with (include "logfire.aiModelEnv" (dict "root" $ "roles" (list "reasoning")) | trim) }}
-            {{- . | nindent 12 }}
-            {{- end }}
-            {{- with (include "logfire.aiProviderEnv" $ | trim) }}
-            {{- . | nindent 12 }}
-            {{- end }}
-            - name: UNSUBSCRIBE_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-unsubscribe-secret") }}
-                  key: logfire-unsubscribe-secret
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-jwt-secret") }}
-                  key: logfire-jwt-secret
             - name: LOGFIRE_REGION
               value: {{ .Values.logfireRegion | default "local" }}
-            - name: KNOWN_LOGFIRE_REGIONS
-              value: '[{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}]'
+            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+            - name: LOGFIRE_CA_PATH
+              value: /etc/logfire/incluster-ca/ca.crt
+            {{- end }}
             {{ if .Values.dev.deployMaildev }}
             - name: SMTP_SERVER
               value: logfire-maildev
@@ -162,3 +110,4 @@ spec:
       {{- end }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
+{{- end }}

@@ -897,6 +897,38 @@ logfire-remote-mcp:
 #     minAvailable: 1
 
 
+# -- Autoscaling & resources for the transactional-email task runner. Deployed only when SMTP is
+# configured (`smtp.host`, or `dev.deployMaildev`), which is the same condition that makes the
+# producers queue email at all.
+# logfire-task-runner:
+#   # -- Workload labels
+#   labels: {}
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   replicas: 1
+#   resources:
+#     cpu: "100m"
+#     memory: "256Mi"
+#     ephemeralStorage: "512Mi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 3
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 70
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
 # -- Autoscaling & resources for the proxy pods
 # logfire-service:
 #   # -- Workload labels
@@ -1948,6 +1980,23 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+    logfire-task-runner:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+          ephemeral-storage: "512Mi"
+        limits:
+          memory: "512Mi"
+          ephemeral-storage: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          cpuAverage: 70
+      pdb:
+        maxUnavailable: 1
     logfire-worker:
       resources:
         requests:
@@ -2237,6 +2286,23 @@ sizingPresets:
           enabled: true
           memAverage: 70
           cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+    logfire-task-runner:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+          ephemeral-storage: "512Mi"
+        limits:
+          memory: "512Mi"
+          ephemeral-storage: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          cpuAverage: 70
       pdb:
         maxUnavailable: 1
     logfire-worker:
@@ -2669,6 +2735,23 @@ sizingPresets:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: logfire-frontend-service
+    logfire-task-runner:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+          ephemeral-storage: "512Mi"
+        limits:
+          memory: "512Mi"
+          ephemeral-storage: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          cpuAverage: 70
+      pdb:
+        maxUnavailable: 1
     logfire-worker:
       resources:
         requests:
