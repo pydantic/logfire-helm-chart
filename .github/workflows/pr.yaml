@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest-16-cores
+    runs-on: depot-ubuntu-24.04-16
     permissions:
       id-token: write
       contents: read
