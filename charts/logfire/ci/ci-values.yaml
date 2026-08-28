@@ -34,14 +34,6 @@ dev:
   deployMinio: true
   deployMaildev: true
 
-# maildev above still deploys, so its ingress rendering stays covered, but the email path
-# itself is off. `appVersion` predates the commit that added `logfire_task_runner`, so the
-# runner cannot start on the image this chart pins and `ct install` would fail waiting for
-# it. Drop this once `appVersion` advances past that commit, and the install test will
-# exercise the runner for real.
-smtp:
-  enabled: false
-
 postgresSecret:
   enabled: true
   name: "pg-dsns"

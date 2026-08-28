@@ -38,6 +38,7 @@ tests:
   - it: configuring SMTP deploys the runner that drains the queue
     set:
       smtp:
+        enabled: true
         host: smtp.example.com
     templates:
       - templates/logfire-task-runner.yaml
@@ -67,6 +68,7 @@ tests:
   - it: the runner waits for the absurd schema before starting
     set:
       smtp:
+        enabled: true
         host: smtp.example.com
       image:
         repository: my-registry.example/
@@ -92,6 +94,7 @@ tests:
   - it: the dev Postgres wait comes before the schema wait
     set:
       smtp:
+        enabled: true
         host: smtp.example.com
       dev:
         deployPostgres: true
@@ -111,6 +114,7 @@ tests:
   - it: an operator supplied wait replaces the generated one
     set:
       smtp:
+        enabled: true
         host: smtp.example.com
       logfire-task-runner:
         initContainers:
@@ -132,6 +136,7 @@ tests:
   - it: the runner receives the SMTP credentials and the database
     set:
       smtp:
+        enabled: true
         host: smtp.example.com
         port: 587
         username: mailer
@@ -169,6 +174,7 @@ tests:
   - it: configuring SMTP turns the producers on
     set:
       smtp:
+        enabled: true
         host: smtp.example.com
     templates:
       - templates/logfire-backend.yaml
@@ -199,6 +205,8 @@ tests:
   # The dev overlay points at maildev instead of a real server, and has to reach the same state.
   - it: the maildev overlay deploys the runner pointed at maildev
     set:
+      smtp:
+        enabled: true
       dev:
         deployMaildev: true
     templates:
@@ -214,13 +222,13 @@ tests:
             name: SMTP_SERVER
             value: logfire-maildev
 
-  # An operator whose image predates `logfire_task_runner` needs a way to configure SMTP without
-  # crash-looping the runner. `smtp.enabled: false` turns the whole path off, producers included,
-  # rather than leaving them queueing onto a queue nothing drains.
-  - it: smtp.enabled false turns the path off despite a configured server
+  # The default is off, so an existing install that already sets `smtp.host` does not acquire a
+  # runner just by upgrading to this chart. Its image predates `logfire_task_runner` and would
+  # only crash-loop. The whole path goes off together, producers included, rather than leaving
+  # them queueing onto a queue nothing drains.
+  - it: delivery is off by default even with a configured server
     set:
       smtp:
-        enabled: false
         host: smtp.example.com
     templates:
       - templates/logfire-task-runner.yaml
@@ -252,11 +260,10 @@ tests:
             value: "false"
         template: templates/logfire-worker.yaml
 
-  # The dev overlay is the shape CI installs, so it has to honour the same switch.
-  - it: smtp.enabled false also turns off the maildev overlay
+  # The dev overlay is the shape CI installs, including the previous revision `ct` upgrades from,
+  # so it has to default off too.
+  - it: delivery is off by default under the maildev overlay
     set:
-      smtp:
-        enabled: false
       dev:
         deployMaildev: true
     templates:
