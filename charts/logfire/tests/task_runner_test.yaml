@@ -213,3 +213,62 @@ tests:
           content:
             name: SMTP_SERVER
             value: logfire-maildev
+
+  # An operator whose image predates `logfire_task_runner` needs a way to configure SMTP without
+  # crash-looping the runner. `smtp.enabled: false` turns the whole path off, producers included,
+  # rather than leaving them queueing onto a queue nothing drains.
+  - it: smtp.enabled false turns the path off despite a configured server
+    set:
+      smtp:
+        enabled: false
+        host: smtp.example.com
+    templates:
+      - templates/logfire-task-runner.yaml
+      - templates/logfire-backend.yaml
+      - templates/logfire-backend-auth.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/logfire-task-runner.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "false"
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "false"
+        template: templates/logfire-backend-auth.yaml
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "false"
+        template: templates/logfire-worker.yaml
+
+  # The dev overlay is the shape CI installs, so it has to honour the same switch.
+  - it: smtp.enabled false also turns off the maildev overlay
+    set:
+      smtp:
+        enabled: false
+      dev:
+        deployMaildev: true
+    templates:
+      - templates/logfire-task-runner.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/logfire-task-runner.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "false"
+        template: templates/logfire-worker.yaml

@@ -1228,7 +1228,7 @@ about sends nothing. `logfire-task-runner` is what drains that queue, so it is d
 same condition.
 */}}
 {{- define "logfire.emailsEnabled" -}}
-{{- if or .Values.dev.deployMaildev .Values.smtp.host -}}
+{{- if and (dig "enabled" true .Values.smtp) (or .Values.dev.deployMaildev .Values.smtp.host) -}}
 true
 {{- else -}}
 false
