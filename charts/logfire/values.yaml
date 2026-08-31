@@ -65,7 +65,7 @@ ingress:
   # -- Enable the Ingress resource.
   # If you are NOT using an ingress resource, you still need to set `tls` and `hostnames`
   # via either `ingress.*` or `gateway.*` so the application can generate correct URLs/CORS.
-  enabled: false
+  enabled: true
 
   # -- Enable TLS/HTTPS. Required for correct CORS behavior.
   tls: false
@@ -732,7 +732,7 @@ logfire-remote-mcp:
   # -- Enable the remote MCP service. When disabled, the deployment is not
   # rendered and the `/mcp` and `/.well-known/oauth-protected-resource/mcp`
   # haproxy routes are removed.
-  enabled: false
+  enabled: true
 # logfire-remote-mcp:
 #   # -- Workload labels
 #   labels: {}
@@ -1524,7 +1524,7 @@ logfire-redis:
   # and simple self-contained installs. It is not highly available, and upgrades that
   # change its pod template cause a brief interruption while Redis is replaced.
   # For production, disable this and set redisDsn to a managed Redis endpoint.
-  enabled: false
+  enabled: true
 
   # -- Redis image configuration
   image:
