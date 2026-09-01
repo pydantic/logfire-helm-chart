@@ -616,7 +616,6 @@ Before diving deeper, verify these common configuration issues:
 | serviceAccount.name | string | `""` | Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template. If create is false and this is not set, the default ServiceAccount is used. |
 | serviceAccountName | string | `"default"` | DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility. @deprecated |
 | sizingPreset | string | `""` | Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults. |
-| smtp.enabled | bool | `false` | Deliver transactional email. Requires an image containing `logfire_task_runner`, which this chart's `appVersion` does not yet ship, so it is off by default and configuring `smtp.host` alone changes nothing. Turning it on without that image leaves `logfire-task-runner` in `CrashLoopBackOff`. When false the producers do not queue email and no runner is deployed, which is the same shape as leaving SMTP unconfigured. |
 | smtp.host | string | `nil` | SMTP server hostname |
 | smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | smtp.port | int | `25` | SMTP server port |
