@@ -25,7 +25,7 @@ tests:
           any: true
       - equal:
           path: spec.template.spec.containers[0].command
-          value: ["python", "-m", "logfire_backend.profiles.auth"]
+          value: ["python", "-m", "logfire_auth.main"]
         documentSelector:
           path: kind
           value: Deployment
