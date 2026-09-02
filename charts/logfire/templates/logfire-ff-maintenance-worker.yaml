@@ -58,7 +58,7 @@ spec:
           env:
             {{- include "logfire.ffBackgroundWorkerExecutionEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
             - name: FF_DELETION_LOOP_DELAY
-              value: "30s"
+              value: "10s"
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             - name: PG_DSN
               valueFrom:
