@@ -7,17 +7,20 @@ set:
   objectStore:
     uri: s3://test-bucket
 tests:
-  # Without SMTP nothing downstream can deliver, so the producers must not queue and there is
-  # nothing for a runner to drain. Deploying one anyway would idle against an empty queue.
-  - it: no SMTP deploys no task runner and leaves the producers queueing nothing
+  # The runner drains the Absurd queues generally, not just the email one, so it is deployed
+  # whether or not SMTP is configured. Without SMTP the producers still queue nothing, so the
+  # runner simply has no email to deliver.
+  - it: the runner is deployed even with no SMTP, and the producers queue nothing
     templates:
       - templates/logfire-task-runner.yaml
       - templates/logfire-backend.yaml
       - templates/logfire-backend-auth.yaml
       - templates/logfire-worker.yaml
     asserts:
-      - hasDocuments:
-          count: 0
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: logfire-task-runner
         template: templates/logfire-task-runner.yaml
       - contains:
           path: spec.template.spec.containers[0].env
@@ -213,3 +216,37 @@ tests:
           content:
             name: SMTP_SERVER
             value: logfire-maildev
+
+  # There is no switch that removes the runner. It is core infrastructure for the Absurd queues,
+  # so disabling email must not take it with it, and a values file that tries is ignored rather
+  # than silently leaving the queues undrained.
+  - it: the runner survives an attempt to switch it off through smtp
+    set:
+      smtp:
+        enabled: false
+        host: smtp.example.com
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: logfire-task-runner
+
+  # The runner needs the database whether or not it is delivering email, since that is how it
+  # reaches the Absurd queues at all.
+  - it: the runner gets the database even with no SMTP configured
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CRUD_PG_DSN
+            valueFrom:
+              secretKeyRef:
+                name: lf-logfire-pg
+                key: postgresDsn
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: ["python", "-m", "logfire_task_runner"]

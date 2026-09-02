@@ -897,9 +897,9 @@ logfire-remote-mcp:
 #     minAvailable: 1
 
 
-# -- Autoscaling & resources for the transactional-email task runner. Deployed only when SMTP is
-# configured (`smtp.host`, or `dev.deployMaildev`), which is the same condition that makes the
-# producers queue email at all.
+# -- Autoscaling & resources for the Absurd task runner. Always deployed: it drains the Absurd
+# queues, which transactional email uses today and further features will use, so it does not
+# depend on SMTP being configured.
 # logfire-task-runner:
 #   # -- Workload labels
 #   labels: {}

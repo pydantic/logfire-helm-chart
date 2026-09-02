@@ -1226,10 +1226,10 @@ In-cluster TLS helpers
 {{/*
 Whether this deployment has an SMTP server behind it, which is what decides if the producers
 queue transactional email at all. Derived from the SMTP configuration rather than a separate
-switch, so the two cannot disagree: `emails_enabled` without a reachable server would fill the
-queue with tasks that can only fail at delivery, and a configured server that no producer knows
-about sends nothing. `logfire-task-runner` is what drains that queue, so it is deployed on the
-same condition.
+switch, so the two cannot disagree: a configured server that no producer knows about sends
+nothing, and `emails_enabled` without a reachable server queues mail that can only fail at
+delivery. This gates the producers only. `logfire-task-runner` drains the Absurd queues and is
+deployed unconditionally, so queued email always has something behind it.
 */}}
 {{- define "logfire.emailsEnabled" -}}
 {{- if or .Values.dev.deployMaildev .Values.smtp.host -}}
