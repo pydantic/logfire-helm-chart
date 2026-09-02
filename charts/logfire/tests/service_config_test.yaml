@@ -29,6 +29,9 @@ tests:
           pattern: "acl path_backend path_reg -i \\^/\\(ui-api\\|v1\\|api\\)/"
       - matchRegex:
           path: stringData["haproxy.cfg"]
+          pattern: "acl path_backend path -i /\\.well-known/oauth-protected-resource /\\.well-known/oauth-protected-resource/ /\\.well-known/oauth-protected-resource/v1"
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
           pattern: "use_backend logfire-backend if path_backend"
       - matchRegex:
           path: stringData["haproxy.cfg"]
