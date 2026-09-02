@@ -48,6 +48,7 @@ spec:
           env:
             - name: LOGFIRE_SEND_TO_LOGFIRE
               value: "false"
+            {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             - name: ON_PREM
               value: "true"
             - name: CRUD_MIGRATIONS_RESPECT_AUTO_RUN_FLAG

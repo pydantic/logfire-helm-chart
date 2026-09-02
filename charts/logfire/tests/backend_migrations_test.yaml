@@ -1,0 +1,28 @@
+suite: backend migrations
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: exports migration telemetry to the in-cluster collector
+    templates:
+      - templates/logfire-backend-migrations.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: COLLECTOR_OTLP_GRPC_HOST
+            value: http://logfire-otel-collector:4317
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OTEL_SERVICE_NAME
+            value: logfire-backend-migrations
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOGFIRE_SEND_TO_LOGFIRE
+            value: "false"
