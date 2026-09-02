@@ -1,0 +1,252 @@
+suite: transactional email delivery
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  # The runner drains the Absurd queues generally, not just the email one, so it is deployed
+  # whether or not SMTP is configured. Without SMTP the producers still queue nothing, so the
+  # runner simply has no email to deliver.
+  - it: the runner is deployed even with no SMTP, and the producers queue nothing
+    templates:
+      - templates/logfire-task-runner.yaml
+      - templates/logfire-backend.yaml
+      - templates/logfire-backend-auth.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: logfire-task-runner
+        template: templates/logfire-task-runner.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "false"
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "false"
+        template: templates/logfire-worker.yaml
+
+  # The queue only drains if something runs `logfire_task_runner`; without this deployment a
+  # self-hosted install queues transactional email that is never delivered.
+  - it: configuring SMTP deploys the runner that drains the queue
+    set:
+      smtp:
+        host: smtp.example.com
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: logfire-task-runner
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: ["python", "-m", "logfire_task_runner"]
+      - equal:
+          path: spec.template.spec.containers[0].ports[0].containerPort
+          value: 8005
+      # Liveness must not touch the database, or one Postgres blip restarts every pod at once.
+      - equal:
+          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
+          value: /health/live
+      - equal:
+          path: spec.template.spec.containers[0].startupProbe.httpGet.path
+          value: /health
+
+  # The runner calls absurd.create_queue() before it serves and exits 1 until that schema
+  # exists, so without this wait it crash-loops against a database the migrations Job has not
+  # reached yet. That Job is only a Helm hook when the bundled Postgres is off, so nothing
+  # else orders the two.
+  - it: the runner waits for the absurd schema before starting
+    set:
+      smtp:
+        host: smtp.example.com
+      image:
+        repository: my-registry.example/
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers
+          content:
+            name: wait-for-absurd-schema
+          any: true
+      - matchRegex:
+          path: spec.template.spec.initContainers[?(@.name=="wait-for-absurd-schema")].command[2]
+          pattern: schema_name = 'absurd'
+      # The wait runs on every install, air-gapped ones included, so it has to reuse the image
+      # the runner already needs rather than reaching for a second registry.
+      - matchRegex:
+          path: spec.template.spec.initContainers[?(@.name=="wait-for-absurd-schema")].image
+          pattern: "^my-registry\\.example/python-prod:"
+
+  # With the bundled Postgres the server wait comes first. The schema wait tolerates a
+  # server that is not up yet, but ordering it second keeps the failure legible.
+  - it: the dev Postgres wait comes before the schema wait
+    set:
+      smtp:
+        host: smtp.example.com
+      dev:
+        deployPostgres: true
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: check-db-ready
+      - equal:
+          path: spec.template.spec.initContainers[1].name
+          value: wait-for-absurd-schema
+
+  # Duplicate initContainer names make Kubernetes reject the Pod outright, so an operator who
+  # supplies their own wait must replace ours rather than collide with it. Same guard the chart
+  # already gives `check-db-ready`.
+  - it: an operator supplied wait replaces the generated one
+    set:
+      smtp:
+        host: smtp.example.com
+      logfire-task-runner:
+        initContainers:
+          - name: wait-for-absurd-schema
+            image: my-own-image:1
+            command: ["true"]
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.initContainers
+          count: 1
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: my-own-image:1
+
+  # The runner is the only workload that delivers these emails, so it needs the credentials
+  # rather than just the producers' enable flag.
+  - it: the runner receives the SMTP credentials and the database
+    set:
+      smtp:
+        host: smtp.example.com
+        port: 587
+        username: mailer
+        password: hunter2
+        use_tls: true
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SMTP_SERVER
+            value: smtp.example.com
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SMTP_PORT
+            value: "587"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SMTP_USE_TLS
+            value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CRUD_PG_DSN
+            valueFrom:
+              secretKeyRef:
+                name: lf-logfire-pg
+                key: postgresDsn
+
+  # A producer that queues while `EMAILS_ENABLED` is false would drop the email silently, so the
+  # flag has to follow the same condition that deploys the runner.
+  - it: configuring SMTP turns the producers on
+    set:
+      smtp:
+        host: smtp.example.com
+    templates:
+      - templates/logfire-backend.yaml
+      - templates/logfire-backend-auth.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "true"
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "true"
+        template: templates/logfire-backend-auth.yaml
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAILS_ENABLED
+            value: "true"
+        template: templates/logfire-worker.yaml
+
+  # The dev overlay points at maildev instead of a real server, and has to reach the same state.
+  - it: the maildev overlay deploys the runner pointed at maildev
+    set:
+      dev:
+        deployMaildev: true
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: logfire-task-runner
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SMTP_SERVER
+            value: logfire-maildev
+
+  # There is no switch that removes the runner. It is core infrastructure for the Absurd queues,
+  # so disabling email must not take it with it, and a values file that tries is ignored rather
+  # than silently leaving the queues undrained.
+  - it: the runner survives an attempt to switch it off through smtp
+    set:
+      smtp:
+        enabled: false
+        host: smtp.example.com
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: logfire-task-runner
+
+  # The runner needs the database whether or not it is delivering email, since that is how it
+  # reaches the Absurd queues at all.
+  - it: the runner gets the database even with no SMTP configured
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CRUD_PG_DSN
+            valueFrom:
+              secretKeyRef:
+                name: lf-logfire-pg
+                key: postgresDsn
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: ["python", "-m", "logfire_task_runner"]

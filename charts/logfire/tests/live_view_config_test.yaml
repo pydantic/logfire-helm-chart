@@ -1,0 +1,33 @@
+suite: live view delivery config
+templates:
+  - templates/logfire-ff-config.yaml
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: keeps query stability aligned with the ingest visibility budget
+    asserts:
+      - equal:
+          path: data.FF_LIVE_TAIL_CREATED_AT_STABILITY_WINDOW
+          value: "120s"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-config
+      - equal:
+          path: data.FF_INGEST_MAX_TIME_SKEW
+          value: "120s"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-config
+      - equal:
+          path: data.FF_INGEST_MAX_TIME_SKEW
+          value: "120s"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config

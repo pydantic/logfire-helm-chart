@@ -1,0 +1,57 @@
+suite: query rate limits
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: emits the current SDK query keys and their one-release compatibility aliases
+    set:
+      rateLimits:
+        queries:
+          perMinute: 10
+          perHour: 60
+    templates:
+      - templates/logfire-backend-auth.yaml
+      - templates/logfire-backend.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_QUERY__PER_MINUTE
+            value: "10"
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_QUERY__PER_HOUR
+            value: "60"
+        template: templates/logfire-backend-auth.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_V1_QUERY__PER_MINUTE
+            value: "10"
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_V1_QUERY__PER_HOUR
+            value: "60"
+        template: templates/logfire-backend-auth.yaml
+        documentSelector:
+          path: kind
+          value: Deployment

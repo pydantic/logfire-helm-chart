@@ -1,0 +1,28 @@
+suite: maintenance configuration
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: uses the platform deletion cadence in both maintenance services
+    templates:
+      - templates/logfire-ff-maintenance-scheduler.yaml
+      - templates/logfire-ff-maintenance-worker.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_DELETION_LOOP_DELAY
+            value: "10s"
+        template: templates/logfire-ff-maintenance-scheduler.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_DELETION_LOOP_DELAY
+            value: "10s"
+        template: templates/logfire-ff-maintenance-worker.yaml

@@ -1206,6 +1206,10 @@ securityContext:
 {{- define "logfire.rateLimits" -}}
 {{- with .Values.rateLimits -}}
 {{- $queries := get . "queries" | default dict -}}
+- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_QUERY__PER_MINUTE
+  value: {{ (get $queries "perMinute" | default 99999) | quote }}
+- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_QUERY__PER_HOUR
+  value: {{ (get $queries "perHour" | default 99999) | quote }}
 - name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_V1_QUERY__PER_MINUTE
   value: {{ (get $queries "perMinute" | default 99999) | quote }}
 - name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_V1_QUERY__PER_HOUR
@@ -1218,6 +1222,22 @@ securityContext:
 In-cluster TLS helpers
 ================================================================================
 */}}
+
+{{/*
+Whether this deployment has an SMTP server behind it, which is what decides if the producers
+queue transactional email at all. Derived from the SMTP configuration rather than a separate
+switch, so the two cannot disagree: a configured server that no producer knows about sends
+nothing, and `emails_enabled` without a reachable server queues mail that can only fail at
+delivery. This gates the producers only. `logfire-task-runner` drains the Absurd queues and is
+deployed unconditionally, so queued email always has something behind it.
+*/}}
+{{- define "logfire.emailsEnabled" -}}
+{{- if or .Values.dev.deployMaildev .Values.smtp.host -}}
+true
+{{- else -}}
+false
+{{- end -}}
+{{- end -}}
 
 {{- define "logfire.inClusterTls.enabled" -}}
 {{- .Values.inClusterTls.enabled | default false -}}
@@ -1407,6 +1427,7 @@ Dev Postgres helpers
   "logfire-backend"
   "logfire-backend-auth"
   "logfire-worker"
+  "logfire-task-runner"
   "logfire-dex"
   "logfire-backend-migrations"
   "logfire-ff-migrations"
@@ -1435,22 +1456,75 @@ Dev Postgres helpers
 {{/*
 Merge initContainers from values with dev Postgres wait initContainer.
 */}}
+{{/*
+`logfire-task-runner` calls `absurd.create_queue()` before it serves, so it exits 1 and
+crash-loops until the `absurd` schema exists. That schema is installed by
+`logfire-backend-migrations`, which is only a Helm hook when the bundled Postgres is off
+(see the annotations on that Job), so nothing otherwise orders the two. Waiting here makes
+the dependency explicit rather than leaving it to scheduling order.
+*/}}
+{{- define "logfire.absurdSchemaReady.initContainer" -}}
+- name: wait-for-absurd-schema
+  image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" "logfire-task-runner" "Chart" .Chart) }}'
+  imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+  command:
+    - python
+    - -c
+    - |
+      import os, time, psycopg
+
+      dsn = os.environ["CRUD_PG_DSN"]
+      while True:
+          try:
+              with psycopg.connect(dsn) as conn:
+                  found = conn.execute(
+                      "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'absurd'"
+                  ).fetchone()
+              if found:
+                  break
+              print("Waiting for the absurd schema...", flush=True)
+          except psycopg.OperationalError as exc:
+              print(f"Waiting for postgres: {exc}", flush=True)
+          time.sleep(2)
+  env:
+    - name: CRUD_PG_DSN
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "logfire.postgresSecretName" . }}
+          key: postgresDsn
+  {{- include "logfire.securityContext" .Values.securityContext | nindent 2 }}
+{{- end -}}
+
 {{- define "logfire.initContainers" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := required "logfire.initContainers: serviceName is required" .serviceName -}}
 {{- $userInit := (index $ctx.Values $serviceName | default dict).initContainers -}}
 {{- $devInit := include "logfire.dev.waitForPostgres.initContainers" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
+{{- $absurdInit := "" -}}
+{{- if eq $serviceName "logfire-task-runner" -}}
+  {{- $absurdInit = include "logfire.absurdSchemaReady.initContainer" $ctx | trim -}}
+{{- end -}}
 {{- $userHasCheckDbReady := dict "value" false -}}
+{{- $userHasAbsurdWait := dict "value" false -}}
 {{- range $userInit }}
   {{- if eq .name "check-db-ready" }}
     {{- $_ := set $userHasCheckDbReady "value" true -}}
   {{- end -}}
+  {{- if eq .name "wait-for-absurd-schema" }}
+    {{- $_ := set $userHasAbsurdWait "value" true -}}
+  {{- end -}}
+{{- end -}}
+{{- if $userHasAbsurdWait.value -}}
+  {{- $absurdInit = "" -}}
 {{- end -}}
 {{- $includeDevInit := and $devInit (not $userHasCheckDbReady.value) -}}
-{{- if or $includeDevInit $userInit -}}
+{{- if or $includeDevInit $userInit $absurdInit -}}
 initContainers:
 {{- if $includeDevInit }}
 {{ $devInit | nindent 2 }}
+{{- end }}
+{{- if $absurdInit }}
+{{ $absurdInit | nindent 2 }}
 {{- end }}
 {{- with $userInit }}
 {{ toYaml . | nindent 2 }}

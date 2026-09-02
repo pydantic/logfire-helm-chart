@@ -1,0 +1,40 @@
+suite: remote MCP resource configuration
+templates:
+  - templates/logfire-backend.yaml
+  - templates/logfire-remote-mcp.yaml
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+  gateway:
+    tls: true
+    hostnames:
+      - logfire.example.com
+  logfire-remote-mcp:
+    enabled: true
+tests:
+  - it: gives the backend and remote MCP the same public resource URL
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MCP_RESOURCE_URL
+            value: https://logfire.example.com/mcp
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MCP_SERVER_URL
+            value: https://logfire.example.com/mcp
+        template: templates/logfire-remote-mcp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
