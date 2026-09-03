@@ -34,6 +34,11 @@ clusterDomain: cluster.local
 # -- Starter admin email address
 adminEmail: hello@example.dev
 
+# -- Client-safe API key used by the frontend to evaluate external managed variables through OFREP.
+# The key is written to the public runtime configuration, so it must only have the
+# `project:read_external_variables` scope.
+variablesApiKey: ""
+
 # -- List of mapping to automatically assign members of OIDC group to logfire roles
 groupOrganizationMapping: []
 #  - group_id: "example-group-id"
