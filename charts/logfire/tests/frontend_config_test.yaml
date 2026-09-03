@@ -1,0 +1,34 @@
+suite: frontend runtime configuration
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: omits the managed variables key by default
+    templates:
+      - templates/logfire-frontend-service-config.yaml
+    asserts:
+      - notMatchRegex:
+          path: data["config.1.js"]
+          pattern: "variablesApiKey"
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-service-config
+
+  - it: exposes a client-safe managed variables key in runtime configuration
+    set:
+      variablesApiKey: pylf_external_test-key
+    templates:
+      - templates/logfire-frontend-service-config.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.1.js"]
+          pattern: 'variablesApiKey: "pylf_external_test-key"'
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-service-config

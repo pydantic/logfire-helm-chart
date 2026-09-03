@@ -30,7 +30,10 @@ data:
       dexPublicUrl: '{{ include "logfire.url" . }}',
       dexDynamicRedirect: {{ .Values.dexDynamicRedirect | default false }},
       appVersion: '{{ .Chart.AppVersion }}',
-      selfHosted: true
+      selfHosted: true,
+      {{ with .Values.variablesApiKey }}
+      variablesApiKey: {{ . | toJson }}
+      {{- end }}
     }
 ---
 apiVersion: v1
