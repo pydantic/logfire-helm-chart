@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.42](https://img.shields.io/badge/Version-0.13.42-informational?style=flat-square) ![AppVersion: 4ae3e48d](https://img.shields.io/badge/AppVersion-4ae3e48d-informational?style=flat-square)
+![Version: 0.13.43](https://img.shields.io/badge/Version-0.13.43-informational?style=flat-square) ![AppVersion: b3f4394e](https://img.shields.io/badge/AppVersion-b3f4394e-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -196,6 +196,21 @@ ingress:
   ingressClassName: nginx
 ```
 
+Logfire Live View requires WebSocket support. Ensure every proxy in front of
+`logfire-service` preserves the WebSocket upgrade and `Sec-WebSocket-Protocol`
+headers. Some ingress controllers require an explicit annotation. For the
+[F5 NGINX Ingress Controller](https://docs.nginx.com/nginx-ingress-controller/configuration/ingress-resources/advanced-configuration-with-annotations/):
+
+```yaml
+ingress:
+  annotations:
+    nginx.org/websocket-services: logfire-service
+```
+
+A successful WebSocket handshake normally returns `101 Switching Protocols`.
+The annotation above is specific to the F5 controller; use the configuration
+required by your ingress or gateway implementation.
+
 If you expose `logfire-service` directly instead of rendering an Ingress or Gateway, keep `ingress.enabled: false` and still set the public hostname and TLS behavior:
 
 ```yaml
@@ -331,6 +346,22 @@ logfire-worker:
 Nested `resources.requests` do not add mandatory limits, allowing workloads to use spare node capacity. The legacy flat resource shorthand continues to use the configured values for both requests and limits.
 
 ## Advanced Configuration
+
+### External Secrets and Automatic Reloads
+
+For Argo CD deployments, use the chart's existing-Secret options with an external secret controller. Updating a Kubernetes Secret does not restart pods that consume its values through environment variables, so configure a reload controller such as [Reloader](https://github.com/stakater/Reloader) as well.
+
+Add the reload controller's workload annotations to the relevant Secret values. The chart copies them only to workloads that consume that Secret and omits its Helm checksum annotations, leaving rotation to the reload controller:
+
+```yaml
+postgresSecret:
+  enabled: true
+  name: logfire-postgres
+  annotations:
+    reloader.stakater.com/auto: "true"
+```
+
+The same `annotations` pattern is supported by `existingSecret`, `adminSecret`, and `existingGatewaySecret`. The chart does not install a reload controller.
 
 ### In-cluster HTTPS
 
@@ -480,7 +511,7 @@ Before diving deeper, verify these common configuration issues:
 | inClusterTls.certs.mode | string | `"existingSecrets"` | Use existingSecrets for customer-provided certs, or certManager to have the chart create cert-manager Certificate resources. |
 | inClusterTls.httpsPort | int | `8443` | Port used for in-cluster HTTPS on Services. Use a non-privileged port to avoid securityContext constraints. |
 | inClusterTls.secretNamePrefix | string | `""` | Convention-based certificate secret naming. When enabled, the chart expects a kubernetes.io/tls Secret per service:   <release>-<service>-tls This also controls secret names used by chart-created cert-manager Certificates. If secretNamePrefix is empty, the prefix defaults to the Helm release name. |
-| ingress.annotations | object | `{}` | Ingress annotations |
+| ingress.annotations | object | `{}` | Ingress annotations. Logfire Live View requires WebSocket support, and some controllers require an explicit annotation. For example, F5 NGINX Ingress Controller uses `nginx.org/websocket-services: logfire-service`. |
 | ingress.enabled | bool | `true` | Enable the Ingress resource. If you are NOT using an ingress resource, you still need to set `tls` and `hostnames` via either `ingress.*` or `gateway.*` so the application can generate correct URLs/CORS. |
 | ingress.hostname | string | `"logfire.example.com"` | DEPRECATED (kept for backward compatibility). Use `hostnames` (list) for all new deployments. |
 | ingress.hostnames | list | `["logfire.example.com"]` | Hostname(s) for Pydantic Logfire. Preferred method. Supports one or more hostnames; put the primary domain first. |
@@ -613,6 +644,7 @@ Before diving deeper, verify these common configuration issues:
 | usageRedis | object | `{"dsn":"","prefix":""}` | Redis settings for usage, autocomplete, and rate limiting data. Empty DSN falls back to `redisDsn`. Use a prefix only when sharing one Redis instance with other data. |
 | usageRedis.dsn | string | `""` | Redis DSN for usage, autocomplete, and rate limiting data. |
 | usageRedis.prefix | string | `""` | Key prefix for usage keys. |
+| variablesApiKey | string | `""` | Client-safe API key used by the frontend to evaluate external managed variables through OFREP. The key is written to the public runtime configuration, so it must only have the `project:read_external_variables` scope. |
 
 ----------------------------------------------
 Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)
