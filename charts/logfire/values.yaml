@@ -90,7 +90,9 @@ ingress:
   # -- TLS Secret name if you want to do a custom one
   secretName: logfire-frontend-cert
 
-  # -- Ingress annotations
+  # -- Ingress annotations. Logfire Live View requires WebSocket support, and
+  # some controllers require an explicit annotation. For example, F5 NGINX
+  # Ingress Controller uses `nginx.org/websocket-services: logfire-service`.
   annotations: {}
 
 

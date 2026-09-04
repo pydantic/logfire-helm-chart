@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.43-rc.5](https://img.shields.io/badge/Version-0.13.43--rc.5-informational?style=flat-square) ![AppVersion: b3f4394e](https://img.shields.io/badge/AppVersion-b3f4394e-informational?style=flat-square)
+![Version: 0.13.43](https://img.shields.io/badge/Version-0.13.43-informational?style=flat-square) ![AppVersion: b3f4394e](https://img.shields.io/badge/AppVersion-b3f4394e-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -195,6 +195,21 @@ ingress:
     - logfire.example.com
   ingressClassName: nginx
 ```
+
+Logfire Live View requires WebSocket support. Ensure every proxy in front of
+`logfire-service` preserves the WebSocket upgrade and `Sec-WebSocket-Protocol`
+headers. Some ingress controllers require an explicit annotation. For the
+[F5 NGINX Ingress Controller](https://docs.nginx.com/nginx-ingress-controller/configuration/ingress-resources/advanced-configuration-with-annotations/):
+
+```yaml
+ingress:
+  annotations:
+    nginx.org/websocket-services: logfire-service
+```
+
+A successful WebSocket handshake normally returns `101 Switching Protocols`.
+The annotation above is specific to the F5 controller; use the configuration
+required by your ingress or gateway implementation.
 
 If you expose `logfire-service` directly instead of rendering an Ingress or Gateway, keep `ingress.enabled: false` and still set the public hostname and TLS behavior:
 
@@ -496,7 +511,7 @@ Before diving deeper, verify these common configuration issues:
 | inClusterTls.certs.mode | string | `"existingSecrets"` | Use existingSecrets for customer-provided certs, or certManager to have the chart create cert-manager Certificate resources. |
 | inClusterTls.httpsPort | int | `8443` | Port used for in-cluster HTTPS on Services. Use a non-privileged port to avoid securityContext constraints. |
 | inClusterTls.secretNamePrefix | string | `""` | Convention-based certificate secret naming. When enabled, the chart expects a kubernetes.io/tls Secret per service:   <release>-<service>-tls This also controls secret names used by chart-created cert-manager Certificates. If secretNamePrefix is empty, the prefix defaults to the Helm release name. |
-| ingress.annotations | object | `{}` | Ingress annotations |
+| ingress.annotations | object | `{}` | Ingress annotations. Logfire Live View requires WebSocket support, and some controllers require an explicit annotation. For example, F5 NGINX Ingress Controller uses `nginx.org/websocket-services: logfire-service`. |
 | ingress.enabled | bool | `true` | Enable the Ingress resource. If you are NOT using an ingress resource, you still need to set `tls` and `hostnames` via either `ingress.*` or `gateway.*` so the application can generate correct URLs/CORS. |
 | ingress.hostname | string | `"logfire.example.com"` | DEPRECATED (kept for backward compatibility). Use `hostnames` (list) for all new deployments. |
 | ingress.hostnames | list | `["logfire.example.com"]` | Hostname(s) for Pydantic Logfire. Preferred method. Supports one or more hostnames; put the primary domain first. |
