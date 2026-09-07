@@ -250,3 +250,37 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].command
           value: ["python", "-m", "logfire_task_runner"]
+
+  - it: applies self-hosted recipient entitlements and signs notification unsubscribe links
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ON_PREM
+            value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: UNSUBSCRIBE_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: logfire-unsubscribe-secret
+                key: logfire-unsubscribe-secret
+
+  - it: shares the operator supplied unsubscribe secret
+    templates:
+      - templates/logfire-task-runner.yaml
+    set:
+      existingSecret.enabled: true
+      existingSecret.name: my-shared-secret
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: UNSUBSCRIBE_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: my-shared-secret
+                key: logfire-unsubscribe-secret

@@ -60,6 +60,8 @@ spec:
             {{- include "logfire.ffQueryExecutionEnv" (dict "Values" .Values "serviceName" $serviceName "role" "worker") | nindent 12 }}
             - name: FF_TLS_CLIENT_SNI_HOSTNAME
               value: "logfire-ff-query-worker"
+            - name: FF_TLS_CLIENT_PORT
+              value: {{ include "logfire.port" (dict "port" 8011 "root" .) | quote }}
             - name: FF_REDIS_TAIL_DSN
               value: {{ .Values.redisDsn }}
             - name: PG_DSN
