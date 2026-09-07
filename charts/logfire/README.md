@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.45-rc.1](https://img.shields.io/badge/Version-0.13.45--rc.1-informational?style=flat-square) ![AppVersion: 49166f28](https://img.shields.io/badge/AppVersion-49166f28-informational?style=flat-square)
+![Version: 0.13.46-rc.1](https://img.shields.io/badge/Version-0.13.46--rc.1-informational?style=flat-square) ![AppVersion: 49166f28](https://img.shields.io/badge/AppVersion-49166f28-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -177,6 +177,11 @@ https://logfire.example.com/logfire-meta/logfire-meta#token=LOGFIRE_META_FRONTEN
 For local evaluation with the port-forward above, use `http://localhost:8080/logfire-meta/logfire-meta#token=LOGFIRE_META_FRONTEND_TOKEN`.
 
 After you have access, create an invite link from **Settings** > **Invite** and assign the **Admin** organization role.
+
+## Upgrading
+
+Review the release's upgrade notes and the [upgrade prerequisites](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/UPGRADING.md) before changing chart or image versions.
+The upgrade guide is also included as `UPGRADING.md` in the chart package.
 
 ## Configuration Notes
 
