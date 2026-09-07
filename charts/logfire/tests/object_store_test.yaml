@@ -90,3 +90,103 @@ tests:
         documentSelector:
           path: kind
           value: StatefulSet
+
+  - it: rejects empty template result in production
+    set:
+      objectStore:
+        uri: '{{ "" }}'
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+
+  - it: rejects missing value template result in production
+    set:
+      objectStore:
+        uri: '{{ .Values.missingBucket | default "" }}'
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+
+  - it: rejects whitespace template result in production
+    set:
+      objectStore:
+        uri: '{{ "   " }}'
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+
+  - it: rejects whitespace literal in production
+    set:
+      objectStore:
+        uri: "   "
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+
+  - it: rejects empty literal in production
+    set:
+      objectStore:
+        uri: ''
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+
+  - it: allows an empty template result with development MinIO
+    set:
+      dev:
+        deployMinio: true
+      objectStore:
+        uri: '{{ "" }}'
+    templates:
+      - templates/logfire-validate-config.yaml
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_OBJECT_STORE_URI
+          value: ""
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+        template: templates/logfire-ff-config.yaml
+
+  - it: preserves a literal GCS URI
+    set:
+      objectStore:
+        uri: gs://tenant-app-data/logfire
+    templates:
+      - templates/logfire-ff-config.yaml
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - equal:
+          path: data.FF_OBJECT_STORE_URI
+          value: gs://tenant-app-data/logfire
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+        template: templates/logfire-ff-config.yaml
+      - equal:
+          path: data.FF_FAILOVER_OBJECT_STORE_URI
+          value: gs://tenant-app-data/logfire/_ingest_failover
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config
+        template: templates/logfire-ff-config.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_OBJECT_STORE_URI
+            value: gs://tenant-app-data/logfire
+        documentSelector:
+          path: kind
+          value: StatefulSet
+        template: templates/logfire-ff-ingest.yaml
