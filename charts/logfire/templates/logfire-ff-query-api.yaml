@@ -83,10 +83,10 @@ spec:
           env:
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             {{- include "logfire.ffQueryExecutionEnv" (dict "Values" .Values "serviceName" $serviceName "role" $queryExecutionRole) | nindent 12 }}
-            {{- if $remoteQueryWorkerEnabled }}
             - name: FF_TLS_CLIENT_SNI_HOSTNAME
-              value: "logfire-ff-query-worker"
-            {{- end }}
+              value: {{ ternary "logfire-ff-query-worker" "logfire-ff-query-api" $remoteQueryWorkerEnabled | quote }}
+            - name: FF_TLS_CLIENT_PORT
+              value: {{ include "logfire.port" (dict "port" 8011 "root" .) | quote }}
             - name: FF_REDIS_TAIL_DSN
               value: {{ .Values.redisDsn }}
             - name: PG_DSN

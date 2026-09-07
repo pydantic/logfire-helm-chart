@@ -1,0 +1,141 @@
+suite: query worker service addressing
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: addresses logfire-ff-query-api with remote worker false and TLS false
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    set:
+      logfire-ff-query-worker.enabled: false
+      inClusterTls.enabled: false
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_SNI_HOSTNAME
+            value: "logfire-ff-query-api"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "8011"
+  - it: addresses logfire-ff-query-api with remote worker false and TLS true
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    set:
+      logfire-ff-query-worker.enabled: false
+      inClusterTls.enabled: true
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_SNI_HOSTNAME
+            value: "logfire-ff-query-api"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "9443"
+  - it: addresses logfire-ff-query-api with remote worker true and TLS false
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    set:
+      logfire-ff-query-worker.enabled: true
+      inClusterTls.enabled: false
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_SNI_HOSTNAME
+            value: "logfire-ff-query-worker"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "8011"
+  - it: addresses logfire-ff-query-worker with remote worker true and TLS false
+    templates:
+      - templates/logfire-ff-query-worker.yaml
+    set:
+      logfire-ff-query-worker.enabled: true
+      inClusterTls.enabled: false
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_SNI_HOSTNAME
+            value: "logfire-ff-query-worker"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "8011"
+  - it: addresses logfire-ff-query-api with remote worker true and TLS true
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    set:
+      logfire-ff-query-worker.enabled: true
+      inClusterTls.enabled: true
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_SNI_HOSTNAME
+            value: "logfire-ff-query-worker"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "9443"
+  - it: addresses logfire-ff-query-worker with remote worker true and TLS true
+    templates:
+      - templates/logfire-ff-query-worker.yaml
+    set:
+      logfire-ff-query-worker.enabled: true
+      inClusterTls.enabled: true
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_SNI_HOSTNAME
+            value: "logfire-ff-query-worker"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "9443"
