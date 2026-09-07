@@ -670,8 +670,6 @@ logfire-ai-gateway:
   enabled: false
   # -- HAProxy inactivity timeout for public `/proxy` requests to the AI gateway.
   proxyTimeout: 600s
-  # -- Service and Pod network CIDRs the AI gateway must never contact. Set these to your cluster's actual IPv4/IPv6 ranges; an empty list adds no cluster-network protection. Private provider addresses outside these ranges remain allowed.
-  blockedUpstreamCidrs: []
 #   # -- Workload labels
 #   labels: {}
 #   # -- Workload annotations

@@ -435,28 +435,3 @@ Before diving deeper, verify these common configuration issues:
 {{ template "chart.valuesSection" . }}
 
 {{ template "helm-docs.versionFooter" . }}
-
-## AI Gateway cluster network protection
-
-When enabling `logfire-ai-gateway.enabled`, set `logfire-ai-gateway.blockedUpstreamCidrs`
-to your cluster's Service and Pod CIDRs, including IPv6 ranges in dual-stack clusters.
-These ranges are blocked even though self-hosted deployments allow private provider
-addresses. The chart cannot discover these ranges reliably. The default empty list
-adds no cluster-network protection; do not copy example ranges without checking your
-cluster configuration. A malformed CIDR prevents the AI gateway from starting.
-
-```yaml
-logfire-ai-gateway:
-  enabled: true
-  blockedUpstreamCidrs:
-    - "10.96.0.0/12"
-    - "10.244.0.0/16"
-```
-
-## Alert channel delivery
-
-The task runner uses self-hosted entitlements and the same unsubscribe-signing secret
-as the backend and worker. Per-channel delivery continues on the existing worker by
-default. If you override `ABSURD_CHANNEL_TASKS=true` on the worker, configure any
-Slack App credentials, encryption key, shared Redis connection, and egress proxy
-required by your channels on the task runner before enabling that override.
