@@ -27,6 +27,20 @@ tests:
           path: metadata.name
           value: logfire-ff-ingest-config
 
+  - it: renders without objectStore.uri when dev.deployMinio is enabled
+    set:
+      dev:
+        deployMinio: true
+    templates:
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_OBJECT_STORE_URI
+          value: ""
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+
   - it: expands helm templates in objectStore.uri
     set:
       objectStore:

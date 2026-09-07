@@ -18,7 +18,7 @@ data:
   FF_TOKEN_REDIS_PREFIX: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "tokenRedis") | quote }}
   FF_USAGE_REDIS_DSN: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "usageRedis") }}
   FF_USAGE_REDIS_PREFIX: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "usageRedis") | quote }}
-  FF_OBJECT_STORE_URI: {{ tpl .Values.objectStore.uri . | quote }}
+  FF_OBJECT_STORE_URI: {{ tpl (.Values.objectStore.uri | default "") . | quote }}
   FF_PG_TRANSACTION_TIMEOUT: "30s"
 {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
   FF_TLS_MODE: "allow"
@@ -91,7 +91,7 @@ metadata:
 data:
   FF_BACKEND_SERVICE_URL: "{{ include "logfire.scheme" . }}://logfire-backend-auth:{{ include "logfire.port" (dict "port" 8000 "root" .) }}"
   FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
-  FF_FAILOVER_OBJECT_STORE_URI: {{ printf "%s/_ingest_failover" (tpl .Values.objectStore.uri .) | quote }}
+  FF_FAILOVER_OBJECT_STORE_URI: {{ printf "%s/_ingest_failover" (tpl (.Values.objectStore.uri | default "") .) | quote }}
   FF_INGEST_MAX_TIME_SKEW: "120s"
   FF_INGEST_MAX_FUTURE_TIME_DRIFT: "1h"
   FF_INGEST_MAX_PAST_TIME_DRIFT: "24h"
