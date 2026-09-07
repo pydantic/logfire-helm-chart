@@ -1380,7 +1380,8 @@ logfire-ff-cache-byte:
 
 # -- Object storage details
 objectStore:
-  # -- URI for object storage (e.g., `s3://bucket`)
+  # -- URI for object storage (e.g., `s3://bucket`). Supports Helm templating,
+  # e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release.
   uri:
   # -- Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C).
   # Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy
@@ -1392,7 +1393,8 @@ objectStore:
   # pre-existing objects.
   # losing the key means losing the data — AWS does not store it.
   sseCKeyB64:
-  # -- Additional environment variables for the object store connection
+  # -- Additional environment variables for the object store connection.
+  # String values support Helm templating.
   env: {}
   # -- Volume mounts for object store credentials
   volumeMounts: []

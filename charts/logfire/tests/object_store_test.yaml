@@ -1,0 +1,78 @@
+suite: objectStore configuration
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  dev:
+    deployPostgres: true
+tests:
+  - it: renders a plain objectStore.uri unchanged
+    set:
+      objectStore:
+        uri: s3://test-bucket
+    templates:
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_OBJECT_STORE_URI
+          value: s3://test-bucket
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+      - equal:
+          path: data.FF_FAILOVER_OBJECT_STORE_URI
+          value: s3://test-bucket/_ingest_failover
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config
+
+  - it: expands helm templates in objectStore.uri
+    set:
+      objectStore:
+        uri: "s3://logfire-{{ .Release.Name }}-{{ .Release.Namespace }}"
+    templates:
+      - templates/logfire-ff-config.yaml
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - equal:
+          path: data.FF_OBJECT_STORE_URI
+          value: s3://logfire-lf-default
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+        template: templates/logfire-ff-config.yaml
+      - equal:
+          path: data.FF_FAILOVER_OBJECT_STORE_URI
+          value: s3://logfire-lf-default/_ingest_failover
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config
+        template: templates/logfire-ff-config.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_OBJECT_STORE_URI
+            value: s3://logfire-lf-default
+        documentSelector:
+          path: kind
+          value: StatefulSet
+        template: templates/logfire-ff-ingest.yaml
+
+  - it: expands helm templates in objectStore.env string values
+    set:
+      objectStore:
+        uri: s3://test-bucket
+        env:
+          AWS_ENDPOINT: "http://minio-{{ .Release.Name }}:9000"
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ENDPOINT
+            value: http://minio-lf:9000
+        documentSelector:
+          path: kind
+          value: StatefulSet

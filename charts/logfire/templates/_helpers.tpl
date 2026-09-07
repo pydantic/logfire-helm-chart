@@ -670,12 +670,15 @@ Create Postgres secret name
 
 {{- define "logfire.objectStoreEnv" -}}
 - name: FF_OBJECT_STORE_URI
-  value: {{ .Values.objectStore.uri }}
+  value: {{ tpl .Values.objectStore.uri . | quote }}
 {{- with .Values.objectStore.sseCKeyB64 }}
 - name: FF_S3_SSE_C_KEY_B64
 {{ include "logfire.envValue" (dict "value" . "quote" true) | indent 2 }}
 {{- end }}
 {{- range $key, $value := .Values.objectStore.env }}
+{{- if kindIs "string" $value }}
+{{- $value = tpl $value $ }}
+{{- end }}
 - name: {{ $key }}
 {{ include "logfire.envValue" (dict "value" $value "quote" (not (kindIs "map" $value)) "allowValueKey" true) | indent 2 }}
 {{- end }}
