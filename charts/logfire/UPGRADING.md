@@ -4,6 +4,66 @@ Read the release's upgrade notes before changing the chart or image version.
 Complete database prerequisites against the CRUD database, not the Fusionfire
 or Dex database. Keep image tags aligned with the chart's supported release.
 
+## Unreleased: independently scheduled SLO history
+
+The upcoming independent SLO history scheduler changes the lock order used by
+history writers. Existing installations must disable and drain optional history
+before replacing worker images, then enable it only after all old writers have
+stopped. A normal rolling image update with history enabled is not sufficient.
+The release notes must identify the first affected application version before
+shipping it. These steps are separate from the alert-history index prerequisite
+below; follow both when the destination release requires both.
+
+### Existing installations
+
+1. Keep the currently installed application version and add this override to
+   your existing values file. Preserve any other entries in the worker's `env`
+   list, and keep live SLO evaluation enabled:
+
+   ```yaml
+   logfire-worker:
+     env:
+       - name: SLO_HISTORY_BACKFILL_ENABLED
+         value: "false"
+   ```
+
+2. Apply the values change using your normal controlled rollout, without
+   changing application images yet. The setting is read at process startup,
+   not dynamically. Verify every worker has restarted with optional history
+   disabled, all previous worker processes have stopped, and their in-flight
+   history queries and database transactions have drained. Check any additional
+   worker deployments or manually operated workers, not only the Helm-managed
+   Deployment. Do not use `SLOS_ENABLED=false`: live SLO evaluation should
+   continue during this procedure.
+3. Upgrade to the new release while retaining the explicit history override.
+   Allow the normal backend migration job to finish before new workers start.
+   It creates the additive `logfire.slo_history_backfill_state` table; new
+   workers require the table even with optional history disabled. Leave
+   `CRUD_MIGRATIONS_RESPECT_AUTO_RUN_FLAG` enabled. No manual migration or
+   modification of bucket rows is needed for this scheduler change.
+4. Verify all workers now use the corrected release and no old writers remain.
+   Confirm live SLO results still refresh. Set the history override to `"true"`
+   and roll out that configuration. Existing objectives may wait for their next
+   successful live evaluation before history becomes eligible; do not edit
+   stored status timestamps to accelerate it.
+5. Check history progress and failures, live evaluation freshness, database
+   contention, and interactive query availability. If these regress, disable
+   optional history through another controlled rollout and investigate. Record
+   the installed versions and the fleet/drain verification in the upgrade
+   change record.
+
+### Fresh installations and rollback
+
+A fresh installation has no old writer fleet. Let automatic schema bootstrap
+complete before starting workers, then use the normal history default.
+
+Before rolling back to an older worker implementation, disable optional history
+on the new fleet, replace its processes with that setting, and verify its
+in-flight history work has drained. Only then introduce old workers. Keep the
+additive state table and migration bookkeeping; do not delete history buckets
+or hand-edit admission timestamps. After the rollback fleet is consistent,
+restore the history configuration supported by that release.
+
 ## Unreleased: SLO alert-history completion index
 
 This prerequisite applies to the upcoming completion-ordered SLO alert-history
