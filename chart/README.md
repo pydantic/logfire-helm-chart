@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.43](https://img.shields.io/badge/Version-0.13.43-informational?style=flat-square) ![AppVersion: b3f4394e](https://img.shields.io/badge/AppVersion-b3f4394e-informational?style=flat-square)
+![Version: 0.13.44](https://img.shields.io/badge/Version-0.13.44-informational?style=flat-square) ![AppVersion: b3f4394e](https://img.shields.io/badge/AppVersion-b3f4394e-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -596,9 +596,9 @@ Before diving deeper, verify these common configuration issues:
 | minio.persistence.size | string | `"32Gi"` |  |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
 | objectStore | object | `{"env":{},"sseCKeyB64":null,"uri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
-| objectStore.env | object | `{}` | Additional environment variables for the object store connection |
+| objectStore.env | object | `{}` | Additional environment variables for the object store connection. String values support Helm templating. |
 | objectStore.sseCKeyB64 | string | `nil` | Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C). Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy requests. Only used when the object store is S3. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).  IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on a bucket that already contains FusionFire data will break all reads of the pre-existing objects. losing the key means losing the data — AWS does not store it. |
-| objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`) |
+| objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`). Supports Helm templating, e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release. |
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials |
 | otelResourceAttributes | object | `{}` | Additional OTEL resource attributes to stamp onto internal telemetry emitted by Logfire workloads. These are merged on top of the chart defaults and can override them. Example:   deployment.environment.name: prod   service.namespace: logfire |
