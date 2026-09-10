@@ -125,17 +125,19 @@ tests:
           path: kind
           value: Deployment
 
-  - it: omits query routing environment when disabled
+  - it: routes all cache consumers directly without a proxy
     set:
-      logfire-ff-cache-byte:
-        clientSideRouting:
-          enabled: false
-          zoneAware: true
+      logfire-ff-query-worker:
+        enabled: true
     templates:
       - templates/logfire-ff-query-api.yaml
-      - templates/logfire-ff-cache-routing-rbac.yaml
+      - templates/logfire-ff-query-worker.yaml
+      - templates/logfire-ff-crud-api.yaml
+      - templates/logfire-ff-maintenance-worker.yaml
+      - templates/logfire-ff-compaction-worker.yaml
+      - templates/logfire-ff-config.yaml
     asserts:
-      - notContains:
+      - contains:
           path: spec.template.spec.containers[0].env
           content:
             name: FF_BYTE_CACHE_K8S_SERVICE
@@ -144,9 +146,49 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
-      - hasDocuments:
-          count: 0
-        template: templates/logfire-ff-cache-routing-rbac.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BYTE_CACHE_K8S_SERVICE
+            value: logfire-ff-cache-byte-internal
+        template: templates/logfire-ff-query-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BYTE_CACHE_K8S_SERVICE
+            value: logfire-ff-cache-byte-internal
+        template: templates/logfire-ff-crud-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BYTE_CACHE_K8S_SERVICE
+            value: logfire-ff-cache-byte-internal
+        template: templates/logfire-ff-maintenance-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BYTE_CACHE_K8S_SERVICE
+            value: logfire-ff-cache-byte-internal
+        template: templates/logfire-ff-compaction-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: data.FF_CACHE_OBJECT_STORE_URI
+          value: http://logfire-ff-cache-byte-internal:9001
+        template: templates/logfire-ff-config.yaml
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
 
   - it: grants only EndpointSlice discovery by default
     templates:

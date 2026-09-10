@@ -6,12 +6,13 @@ Helpers specific to Fusionfire workloads and configuration.
 */}}
 
 {{/*
-Configure query workloads to discover byte-cache pods directly. Keep these
-defaults before service-specific env so operators can explicitly override them.
+Byte-cache clients discover cache pods directly via EndpointSlice.
+Zone-local routing is opt-in: it needs nodes/get ClusterRole and cache
+replicas covering every query zone.
+Keep these defaults before service-specific env so operators can override them.
 */}}
 {{- define "logfire.ffByteCacheClientRoutingEnv" -}}
 {{- $routing := get (get .Values "logfire-ff-cache-byte" | default dict) "clientSideRouting" | default dict -}}
-{{- if get $routing "enabled" }}
 - name: FF_BYTE_CACHE_K8S_SERVICE
   value: logfire-ff-cache-byte-internal
 - name: FF_BYTE_CACHE_K8S_NAMESPACE
@@ -25,7 +26,6 @@ defaults before service-specific env so operators can explicitly override them.
   valueFrom:
     fieldRef:
       fieldPath: spec.nodeName
-{{- end }}
 {{- end }}
 {{- end -}}
 

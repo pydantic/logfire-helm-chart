@@ -2,7 +2,7 @@
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $routing := get (get .Values $serviceName | default dict) "clientSideRouting" | default dict -}}
 {{- $routingTopologySpreadConstraints := list -}}
-{{- if and (get $routing "enabled") (get $routing "zoneAware") -}}
+{{- if get $routing "zoneAware" -}}
   {{- $selector := dict "matchLabels" (dict "app.kubernetes.io/component" $serviceName) -}}
   {{- $routingTopologySpreadConstraints = list
     (dict "maxSkew" 1 "topologyKey" "topology.kubernetes.io/zone" "whenUnsatisfiable" "ScheduleAnyway" "labelSelector" $selector)
