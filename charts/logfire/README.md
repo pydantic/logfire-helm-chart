@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.45-rc.1](https://img.shields.io/badge/Version-0.13.45--rc.1-informational?style=flat-square) ![AppVersion: 49166f28](https://img.shields.io/badge/AppVersion-49166f28-informational?style=flat-square)
+![Version: 0.13.45-rc.2](https://img.shields.io/badge/Version-0.13.45--rc.2-informational?style=flat-square) ![AppVersion: 49166f28](https://img.shields.io/badge/AppVersion-49166f28-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -376,6 +376,16 @@ CA bundle requirements by mode:
 * `inClusterTls.certs.mode=certManager` with custom `issuerRef.name`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
 * `inClusterTls.certs.mode=existingSecrets`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
 
+Cache consumers dial the headless `logfire-ff-cache-byte-internal` service directly and verify
+that hostname, so the service certificate must include the bare `logfire-ff-cache-byte-internal`
+DNS name. Keep the `logfire-ff-cache-byte` names and the namespace and cluster-domain variants as
+well: existing certificates already carry them, and they keep the certificate valid if you roll
+back to a chart that still runs the cache proxy.
+
+The cache loads its certificate at startup, so after rotating the Secret restart
+`deployment/logfire-ff-cache-byte` so the pods serve the new certificate, or configure a reload
+controller as described in External Secrets and Automatic Reloads.
+
 For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
 When working from this repository, run `helm dependency update charts/logfire` to fetch dependency charts.
 
@@ -521,7 +531,7 @@ Before diving deeper, verify these common configuration issues:
 | intakeOauth | object | `{"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When `resourceUrl` is empty, the chart derives the self-hosted resource URL from the primary Logfire URL:   resourceUrl = <logfire.url>/v1 |
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
 | istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
-| istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-ff-proxy-cache-byte, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
+| istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
 | logfire-ai-gateway.proxyTimeout | string | `"600s"` | HAProxy inactivity timeout for public `/proxy` requests to the AI gateway. |
@@ -535,8 +545,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-cache-byte | object | `{"clientSideRouting":{"enabled":true,"zoneAware":false},"pdb":{},"replicas":3,"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
-| logfire-ff-cache-byte.clientSideRouting.enabled | bool | `true` | Route query byte-cache requests directly using EndpointSlice discovery. HAProxy remains for unmigrated consumers; stale zoneless discovery can use ClusterIP. |
+| logfire-ff-cache-byte | object | `{"clientSideRouting":{"zoneAware":false},"pdb":{},"replicas":3,"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
 | logfire-ff-cache-byte.clientSideRouting.zoneAware | bool | `false` | Restrict direct routing to zone-local cache pods. Requires nodes/get cluster RBAC and adds soft zone/hostname spreading. Cache replicas must cover every query zone; local misses use durable storage. |
 | logfire-ff-cache-byte.replicas | int | `3` | Number of byte-cache replicas when autoscaling is not configured. |
 | logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume. storage accepts Kubernetes quantities (e.g. 32Gi, 1.5Gi, 10G) of at least 1Mi. |
