@@ -23,7 +23,7 @@ topologySpreadConstraints: []
 # -- Istio compatibility options
 istio:
   # -- When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:
-  #    logfire-service, logfire-ff-proxy-cache-byte, logfire-backend-migrations,
+  #    logfire-service, logfire-backend-migrations,
   #    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.
   #    You can still override per workload via `<workload>.podLabels`.
   disableSidecarOnKnownWorkloads: false
@@ -977,9 +977,6 @@ logfire-remote-mcp:
 # -- Autoscaling & resources for the byte cache pods
 logfire-ff-cache-byte:
   clientSideRouting:
-    # -- Route query byte-cache requests directly using EndpointSlice discovery.
-    # HAProxy remains for unmigrated consumers; stale zoneless discovery can use ClusterIP.
-    enabled: true
     # -- Restrict direct routing to zone-local cache pods.
     # Requires nodes/get cluster RBAC and adds soft zone/hostname spreading.
     # Cache replicas must cover every query zone; local misses use durable storage.
@@ -1029,45 +1026,6 @@ logfire-ff-cache-byte:
 #   # -- Disk-cache capacity. Defaults to 80% of scratchVolume.storage.
 #   # Ignored by image tags older than de12a70b, which size from free space.
 #   cacheDiskCapacity: "24GB"
-
-
-# -- Autoscaling & resources for the byte proxy cache pods
-# logfire-ff-proxy-cache-byte:
-#   # -- Workload labels
-#   labels: {}
-#   # -- Workload annotations
-#   annotations: {}
-#   # -- Pod labels
-#   podLabels: {}
-#   # -- Pod annotations
-#   podAnnotations: {}
-#   service:
-#     # -- Service annotations
-#     annotations: {}
-#   replicas: 2
-#   resources:
-#     cpu: "750m"
-#     memory: "768Mi"
-#   autoscaling:
-#     minReplicas: 1
-#     maxReplicas: 2
-#     hpa:
-#       enabled: true
-#       memAverage: 65
-#       cpuAverage: 40
-#     keda:
-#       enabled: true
-#       triggers:
-#         - type: cpu
-#           metricType: Utilization
-#           metadata:
-#             value: "50"
-#   nodeSelector: {}
-#   affinity: {}
-#   tolerations: []
-#   pdb:
-#     maxUnavailable: 1
-#     minAvailable: 1
 
 
 # -- Maintenance worker
@@ -2061,19 +2019,6 @@ sizingPresets:
         hpa:
           enabled: true
           cpuAverage: 25
-    logfire-ff-proxy-cache-byte:
-      resources:
-        cpu: "150m"
-        memory: "256Mi"
-      autoscaling:
-        minReplicas: 1
-        maxReplicas: 6
-        hpa:
-          enabled: true
-          memAverage: 65
-          cpuAverage: 40
-      pdb:
-        maxUnavailable: 1
     logfire-ff-maintenance-worker:
       resources:
         requests:
@@ -2387,19 +2332,6 @@ sizingPresets:
         hpa:
           enabled: true
           cpuAverage: 25
-    logfire-ff-proxy-cache-byte:
-      resources:
-        cpu: "500m"
-        memory: "384Mi"
-      autoscaling:
-        minReplicas: 1
-        maxReplicas: 8
-        hpa:
-          enabled: true
-          memAverage: 65
-          cpuAverage: 40
-      pdb:
-        maxUnavailable: 1
     logfire-ff-maintenance-worker:
       resources:
         requests:
@@ -2817,19 +2749,6 @@ sizingPresets:
         storage: 32Gi
       pdb:
         minAvailable: 2
-    logfire-ff-proxy-cache-byte:
-      resources:
-        cpu: "750m"
-        memory: "768Mi"
-      autoscaling:
-        minReplicas: 1
-        maxReplicas: 6
-        hpa:
-          enabled: true
-          memAverage: 65
-          cpuAverage: 40
-      pdb:
-        maxUnavailable: 1
     logfire-ff-maintenance-worker:
       resources:
         requests:
@@ -2908,9 +2827,6 @@ sizingPresets:
       autoscaling:
         minReplicas: 9
         maxReplicas: 24
-    logfire-ff-proxy-cache-byte:
-      autoscaling:
-        maxReplicas: 32
     logfire-ff-maintenance-worker:
       resources:
         requests:

@@ -34,4 +34,11 @@ The email address used is {{ .Values.adminEmail }}.
 You'll need to reset the password to log in.
 This admin account has no special access over other accounts or new organizations / projects you might create.
 
+{{- if and (include "logfire.inClusterTls.enabled" . | eq "true") (include "logfire.inClusterTls.certs.mode" . | eq "existingSecrets") }}
+Byte-cache clients connect directly to the logfire-ff-cache-byte-internal
+headless service: ensure the {{ include "logfire.inClusterTls.secretName" (dict "ctx" . "serviceName" "logfire-ff-cache-byte") }} TLS secret
+includes the logfire-ff-cache-byte-internal DNS names, or byte-cache access
+fails TLS verification. See the In-cluster HTTPS docs.
+{{- end }}
+
 For more information and documentation, visit: https://logfire.pydantic.dev/docs/

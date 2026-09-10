@@ -975,7 +975,6 @@ Custom labels for workloads pods
 {{- if dig "disableSidecarOnKnownWorkloads" false (.Values.istio | default dict) -}}
   {{- $knownWorkloads := list
     "logfire-service"
-    "logfire-ff-proxy-cache-byte"
     "logfire-backend-migrations"
     "logfire-ff-migrations"
     "logfire-redis"

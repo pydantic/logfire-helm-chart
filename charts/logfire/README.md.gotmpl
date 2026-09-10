@@ -377,6 +377,16 @@ CA bundle requirements by mode:
 * `inClusterTls.certs.mode=certManager` with custom `issuerRef.name`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
 * `inClusterTls.certs.mode=existingSecrets`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
 
+Cache consumers dial the headless `logfire-ff-cache-byte-internal` service directly and verify
+that hostname, so the service certificate must include the bare `logfire-ff-cache-byte-internal`
+DNS name. Keep the `logfire-ff-cache-byte` names and the namespace and cluster-domain variants as
+well: existing certificates already carry them, and they keep the certificate valid if you roll
+back to a chart that still runs the cache proxy.
+
+The cache loads its certificate at startup, so after rotating the Secret restart
+`deployment/logfire-ff-cache-byte` so the pods serve the new certificate, or configure a reload
+controller as described in External Secrets and Automatic Reloads.
+
 For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
 When working from this repository, run `helm dependency update charts/logfire` to fetch dependency charts.
 
