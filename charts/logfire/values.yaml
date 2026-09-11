@@ -419,15 +419,14 @@ logfire-dex:
 
   # -- Resource requests/limits
   # resources:
-  #   cpu: "250m"
-  #   memory: "256Mi"
-  #   # requests:
-  #   #   cpu: "250m"
-  #   #   memory: "256Mi"
-  #   # limits:
-  #   #   cpu: "500m"
-  #   #   memory: "512Mi"
-  #   # If limits are omitted, they default to requests (Guaranteed QoS).
+  #   requests:
+  #     cpu: "250m"
+  #     memory: "256Mi"
+  #   limits:
+  #     cpu: "500m"
+  #     memory: "512Mi"
+  # Omit `limits` for uncapped pods. Legacy flat `cpu`/`memory` values set
+  # requests and limits to the same value.
 
   # autoscaling:
   #   minReplicas: 1
@@ -501,15 +500,16 @@ logfire-ff-ingest:
   # directFileSubmitConcurrency: 32
 
   # resources:
-  #   cpu: "1"
-  #   memory: "2Gi"
+  #   requests:
+  #     cpu: "1"
+  #     memory: "2Gi"
   # autoscaling:
   #   minReplicas: 2
   #   maxReplicas: 24
   #   hpa:
   #     enabled: true
   #     memAverage: 40
-  #     cpuAverage: 60
+  #     cpuAverage: 45
   #     behavior:
   #       scaleDown:
   #         stabilizationWindowSeconds: 300
@@ -1854,8 +1854,12 @@ sizingPresets:
   tiny:
     logfire-dex:
       resources:
-        cpu: "50m"
-        memory: "96Mi"
+        requests:
+          cpu: "50m"
+          memory: "96Mi"
+        limits:
+          cpu: "50m"
+          memory: "96Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 3
@@ -1866,16 +1870,19 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-ingest:
+      # Requests only, so a hash-pinned pod can burst instead of being
+      # CFS-throttled at a hard limit.
       resources:
-        cpu: "500m"
-        memory: "1Gi"
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 12
         hpa:
           enabled: true
           memAverage: 40
-          cpuAverage: 60
+          cpuAverage: 45
       pdb:
         maxUnavailable: 1
     logfire-ff-ingest-processor:
@@ -1965,8 +1972,12 @@ sizingPresets:
         storage: "1Gi"
     logfire-ff-crud-api:
       resources:
-        cpu: "100m"
-        memory: "192Mi"
+        requests:
+          cpu: "100m"
+          memory: "192Mi"
+        limits:
+          cpu: "100m"
+          memory: "192Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -1978,8 +1989,12 @@ sizingPresets:
         maxUnavailable: 1
     logfire-frontend-service:
       resources:
-        cpu: "50m"
-        memory: "96Mi"
+        requests:
+          cpu: "50m"
+          memory: "96Mi"
+        limits:
+          cpu: "50m"
+          memory: "96Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 3
@@ -2025,9 +2040,14 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ai-gateway:
       resources:
-        cpu: "100m"
-        memory: "256Mi"
-        ephemeralStorage: "1Gi"
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+          ephemeral-storage: "1Gi"
+        limits:
+          cpu: "100m"
+          memory: "256Mi"
+          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -2039,8 +2059,12 @@ sizingPresets:
         maxUnavailable: 1
     logfire-service:
       resources:
-        cpu: "250m"
-        memory: "256Mi"
+        requests:
+          cpu: "250m"
+          memory: "256Mi"
+        limits:
+          cpu: "250m"
+          memory: "256Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -2051,8 +2075,12 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ff-cache-byte:
       resources:
-        cpu: "1"
-        memory: "6Gi"
+        requests:
+          cpu: "1"
+          memory: "6Gi"
+        limits:
+          cpu: "1"
+          memory: "6Gi"
       scratchVolume:
         storage: "1Gi"
       autoscaling:
@@ -2063,8 +2091,12 @@ sizingPresets:
           cpuAverage: 25
     logfire-ff-proxy-cache-byte:
       resources:
-        cpu: "150m"
-        memory: "256Mi"
+        requests:
+          cpu: "150m"
+          memory: "256Mi"
+        limits:
+          cpu: "150m"
+          memory: "256Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 6
@@ -2123,8 +2155,12 @@ sizingPresets:
         storage: "16Gi"
     logfire-otel-collector:
       resources:
-        cpu: "150m"
-        memory: "256Mi"
+        requests:
+          cpu: "150m"
+          memory: "256Mi"
+        limits:
+          cpu: "150m"
+          memory: "256Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -2137,8 +2173,12 @@ sizingPresets:
   small:
     logfire-dex:
       resources:
-        cpu: "100m"
-        memory: "128Mi"
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "100m"
+          memory: "128Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 3
@@ -2149,16 +2189,19 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-ingest:
+      # Requests only, so a hash-pinned pod can burst instead of being
+      # CFS-throttled at a hard limit.
       resources:
-        cpu: "500m"
-        memory: "1Gi"
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 12
         hpa:
           enabled: true
           memAverage: 40
-          cpuAverage: 60
+          cpuAverage: 45
       pdb:
         maxUnavailable: 1
       topologySpreadConstraints:
@@ -2273,8 +2316,12 @@ sizingPresets:
         storage: "2Gi"
     logfire-ff-crud-api:
       resources:
-        cpu: "125m"
-        memory: "256Mi"
+        requests:
+          cpu: "125m"
+          memory: "256Mi"
+        limits:
+          cpu: "125m"
+          memory: "256Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 6
@@ -2286,8 +2333,12 @@ sizingPresets:
         maxUnavailable: 1
     logfire-frontend-service:
       resources:
-        cpu: "100m"
-        memory: "128Mi"
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "100m"
+          memory: "128Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 3
@@ -2352,8 +2403,12 @@ sizingPresets:
         maxUnavailable: 1
     logfire-service:
       resources:
-        cpu: "500m"
-        memory: "512Mi"
+        requests:
+          cpu: "500m"
+          memory: "512Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
       autoscaling:
         minReplicas: 2
         maxReplicas: 6
@@ -2377,8 +2432,12 @@ sizingPresets:
               app.kubernetes.io/component: logfire-service
     logfire-ff-cache-byte:
       resources:
-        cpu: "1"
-        memory: "6Gi"
+        requests:
+          cpu: "1"
+          memory: "6Gi"
+        limits:
+          cpu: "1"
+          memory: "6Gi"
       scratchVolume:
         storage: "4Gi"
       autoscaling:
@@ -2389,8 +2448,12 @@ sizingPresets:
           cpuAverage: 25
     logfire-ff-proxy-cache-byte:
       resources:
-        cpu: "500m"
-        memory: "384Mi"
+        requests:
+          cpu: "500m"
+          memory: "384Mi"
+        limits:
+          cpu: "500m"
+          memory: "384Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 8
@@ -2449,8 +2512,12 @@ sizingPresets:
         storage: "32Gi"
     logfire-otel-collector:
       resources:
-        cpu: "250m"
-        memory: "512Mi"
+        requests:
+          cpu: "250m"
+          memory: "512Mi"
+        limits:
+          cpu: "250m"
+          memory: "512Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -2463,8 +2530,12 @@ sizingPresets:
   standard:
     logfire-dex:
       resources:
-        cpu: "100m"
-        memory: "128Mi"
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "100m"
+          memory: "128Mi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 5
@@ -2490,16 +2561,21 @@ sizingPresets:
     logfire-ff-ingest:
       volumeClaimTemplates:
         storage: 16Gi
+      # Requests without limits: the ingest HAProxy backend consistent-hashes a
+      # tenant's Authorization + path to a single pod, and the HPA scales on the
+      # fleet average, so a pinned pod must be able to burst into spare node
+      # capacity instead of being CFS throttled at a hard limit.
       resources:
-        cpu: "1"
-        memory: "2Gi"
+        requests:
+          cpu: "1"
+          memory: "2Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 12
         hpa:
           enabled: true
           memAverage: 40
-          cpuAverage: 60
+          cpuAverage: 45
       pdb:
         maxUnavailable: 1
       topologySpreadConstraints:
@@ -2631,8 +2707,12 @@ sizingPresets:
               app.kubernetes.io/component: logfire-ai-gateway
     logfire-remote-mcp:
       resources:
-        cpu: "250m"
-        memory: "640Mi"
+        requests:
+          cpu: "250m"
+          memory: "640Mi"
+        limits:
+          cpu: "250m"
+          memory: "640Mi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 6
@@ -2694,8 +2774,12 @@ sizingPresets:
         storage: "6Gi"
     logfire-ff-crud-api:
       resources:
-        cpu: "125m"
-        memory: "512Mi"
+        requests:
+          cpu: "125m"
+          memory: "512Mi"
+        limits:
+          cpu: "125m"
+          memory: "512Mi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 6
@@ -2720,8 +2804,12 @@ sizingPresets:
               app.kubernetes.io/component: logfire-ff-crud-api
     logfire-frontend-service:
       resources:
-        cpu: "100m"
-        memory: "128Mi"
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "100m"
+          memory: "128Mi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 5
@@ -2780,8 +2868,12 @@ sizingPresets:
         maxUnavailable: 1
     logfire-service:
       resources:
-        cpu: "1"
-        memory: "1Gi"
+        requests:
+          cpu: "1"
+          memory: "1Gi"
+        limits:
+          cpu: "1"
+          memory: "1Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 6
@@ -2805,8 +2897,12 @@ sizingPresets:
               app.kubernetes.io/component: logfire-service
     logfire-ff-cache-byte:
       resources:
-        cpu: "1"
-        memory: "6Gi"
+        requests:
+          cpu: "1"
+          memory: "6Gi"
+        limits:
+          cpu: "1"
+          memory: "6Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 24
@@ -2819,8 +2915,12 @@ sizingPresets:
         minAvailable: 2
     logfire-ff-proxy-cache-byte:
       resources:
-        cpu: "750m"
-        memory: "768Mi"
+        requests:
+          cpu: "750m"
+          memory: "768Mi"
+        limits:
+          cpu: "750m"
+          memory: "768Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 6
@@ -2879,8 +2979,12 @@ sizingPresets:
         storage: "64Gi"
     logfire-otel-collector:
       resources:
-        cpu: "1"
-        memory: "1Gi"
+        requests:
+          cpu: "1"
+          memory: "1Gi"
+        limits:
+          cpu: "1"
+          memory: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 2
