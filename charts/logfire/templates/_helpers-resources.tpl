@@ -5,6 +5,43 @@ Resource Quantity Helpers
 Helpers for parsing/deriving CPU and memory quantities used by FF workloads.
 */}}
 
+{{- define "logfire.normalizeResources" -}}
+{{- $values := deepCopy .values -}}
+{{- $resources := get $values "resources" -}}
+{{- if and $resources (kindIs "map" $resources) -}}
+{{- $flat := dict -}}
+{{- range $key := list "cpu" "memory" -}}
+{{- if hasKey $resources $key -}}
+{{- $_ := set $flat $key (get $resources $key) -}}
+{{- $_ := unset $resources $key -}}
+{{- end -}}
+{{- end -}}
+{{- if $flat -}}
+{{- $requestsSpecified := hasKey $resources "requests" -}}
+{{- $limitsSpecified := hasKey $resources "limits" -}}
+{{- $requests := get $resources "requests" | default dict -}}
+{{- $limits := get $resources "limits" | default dict -}}
+{{- range $key := list "cpu" "memory" -}}
+{{- if hasKey $flat $key -}}
+{{- if not (hasKey $requests $key) -}}
+{{- $_ := set $requests $key (get $flat $key) -}}
+{{- end -}}
+{{- if and (not $limitsSpecified) (not (hasKey $limits $key)) -}}
+{{- $_ := set $limits $key (get $flat $key) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if or $requestsSpecified (not (empty $requests)) -}}
+{{- $_ := set $resources "requests" $requests -}}
+{{- end -}}
+{{- if or $limitsSpecified (not (empty $limits)) -}}
+{{- $_ := set $resources "limits" $limits -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $values | toJson -}}
+{{- end -}}
+
 {{/*
 Convert Kubernetes CPU quantity to millicores.
 Accepts values like 1, 0.5, 750m.

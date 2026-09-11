@@ -109,6 +109,7 @@ Only sizing and portable availability keys are inherited from presets.
 {{- define "logfire.effectiveServiceValues" -}}
 {{- $serviceName := .serviceName -}}
 {{- $serviceValues := get .Values $serviceName | default dict -}}
+{{- $serviceValues = include "logfire.normalizeResources" (dict "values" $serviceValues) | fromJson -}}
 {{- $merged := dict -}}
 {{- $presetName := .Values.sizingPreset | default "" -}}
 {{- if $presetName -}}
