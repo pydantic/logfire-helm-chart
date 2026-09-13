@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.45-rc.2](https://img.shields.io/badge/Version-0.13.45--rc.2-informational?style=flat-square) ![AppVersion: 49166f28](https://img.shields.io/badge/AppVersion-49166f28-informational?style=flat-square)
+![Version: 0.13.45-rc.3](https://img.shields.io/badge/Version-0.13.45--rc.3-informational?style=flat-square) ![AppVersion: 49166f28](https://img.shields.io/badge/AppVersion-49166f28-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -288,6 +288,20 @@ Logfire requires three separate PostgreSQL databases: `crud`, `ff`, and `dex`.
 They may run on the same PostgreSQL instance, but they must be separate databases to avoid schema collisions.
 Each database user needs owner permissions so migrations can run.
 
+The chart runs short, required migrations as Helm upgrade hooks. Optional schema
+work that may take much longer runs separately in the
+`logfire-backend-post-deploy-migrations` CronJob. The application remains
+available if this job is pending or fails; by default Kubernetes tries pending
+work daily at 03:17, allows one run at a time, and does not immediately retry a
+failed multi-hour scan. Inspect the retained failed Job before the next daily
+attempt. Set `postDeployMigrations.enabled: false` to suspend automatic attempts
+while investigating, and restore it after resolving the failure.
+
+The post-deployment runner needs a direct PostgreSQL DSN. Do not put a
+transaction pooler or a proxy with a shorter query timeout in `postgresDsn`, or
+long concurrent index builds can be cancelled after the Helm upgrade has
+succeeded.
+
 ### AI
 
 Pydantic Logfire AI features can be enabled by setting the `ai` configuration in your values file:
@@ -521,10 +535,11 @@ Before diving deeper, verify these common configuration issues:
 | intakeOauth | object | `{"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When `resourceUrl` is empty, the chart derives the self-hosted resource URL from the primary Logfire URL:   resourceUrl = <logfire.url>/v1 |
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
 | istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
-| istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-ff-proxy-cache-byte, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
+| istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-ff-proxy-cache-byte, logfire-backend-migrations,    logfire-backend-post-deploy-migrations, logfire-ff-migrations, logfire-redis,    and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
 | logfire-ai-gateway.proxyTimeout | string | `"600s"` | HAProxy inactivity timeout for public `/proxy` requests to the AI gateway. |
+| logfire-backend-post-deploy-migrations | object | `{"resources":{"requests":{"cpu":"250m","memory":"512Mi"}}}` | Resources and placement for the automatic post-deployment migration CronJob. |
 | logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
 | logfire-dex.config | object | `{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex configuration (see https://dexidp.io/docs/) |
@@ -605,6 +620,13 @@ Before diving deeper, verify these common configuration issues:
 | otel_collector | object | `{"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.152.0"},"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true}}` | otel-collector configuration |
 | otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
 | podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details |
+| postDeployMigrations | object | `{"activeDeadlineSeconds":21600,"enabled":true,"failedJobsHistoryLimit":3,"schedule":"17 3 * * *","startingDeadlineSeconds":3600,"successfulJobsHistoryLimit":1}` | Automatic post-deployment schema migrations. These migrations are optional to application correctness and run outside the Helm upgrade gate. |
+| postDeployMigrations.activeDeadlineSeconds | int | `21600` | Maximum duration of one migration Job. |
+| postDeployMigrations.enabled | bool | `true` | Create the post-deployment migration CronJob. |
+| postDeployMigrations.failedJobsHistoryLimit | int | `3` | Number of failed Jobs to retain for diagnosis. |
+| postDeployMigrations.schedule | string | `"17 3 * * *"` | Cron schedule for pending post-deployment migrations. The default is daily at 03:17. |
+| postDeployMigrations.startingDeadlineSeconds | int | `3600` | Maximum delay after a missed schedule before Kubernetes skips that run. |
+| postDeployMigrations.successfulJobsHistoryLimit | int | `1` | Number of successful Jobs to retain. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
 | postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
@@ -645,6 +667,3 @@ Before diving deeper, verify these common configuration issues:
 | usageRedis.dsn | string | `""` | Redis DSN for usage, autocomplete, and rate limiting data. |
 | usageRedis.prefix | string | `""` | Key prefix for usage keys. |
 | variablesApiKey | string | `""` | Client-safe API key used by the frontend to evaluate external managed variables through OFREP. The key is written to the public runtime configuration, so it must only have the `project:read_external_variables` scope. |
-
-----------------------------------------------
-Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)

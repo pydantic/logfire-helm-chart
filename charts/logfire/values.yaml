@@ -24,7 +24,8 @@ topologySpreadConstraints: []
 istio:
   # -- When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:
   #    logfire-service, logfire-ff-proxy-cache-byte, logfire-backend-migrations,
-  #    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.
+  #    logfire-backend-post-deploy-migrations, logfire-ff-migrations, logfire-redis,
+  #    and logfire-otel-collector.
   #    You can still override per workload via `<workload>.podLabels`.
   disableSidecarOnKnownWorkloads: false
 
@@ -278,6 +279,22 @@ postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 
 # -- Postgres DSN used for the `ff` database
 postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
+
+# -- Automatic post-deployment schema migrations. These migrations are optional
+# to application correctness and run outside the Helm upgrade gate.
+postDeployMigrations:
+  # -- Create the post-deployment migration CronJob.
+  enabled: true
+  # -- Cron schedule for pending post-deployment migrations. The default is daily at 03:17.
+  schedule: "17 3 * * *"
+  # -- Maximum delay after a missed schedule before Kubernetes skips that run.
+  startingDeadlineSeconds: 3600
+  # -- Maximum duration of one migration Job.
+  activeDeadlineSeconds: 21600
+  # -- Number of successful Jobs to retain.
+  successfulJobsHistoryLimit: 1
+  # -- Number of failed Jobs to retain for diagnosis.
+  failedJobsHistoryLimit: 3
 
 
 # ==============================================================================
@@ -584,6 +601,20 @@ logfire-ff-query-api:
 # -- Environment overrides for the maintenance scheduler pod
 logfire-ff-maintenance-scheduler:
   env: []
+
+# -- Resources and placement for the automatic post-deployment migration CronJob.
+logfire-backend-post-deploy-migrations:
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+  # labels: {}
+  # annotations: {}
+  # podLabels: {}
+  # podAnnotations: {}
+  # nodeSelector: {}
+  # affinity: {}
+  # tolerations: []
 
 # -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
