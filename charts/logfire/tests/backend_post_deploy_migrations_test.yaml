@@ -1,0 +1,92 @@
+suite: backend post-deployment migrations
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: runs independently of the Helm upgrade gate with bounded retries
+    templates:
+      - templates/logfire-backend-post-deploy-migrations.yaml
+    asserts:
+      - equal:
+          path: kind
+          value: CronJob
+      - notExists:
+          path: metadata.annotations["helm.sh/hook"]
+      - equal:
+          path: spec.schedule
+          value: "17 3 * * *"
+      - equal:
+          path: spec.concurrencyPolicy
+          value: Forbid
+      - equal:
+          path: spec.startingDeadlineSeconds
+          value: 3600
+      - equal:
+          path: spec.jobTemplate.spec.backoffLimit
+          value: 0
+      - equal:
+          path: spec.jobTemplate.spec.activeDeadlineSeconds
+          value: 21600
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.restartPolicy
+          value: Never
+
+  - it: runs only the post-deployment entrypoint against the configured CRUD database
+    templates:
+      - templates/logfire-backend-post-deploy-migrations.yaml
+    asserts:
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].command
+          value:
+            - python
+            - src/packages/logfire-db/logfire_db/migrations/post_deploy.py
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: CRUD_PG_DSN
+            valueFrom:
+              secretKeyRef:
+                name: lf-logfire-pg
+                key: postgresDsn
+      - notContains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: CRUD_MIGRATIONS_RESPECT_AUTO_RUN_FLAG
+          any: true
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].resources.requests.cpu
+          value: 250m
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].resources.requests.memory
+          value: 512Mi
+
+  - it: supports an independent image tag and placement overrides
+    set:
+      logfire-backend-post-deploy-migrations:
+        image:
+          tag: post-deploy-runner
+        nodeSelector:
+          workload: migrations
+    templates:
+      - templates/logfire-backend-post-deploy-migrations.yaml
+    asserts:
+      - matchRegex:
+          path: spec.jobTemplate.spec.template.spec.containers[0].image
+          pattern: ":post-deploy-runner$"
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.nodeSelector.workload
+          value: migrations
+
+  - it: can be disabled while upgrading from an image without the runner
+    set:
+      postDeployMigrations:
+        enabled: false
+    templates:
+      - templates/logfire-backend-post-deploy-migrations.yaml
+    asserts:
+      - hasDocuments:
+          count: 0

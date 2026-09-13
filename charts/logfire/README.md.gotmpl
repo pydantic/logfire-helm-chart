@@ -289,6 +289,20 @@ Logfire requires three separate PostgreSQL databases: `crud`, `ff`, and `dex`.
 They may run on the same PostgreSQL instance, but they must be separate databases to avoid schema collisions.
 Each database user needs owner permissions so migrations can run.
 
+The chart runs short, required migrations as Helm upgrade hooks. Optional schema
+work that may take much longer runs separately in the
+`logfire-backend-post-deploy-migrations` CronJob. The application remains
+available if this job is pending or fails; by default Kubernetes tries pending
+work daily at 03:17, allows one run at a time, and does not immediately retry a
+failed multi-hour scan. Inspect the retained failed Job before the next daily
+attempt. Set `postDeployMigrations.enabled: false` to suspend automatic attempts
+while investigating, and restore it after resolving the failure.
+
+The post-deployment runner needs a direct PostgreSQL DSN. Do not put a
+transaction pooler or a proxy with a shorter query timeout in `postgresDsn`, or
+long concurrent index builds can be cancelled after the Helm upgrade has
+succeeded.
+
 ### AI
 
 Pydantic Logfire AI features can be enabled by setting the `ai` configuration in your values file:

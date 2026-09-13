@@ -1,0 +1,59 @@
+{{- if .Values.postDeployMigrations.enabled }}
+{{- $serviceName := "logfire-backend-post-deploy-migrations" }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  {{- $annotations := include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres")) }}
+  {{- if $annotations }}
+  annotations:
+    {{- $annotations | nindent 4 }}
+  {{- end }}
+spec:
+  schedule: {{ .Values.postDeployMigrations.schedule | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: {{ .Values.postDeployMigrations.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: {{ .Values.postDeployMigrations.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.postDeployMigrations.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ .Values.postDeployMigrations.activeDeadlineSeconds }}
+      template:
+        metadata:
+          labels:
+            {{- include "logfire.selectorLabels" . | nindent 12 }}
+            {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
+            app.kubernetes.io/component: {{ $serviceName }}
+          {{- with (include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName)) }}
+          annotations:
+            {{- . | nindent 12 }}
+          {{- end }}
+        spec:
+          {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 10 }}
+          restartPolicy: Never
+          containers:
+            - name: {{ $serviceName }}
+              image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
+              imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+              {{- include "logfire.securityContext" .Values.securityContext | nindent 14 }}
+              command:
+                - python
+                - src/packages/logfire-db/logfire_db/migrations/post_deploy.py
+              env:
+                - name: LOGFIRE_SEND_TO_LOGFIRE
+                  value: "false"
+                {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 16 }}
+                - name: ON_PREM
+                  value: "true"
+                - name: CRUD_PG_DSN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "logfire.postgresSecretName" . }}
+                      key: postgresDsn
+              {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 14 }}
+{{- end }}
