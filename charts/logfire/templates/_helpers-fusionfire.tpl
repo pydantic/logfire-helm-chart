@@ -8,7 +8,7 @@ Helpers specific to Fusionfire workloads and configuration.
 {{/*
 Byte-cache clients discover cache pods directly via EndpointSlice.
 Zone-local routing is opt-in: it needs nodes/get ClusterRole and cache
-replicas covering every query zone.
+replicas covering every cache-consumer zone.
 Keep these defaults before service-specific env so operators can override them.
 */}}
 {{- define "logfire.ffByteCacheClientRoutingEnv" -}}

@@ -125,6 +125,32 @@ tests:
           path: kind
           value: Deployment
 
+  - it: includes the internal cache service names in its managed certificate
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+      dev:
+        deployCertManager: true
+    templates:
+      - templates/logfire-incluster-tls-certmanager.yaml
+    asserts:
+      - equal:
+          path: spec.dnsNames
+          value:
+            - logfire-ff-cache-byte
+            - logfire-ff-cache-byte.cache-ns
+            - logfire-ff-cache-byte.cache-ns.svc
+            - logfire-ff-cache-byte.cache-ns.svc.cluster.local
+            - logfire-ff-cache-byte-internal
+            - logfire-ff-cache-byte-internal.cache-ns
+            - logfire-ff-cache-byte-internal.cache-ns.svc
+            - logfire-ff-cache-byte-internal.cache-ns.svc.cluster.local
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-cache-byte-incluster-tls
+
   - it: routes all cache consumers directly without a proxy
     set:
       logfire-ff-query-worker:

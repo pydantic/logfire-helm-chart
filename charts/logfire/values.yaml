@@ -979,7 +979,7 @@ logfire-ff-cache-byte:
   clientSideRouting:
     # -- Restrict direct routing to zone-local cache pods.
     # Requires nodes/get cluster RBAC and adds soft zone/hostname spreading.
-    # Cache replicas must cover every query zone; local misses use durable storage.
+    # Cache replicas must cover every cache-consumer zone; local misses use durable storage.
     zoneAware: false
 #   # -- Workload labels
 #   labels: {}
