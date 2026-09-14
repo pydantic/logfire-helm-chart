@@ -122,7 +122,18 @@ Only sizing and portable availability keys are inherited from presets.
     {{- $presetValues = mergeOverwrite (deepCopy (get $presets "standard")) (deepCopy $presetValues) -}}
   {{- end -}}
   {{- $presetServiceValues := get $presetValues $serviceName | default dict -}}
-  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "maxQueryCostPerPod" "queryParallelism" "datafusionThreads" "datafusionTargetPartitions" "datafusionBatchSize" "ioThreads" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "cacheDiskCapacity" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" -}}
+  {{- $presetHpaBehavior := get $presetValues "hpaBehavior" | default dict -}}
+  {{- if and $presetHpaBehavior (hasKey $presetServiceValues "autoscaling") -}}
+    {{- $presetServiceValues = deepCopy $presetServiceValues -}}
+    {{- $autoscaling := get $presetServiceValues "autoscaling" | default dict -}}
+    {{- $hpa := get $autoscaling "hpa" | default dict -}}
+    {{- if and $hpa (not (hasKey $hpa "behavior")) -}}
+      {{- $_ := set $hpa "behavior" (deepCopy $presetHpaBehavior) -}}
+      {{- $_ := set $autoscaling "hpa" $hpa -}}
+      {{- $_ := set $presetServiceValues "autoscaling" $autoscaling -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "maxQueryCostPerPod" "queryParallelism" "datafusionThreads" "datafusionTargetPartitions" "datafusionBatchSize" "ioThreads" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "cacheDiskCapacity" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" "spreadAcrossZones" -}}
     {{- if hasKey $presetServiceValues $key -}}
       {{- $_ := set $merged $key (deepCopy (get $presetServiceValues $key)) -}}
     {{- end -}}
@@ -1086,6 +1097,26 @@ contain the same topologyKey.
 {{- $affinity := merge (deepCopy ($serviceValues.affinity | default dict)) (.Values.affinity | default dict) -}}
 {{- $tolerations := concat ($serviceValues.tolerations | default list) (.Values.tolerations | default list) -}}
 {{- $topologySpreadConstraints := concat ($serviceValues.topologySpreadConstraints | default list) (.Values.topologySpreadConstraints | default list) -}}
+{{- if get $serviceValues "spreadAcrossZones" -}}
+  {{- $selector := dict "matchLabels" (dict "app.kubernetes.io/component" .serviceName) -}}
+  {{- $presetTopologySpreadConstraints := list
+    (dict "maxSkew" 1 "topologyKey" "topology.kubernetes.io/zone" "whenUnsatisfiable" "ScheduleAnyway" "labelSelector" $selector)
+    (dict "maxSkew" 1 "topologyKey" "kubernetes.io/hostname" "whenUnsatisfiable" "ScheduleAnyway" "labelSelector" $selector)
+  -}}
+  {{- range $presetTopologySpreadConstraints -}}
+    {{- $presetConstraint := . -}}
+    {{- $topologyKey := get $presetConstraint "topologyKey" -}}
+    {{- $hasTopologyKey := false -}}
+    {{- range $topologySpreadConstraints -}}
+      {{- if eq (get . "topologyKey") $topologyKey -}}
+        {{- $hasTopologyKey = true -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if not $hasTopologyKey -}}
+      {{- $topologySpreadConstraints = append $topologySpreadConstraints $presetConstraint -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 {{- range (.defaultTopologySpreadConstraints | default list) -}}
   {{- $defaultConstraint := . -}}
   {{- $topologyKey := get $defaultConstraint "topologyKey" -}}

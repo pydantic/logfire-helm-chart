@@ -1816,7 +1816,6 @@ sizingPresets:
           cpu: "50m"
           memory: "96Mi"
         limits:
-          cpu: "50m"
           memory: "96Mi"
       autoscaling:
         minReplicas: 1
@@ -1892,7 +1891,6 @@ sizingPresets:
           cpu: "100m"
           memory: "256Mi"
         limits:
-          cpu: "250m"
           memory: "384Mi"
       autoscaling:
         minReplicas: 1
@@ -1934,7 +1932,6 @@ sizingPresets:
           cpu: "100m"
           memory: "192Mi"
         limits:
-          cpu: "100m"
           memory: "192Mi"
       autoscaling:
         minReplicas: 1
@@ -1951,7 +1948,6 @@ sizingPresets:
           cpu: "50m"
           memory: "96Mi"
         limits:
-          cpu: "50m"
           memory: "96Mi"
       autoscaling:
         minReplicas: 1
@@ -2003,7 +1999,6 @@ sizingPresets:
           memory: "256Mi"
           ephemeral-storage: "1Gi"
         limits:
-          cpu: "100m"
           memory: "256Mi"
           ephemeral-storage: "1Gi"
       autoscaling:
@@ -2021,7 +2016,6 @@ sizingPresets:
           cpu: "250m"
           memory: "256Mi"
         limits:
-          cpu: "250m"
           memory: "256Mi"
       autoscaling:
         minReplicas: 1
@@ -2037,7 +2031,6 @@ sizingPresets:
           cpu: "1"
           memory: "6Gi"
         limits:
-          cpu: "1"
           memory: "6Gi"
       scratchVolume:
         storage: "1Gi"
@@ -2100,7 +2093,6 @@ sizingPresets:
           cpu: "150m"
           memory: "256Mi"
         limits:
-          cpu: "150m"
           memory: "256Mi"
       autoscaling:
         minReplicas: 1
@@ -2112,16 +2104,40 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
   small:
+    # Production presets react quickly to demand, retain capacity through short
+    # troughs, and remove at most one pod per minute. This avoids the sustained
+    # replica churn caused by Kubernetes' default HPA behavior.
+    hpaBehavior: &productionHpaBehavior
+      scaleUp:
+        stabilizationWindowSeconds: 0
+        policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 60
+          - type: Pods
+            value: 2
+            periodSeconds: 60
+        selectPolicy: Max
+      scaleDown:
+        stabilizationWindowSeconds: 900
+        policies:
+          - type: Percent
+            value: 25
+            periodSeconds: 60
+          - type: Pods
+            value: 1
+            periodSeconds: 60
+        selectPolicy: Min
     logfire-dex:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "100m"
           memory: "128Mi"
         limits:
-          cpu: "100m"
           memory: "128Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 3
         hpa:
           enabled: true
@@ -2185,6 +2201,7 @@ sizingPresets:
             matchLabels:
               app.kubernetes.io/component: logfire-ff-ingest-processor
     logfire-backend-auth:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "100m"
@@ -2192,7 +2209,7 @@ sizingPresets:
         limits:
           memory: "768Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 4
         hpa:
           enabled: true
@@ -2200,6 +2217,7 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-backend:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "750m"
@@ -2207,7 +2225,7 @@ sizingPresets:
         limits:
           memory: "2Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 4
         hpa:
           enabled: true
@@ -2215,15 +2233,15 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-remote-mcp:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "150m"
           memory: "384Mi"
         limits:
-          cpu: "500m"
           memory: "512Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 3
         hpa:
           enabled: true
@@ -2231,13 +2249,14 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-query-api:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "2"
           memory: "4Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 8
         hpa:
           enabled: true
@@ -2256,15 +2275,15 @@ sizingPresets:
       scratchVolume:
         storage: "2Gi"
     logfire-ff-crud-api:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "125m"
           memory: "256Mi"
         limits:
-          cpu: "125m"
           memory: "256Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 6
         hpa:
           enabled: true
@@ -2273,15 +2292,15 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-frontend-service:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "100m"
           memory: "128Mi"
         limits:
-          cpu: "100m"
           memory: "128Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 3
         hpa:
           enabled: true
@@ -2324,17 +2343,17 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ai-gateway:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "150m"
           memory: "384Mi"
           ephemeral-storage: "1Gi"
         limits:
-          cpu: "500m"
           memory: "768Mi"
           ephemeral-storage: "1Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 6
         hpa:
           enabled: true
@@ -2343,12 +2362,12 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-service:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "500m"
           memory: "512Mi"
         limits:
-          cpu: "500m"
           memory: "512Mi"
       autoscaling:
         minReplicas: 2
@@ -2372,21 +2391,23 @@ sizingPresets:
             matchLabels:
               app.kubernetes.io/component: logfire-service
     logfire-ff-cache-byte:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "1"
           memory: "6Gi"
         limits:
-          cpu: "1"
           memory: "6Gi"
       scratchVolume:
         storage: "4Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 24
         hpa:
           enabled: true
           cpuAverage: 25
+      pdb:
+        minAvailable: 1
     logfire-ff-maintenance-worker:
       resources:
         requests:
@@ -2435,15 +2456,15 @@ sizingPresets:
       scratchVolume:
         storage: "32Gi"
     logfire-otel-collector:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "250m"
           memory: "512Mi"
         limits:
-          cpu: "250m"
           memory: "512Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 4
         hpa:
           enabled: true
@@ -2452,13 +2473,13 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
   standard:
+    hpaBehavior: *productionHpaBehavior
     logfire-dex:
       resources:
         requests:
           cpu: "100m"
           memory: "128Mi"
         limits:
-          cpu: "100m"
           memory: "128Mi"
       autoscaling:
         minReplicas: 3
@@ -2581,7 +2602,7 @@ sizingPresets:
         maxReplicas: 6
         hpa:
           enabled: true
-          cpuAverage: 25
+          cpuAverage: 50
       pdb:
         maxUnavailable: 1
       topologySpreadConstraints:
@@ -2604,7 +2625,6 @@ sizingPresets:
           memory: "512Mi"
           ephemeral-storage: "1Gi"
         limits:
-          cpu: "500m"
           memory: "2Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
@@ -2635,7 +2655,6 @@ sizingPresets:
           cpu: "250m"
           memory: "640Mi"
         limits:
-          cpu: "250m"
           memory: "640Mi"
       autoscaling:
         minReplicas: 3
@@ -2666,7 +2685,7 @@ sizingPresets:
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 3
-        maxReplicas: 8
+        maxReplicas: 12
         hpa:
           enabled: true
           memAverage: 70
@@ -2691,7 +2710,7 @@ sizingPresets:
     logfire-ff-query-worker:
       resources:
         requests:
-          cpu: "500m"
+          cpu: "1"
           memory: "4Gi"
           ephemeral-storage: "1Gi"
       scratchVolume:
@@ -2702,7 +2721,6 @@ sizingPresets:
           cpu: "125m"
           memory: "512Mi"
         limits:
-          cpu: "125m"
           memory: "512Mi"
       autoscaling:
         minReplicas: 3
@@ -2732,7 +2750,6 @@ sizingPresets:
           cpu: "100m"
           memory: "128Mi"
         limits:
-          cpu: "100m"
           memory: "128Mi"
       autoscaling:
         minReplicas: 3
@@ -2796,14 +2813,13 @@ sizingPresets:
           cpu: "1"
           memory: "1Gi"
         limits:
-          cpu: "1"
           memory: "1Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 6
         hpa:
           enabled: true
-          cpuAverage: 20
+          cpuAverage: 40
       pdb:
         maxUnavailable: 1
       topologySpreadConstraints:
@@ -2825,7 +2841,6 @@ sizingPresets:
           cpu: "1"
           memory: "6Gi"
         limits:
-          cpu: "1"
           memory: "6Gi"
       autoscaling:
         minReplicas: 3
@@ -2887,14 +2902,13 @@ sizingPresets:
     logfire-otel-collector:
       resources:
         requests:
-          cpu: "1"
-          memory: "1Gi"
+          cpu: "500m"
+          memory: "512Mi"
         limits:
-          cpu: "1"
           memory: "1Gi"
       autoscaling:
-        minReplicas: 1
-        maxReplicas: 2
+        minReplicas: 2
+        maxReplicas: 4
         hpa:
           enabled: true
           memAverage: 70
