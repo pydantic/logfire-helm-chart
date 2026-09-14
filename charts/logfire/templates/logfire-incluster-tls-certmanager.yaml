@@ -15,7 +15,7 @@
   (dict "serviceName" "logfire-dex")
   (dict "serviceName" "logfire-ff-ingest")
   (dict "serviceName" "logfire-ff-ingest-processor")
-  (dict "serviceName" "logfire-ff-cache-byte")
+  (dict "serviceName" "logfire-ff-cache-byte" "extraServiceNames" (list "logfire-ff-cache-byte-internal"))
   (dict "serviceName" "logfire-ff-crud-api")
   (dict "serviceName" "logfire-ff-maintenance-scheduler")
   (dict "serviceName" "logfire-ff-maintenance-worker")
