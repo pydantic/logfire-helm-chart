@@ -117,6 +117,18 @@ tests:
           path: kind
           value: HorizontalPodAutoscaler
       - equal:
+          path: spec.behavior.scaleDown.stabilizationWindowSeconds
+          value: 300
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.behavior.scaleDown.selectPolicy
+          value: Min
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
           path: spec.minAvailable
           value: 1
         documentSelector:
@@ -129,6 +141,7 @@ tests:
     templates:
       - templates/logfire-backend.yaml
       - templates/logfire-service.yaml
+      - templates/logfire-ff-cache-byte.yaml
       - templates/logfire-ff-query-api.yaml
       - templates/logfire-otel-collector.yaml
     asserts:
@@ -148,8 +161,15 @@ tests:
           value: HorizontalPodAutoscaler
       - equal:
           path: spec.maxReplicas
-          value: 12
+          value: 16
         template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.behavior.scaleDown.stabilizationWindowSeconds
+          value: 300
+        template: templates/logfire-ff-cache-byte.yaml
         documentSelector:
           path: kind
           value: HorizontalPodAutoscaler

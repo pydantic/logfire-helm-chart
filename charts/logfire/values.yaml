@@ -2108,7 +2108,7 @@ sizingPresets:
     # troughs, and remove at most one pod per minute. This avoids the sustained
     # replica churn caused by Kubernetes' default HPA behavior.
     hpaBehavior: &productionHpaBehavior
-      scaleUp:
+      scaleUp: &productionHpaScaleUp
         stabilizationWindowSeconds: 0
         policies:
           - type: Percent
@@ -2406,6 +2406,20 @@ sizingPresets:
         hpa:
           enabled: true
           cpuAverage: 25
+          # Byte-cache replicas are expensive and safe to drain gradually once
+          # a burst has passed, so do not retain peak capacity for 15 minutes.
+          behavior: &byteCacheHpaBehavior
+            scaleUp: *productionHpaScaleUp
+            scaleDown:
+              stabilizationWindowSeconds: 300
+              policies:
+                - type: Percent
+                  value: 25
+                  periodSeconds: 60
+                - type: Pods
+                  value: 1
+                  periodSeconds: 60
+              selectPolicy: Min
       pdb:
         minAvailable: 1
     logfire-ff-maintenance-worker:
@@ -2685,7 +2699,7 @@ sizingPresets:
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 3
-        maxReplicas: 12
+        maxReplicas: 16
         hpa:
           enabled: true
           memAverage: 70
@@ -2848,6 +2862,7 @@ sizingPresets:
         hpa:
           enabled: true
           cpuAverage: 25
+          behavior: *byteCacheHpaBehavior
       scratchVolume:
         storage: 32Gi
       pdb:
