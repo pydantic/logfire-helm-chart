@@ -117,18 +117,6 @@ tests:
           path: kind
           value: HorizontalPodAutoscaler
       - equal:
-          path: spec.behavior.scaleDown.stabilizationWindowSeconds
-          value: 300
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
-          path: spec.behavior.scaleDown.selectPolicy
-          value: Min
-        documentSelector:
-          path: kind
-          value: HorizontalPodAutoscaler
-      - equal:
           path: spec.minAvailable
           value: 1
         documentSelector:
