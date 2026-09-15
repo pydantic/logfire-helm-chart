@@ -65,6 +65,9 @@ rateLimits: {}
 # -- Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults.
 sizingPreset: ""
 
+# -- Also write Fusionfire telemetry to the container console in addition to sending it through OTLP.
+fusionfireForceConsoleLogging: false
+
 # ==============================================================================
 # Ingress
 # ==============================================================================
