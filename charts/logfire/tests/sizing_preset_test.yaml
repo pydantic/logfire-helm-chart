@@ -35,6 +35,238 @@ tests:
           path: kind
           value: HorizontalPodAutoscaler
 
+  - it: small keeps customer-facing services available across failures
+    set:
+      sizingPreset: small
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - equal:
+          path: spec.minReplicas
+          value: 2
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.behavior.scaleDown.stabilizationWindowSeconds
+          value: 900
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.behavior.scaleDown.selectPolicy
+          value: Min
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.template.spec.topologySpreadConstraints[0].topologyKey
+          value: topology.kubernetes.io/zone
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.topologySpreadConstraints[1].topologyKey
+          value: kubernetes.io/hostname
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: service-level HPA behavior overrides the production preset
+    set:
+      sizingPreset: small
+      logfire-backend:
+        autoscaling:
+          hpa:
+            behavior:
+              scaleDown:
+                stabilizationWindowSeconds: 60
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - equal:
+          path: spec.behavior.scaleDown.stabilizationWindowSeconds
+          value: 60
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+
+  - it: small does not duplicate existing service topology constraints
+    set:
+      sizingPreset: small
+    templates:
+      - templates/logfire-service.yaml
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.topologySpreadConstraints
+          count: 2
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: small keeps two byte-cache replicas with a disruption budget
+    set:
+      sizingPreset: small
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    asserts:
+      - equal:
+          path: spec.minReplicas
+          value: 2
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.minAvailable
+          value: 1
+        documentSelector:
+          path: kind
+          value: PodDisruptionBudget
+
+  - it: standard uses consistent HPA thresholds and ceilings
+    set:
+      sizingPreset: standard
+    templates:
+      - templates/logfire-backend.yaml
+      - templates/logfire-service.yaml
+      - templates/logfire-ff-cache-byte.yaml
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-otel-collector.yaml
+    asserts:
+      - equal:
+          path: spec.metrics[0].resource.target.averageUtilization
+          value: 50
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.metrics[0].resource.target.averageUtilization
+          value: 40
+        template: templates/logfire-service.yaml
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.maxReplicas
+          value: 16
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.behavior.scaleDown.stabilizationWindowSeconds
+          value: 300
+        template: templates/logfire-ff-cache-byte.yaml
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.minReplicas
+          value: 2
+        template: templates/logfire-otel-collector.yaml
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.maxReplicas
+          value: 4
+        template: templates/logfire-otel-collector.yaml
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.cpu
+          value: 500m
+        template: templates/logfire-otel-collector.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 512Mi
+        template: templates/logfire-otel-collector.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 1Gi
+        template: templates/logfire-otel-collector.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: standard resource requests do not regress from small
+    set:
+      sizingPreset: standard
+      logfire-ff-query-worker.enabled: true
+    templates:
+      - templates/logfire-remote-mcp.yaml
+      - templates/logfire-ff-query-worker.yaml
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].resources.limits.cpu
+        template: templates/logfire-remote-mcp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.cpu
+          value: 1
+        template: templates/logfire-ff-query-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: production workloads can burst above their CPU requests
+    set:
+      sizingPreset: standard
+      logfire-ai-gateway.enabled: true
+    templates:
+      - templates/dex/deployment.yaml
+      - templates/logfire-ai-gateway.yaml
+      - templates/logfire-remote-mcp.yaml
+      - templates/logfire-ff-crud-api.yaml
+      - templates/logfire-frontend-service.yaml
+      - templates/logfire-service.yaml
+      - templates/logfire-ff-cache-byte.yaml
+      - templates/logfire-otel-collector.yaml
+    asserts:
+      - notExists: &no_cpu_limit
+          path: spec.template.spec.containers[0].resources.limits.cpu
+        template: templates/dex/deployment.yaml
+      - notExists:
+          <<: *no_cpu_limit
+        template: templates/logfire-ai-gateway.yaml
+        documentSelector: &deployment
+          path: kind
+          value: Deployment
+      - notExists:
+          <<: *no_cpu_limit
+        template: templates/logfire-remote-mcp.yaml
+        documentSelector: *deployment
+      - notExists:
+          <<: *no_cpu_limit
+        template: templates/logfire-ff-crud-api.yaml
+        documentSelector: *deployment
+      - notExists:
+          <<: *no_cpu_limit
+        template: templates/logfire-frontend-service.yaml
+        documentSelector: *deployment
+      - notExists:
+          <<: *no_cpu_limit
+        template: templates/logfire-service.yaml
+        documentSelector: *deployment
+      - notExists:
+          <<: *no_cpu_limit
+        template: templates/logfire-ff-cache-byte.yaml
+        documentSelector: *deployment
+      - notExists:
+          <<: *no_cpu_limit
+        template: templates/logfire-otel-collector.yaml
+        documentSelector: *deployment
+
   - it: ingest StatefulSet PVC template is stable for tiny
     set:
       sizingPreset: tiny
