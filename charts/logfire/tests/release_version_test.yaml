@@ -1,0 +1,33 @@
+suite: platform release version reported to API clients
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: defaults APP_VERSION to the workload image version
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - isNotEmpty:
+          path: spec.template.spec.containers[0].env[?(@.name == "APP_VERSION")].value
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: reports the configured platform release tag
+    set:
+      releaseVersion: v2026-09-15.01
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "APP_VERSION")].value
+          value: v2026-09-15.01
+        documentSelector:
+          path: kind
+          value: Deployment

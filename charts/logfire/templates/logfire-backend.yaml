@@ -188,6 +188,8 @@ spec:
               value: {{ $serviceName }}
             - name: LOGFIRE_SERVICE_VERSION
               value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName) | quote }}
+            - name: APP_VERSION
+              value: {{ .Values.releaseVersion | default (include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName)) | quote }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
