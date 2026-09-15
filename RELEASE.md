@@ -6,7 +6,7 @@ The workflow inspects `Chart.yaml`'s `version:` string to decide whether the rel
 
 ## Stable release
 
-1. Open a PR against `main` that bumps `charts/logfire/Chart.yaml` `version:` (and, where relevant, `appVersion:`). Follow the PR template — the `## Summary` and `## Upgrade notes` sections are scraped into the GitHub Release body by the workflow.
+1. Open a PR against `main` that bumps `charts/logfire/Chart.yaml` `version:` (and, where relevant, `appVersion:`), and sets `charts/logfire/values.yaml` `releaseVersion:` to the platform release the images were built from (e.g. `v2026-09-15.01`). `releaseVersion` is what API clients see in the `Logfire-Version` response header, so they can tell which platform release an instance runs; leave it empty only for builds with no platform release. Follow the PR template — the `## Summary` and `## Upgrade notes` sections are scraped into the GitHub Release body by the workflow.
 2. Merge to `main`. The workflow creates tag `logfire-X.Y.Z`, a GitHub Release, publishes the chart to the Pages index, copies `charts/logfire/README.md` to `gh-pages`, and rewrites the release notes from the PR body.
 
 ## Pre-release (RC)
