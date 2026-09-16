@@ -9,7 +9,20 @@ set:
   dev:
     deployPostgres: true
 tests:
-  - it: defaults APP_VERSION to the workload image version
+  - it: reports the platform release the chart images were built from
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "APP_VERSION")].value
+          value: v2026-09-07.04
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: falls back to the workload image version when releaseVersion is empty
+    set:
+      releaseVersion: ""
     templates:
       - templates/logfire-backend.yaml
     asserts:

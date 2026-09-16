@@ -40,7 +40,7 @@ adminEmail: hello@example.dev
 variablesApiKey: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: ""
+releaseVersion: "v2026-09-07.04"
 
 # -- List of mapping to automatically assign members of OIDC group to logfire roles
 groupOrganizationMapping: []
