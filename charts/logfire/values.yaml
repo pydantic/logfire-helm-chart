@@ -2097,7 +2097,8 @@ sizingPresets:
       scratchVolume:
         storage: "16Gi"
     logfire-otel-collector:
-      # 32MiB keeps RSS headroom on the 256Mi memory limit; see tests/otel_collector_config_test.yaml
+      # Initial canary value for the exporter sending queue. The bound is byte-based; the exact
+      # value is not a memory measurement. Monitor OOMs, receiver refusals, and enqueue failures.
       sendingQueueBytes: 33554432
       resources:
         requests:
@@ -2482,7 +2483,8 @@ sizingPresets:
         storage: "32Gi"
     logfire-otel-collector:
       spreadAcrossZones: true
-      # 64MiB keeps RSS headroom on the 512Mi memory limit; see tests/otel_collector_config_test.yaml
+      # Initial canary value for the exporter sending queue. The bound is byte-based; the exact
+      # value is not a memory measurement. Monitor OOMs, receiver refusals, and enqueue failures.
       sendingQueueBytes: 67108864
       resources:
         requests:
@@ -2928,7 +2930,8 @@ sizingPresets:
       scratchVolume:
         storage: "64Gi"
     logfire-otel-collector:
-      # 128MiB keeps RSS headroom on the 1Gi memory limit; see tests/otel_collector_config_test.yaml
+      # Initial canary value for the exporter sending queue. The bound is byte-based; the exact
+      # value is not a memory measurement. Monitor OOMs, receiver refusals, and enqueue failures.
       sendingQueueBytes: 134217728
       resources:
         requests:

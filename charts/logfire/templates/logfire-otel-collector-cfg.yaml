@@ -32,9 +32,12 @@ data:
         headers:
           Authorization: "Bearer ${LOGFIRE_META_WRITE_TOKEN}"
         {{- end }}
-        # Bound the exporter queue by bytes so a slow destination cannot grow it into the
-        # container's memory limit. On overflow the receiver refuses new data and the sender
-        # retries; see tests/otel_collector_config_test.yaml for the per-profile bound.
+        # Byte-bounded, in-memory sending queue. Bounding keeps a slow destination from growing
+        # the queue into the container's memory limit. On overflow the receiver refuses new data,
+        # which protects data only when the sender retries. A restart loses undrained entries.
+        # Each signal pipeline has its own queue, so worst-case queued bytes are about 3x this
+        # value. The per-profile sizes are initial canary settings: monitor OOMs, receiver
+        # refusals, and enqueue failures. See tests/otel_collector_config_test.yaml.
         sending_queue:
           enabled: true
           sizer: bytes
