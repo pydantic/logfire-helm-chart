@@ -1,4 +1,6 @@
 {{- $serviceName := "logfire-otel-collector" }}
+{{- $collectorValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson }}
+{{- $queueSizeBytes := $collectorValues.sendingQueueBytes | default .Values.otel_collector.sendingQueueBytes | default 67108864 }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -30,6 +32,13 @@ data:
         headers:
           Authorization: "Bearer ${LOGFIRE_META_WRITE_TOKEN}"
         {{- end }}
+        # Bound the exporter queue by bytes so a slow destination cannot grow it into the
+        # container's memory limit. On overflow the receiver refuses new data and the sender
+        # retries; see tests/otel_collector_config_test.yaml for the per-profile bound.
+        sending_queue:
+          enabled: true
+          sizer: bytes
+          queue_size: {{ $queueSizeBytes | int64 }}
       {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
       {{- with .Values.otel_collector.prometheus }}
       prometheus:
@@ -49,8 +58,9 @@ data:
     processors:
       memory_limiter:
         check_interval: 1s
-        limit_mib: 512
-        spike_limit_mib: 128
+        # Percentage-based so the limiter tracks whichever memory limit the sizing preset sets.
+        limit_percentage: 75
+        spike_limit_percentage: 15
       batch:
         timeout: 1s
         send_batch_size: 2048
@@ -108,11 +118,11 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [k8s_attributes, batch]
+          processors: [memory_limiter, k8s_attributes, batch]
           exporters: [debug, otlp_http]
         metrics:
           receivers: [otlp]
-          processors: [k8s_attributes, batch]
+          processors: [memory_limiter, k8s_attributes, batch]
           {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
           exporters: [debug, otlp_http, prometheus]
           {{- else }}
@@ -120,5 +130,5 @@ data:
           {{- end }}
         logs:
           receivers: [otlp]
-          processors: [k8s_attributes, batch]
+          processors: [memory_limiter, k8s_attributes, batch]
           exporters: [otlp_http]

@@ -1,0 +1,81 @@
+suite: otel collector config resilience
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+templates:
+  - templates/logfire-otel-collector-cfg.yaml
+tests:
+  - it: wires the memory limiter first in every pipeline and bounds the queue in bytes
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "limit_percentage: 75"
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "spike_limit_percentage: 15"
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "sizer: bytes"
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "queue_size: 67108864"
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'traces:\n      receivers: \[otlp\]\n      processors: \[memory_limiter, k8s_attributes, batch\]'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'metrics:\n      receivers: \[otlp\]\n      processors: \[memory_limiter, k8s_attributes, batch\]'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'logs:\n      receivers: \[otlp\]\n      processors: \[memory_limiter, k8s_attributes, batch\]'
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "processors: \\[k8s_attributes, batch\\]"
+
+  - it: tiny bounds the queue for the 256Mi profile
+    set:
+      sizingPreset: tiny
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "queue_size: 33554432"
+
+  - it: small bounds the queue for the 512Mi profile
+    set:
+      sizingPreset: small
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "queue_size: 67108864"
+
+  - it: standard bounds the queue for the 1Gi profile
+    set:
+      sizingPreset: standard
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "queue_size: 134217728"
+
+  - it: large inherits the standard collector sizing
+    set:
+      sizingPreset: large
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "queue_size: 134217728"
+
+  - it: service-level sendingQueueBytes overrides the preset
+    set:
+      sizingPreset: tiny
+      logfire-otel-collector:
+        sendingQueueBytes: 16777216
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "queue_size: 16777216"

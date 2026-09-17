@@ -1596,6 +1596,9 @@ otelResourceAttributes: {}
 
 # -- otel-collector configuration
 otel_collector:
+  # -- Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per
+  # profile; this value applies when no sizing preset is used.
+  sendingQueueBytes: 67108864
   # -- exporter configuration for the otlp_http exporter
   # Override these to send telemetry data to a different OTLP-compatible destination.
   exporter:
@@ -2094,6 +2097,8 @@ sizingPresets:
       scratchVolume:
         storage: "16Gi"
     logfire-otel-collector:
+      # 32MiB keeps RSS headroom on the 256Mi memory limit; see tests/otel_collector_config_test.yaml
+      sendingQueueBytes: 33554432
       resources:
         requests:
           cpu: "150m"
@@ -2477,6 +2482,8 @@ sizingPresets:
         storage: "32Gi"
     logfire-otel-collector:
       spreadAcrossZones: true
+      # 64MiB keeps RSS headroom on the 512Mi memory limit; see tests/otel_collector_config_test.yaml
+      sendingQueueBytes: 67108864
       resources:
         requests:
           cpu: "250m"
@@ -2921,6 +2928,8 @@ sizingPresets:
       scratchVolume:
         storage: "64Gi"
     logfire-otel-collector:
+      # 128MiB keeps RSS headroom on the 1Gi memory limit; see tests/otel_collector_config_test.yaml
+      sendingQueueBytes: 134217728
       resources:
         requests:
           cpu: "500m"
