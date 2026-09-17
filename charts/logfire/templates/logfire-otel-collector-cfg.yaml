@@ -1,5 +1,9 @@
 {{- $serviceName := "logfire-otel-collector" }}
 {{- $collectorValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson }}
+{{- $collectorResources := $collectorValues.resources | default dict }}
+{{- $collectorLimits := get $collectorResources "limits" | default dict }}
+{{- $usesFlatResources := or (hasKey $collectorResources "cpu") (hasKey $collectorResources "memory") (hasKey $collectorResources "ephemeralStorage") (hasKey $collectorResources "ephemeral-storage") }}
+{{- $rendersMemoryLimit := and (or $usesFlatResources (not (empty $collectorLimits))) (or $usesFlatResources (hasKey $collectorLimits "memory")) }}
 {{- $queueSizeBytes := $collectorValues.sendingQueueBytes | default .Values.otel_collector.sendingQueueBytes | default 67108864 }}
 apiVersion: v1
 kind: ConfigMap
@@ -61,9 +65,16 @@ data:
     processors:
       memory_limiter:
         check_interval: 1s
-        # Percentage-based so the limiter tracks whichever memory limit the sizing preset sets.
+        {{- if $rendersMemoryLimit }}
+        # Track the memory limit this deployment renders for the collector.
         limit_percentage: 75
         spike_limit_percentage: 15
+        {{- else }}
+        # No container memory limit is rendered for this deployment, so percentage limits would
+        # be computed from the node's memory. Keep the fixed fallback.
+        limit_mib: 512
+        spike_limit_mib: 128
+        {{- end }}
       batch:
         timeout: 1s
         send_batch_size: 2048
