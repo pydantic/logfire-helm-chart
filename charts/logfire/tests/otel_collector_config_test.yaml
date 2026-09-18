@@ -1,0 +1,112 @@
+suite: otel collector config resilience
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+templates:
+  - templates/logfire-otel-collector-cfg.yaml
+tests:
+  - it: without a container memory limit the limiter keeps the fixed fallback
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "limit_mib: 512"
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "limit_percentage"
+
+  - it: wires the memory limiter first in every pipeline and bounds the queue in bytes
+    set:
+      logfire-otel-collector:
+        resources:
+          limits:
+            memory: 512Mi
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "limit_percentage: 75"
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "spike_limit_percentage: 15"
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "sizer: bytes"
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "queue_size: 67108864"
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'traces:\n      receivers: \[otlp\]\n      processors: \[memory_limiter, k8s_attributes, batch\]'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'metrics:\n      receivers: \[otlp\]\n      processors: \[memory_limiter, k8s_attributes, batch\]'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'logs:\n      receivers: \[otlp\]\n      processors: \[memory_limiter, k8s_attributes, batch\]'
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "processors: \\[k8s_attributes, batch\\]"
+
+  - it: tiny bounds the queue for the 256Mi profile and tracks its memory limit
+    set:
+      sizingPreset: tiny
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "queue_size: 33554432"
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "limit_percentage: 75"
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "limit_mib"
+
+  - it: small bounds the queue for the 512Mi profile
+    set:
+      sizingPreset: small
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "queue_size: 67108864"
+
+  - it: standard bounds the queue for the 1Gi profile
+    set:
+      sizingPreset: standard
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "queue_size: 134217728"
+
+  - it: large inherits the standard collector sizing
+    set:
+      sizingPreset: large
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "queue_size: 134217728"
+
+  - it: requests without limits keep the fixed fallback
+    set:
+      logfire-otel-collector:
+        resources:
+          requests:
+            memory: 512Mi
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "limit_mib: 512"
+
+  - it: service-level sendingQueueBytes overrides the preset
+    set:
+      sizingPreset: tiny
+      logfire-otel-collector:
+        sendingQueueBytes: 16777216
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: "queue_size: 16777216"

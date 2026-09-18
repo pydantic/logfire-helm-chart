@@ -40,7 +40,7 @@ adminEmail: hello@example.dev
 variablesApiKey: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: "v2026-09-07.04"
+releaseVersion: "v2026-09-18.01"
 
 # -- List of mapping to automatically assign members of OIDC group to logfire roles
 groupOrganizationMapping: []
@@ -1596,6 +1596,9 @@ otelResourceAttributes: {}
 
 # -- otel-collector configuration
 otel_collector:
+  # -- Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per
+  # profile; this value applies when no sizing preset is used.
+  sendingQueueBytes: 67108864
   # -- exporter configuration for the otlp_http exporter
   # Override these to send telemetry data to a different OTLP-compatible destination.
   exporter:
@@ -2094,6 +2097,9 @@ sizingPresets:
       scratchVolume:
         storage: "16Gi"
     logfire-otel-collector:
+      # Initial canary value for the exporter sending queue. The bound is byte-based; the exact
+      # value is not a memory measurement. Monitor OOMs, receiver refusals, and enqueue failures.
+      sendingQueueBytes: 33554432
       resources:
         requests:
           cpu: "150m"
@@ -2477,6 +2483,9 @@ sizingPresets:
         storage: "32Gi"
     logfire-otel-collector:
       spreadAcrossZones: true
+      # Initial canary value for the exporter sending queue. The bound is byte-based; the exact
+      # value is not a memory measurement. Monitor OOMs, receiver refusals, and enqueue failures.
+      sendingQueueBytes: 67108864
       resources:
         requests:
           cpu: "250m"
@@ -2921,6 +2930,9 @@ sizingPresets:
       scratchVolume:
         storage: "64Gi"
     logfire-otel-collector:
+      # Initial canary value for the exporter sending queue. The bound is byte-based; the exact
+      # value is not a memory measurement. Monitor OOMs, receiver refusals, and enqueue failures.
+      sendingQueueBytes: 134217728
       resources:
         requests:
           cpu: "500m"

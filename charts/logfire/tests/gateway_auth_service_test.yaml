@@ -1,0 +1,40 @@
+suite: gateway auth service address
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+  logfire-ai-gateway:
+    enabled: true
+tests:
+  - it: points the gateway at the backend auth profile over plaintext HTTP
+    templates:
+      - templates/logfire-ai-gateway.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "GATEWAY_AUTH_SERVICE_URL")].value
+          value: http://logfire-backend-auth:8000
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: reaches the backend auth profile over HTTPS when in-cluster TLS is on
+    set:
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-ai-gateway.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "GATEWAY_AUTH_SERVICE_URL")].value
+          value: https://logfire-backend-auth:8443
+        documentSelector:
+          path: kind
+          value: Deployment
