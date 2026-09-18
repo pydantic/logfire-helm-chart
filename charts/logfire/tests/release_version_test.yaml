@@ -10,12 +10,14 @@ set:
     deployPostgres: true
 tests:
   - it: reports the platform release the chart images were built from
+    set:
+      releaseVersion: v2026-09-18.01
     templates:
       - templates/logfire-backend.yaml
     asserts:
       - equal:
           path: spec.template.spec.containers[0].env[?(@.name == "APP_VERSION")].value
-          value: v2026-09-07.04
+          value: v2026-09-18.01
         documentSelector:
           path: kind
           value: Deployment
