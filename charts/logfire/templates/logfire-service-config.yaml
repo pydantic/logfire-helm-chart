@@ -52,7 +52,7 @@ stringData:
       option httplog
       option http-keep-alive
       no option httpclose
-      timeout http-keep-alive 60s
+      timeout http-keep-alive {{ .Values.keepAliveTimeout }}
       timeout client {{ ternary $aiGatewayProxyTimeout "120s" (get $aiGatewayValues "enabled") }}
       http-request set-header Host %[req.hdr(Host)]
       http-request set-header X-Real-IP %[src]
