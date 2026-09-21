@@ -1,0 +1,22 @@
+suite: haproxy keep-alive timeout
+templates:
+  - templates/logfire-service-config.yaml
+release:
+  name: lf
+  namespace: default
+set:
+  sizingPreset: tiny
+tests:
+  - it: keeps client connections open past common ingress idle timeouts
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "timeout http-keep-alive 120s"
+
+  - it: allows overriding the keep-alive timeout
+    set:
+      keepAliveTimeout: 300s
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "timeout http-keep-alive 300s"
