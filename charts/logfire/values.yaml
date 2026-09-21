@@ -1475,7 +1475,7 @@ image:
 haproxy:
   image:
     repository: haproxy
-    tag: "3.2"
+    tag: "3.4"
     pullPolicy: IfNotPresent
 
 
@@ -1608,7 +1608,7 @@ otel_collector:
     headers: {}
   image:
     repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
-    tag: "0.152.0"
+    tag: "0.160.0"
     pullPolicy: IfNotPresent
   prometheus:
     enabled: false
