@@ -42,6 +42,11 @@ variablesApiKey: ""
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
 releaseVersion: "v2026-09-18.01"
 
+# -- Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of
+# the ingress or tunnel in front of the release; if HAProxy closes an idle connection first,
+# the client sees a 502/520 when it reuses it.
+keepAliveTimeout: 120s
+
 # -- List of mapping to automatically assign members of OIDC group to logfire roles
 groupOrganizationMapping: []
 #  - group_id: "example-group-id"
@@ -1475,7 +1480,7 @@ image:
 haproxy:
   image:
     repository: haproxy
-    tag: "3.2"
+    tag: "3.4"
     pullPolicy: IfNotPresent
 
 
@@ -1608,7 +1613,7 @@ otel_collector:
     headers: {}
   image:
     repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
-    tag: "0.152.0"
+    tag: "0.160.0"
     pullPolicy: IfNotPresent
   prometheus:
     enabled: false
