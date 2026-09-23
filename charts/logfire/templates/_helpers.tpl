@@ -1263,10 +1263,22 @@ where the backend reports push unavailable and the settings panel says so.
 Rolls the workloads that hold the VAPID key when it changes, so a rotation cannot leave one pod
 signing with the old key while another signs with the new one. Emits nothing while webPush is
 disabled.
+
+A key supplied in the values is hashed from there rather than from the live Secret, which still
+holds the pre-upgrade key while the templates render: hashing that would leave the pod template
+unchanged on the very upgrade that rotates the key, so a pod would pick the new one up only at
+some later unrelated restart. The hash is taken over the base64 value the Secret stores, which is
+what the lookup path hashes once the new key is applied, so a subsequent no-op upgrade does not
+roll the workloads a second time. The generated and existingSecret cases keep reading the
+cluster, since that is where their key lives.
 */}}
 {{- define "logfire.webPushChecksumAnnotation" -}}
 {{- if .Values.webPush.enabled -}}
+{{- if and .Values.webPush.privateKey (not .Values.existingSecret.enabled) -}}
+{{- printf "checksum/logfire-web-push-vapid-key: %s" (.Values.webPush.privateKey | b64enc | sha256sum) -}}
+{{- else -}}
 {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-web-push-vapid-key")) -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 

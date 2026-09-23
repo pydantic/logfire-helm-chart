@@ -117,6 +117,8 @@ tests:
     templates:
       - templates/secrets.yaml
       - templates/logfire-backend.yaml
+      - templates/logfire-worker.yaml
+      - templates/logfire-task-runner.yaml
     asserts:
       - equal:
           path: data["logfire-web-push-vapid-key"]
@@ -132,6 +134,47 @@ tests:
             value: mailto:ops@example.com
         template: templates/logfire-backend.yaml
         documentIndex: 1
+      # sha256 of the base64 the secret above holds, so the annotation follows the key this
+      # upgrade writes rather than the one already in the cluster, and every workload agrees.
+      - equal:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+          value: 775e989808830a2ebaca0a4420f243de5e61e48a21ba898ab8d75c9054249b46
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - equal:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+          value: 775e989808830a2ebaca0a4420f243de5e61e48a21ba898ab8d75c9054249b46
+        template: templates/logfire-worker.yaml
+      - equal:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+          value: 775e989808830a2ebaca0a4420f243de5e61e48a21ba898ab8d75c9054249b46
+        template: templates/logfire-task-runner.yaml
+
+  # Rotation is the case the annotation exists for: a new key in the values has to change the pod
+  # template, or the upgrade writes the secret and leaves every running pod on the old key.
+  - it: rotating a supplied key changes the checksum the workloads roll on
+    set:
+      webPush:
+        enabled: true
+        privateKey: ZmvfkTUyIsCk3qLTVhUnMiAUvGPuqcCBWsD7wGtYmS4
+    templates:
+      - templates/logfire-backend.yaml
+      - templates/logfire-worker.yaml
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+          value: d827eb4ac5da90152853e4226ef9883934af66cbd393b4bd3d1fb93ca3b31082
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - equal:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+          value: d827eb4ac5da90152853e4226ef9883934af66cbd393b4bd3d1fb93ca3b31082
+        template: templates/logfire-worker.yaml
+      - equal:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+          value: d827eb4ac5da90152853e4226ef9883934af66cbd393b4bd3d1fb93ca3b31082
+        template: templates/logfire-task-runner.yaml
 
   # An operator holding every Logfire secret in one place holds this one too, so the chart must
   # read the key from their secret rather than generating a second one beside it.
