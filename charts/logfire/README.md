@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.47-rc.6](https://img.shields.io/badge/Version-0.13.47--rc.6-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
+![Version: 0.13.47](https://img.shields.io/badge/Version-0.13.47-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -554,7 +554,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-ff-cache-byte.clientSideRouting.zoneAware | bool | `false` | Restrict direct routing to zone-local cache pods. Requires nodes/get cluster RBAC and adds soft zone/hostname spreading. Cache replicas must cover every cache-consumer zone; local misses use durable storage. |
 | logfire-ff-cache-byte.replicas | int | `3` | Number of byte-cache replicas when autoscaling is not configured. |
 | logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume. storage accepts Kubernetes quantities (e.g. 32Gi, 1.5Gi, 10G) of at least 1Mi. |
-| logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
+| logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn,otel::tracing=info"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
 | logfire-ff-ingest-processor.env | list | `[{"name":"RUST_LOG","value":"warn"}]` | Extra env vars for the ingest processor pod |
@@ -563,7 +563,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-ff-ingest-processor.podLabels | object | `{}` | Pod labels |
 | logfire-ff-ingest-processor.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-ingest.annotations | object | `{}` | Workload annotations |
-| logfire-ff-ingest.env | list | `[{"name":"RUST_LOG","value":"warn"}]` | Extra env vars for the ingest pod |
+| logfire-ff-ingest.env | list | `[{"name":"RUST_LOG","value":"warn,otel::tracing=info"}]` | Extra env vars for the ingest pod |
 | logfire-ff-ingest.labels | object | `{}` | Workload labels |
 | logfire-ff-ingest.podAnnotations | object | `{}` | Pod annotations |
 | logfire-ff-ingest.podLabels | object | `{}` | Pod labels |

@@ -507,7 +507,10 @@ logfire-ff-ingest:
   # -- Extra env vars for the ingest pod
   env:
     - name: RUST_LOG
-      value: warn
+      # The HTTP middleware creates otel::tracing spans at INFO. With only
+      # `warn`, its disabled span makes set_parent emit a warning per request.
+      # Keep other targets at WARN while allowing the sampled HTTP spans.
+      value: warn,otel::tracing=info
 
   # //// Enables serviceName for older K8s versions
   # serviceName: true
