@@ -490,8 +490,9 @@ Before diving deeper, verify these common configuration issues:
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | extraObjects | list | `[]` | Additional Kubernetes objects to render with this release. Templating is supported. |
 | fusionfireForceConsoleLogging | bool | `false` | Also write Fusionfire telemetry to the container console in addition to sending it through OTLP. |
-| fusionfireMaterializedViews | object | `{"initialBackfillWindow":"1d"}` | Materialized-view creation policy shared by all Fusionfire services. |
+| fusionfireMaterializedViews | object | `{"initialBackfillWindow":"1d","minSourceBytes":"5gb"}` | Materialized-view creation policy shared by all Fusionfire services. |
 | fusionfireMaterializedViews.initialBackfillWindow | string | `"1d"` | Maximum source-history window to materialize when a new view is created. Set to `0s` to opt into a full-history initial backfill. Existing views retain the floor stamped when they were created. |
+| fusionfireMaterializedViews.minSourceBytes | string | `"5gb"` | Minimum source data written over the trailing seven days required to materialize a new view. Set to `0` to disable the source-volume floor. |
 | gateway.addresses | list | `[]` | Gateway addresses (optional, only used when create is true). Used to request specific addresses for the Gateway. |
 | gateway.annotations | object | `{}` | HTTPRoute annotations |
 | gateway.create | bool | `true` | Create a Gateway resource. Set to false to use an existing Gateway. |

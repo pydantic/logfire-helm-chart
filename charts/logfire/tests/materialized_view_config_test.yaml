@@ -19,6 +19,12 @@ tests:
         documentSelector:
           path: metadata.name
           value: logfire-ff-base-config
+      - equal:
+          path: data.FF_MV_MIN_SOURCE_BYTES
+          value: 5gb
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
 
   - it: allows an explicit full-history initial backfill
     set:
@@ -28,6 +34,18 @@ tests:
       - equal:
           path: data.FF_MV_INITIAL_BACKFILL_WINDOW
           value: 0s
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+
+  - it: allows an explicit opt-out from the source-volume floor
+    set:
+      fusionfireMaterializedViews:
+        minSourceBytes: "0"
+    asserts:
+      - equal:
+          path: data.FF_MV_MIN_SOURCE_BYTES
+          value: "0"
         documentSelector:
           path: metadata.name
           value: logfire-ff-base-config

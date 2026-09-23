@@ -77,6 +77,8 @@ fusionfireForceConsoleLogging: false
 fusionfireMaterializedViews:
   # -- Maximum source-history window to materialize when a new view is created. Set to `0s` to opt into a full-history initial backfill. Existing views retain the floor stamped when they were created.
   initialBackfillWindow: 1d
+  # -- Minimum source data written over the trailing seven days required to materialize a new view. Set to `0` to disable the source-volume floor.
+  minSourceBytes: 5gb
 
 # ==============================================================================
 # Ingress
