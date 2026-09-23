@@ -325,6 +325,25 @@ smtp:
 
 
 # ==============================================================================
+# Web push notifications
+# ==============================================================================
+
+webPush:
+  # -- Let users turn on browser push notifications for alerts. Needs the deployment to be
+  # served over HTTPS, since browsers register a service worker only on a secure origin.
+  # While this is false the settings panel reports push as unavailable.
+  enabled: false
+  # -- Contact the push service operator can reach you on, a `mailto:` or `https:` URL
+  # (RFC 8292). Defaults to `mailto:` and `adminEmail`.
+  subject: ""
+  # -- VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as
+  # `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one
+  # and keep it across upgrades. Replacing it unregisters every device that had push on, which
+  # each browser recovers from by subscribing again on its next visit.
+  privateKey: ""
+
+
+# ==============================================================================
 # AI configuration
 # ==============================================================================
 

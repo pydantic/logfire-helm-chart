@@ -75,6 +75,9 @@ spec:
           "logfire-unsubscribe-secret"
           "logfire-mcp-oauth-client-secret"
         )) | nindent 8 }}
+        {{- with (include "logfire.webPushChecksumAnnotation" . | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- end }}
         {{- if (index .Values "logfire-ai-gateway" "enabled") }}
         {{- $gwEx := get .Values "existingGatewaySecret" | default dict }}
@@ -266,6 +269,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-unsubscribe-secret") }}
                   key: logfire-unsubscribe-secret
+            {{- with (include "logfire.webPushEnv" . | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:

@@ -1242,6 +1242,34 @@ securityContext:
 {{- end -}}
 {{- end -}}
 
+{{/*
+The VAPID application-server identity every Web Push request is signed with, for the
+workloads that register a device or send to one. Emits nothing while webPush is disabled,
+where the backend reports push unavailable and the settings panel says so.
+*/}}
+{{- define "logfire.webPushEnv" -}}
+{{- if .Values.webPush.enabled -}}
+- name: WEB_PUSH_VAPID_SUBJECT
+  value: {{ .Values.webPush.subject | default (printf "mailto:%s" .Values.adminEmail) | quote }}
+- name: WEB_PUSH_VAPID_PRIVATE_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-web-push-vapid-key") }}
+      key: logfire-web-push-vapid-key
+{{- end -}}
+{{- end -}}
+
+{{/*
+Rolls the workloads that hold the VAPID key when it changes, so a rotation cannot leave one pod
+signing with the old key while another signs with the new one. Emits nothing while webPush is
+disabled.
+*/}}
+{{- define "logfire.webPushChecksumAnnotation" -}}
+{{- if .Values.webPush.enabled -}}
+{{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-web-push-vapid-key")) -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.rateLimits" -}}
 {{- with .Values.rateLimits -}}
 {{- $queries := get . "queries" | default dict -}}
