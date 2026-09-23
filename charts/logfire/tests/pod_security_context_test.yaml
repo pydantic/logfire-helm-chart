@@ -14,14 +14,10 @@ tests:
       - templates/logfire-ff-ingest.yaml
     asserts:
       - equal:
-          path: spec.template.spec.securityContext.fsGroup
-          value: 1000
-        documentSelector:
-          path: kind
-          value: StatefulSet
-      - equal:
-          path: spec.template.spec.securityContext.fsGroupChangePolicy
-          value: OnRootMismatch
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
         documentSelector:
           path: kind
           value: StatefulSet
@@ -31,52 +27,25 @@ tests:
       - templates/logfire-ff-cache-byte.yaml
     asserts:
       - equal:
-          path: spec.template.spec.securityContext.fsGroup
-          value: 1000
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.securityContext.fsGroupChangePolicy
-          value: OnRootMismatch
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: keeps the default fsGroup when users add other pod security context keys
-    templates:
-      - templates/logfire-ff-ingest.yaml
-    set:
-      podSecurityContext:
-        runAsUser: 2000
-    asserts:
-      - equal:
           path: spec.template.spec.securityContext
           value:
             fsGroup: 1000
             fsGroupChangePolicy: OnRootMismatch
-            runAsUser: 2000
         documentSelector:
           path: kind
-          value: StatefulSet
+          value: Deployment
 
-  - it: lets an explicit user fsGroup override the default
+  - it: leaves non-Fusionfire workloads without the Fusionfire defaults
     templates:
-      - templates/logfire-ff-ingest.yaml
-    set:
-      podSecurityContext:
-        fsGroup: 2000
+      - templates/logfire-backend.yaml
     asserts:
-      - equal:
+      - notExists:
           path: spec.template.spec.securityContext
-          value:
-            fsGroup: 2000
-            fsGroupChangePolicy: OnRootMismatch
         documentSelector:
           path: kind
-          value: StatefulSet
+          value: Deployment
 
-  - it: applies the default to a query worker with a scratch volume
+  - it: applies the Fusionfire defaults to a query worker with a scratch volume
     templates:
       - templates/logfire-ff-query-worker.yaml
     set:
@@ -93,3 +62,87 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: merges chart-wide keys over the Fusionfire defaults
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    set:
+      podSecurityContext:
+        runAsUser: 2000
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+            runAsUser: 2000
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: lets a chart-wide fsGroup override the Fusionfire default
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    set:
+      podSecurityContext:
+        fsGroup: 2000
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 2000
+            fsGroupChangePolicy: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: lets a per-service pod security context override the chart-wide context and the defaults
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    set:
+      podSecurityContext:
+        fsGroup: 2000
+        runAsUser: 2000
+      logfire-ff-cache-byte:
+        podSecurityContext:
+          fsGroup: 3000
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 3000
+            fsGroupChangePolicy: OnRootMismatch
+            runAsUser: 2000
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: keeps the Fusionfire defaults when the release values carry an empty pod security context
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    set:
+      podSecurityContext: {}
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: keeps the Fusionfire defaults when the release values have no pod security context key
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    set:
+      podSecurityContext: null
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: StatefulSet

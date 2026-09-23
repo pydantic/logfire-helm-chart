@@ -1,4 +1,5 @@
 {{- $serviceName := "logfire-ff-migrations" }}
+{{- $podSecurityContext := include "logfire.fusionfirePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -28,7 +29,7 @@ spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
-      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
+      {{- include "logfire.securityContext" $podSecurityContext | nindent 6 }}
       serviceAccountName: {{ include "logfire.hookServiceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:

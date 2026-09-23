@@ -1445,13 +1445,11 @@ revisionHistoryLimit: 2
 
 # -- Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod)
 # See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details
-# The Fusionfire and bcache images run as uid/gid 1000. Chart-managed volumes (scratch and
-# ingest data) mount root-owned without an fsGroup, so the default group-owns them once on
-# first mount; `fsGroupChangePolicy: OnRootMismatch` skips the recursive chown after that.
-# A user-supplied `fsGroup` still wins.
-podSecurityContext:
-  fsGroup: 1000
-  fsGroupChangePolicy: OnRootMismatch
+# Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and
+# `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed
+# scratch and ingest volumes. A per-service `podSecurityContext` wins over both.
+podSecurityContext: {}
+  # fsGroup: 2000
 
 # -- Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container)
 # See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details

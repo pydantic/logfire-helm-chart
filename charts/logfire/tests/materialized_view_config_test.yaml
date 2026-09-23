@@ -49,3 +49,37 @@ tests:
         documentSelector:
           path: metadata.name
           value: logfire-ff-base-config
+
+  - it: falls back to the defaults when the release values have no materialized-view key
+    set:
+      fusionfireMaterializedViews: null
+    asserts:
+      - equal:
+          path: data.FF_MV_INITIAL_BACKFILL_WINDOW
+          value: 1d
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+      - equal:
+          path: data.FF_MV_MIN_SOURCE_BYTES
+          value: 5gb
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+
+  - it: falls back to the defaults when the materialized-view values are empty
+    set:
+      fusionfireMaterializedViews: {}
+    asserts:
+      - equal:
+          path: data.FF_MV_INITIAL_BACKFILL_WINDOW
+          value: 1d
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+      - equal:
+          path: data.FF_MV_MIN_SOURCE_BYTES
+          value: 5gb
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config

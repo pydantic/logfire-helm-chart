@@ -6,6 +6,25 @@ Helpers specific to Fusionfire workloads and configuration.
 */}}
 
 {{/*
+Merge the Fusionfire volume-ownership defaults under the chart-wide and per-service
+pod security contexts. The uid 1000 Fusionfire and bcache images need `fsGroup: 1000`
+to write chart-managed scratch and ingest volumes, and `fsGroupChangePolicy: OnRootMismatch`
+skips the recursive chown after the first mount. Later layers win, and the defaults
+apply even when an upgrade with `--reuse-values` carries no `podSecurityContext` key.
+Returns JSON so callers can parse it with `fromJson`, matching
+`logfire.effectiveServiceValues`.
+*/}}
+{{- define "logfire.fusionfirePodSecurityContext" -}}
+{{- $ctx := required "logfire.fusionfirePodSecurityContext: need .ctx" .ctx -}}
+{{- $serviceName := required "logfire.fusionfirePodSecurityContext: need .serviceName" .serviceName -}}
+{{- $serviceValues := get $ctx.Values $serviceName | default dict -}}
+{{- $podSecurityContext := dict "fsGroup" 1000 "fsGroupChangePolicy" "OnRootMismatch" -}}
+{{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy ($ctx.Values.podSecurityContext | default dict)) -}}
+{{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy (get $serviceValues "podSecurityContext" | default dict)) -}}
+{{- $podSecurityContext | toJson -}}
+{{- end -}}
+
+{{/*
 Byte-cache clients discover cache pods directly via EndpointSlice.
 Zone-local routing is opt-in: it needs nodes/get ClusterRole and cache
 replicas covering every cache-consumer zone.

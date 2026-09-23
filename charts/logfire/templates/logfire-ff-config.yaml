@@ -1,4 +1,5 @@
 {{- $maintenanceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-maintenance-worker") | fromJson -}}
+{{- $materializedViews := .Values.fusionfireMaterializedViews | default dict -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -11,8 +12,8 @@ data:
   RUST_LOG: "info"
   FF_SEND_TO_LOGFIRE: "true"
   FF_FORCE_CONSOLE_LOGGING: {{ .Values.fusionfireForceConsoleLogging | quote }}
-  FF_MV_INITIAL_BACKFILL_WINDOW: {{ .Values.fusionfireMaterializedViews.initialBackfillWindow | quote }}
-  FF_MV_MIN_SOURCE_BYTES: {{ .Values.fusionfireMaterializedViews.minSourceBytes | quote }}
+  FF_MV_INITIAL_BACKFILL_WINDOW: {{ dig "initialBackfillWindow" "1d" $materializedViews | quote }}
+  FF_MV_MIN_SOURCE_BYTES: {{ dig "minSourceBytes" "5gb" $materializedViews | quote }}
   FF_COLLECT_STATISTICS_FROM_ZONE_MAP_INDEXES: "false"
   FF_CACHE_OBJECT_STORE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-byte-internal:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
   FF_SHARED_REDIS_DSN: {{ .Values.redisDsn }}

@@ -1156,6 +1156,7 @@ securityContext:
 {{- define "logfire.standardPodSpecFields" -}}
 {{- $ctx := required "logfire.standardPodSpecFields: need .ctx" .ctx -}}
 {{- $serviceName := required "logfire.standardPodSpecFields: need .serviceName" .serviceName -}}
+{{- $podSecurityContext := .podSecurityContext | default $ctx.Values.podSecurityContext -}}
 {{- $lines := list -}}
 {{- with ($ctx.Values.priorityClassName | default "") -}}
   {{- $lines = append $lines (printf "priorityClassName: %s" .) -}}
@@ -1172,7 +1173,7 @@ securityContext:
 {{- if $initContainers -}}
   {{- $lines = append $lines $initContainers -}}
 {{- end -}}
-{{- with $ctx.Values.podSecurityContext -}}
+{{- with $podSecurityContext -}}
   {{- $lines = append $lines (include "logfire.securityContext" . | trim) -}}
 {{- end -}}
 {{- $podScheduling := include "logfire.podScheduling" (dict "Values" $ctx.Values "serviceName" $serviceName) | trim -}}
