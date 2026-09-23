@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.46](https://img.shields.io/badge/Version-0.13.46-informational?style=flat-square) ![AppVersion: 39fae507](https://img.shields.io/badge/AppVersion-39fae507-informational?style=flat-square)
+![Version: 0.13.47](https://img.shields.io/badge/Version-0.13.47-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -490,6 +490,9 @@ Before diving deeper, verify these common configuration issues:
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | extraObjects | list | `[]` | Additional Kubernetes objects to render with this release. Templating is supported. |
 | fusionfireForceConsoleLogging | bool | `false` | Also write Fusionfire telemetry to the container console in addition to sending it through OTLP. |
+| fusionfireMaterializedViews | object | `{"initialBackfillWindow":"1d","minSourceBytes":"5gb"}` | Materialized-view creation policy shared by all Fusionfire services. |
+| fusionfireMaterializedViews.initialBackfillWindow | string | `"1d"` | Maximum source-history window to materialize when a new view is created. Set to `0s` to opt into a full-history initial backfill. Existing views retain the floor stamped when they were created. |
+| fusionfireMaterializedViews.minSourceBytes | string | `"5gb"` | Minimum source data written over the trailing seven days required to materialize a new view. Set to `0` to disable the source-volume floor. |
 | gateway.addresses | list | `[]` | Gateway addresses (optional, only used when create is true). Used to request specific addresses for the Gateway. |
 | gateway.annotations | object | `{}` | HTTPRoute annotations |
 | gateway.create | bool | `true` | Create a Gateway resource. Set to false to use an existing Gateway. |
@@ -510,7 +513,7 @@ Before diving deeper, verify these common configuration issues:
 | gateway.tls | string | nil (uses ingress.tls) | Enable TLS/HTTPS for the Gateway listener. If not set, falls back to ingress.tls for backward compatibility. Also overrides the app's public URL scheme/CORS behavior (http vs https URLs) whenever set. |
 | gateway.tlsSecretName | string | nil (uses ingress.secretName) | TLS Secret name for the Gateway listener certificate. If not set, falls back to ingress.secretName for backward compatibility. |
 | groupOrganizationMapping | list | `[]` | List of mapping to automatically assign members of OIDC group to logfire roles |
-| haproxy | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.2"}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
+| haproxy | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.4"}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks) |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | imagePullSecrets | list | `[]` | Image pull secrets used by all pods |
@@ -533,6 +536,7 @@ Before diving deeper, verify these common configuration issues:
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
 | istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
 | istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
+| keepAliveTimeout | string | `"120s"` | Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of the ingress or tunnel in front of the release; if HAProxy closes an idle connection first, the client sees a 502/520 when it reuses it. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
 | logfire-ai-gateway.proxyTimeout | string | `"600s"` | HAProxy inactivity timeout for public `/proxy` requests to the AI gateway. |
@@ -550,7 +554,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-ff-cache-byte.clientSideRouting.zoneAware | bool | `false` | Restrict direct routing to zone-local cache pods. Requires nodes/get cluster RBAC and adds soft zone/hostname spreading. Cache replicas must cover every cache-consumer zone; local misses use durable storage. |
 | logfire-ff-cache-byte.replicas | int | `3` | Number of byte-cache replicas when autoscaling is not configured. |
 | logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume. storage accepts Kubernetes quantities (e.g. 32Gi, 1.5Gi, 10G) of at least 1Mi. |
-| logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
+| logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn,otel::tracing=info"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
 | logfire-ff-ingest-processor.env | list | `[{"name":"RUST_LOG","value":"warn"}]` | Extra env vars for the ingest processor pod |
@@ -559,7 +563,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-ff-ingest-processor.podLabels | object | `{}` | Pod labels |
 | logfire-ff-ingest-processor.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-ingest.annotations | object | `{}` | Workload annotations |
-| logfire-ff-ingest.env | list | `[{"name":"RUST_LOG","value":"warn"}]` | Extra env vars for the ingest pod |
+| logfire-ff-ingest.env | list | `[{"name":"RUST_LOG","value":"warn,otel::tracing=info"}]` | Extra env vars for the ingest pod |
 | logfire-ff-ingest.labels | object | `{}` | Workload labels |
 | logfire-ff-ingest.podAnnotations | object | `{}` | Pod annotations |
 | logfire-ff-ingest.podLabels | object | `{}` | Pod labels |
@@ -612,10 +616,10 @@ Before diving deeper, verify these common configuration issues:
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials |
 | otelResourceAttributes | object | `{}` | Additional OTEL resource attributes to stamp onto internal telemetry emitted by Logfire workloads. These are merged on top of the chart defaults and can override them. Example:   deployment.environment.name: prod   service.namespace: logfire |
-| otel_collector | object | `{"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.152.0"},"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true},"sendingQueueBytes":67108864}` | otel-collector configuration |
+| otel_collector | object | `{"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.160.0"},"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true},"sendingQueueBytes":67108864}` | otel-collector configuration |
 | otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
 | otel_collector.sendingQueueBytes | int | `67108864` | Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per profile; this value applies when no sizing preset is used. |
-| podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details |
+| podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed scratch and ingest volumes. A per-service `podSecurityContext` wins over both. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
 | postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
@@ -634,7 +638,7 @@ Before diving deeper, verify these common configuration issues:
 | priorityClassName | string | `""` | Pod priority class See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | rateLimits | object | `{}` | Configure Rate Limiting rules for Logfire endpoints |
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN. Change if using an external Redis instance. |
-| releaseVersion | string | `"v2026-09-18.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
+| releaseVersion | string | `"v2026-09-23.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details |
 | serviceAccount | object | `{"annotations":{},"create":false,"name":""}` | ServiceAccount configuration |
