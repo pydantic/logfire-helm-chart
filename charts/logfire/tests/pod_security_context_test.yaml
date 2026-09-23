@@ -1,0 +1,95 @@
+suite: pod security context defaults for the non-root Fusionfire images
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: defaults fsGroup 1000 and OnRootMismatch on the ingest StatefulSet
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 1000
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - equal:
+          path: spec.template.spec.securityContext.fsGroupChangePolicy
+          value: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: defaults fsGroup 1000 and OnRootMismatch on the byte-cache Deployment
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 1000
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.securityContext.fsGroupChangePolicy
+          value: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: keeps the default fsGroup when users add other pod security context keys
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    set:
+      podSecurityContext:
+        runAsUser: 2000
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+            runAsUser: 2000
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: lets an explicit user fsGroup override the default
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    set:
+      podSecurityContext:
+        fsGroup: 2000
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 2000
+            fsGroupChangePolicy: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: applies the default to a query worker with a scratch volume
+    templates:
+      - templates/logfire-ff-query-worker.yaml
+    set:
+      logfire-ff-query-worker:
+        enabled: true
+        scratchVolume:
+          storage: 2Gi
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: Deployment
