@@ -1,0 +1,208 @@
+suite: web push notifications
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  # Push is off unless an operator asks for it, and a deployment with no key pair reports the
+  # channel unavailable rather than offering a button that cannot work.
+  - it: no VAPID configuration is rendered by default
+    templates:
+      - templates/secrets.yaml
+      - templates/logfire-backend.yaml
+      - templates/logfire-worker.yaml
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - containsDocument:
+          kind: Secret
+          apiVersion: v1
+          name: logfire-web-push-vapid-key
+          any: true
+        not: true
+        template: templates/secrets.yaml
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEB_PUSH_VAPID_SUBJECT
+            value: mailto:test@example.com
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEB_PUSH_VAPID_SUBJECT
+            value: mailto:test@example.com
+        template: templates/logfire-worker.yaml
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEB_PUSH_VAPID_SUBJECT
+            value: mailto:test@example.com
+        template: templates/logfire-task-runner.yaml
+
+  # The backend registers devices and serves the public key; the worker and the task runner are
+  # what actually send to a device, so all three need the same pair.
+  - it: enabling push generates a key and gives it to every workload that needs it
+    set:
+      webPush:
+        enabled: true
+    templates:
+      - templates/secrets.yaml
+      - templates/logfire-backend.yaml
+      - templates/logfire-worker.yaml
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - containsDocument:
+          kind: Secret
+          apiVersion: v1
+          name: logfire-web-push-vapid-key
+          any: true
+        template: templates/secrets.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEB_PUSH_VAPID_SUBJECT
+            value: mailto:test@example.com
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEB_PUSH_VAPID_PRIVATE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: logfire-web-push-vapid-key
+                key: logfire-web-push-vapid-key
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEB_PUSH_VAPID_PRIVATE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: logfire-web-push-vapid-key
+                key: logfire-web-push-vapid-key
+        template: templates/logfire-worker.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEB_PUSH_VAPID_PRIVATE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: logfire-web-push-vapid-key
+                key: logfire-web-push-vapid-key
+        template: templates/logfire-task-runner.yaml
+      # A rotated key must roll the pods together, so none is left signing with the old one.
+      - isNotNullOrEmpty:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - isNotNullOrEmpty:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+        template: templates/logfire-worker.yaml
+      - isNotNullOrEmpty:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+        template: templates/logfire-task-runner.yaml
+
+  - it: a supplied key is used instead of a generated one
+    set:
+      webPush:
+        enabled: true
+        subject: mailto:ops@example.com
+        privateKey: bntZ3iSNAWkGgU1mG4b7zGmfEOWnlfBWGCQfXDf7Mbs
+    templates:
+      - templates/secrets.yaml
+      - templates/logfire-backend.yaml
+      - templates/logfire-worker.yaml
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - equal:
+          path: data["logfire-web-push-vapid-key"]
+          value: Ym50WjNpU05BV2tHZ1UxbUc0Yjd6R21mRU9XbmxmQldHQ1FmWERmN01icw==
+        template: templates/secrets.yaml
+        documentSelector:
+          path: metadata.name
+          value: logfire-web-push-vapid-key
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEB_PUSH_VAPID_SUBJECT
+            value: mailto:ops@example.com
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      # sha256 of the base64 the secret above holds, so the annotation follows the key this
+      # upgrade writes rather than the one already in the cluster, and every workload agrees.
+      - equal:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+          value: 775e989808830a2ebaca0a4420f243de5e61e48a21ba898ab8d75c9054249b46
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - equal:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+          value: 775e989808830a2ebaca0a4420f243de5e61e48a21ba898ab8d75c9054249b46
+        template: templates/logfire-worker.yaml
+      - equal:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+          value: 775e989808830a2ebaca0a4420f243de5e61e48a21ba898ab8d75c9054249b46
+        template: templates/logfire-task-runner.yaml
+
+  # Rotation is the case the annotation exists for: a new key in the values has to change the pod
+  # template, or the upgrade writes the secret and leaves every running pod on the old key.
+  - it: rotating a supplied key changes the checksum the workloads roll on
+    set:
+      webPush:
+        enabled: true
+        privateKey: ZmvfkTUyIsCk3qLTVhUnMiAUvGPuqcCBWsD7wGtYmS4
+    templates:
+      - templates/logfire-backend.yaml
+      - templates/logfire-worker.yaml
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+          value: d827eb4ac5da90152853e4226ef9883934af66cbd393b4bd3d1fb93ca3b31082
+        template: templates/logfire-backend.yaml
+        documentIndex: 1
+      - equal:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+          value: d827eb4ac5da90152853e4226ef9883934af66cbd393b4bd3d1fb93ca3b31082
+        template: templates/logfire-worker.yaml
+      - equal:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+          value: d827eb4ac5da90152853e4226ef9883934af66cbd393b4bd3d1fb93ca3b31082
+        template: templates/logfire-task-runner.yaml
+
+  # An operator holding every Logfire secret in one place holds this one too, so the chart must
+  # read the key from their secret rather than generating a second one beside it.
+  - it: existingSecret owns the key when it is enabled
+    set:
+      webPush:
+        enabled: true
+      existingSecret:
+        enabled: true
+        name: my-shared-secret
+    templates:
+      - templates/secrets.yaml
+      - templates/logfire-backend.yaml
+    asserts:
+      - containsDocument:
+          kind: Secret
+          apiVersion: v1
+          name: logfire-web-push-vapid-key
+          any: true
+        not: true
+        template: templates/secrets.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEB_PUSH_VAPID_PRIVATE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: my-shared-secret
+                key: logfire-web-push-vapid-key
+        template: templates/logfire-backend.yaml
+        documentIndex: 1

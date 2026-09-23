@@ -24,6 +24,9 @@ spec:
         {{- end }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
         {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-unsubscribe-secret" "logfire-jwt-secret")) | nindent 8 }}
+        {{- with (include "logfire.webPushChecksumAnnotation" . | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
@@ -122,6 +125,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
+            {{- with (include "logfire.webPushEnv" . | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: LOGFIRE_REGION
               value: {{ .Values.logfireRegion | default "local" }}
             - name: KNOWN_LOGFIRE_REGIONS
