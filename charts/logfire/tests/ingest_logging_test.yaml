@@ -1,0 +1,31 @@
+suite: ingest logging
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: keeps warnings and enables sampled HTTP request spans
+    set:
+      sizingPreset: standard
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: RUST_LOG
+            value: warn,otel::tracing=info
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OTEL_TRACES_SAMPLER
+            value: parentbased_traceidratio
+        documentSelector:
+          path: kind
+          value: StatefulSet
