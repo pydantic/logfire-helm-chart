@@ -73,6 +73,11 @@ sizingPreset: ""
 # -- Also write Fusionfire telemetry to the container console in addition to sending it through OTLP.
 fusionfireForceConsoleLogging: false
 
+# -- Materialized-view creation policy shared by all Fusionfire services.
+fusionfireMaterializedViews:
+  # -- Maximum source-history window to materialize when a new view is created. Set to `0s` to opt into a full-history initial backfill. Existing views retain the floor stamped when they were created.
+  initialBackfillWindow: 1d
+
 # ==============================================================================
 # Ingress
 # ==============================================================================

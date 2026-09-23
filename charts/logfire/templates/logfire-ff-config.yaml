@@ -11,6 +11,7 @@ data:
   RUST_LOG: "info"
   FF_SEND_TO_LOGFIRE: "true"
   FF_FORCE_CONSOLE_LOGGING: {{ .Values.fusionfireForceConsoleLogging | quote }}
+  FF_MV_INITIAL_BACKFILL_WINDOW: {{ .Values.fusionfireMaterializedViews.initialBackfillWindow | quote }}
   FF_COLLECT_STATISTICS_FROM_ZONE_MAP_INDEXES: "false"
   FF_CACHE_OBJECT_STORE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-byte-internal:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
   FF_SHARED_REDIS_DSN: {{ .Values.redisDsn }}
