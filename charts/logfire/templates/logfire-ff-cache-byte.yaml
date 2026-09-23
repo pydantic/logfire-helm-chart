@@ -1,4 +1,5 @@
 {{- $serviceName := "logfire-ff-cache-byte" }}
+{{- $podSecurityContext := include "logfire.fusionfirePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $routing := get (get .Values $serviceName | default dict) "clientSideRouting" | default dict -}}
 {{- $routingTopologySpreadConstraints := list -}}
@@ -70,7 +71,7 @@ spec:
       {{- end }}
       {{- end }}
       {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
-      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
+      {{- include "logfire.securityContext" $podSecurityContext | nindent 6 }}
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName "defaultTopologySpreadConstraints" $routingTopologySpreadConstraints) | nindent 6}}
       containers:
         - name: {{ $serviceName }}

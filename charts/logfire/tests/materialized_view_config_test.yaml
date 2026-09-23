@@ -1,0 +1,85 @@
+suite: materialized-view configuration
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+templates:
+  - templates/logfire-ff-config.yaml
+tests:
+  - it: limits initial backfills for newly created views to one day by default
+    asserts:
+      - equal:
+          path: data.FF_MV_INITIAL_BACKFILL_WINDOW
+          value: 1d
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+      - equal:
+          path: data.FF_MV_MIN_SOURCE_BYTES
+          value: 5gb
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+
+  - it: allows an explicit full-history initial backfill
+    set:
+      fusionfireMaterializedViews:
+        initialBackfillWindow: 0s
+    asserts:
+      - equal:
+          path: data.FF_MV_INITIAL_BACKFILL_WINDOW
+          value: 0s
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+
+  - it: allows an explicit opt-out from the source-volume floor
+    set:
+      fusionfireMaterializedViews:
+        minSourceBytes: "0"
+    asserts:
+      - equal:
+          path: data.FF_MV_MIN_SOURCE_BYTES
+          value: "0"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+
+  - it: falls back to the defaults when the release values have no materialized-view key
+    set:
+      fusionfireMaterializedViews: null
+    asserts:
+      - equal:
+          path: data.FF_MV_INITIAL_BACKFILL_WINDOW
+          value: 1d
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+      - equal:
+          path: data.FF_MV_MIN_SOURCE_BYTES
+          value: 5gb
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+
+  - it: falls back to the defaults when the materialized-view values are empty
+    set:
+      fusionfireMaterializedViews: {}
+    asserts:
+      - equal:
+          path: data.FF_MV_INITIAL_BACKFILL_WINDOW
+          value: 1d
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+      - equal:
+          path: data.FF_MV_MIN_SOURCE_BYTES
+          value: 5gb
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config

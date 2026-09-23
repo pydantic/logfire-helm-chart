@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.47-rc.5](https://img.shields.io/badge/Version-0.13.47--rc.5-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
+![Version: 0.13.47-rc.6](https://img.shields.io/badge/Version-0.13.47--rc.6-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -490,6 +490,9 @@ Before diving deeper, verify these common configuration issues:
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | extraObjects | list | `[]` | Additional Kubernetes objects to render with this release. Templating is supported. |
 | fusionfireForceConsoleLogging | bool | `false` | Also write Fusionfire telemetry to the container console in addition to sending it through OTLP. |
+| fusionfireMaterializedViews | object | `{"initialBackfillWindow":"1d","minSourceBytes":"5gb"}` | Materialized-view creation policy shared by all Fusionfire services. |
+| fusionfireMaterializedViews.initialBackfillWindow | string | `"1d"` | Maximum source-history window to materialize when a new view is created. Set to `0s` to opt into a full-history initial backfill. Existing views retain the floor stamped when they were created. |
+| fusionfireMaterializedViews.minSourceBytes | string | `"5gb"` | Minimum source data written over the trailing seven days required to materialize a new view. Set to `0` to disable the source-volume floor. |
 | gateway.addresses | list | `[]` | Gateway addresses (optional, only used when create is true). Used to request specific addresses for the Gateway. |
 | gateway.annotations | object | `{}` | HTTPRoute annotations |
 | gateway.create | bool | `true` | Create a Gateway resource. Set to false to use an existing Gateway. |
@@ -616,7 +619,7 @@ Before diving deeper, verify these common configuration issues:
 | otel_collector | object | `{"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.160.0"},"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true},"sendingQueueBytes":67108864}` | otel-collector configuration |
 | otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
 | otel_collector.sendingQueueBytes | int | `67108864` | Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per profile; this value applies when no sizing preset is used. |
-| podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details |
+| podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed scratch and ingest volumes. A per-service `podSecurityContext` wins over both. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
 | postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |

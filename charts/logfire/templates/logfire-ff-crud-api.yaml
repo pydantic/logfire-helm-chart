@@ -1,4 +1,5 @@
 {{- $serviceName := "logfire-ff-crud-api" }}
+{{- $podSecurityContext := include "logfire.fusionfirePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -50,7 +51,7 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
     spec:
-      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
+      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName "podSecurityContext" $podSecurityContext) | nindent 6 }}
       containers:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
