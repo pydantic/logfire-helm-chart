@@ -54,6 +54,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 11
+          # Readiness is the database-aware check that startup uses. A replica that loses
+          # Postgres leaves the Deployment's available count, so a capacity shortfall is
+          # visible instead of counting as a ready replica that delivers nothing.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8005
           env:
             - name: LOGFIRE_SERVICE_NAME
               value: {{ $serviceName }}
