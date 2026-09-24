@@ -1495,6 +1495,15 @@ haproxy:
     repository: haproxy
     tag: "3.4"
     pullPolicy: IfNotPresent
+  # -- Container SecurityContext for the HAProxy proxies. The default pins the numeric identity
+  # the image already uses, so the kubelet can verify `runAsNonRoot`, and makes the image root
+  # read-only. HAProxy writes no file outside its mounts, so it needs no scratch volume. Set
+  # this to override the defaults.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 99
+    runAsGroup: 99
+    readOnlyRootFilesystem: true
 
 
 # ==============================================================================

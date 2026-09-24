@@ -58,9 +58,10 @@ spec:
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- $haproxy := default (dict) .Values.haproxy }}
       {{- $haproxyImage := get $haproxy "image" | default dict }}
+      {{- $haproxySecurityContext := get $haproxy "securityContext" | default .Values.securityContext }}
       containers:
         - name: {{ $serviceName }}
-          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- include "logfire.securityContext" $haproxySecurityContext | nindent 10 }}
           image: {{ include "logfire.imageRef" (dict "image" $haproxyImage "defaultRepository" "haproxy" "defaultTag" "3.2") }}
           imagePullPolicy: {{ default .Values.image.pullPolicy (get $haproxyImage "pullPolicy") | quote }}
           volumeMounts:
