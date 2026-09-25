@@ -23,7 +23,7 @@ spec:
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
         {{- end }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
-        {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-unsubscribe-secret" "logfire-jwt-secret")) | nindent 8 }}
+        {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-unsubscribe-secret" "logfire-jwt-secret" "logfire-dex-client-secret")) | nindent 8 }}
         {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
@@ -78,6 +78,15 @@ spec:
               value: {{ .Values.redisDsn }}
             - name: BACKEND_REDIS_DSN
               value: {{ .Values.redisDsn }}
+            - name: DEX_INTERNAL_URL
+              value: "{{ include "logfire.scheme" . }}://logfire-dex:{{ include "logfire.port" (dict "port" 5556 "root" .) }}"
+            - name: DEX_CLIENT_ID
+              value: {{ include "logfire.dexClientId" . }}
+            - name: DEX_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-dex-client-secret") }}
+                  key: logfire-dex-client-secret
             - name: OTEL_TRACES_SAMPLER
               value: parentbased_traceidratio
             - name: OTEL_TRACES_SAMPLER_ARG
