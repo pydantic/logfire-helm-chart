@@ -4,7 +4,7 @@ from a MinIO release carries only the old values, so every setting below has a d
 template, and the legacy `minio.auth` credentials and `logfire-minio` Service name stay valid.
 */}}
 {{- $dev := .Values.dev | default dict }}
-{{- $legacyMinio := and (get $dev "deployMinio") (not (get $dev "deployRustfs")) }}
+{{- $legacyMinio := get $dev "deployMinio" }}
 {{- if or (get $dev "deployRustfs") (get $dev "deployMinio") }}
 {{- $serviceName := "logfire-rustfs" }}
 {{- $rustfs := .Values.rustfs | default dict }}

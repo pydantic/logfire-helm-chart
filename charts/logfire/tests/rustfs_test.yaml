@@ -228,3 +228,23 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: keeps the MinIO credentials when both flags are set without rustfs values
+    set:
+      dev:
+        deployMinio: true
+        deployRustfs: true
+      rustfs: null
+      minio:
+        auth:
+          rootUser: logfire-minio
+          rootPassword: logfire-minio
+    asserts:
+      - equal:
+          path: stringData
+          value:
+            accessKey: logfire-minio
+            secretKey: logfire-minio
+        documentSelector:
+          path: kind
+          value: Secret
