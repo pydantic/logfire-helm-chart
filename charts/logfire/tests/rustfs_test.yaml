@@ -191,3 +191,40 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: rolls the pod when the credentials change
+    set:
+      dev:
+        deployRustfs: true
+      rustfs:
+        auth:
+          accessKey: other-key
+          secretKey: other-secret
+    asserts:
+      - notEqual:
+          path: spec.template.metadata.annotations["checksum/rustfs-credentials"]
+          value: 4cd7026689924b99bbaaf2201d0765a4600a6ecc8270c0bf70b6b7c70a487a01
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.metadata.annotations["checksum/rustfs-credentials"]
+          value: bdc9fbd65026311b4e7b0199758c9ecca2ff415a422d304b55b3db917284ff1f
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: uses the chart-wide image pull secrets
+    set:
+      dev:
+        deployRustfs: true
+      imagePullSecrets:
+        - name: registry-key
+    asserts:
+      - equal:
+          path: spec.template.spec.imagePullSecrets
+          value:
+            - name: registry-key
+        documentSelector:
+          path: kind
+          value: Deployment
