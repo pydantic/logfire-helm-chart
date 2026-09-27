@@ -1701,6 +1701,8 @@ dev:
   deployPostgres: false
   # -- Deploy a local RustFS instance as S3-compatible object storage (NOT for production)
   deployRustfs: false
+  # -- Deprecated alias for `dev.deployRustfs`. It also keeps the `logfire-minio` Service name and the `minio.auth` credentials.
+  deployMinio: false
   # -- Deploy cert-manager (NOT for production; includes cluster-scoped resources).
   deployCertManager: false
 

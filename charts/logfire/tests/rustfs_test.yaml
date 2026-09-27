@@ -123,3 +123,71 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: keeps the MinIO Service name and credentials for the deprecated alias
+    set:
+      dev:
+        deployMinio: true
+      rustfs: null
+      minio:
+        auth:
+          rootUser: logfire-minio
+          rootPassword: logfire-minio
+        persistence:
+          enabled: false
+    asserts:
+      - hasDocuments:
+          count: 4
+      - equal:
+          path: stringData
+          value:
+            accessKey: logfire-minio
+            secretKey: logfire-minio
+        documentSelector:
+          path: kind
+          value: Secret
+      - equal:
+          path: spec.ports[0].port
+          value: 9000
+        documentSelector:
+          path: metadata.name
+          value: logfire-minio
+      - equal:
+          path: spec.template.spec.volumes[0].emptyDir
+          value: {}
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: rustfs/rustfs:1.0.0
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: renders with template defaults when the rustfs values are absent
+    set:
+      dev:
+        deployRustfs: true
+      rustfs: null
+    asserts:
+      - hasDocuments:
+          count: 4
+      - equal:
+          path: stringData.accessKey
+          value: logfire-rustfs
+        documentSelector:
+          path: kind
+          value: Secret
+      - equal:
+          path: spec.resources.requests.storage
+          value: 32Gi
+        documentSelector:
+          path: kind
+          value: PersistentVolumeClaim
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 1Gi
+        documentSelector:
+          path: kind
+          value: Deployment

@@ -41,17 +41,16 @@ tests:
           path: metadata.name
           value: logfire-ff-base-config
 
-  - it: rejects the removed dev.deployMinio flag
+  - it: accepts the deprecated dev.deployMinio alias without objectStore.uri
     set:
       dev:
         deployMinio: true
       objectStore:
-        uri: s3://logfire
+        uri: ""
     templates:
       - templates/logfire-validate-config.yaml
     asserts:
-      - failedTemplate:
-          errorMessage: "dev.deployMinio is no longer supported. Set dev.deployRustfs=true and point objectStore.env.AWS_ENDPOINT at http://logfire-rustfs:9000. See rustfs.auth for the credentials."
+      - notFailedTemplate: {}
 
   - it: expands helm templates in objectStore.uri
     set:

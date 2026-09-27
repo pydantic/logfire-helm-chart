@@ -1,11 +1,34 @@
-{{- if (.Values.dev).deployRustfs }}
+{{- /*
+`dev.deployMinio` is a deprecated alias for `dev.deployRustfs`. An upgrade with `--reuse-values`
+from a MinIO release carries only the old values, so every setting below has a default in this
+template, and the legacy `minio.auth` credentials and `logfire-minio` Service name stay valid.
+*/}}
+{{- $dev := .Values.dev | default dict }}
+{{- $legacyMinio := and (get $dev "deployMinio") (not (get $dev "deployRustfs")) }}
+{{- if or (get $dev "deployRustfs") (get $dev "deployMinio") }}
 {{- $serviceName := "logfire-rustfs" }}
 {{- $rustfs := .Values.rustfs | default dict }}
+{{- $minio := .Values.minio | default dict }}
 {{- $auth := get $rustfs "auth" | default dict }}
-{{- $persistence := get $rustfs "persistence" | default dict }}
-{{- $persistenceEnabled := get $persistence "enabled" | default false }}
+{{- $legacyAuth := dict }}
+{{- if $legacyMinio }}
+{{- $legacyAuth = get $minio "auth" | default dict }}
+{{- end }}
+{{- $accessKey := get $auth "accessKey" | default (get $legacyAuth "rootUser") | default "logfire-rustfs" }}
+{{- $secretKey := get $auth "secretKey" | default (get $legacyAuth "rootPassword") | default "logfire-rustfs" }}
+{{- $persistence := dict "enabled" true }}
+{{- if hasKey $rustfs "persistence" }}
+{{- $persistence = get $rustfs "persistence" | default dict }}
+{{- else if and $legacyMinio (hasKey $minio "persistence") }}
+{{- $persistence = pick (get $minio "persistence" | default dict) "enabled" "size" "storageClass" }}
+{{- $_ := set $persistence "storageClassName" (get $persistence "storageClass" | default "") }}
+{{- end }}
+{{- if not (hasKey $persistence "enabled") }}
+{{- $_ := set $persistence "enabled" true }}
+{{- end }}
+{{- $persistenceEnabled := get $persistence "enabled" }}
 {{- $existingClaim := get $persistence "existingClaim" | default "" }}
-{{- $bucket := required "rustfs.bucket is required when dev.deployRustfs is true" (get $rustfs "bucket") }}
+{{- $bucket := get $rustfs "bucket" | default "logfire" }}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -15,8 +38,8 @@ metadata:
     app.kubernetes.io/component: {{ $serviceName }}
 type: Opaque
 stringData:
-  accessKey: {{ required "rustfs.auth.accessKey is required when dev.deployRustfs is true" (get $auth "accessKey") | quote }}
-  secretKey: {{ required "rustfs.auth.secretKey is required when dev.deployRustfs is true" (get $auth "secretKey") | quote }}
+  accessKey: {{ $accessKey | quote }}
+  secretKey: {{ $secretKey | quote }}
 ---
 apiVersion: v1
 kind: Service
@@ -34,6 +57,25 @@ spec:
       name: s3
       port: 9000
       targetPort: s3
+{{- if get $dev "deployMinio" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logfire-minio
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+    - protocol: TCP
+      name: s3
+      port: 9000
+      targetPort: s3
+{{- end }}
 {{- if and $persistenceEnabled (not $existingClaim) }}
 ---
 apiVersion: v1
@@ -138,10 +180,8 @@ spec:
               port: s3
             initialDelaySeconds: 10
             periodSeconds: 10
-          {{- with get $rustfs "resources" }}
           resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+            {{- toYaml (get $rustfs "resources" | default (dict "requests" (dict "cpu" "100m" "memory" "256Mi") "limits" (dict "memory" "1Gi"))) | nindent 12 }}
           volumeMounts:
             - name: data
               mountPath: /data
