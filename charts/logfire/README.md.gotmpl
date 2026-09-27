@@ -15,7 +15,7 @@ Use the [Self-Hosted Production Requirements](https://docs.pydantic.dev/logfire/
 
 Choose one path:
 
-* **Local evaluation**: use `values.dev.yaml`. It deploys development-grade PostgreSQL, MinIO, and MailDev in the cluster.
+* **Local evaluation**: use `values.dev.yaml`. It deploys development-grade PostgreSQL, RustFS, and MailDev in the cluster.
 * **Production**: start from [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml), replace the placeholders for your external services and routing, and adjust the sizing preset if needed.
 
 > **Warning**: `values.dev.yaml` is only for local evaluation and testing. Do not use it for production deployments.

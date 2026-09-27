@@ -10,9 +10,12 @@ when required values are missing or incorrectly configured.
 Validate that objectStore.uri resolves to a nonblank value (required for production)
 */}}
 {{- define "logfire.validate.objectStore" -}}
-{{- if not .Values.dev.deployMinio -}}
+{{- if .Values.dev.deployMinio -}}
+  {{- fail "dev.deployMinio is no longer supported. Set dev.deployRustfs=true and point objectStore.env.AWS_ENDPOINT at http://logfire-rustfs:9000. See rustfs.auth for the credentials." -}}
+{{- end -}}
+{{- if not .Values.dev.deployRustfs -}}
   {{- if not (include "logfire.objectStoreUri" . | trim) -}}
-    {{- fail "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead." -}}
+    {{- fail "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead." -}}
   {{- end -}}
 {{- end -}}
 {{- end -}}

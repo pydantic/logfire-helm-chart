@@ -1,0 +1,125 @@
+suite: development RustFS object store
+release:
+  name: lf
+  namespace: default
+templates:
+  - templates/rustfs.yaml
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://logfire
+  dev:
+    deployPostgres: true
+tests:
+  - it: renders nothing when dev.deployRustfs is disabled
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders the secret, service, claim, and deployment when enabled
+    set:
+      dev:
+        deployRustfs: true
+    asserts:
+      - hasDocuments:
+          count: 4
+      - equal:
+          path: stringData
+          value:
+            accessKey: logfire-rustfs
+            secretKey: logfire-rustfs
+        documentSelector:
+          path: kind
+          value: Secret
+      - equal:
+          path: spec.ports[0].port
+          value: 9000
+        documentSelector:
+          path: kind
+          value: Service
+      - equal:
+          path: spec.resources.requests.storage
+          value: 32Gi
+        documentSelector:
+          path: kind
+          value: PersistentVolumeClaim
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: rustfs/rustfs:1.0.0
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          value: logfire-rustfs
+        documentSelector:
+          path: kind
+          value: Deployment
+      - matchRegex:
+          path: spec.template.spec.containers[0].lifecycle.postStart.exec.command[2]
+          pattern: 'http://127\.0\.0\.1:9000/logfire"'
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: defaults fsGroup to the RustFS image gid and lets the chart-wide context override it
+    set:
+      dev:
+        deployRustfs: true
+      podSecurityContext:
+        fsGroup: 2000
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 2000
+            fsGroupChangePolicy: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: uses the default fsGroup when no pod security context is set
+    set:
+      dev:
+        deployRustfs: true
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 10001
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: uses an emptyDir when persistence is disabled
+    set:
+      dev:
+        deployRustfs: true
+      rustfs:
+        persistence:
+          enabled: false
+    asserts:
+      - hasDocuments:
+          count: 3
+      - equal:
+          path: spec.template.spec.volumes[0].emptyDir
+          value: {}
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: mounts an existing claim without rendering a chart-managed claim
+    set:
+      dev:
+        deployRustfs: true
+      rustfs:
+        persistence:
+          existingClaim: my-claim
+    asserts:
+      - hasDocuments:
+          count: 3
+      - equal:
+          path: spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          value: my-claim
+        documentSelector:
+          path: kind
+          value: Deployment

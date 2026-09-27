@@ -27,10 +27,10 @@ tests:
           path: metadata.name
           value: logfire-ff-ingest-config
 
-  - it: renders without objectStore.uri when dev.deployMinio is enabled
+  - it: renders without objectStore.uri when dev.deployRustfs is enabled
     set:
       dev:
-        deployMinio: true
+        deployRustfs: true
     templates:
       - templates/logfire-ff-config.yaml
     asserts:
@@ -40,6 +40,18 @@ tests:
         documentSelector:
           path: metadata.name
           value: logfire-ff-base-config
+
+  - it: rejects the removed dev.deployMinio flag
+    set:
+      dev:
+        deployMinio: true
+      objectStore:
+        uri: s3://logfire
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "dev.deployMinio is no longer supported. Set dev.deployRustfs=true and point objectStore.env.AWS_ENDPOINT at http://logfire-rustfs:9000. See rustfs.auth for the credentials."
 
   - it: expands helm templates in objectStore.uri
     set:
@@ -78,7 +90,7 @@ tests:
       objectStore:
         uri: s3://test-bucket
         env:
-          AWS_ENDPOINT: "http://minio-{{ .Release.Name }}:9000"
+          AWS_ENDPOINT: "http://rustfs-{{ .Release.Name }}:9000"
     templates:
       - templates/logfire-ff-ingest.yaml
     asserts:
@@ -86,7 +98,7 @@ tests:
           path: spec.template.spec.containers[0].env
           content:
             name: AWS_ENDPOINT
-            value: http://minio-lf:9000
+            value: http://rustfs-lf:9000
         documentSelector:
           path: kind
           value: StatefulSet
@@ -99,7 +111,7 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
 
   - it: rejects missing value template result in production
     set:
@@ -109,7 +121,7 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
 
   - it: rejects whitespace template result in production
     set:
@@ -119,7 +131,7 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
 
   - it: rejects whitespace literal in production
     set:
@@ -129,7 +141,7 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
 
   - it: rejects empty literal in production
     set:
@@ -139,12 +151,12 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
 
-  - it: allows an empty template result with development MinIO
+  - it: allows an empty template result with development RustFS
     set:
       dev:
-        deployMinio: true
+        deployRustfs: true
       objectStore:
         uri: '{{ "" }}'
     templates:

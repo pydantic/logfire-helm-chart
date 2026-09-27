@@ -1699,8 +1699,8 @@ dev:
   deployMaildev: false
   # -- Deploy internal Postgres (NOT for production)
   deployPostgres: false
-  # -- Use a local MinIO instance as object storage (NOT for production)
-  deployMinio: false
+  # -- Deploy a local RustFS instance as S3-compatible object storage (NOT for production)
+  deployRustfs: false
   # -- Deploy cert-manager (NOT for production; includes cluster-scoped resources).
   deployCertManager: false
 
@@ -1729,7 +1729,7 @@ maildev:
 
 
 # ==============================================================================
-# Embedded Postgres & MinIO defaults (dev/test)
+# Embedded Postgres & RustFS defaults (dev/test)
 # ==============================================================================
 
 postgresql:
@@ -1752,39 +1752,41 @@ postgresql:
       size: 10Gi
       mountPath: /var/lib/postgresql
 
-minio:
+# -- RustFS configuration (only used when `dev.deployRustfs` is true)
+rustfs:
   image:
-    registry: docker.io
-    repository: bitnamilegacy/minio
-  console:
-    image:
-      registry: docker.io
-      repository: bitnamilegacy/minio-object-browser
-  fullnameOverride: "logfire-minio"
+    # -- RustFS image repository
+    repository: rustfs/rustfs
+    # -- RustFS image tag
+    tag: "1.0.0"
+    # -- RustFS image pull policy. Defaults to `image.pullPolicy` when unset.
+    pullPolicy: ""
+  # -- Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values.
   auth:
-    rootUser: logfire-minio
-    rootPassword: logfire-minio
+    accessKey: logfire-rustfs
+    secretKey: logfire-rustfs
+  # -- Bucket that RustFS creates at startup. Set `objectStore.uri` to `s3://<bucket>`.
+  bucket: logfire
   persistence:
-    mountPath: /data
+    # -- Store data on a PersistentVolumeClaim. Set false to use an emptyDir.
+    enabled: true
+    # -- Existing PersistentVolumeClaim to use in place of a chart-managed claim
+    existingClaim: ""
+    # -- Storage class for the chart-managed claim. Defaults to `defaultStorageClassName`.
+    storageClassName: ""
+    # -- Size of the chart-managed claim
     size: 32Gi
-  command:
-    - minio
-  args:
-    - server
-    - /data
-  lifecycleHooks:
-    postStart:
-      exec:
-        command:
-          - sh
-          - -c
-          - |
-            # Wait for the server to start
-            sleep 5
-            # Create a bucket
-            mc alias set local http://localhost:9000 logfire-minio logfire-minio
-            mc mb local/logfire
-            mc anonymous set public local/logfire
+  # -- Resource requests and limits for the RustFS container
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  # -- Pod SecurityContext for the RustFS pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 10001`.
+  podSecurityContext: {}
+  # -- Container SecurityContext for the RustFS container. Defaults to the chart-wide `securityContext` when unset.
+  securityContext: {}
 
 # ==============================================================================
 # Extra Kubernetes manifests

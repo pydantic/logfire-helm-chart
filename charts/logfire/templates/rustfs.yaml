@@ -1,0 +1,160 @@
+{{- if (.Values.dev).deployRustfs }}
+{{- $serviceName := "logfire-rustfs" }}
+{{- $rustfs := .Values.rustfs | default dict }}
+{{- $auth := get $rustfs "auth" | default dict }}
+{{- $persistence := get $rustfs "persistence" | default dict }}
+{{- $persistenceEnabled := get $persistence "enabled" | default false }}
+{{- $existingClaim := get $persistence "existingClaim" | default "" }}
+{{- $bucket := required "rustfs.bucket is required when dev.deployRustfs is true" (get $rustfs "bucket") }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+type: Opaque
+stringData:
+  accessKey: {{ required "rustfs.auth.accessKey is required when dev.deployRustfs is true" (get $auth "accessKey") | quote }}
+  secretKey: {{ required "rustfs.auth.secretKey is required when dev.deployRustfs is true" (get $auth "secretKey") | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+    - protocol: TCP
+      name: s3
+      port: 9000
+      targetPort: s3
+{{- if and $persistenceEnabled (not $existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  accessModes:
+    {{- toYaml (default (list "ReadWriteOnce") $persistence.accessModes) | nindent 4 }}
+  {{- include "logfire.storageClassName" (dict "root" . "values" $persistence) | nindent 2 }}
+  resources:
+    requests:
+      storage: {{ default "32Gi" $persistence.size | quote }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+    spec:
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" "rustfs") | nindent 6 }}
+      {{- /* The RustFS image runs as uid and gid 10001, so it needs `fsGroup: 10001` to write a fresh volume. The chart-wide and `rustfs` pod security contexts override this default. */}}
+      {{- $podSecurityContext := dict "fsGroup" 10001 "fsGroupChangePolicy" "OnRootMismatch" }}
+      {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy (.Values.podSecurityContext | default dict)) }}
+      {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy (get $rustfs "podSecurityContext" | default dict)) }}
+      {{- include "logfire.securityContext" $podSecurityContext | nindent 6 }}
+      {{- $rustfsImage := get $rustfs "image" | default dict }}
+      containers:
+        - name: rustfs
+          image: {{ include "logfire.imageRef" (dict "image" $rustfsImage "defaultRepository" "rustfs/rustfs" "defaultTag" "1.0.0") }}
+          imagePullPolicy: {{ default .Values.image.pullPolicy (get $rustfsImage "pullPolicy") | quote }}
+          {{- include "logfire.securityContext" (get $rustfs "securityContext" | default .Values.securityContext) | nindent 10 }}
+          ports:
+            - name: s3
+              containerPort: 9000
+          env:
+            - name: RUSTFS_ADDRESS
+              value: ":9000"
+            - name: RUSTFS_VOLUMES
+              value: /data
+            - name: RUSTFS_CONSOLE_ENABLE
+              value: "false"
+            - name: RUSTFS_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $serviceName }}
+                  key: accessKey
+            - name: RUSTFS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $serviceName }}
+                  key: secretKey
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - |
+                    # The server starts in parallel with this hook. Retry until it accepts the bucket.
+                    # RustFS answers 200 to a PUT for a bucket that already exists.
+                    for _ in $(seq 1 60); do
+                      if curl -fsS -o /dev/null --aws-sigv4 "aws:amz:us-east-1:s3" \
+                          --user "${RUSTFS_ACCESS_KEY}:${RUSTFS_SECRET_KEY}" \
+                          -X PUT "http://127.0.0.1:9000/{{ $bucket }}"; then
+                        exit 0
+                      fi
+                      sleep 2
+                    done
+                    exit 1
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: s3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: s3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          {{- with get $rustfs "resources" }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: logs
+              mountPath: /logs
+      volumes:
+        - name: data
+          {{- if $persistenceEnabled }}
+          persistentVolumeClaim:
+            claimName: {{ default $serviceName $existingClaim }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: logs
+          emptyDir: {}
+{{- end }}
