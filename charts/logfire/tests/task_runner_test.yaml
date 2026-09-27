@@ -42,6 +42,7 @@ tests:
     set:
       smtp:
         host: smtp.example.com
+        fromAddress: logfire@example.com
     templates:
       - templates/logfire-task-runner.yaml
     asserts:
@@ -71,6 +72,7 @@ tests:
     set:
       smtp:
         host: smtp.example.com
+        fromAddress: logfire@example.com
       image:
         repository: my-registry.example/
     templates:
@@ -96,6 +98,7 @@ tests:
     set:
       smtp:
         host: smtp.example.com
+        fromAddress: logfire@example.com
       dev:
         deployPostgres: true
     templates:
@@ -115,6 +118,7 @@ tests:
     set:
       smtp:
         host: smtp.example.com
+        fromAddress: logfire@example.com
       logfire-task-runner:
         initContainers:
           - name: wait-for-absurd-schema
@@ -136,6 +140,7 @@ tests:
     set:
       smtp:
         host: smtp.example.com
+        fromAddress: logfire@example.com
         port: 587
         username: mailer
         password: hunter2
@@ -173,6 +178,7 @@ tests:
     set:
       smtp:
         host: smtp.example.com
+        fromAddress: logfire@example.com
     templates:
       - templates/logfire-backend.yaml
       - templates/logfire-backend-auth.yaml
@@ -225,6 +231,7 @@ tests:
       smtp:
         enabled: false
         host: smtp.example.com
+        fromAddress: logfire@example.com
     templates:
       - templates/logfire-task-runner.yaml
     asserts:
