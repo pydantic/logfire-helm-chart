@@ -1,7 +1,15 @@
 {{- /*
-`dev.deployMinio` is a deprecated alias for `dev.deployRustfs`. An upgrade with `--reuse-values`
-from a MinIO release carries only the old values, so every setting below has a default in this
-template, and the legacy `minio.auth` credentials and `logfire-minio` Service name stay valid.
+`dev.deployMinio` is a deprecated alias for `dev.deployRustfs`. An upgrade that carries the old
+values (either `--reuse-values`, or the previous values file through `-f`) only knows the MinIO
+settings, so while `dev.deployMinio` is set this template keeps the `logfire-minio` Service name
+and prefers the legacy settings:
+
+  credentials: minio.auth -> objectStore.env (the keys Fusionfire uses) -> logfire-minio
+  persistence: minio.persistence -> rustfs.persistence -> enabled
+
+When only `dev.deployRustfs` is set, `rustfs.auth` and `rustfs.persistence` are used. Every
+setting below also has a default in this template because a `--reuse-values` upgrade does not
+carry the new `rustfs` defaults.
 */}}
 {{- $dev := .Values.dev | default dict }}
 {{- $legacyMinio := get $dev "deployMinio" }}
@@ -9,19 +17,36 @@ template, and the legacy `minio.auth` credentials and `logfire-minio` Service na
 {{- $serviceName := "logfire-rustfs" }}
 {{- $rustfs := .Values.rustfs | default dict }}
 {{- $minio := .Values.minio | default dict }}
-{{- $auth := get $rustfs "auth" | default dict }}
-{{- $legacyAuth := dict }}
+{{- $objectStoreEnv := get (.Values.objectStore | default dict) "env" | default dict }}
+{{- $accessKey := "" }}
+{{- $secretKey := "" }}
 {{- if $legacyMinio }}
-{{- $legacyAuth = get $minio "auth" | default dict }}
+{{- $legacyAuth := get $minio "auth" | default dict }}
+{{- $envAccessKey := get $objectStoreEnv "AWS_ACCESS_KEY_ID" }}
+{{- if kindIs "string" $envAccessKey }}
+{{- $envAccessKey = tpl $envAccessKey . }}
+{{- else }}
+{{- $envAccessKey = "" }}
 {{- end }}
-{{- $accessKey := get $auth "accessKey" | default (get $legacyAuth "rootUser") | default "logfire-rustfs" }}
-{{- $secretKey := get $auth "secretKey" | default (get $legacyAuth "rootPassword") | default "logfire-rustfs" }}
+{{- $envSecretKey := get $objectStoreEnv "AWS_SECRET_ACCESS_KEY" }}
+{{- if kindIs "string" $envSecretKey }}
+{{- $envSecretKey = tpl $envSecretKey . }}
+{{- else }}
+{{- $envSecretKey = "" }}
+{{- end }}
+{{- $accessKey = get $legacyAuth "rootUser" | default $envAccessKey | default "logfire-minio" }}
+{{- $secretKey = get $legacyAuth "rootPassword" | default $envSecretKey | default "logfire-minio" }}
+{{- else }}
+{{- $auth := get $rustfs "auth" | default dict }}
+{{- $accessKey = get $auth "accessKey" | default "logfire-rustfs" }}
+{{- $secretKey = get $auth "secretKey" | default "logfire-rustfs" }}
+{{- end }}
 {{- $persistence := dict "enabled" true }}
-{{- if hasKey $rustfs "persistence" }}
-{{- $persistence = get $rustfs "persistence" | default dict }}
-{{- else if and $legacyMinio (hasKey $minio "persistence") }}
+{{- if and $legacyMinio (hasKey $minio "persistence") }}
 {{- $persistence = pick (get $minio "persistence" | default dict) "enabled" "size" "storageClass" }}
 {{- $_ := set $persistence "storageClassName" (get $persistence "storageClass" | default "") }}
+{{- else if hasKey $rustfs "persistence" }}
+{{- $persistence = get $rustfs "persistence" | default dict }}
 {{- end }}
 {{- if not (hasKey $persistence "enabled") }}
 {{- $_ := set $persistence "enabled" true }}

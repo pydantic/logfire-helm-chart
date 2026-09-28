@@ -128,7 +128,6 @@ tests:
     set:
       dev:
         deployMinio: true
-      rustfs: null
       minio:
         auth:
           rootUser: logfire-minio
@@ -161,6 +160,94 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].image
           value: rustfs/rustfs:1.0.0
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: uses the objectStore.env credentials while dev.deployMinio is set
+    set:
+      dev:
+        deployMinio: true
+      objectStore:
+        env:
+          AWS_ACCESS_KEY_ID: env-access-key
+          AWS_SECRET_ACCESS_KEY: env-secret-key
+    asserts:
+      - equal:
+          path: stringData
+          value:
+            accessKey: env-access-key
+            secretKey: env-secret-key
+        documentSelector:
+          path: kind
+          value: Secret
+
+  - it: expands templates in the legacy objectStore.env credentials
+    set:
+      dev:
+        deployMinio: true
+      objectStore:
+        env:
+          AWS_ACCESS_KEY_ID: "{{ .Release.Name }}-access-key"
+          AWS_SECRET_ACCESS_KEY: "{{ .Release.Name }}-secret-key"
+    asserts:
+      - equal:
+          path: stringData
+          value:
+            accessKey: lf-access-key
+            secretKey: lf-secret-key
+        documentSelector:
+          path: kind
+          value: Secret
+
+  - it: prefers the objectStore.env credentials over rustfs.auth while dev.deployMinio is set
+    set:
+      dev:
+        deployMinio: true
+        deployRustfs: true
+      objectStore:
+        env:
+          AWS_ACCESS_KEY_ID: env-access-key
+          AWS_SECRET_ACCESS_KEY: env-secret-key
+      rustfs:
+        auth:
+          accessKey: new-access-key
+          secretKey: new-secret-key
+    asserts:
+      - equal:
+          path: stringData
+          value:
+            accessKey: env-access-key
+            secretKey: env-secret-key
+        documentSelector:
+          path: kind
+          value: Secret
+
+  - it: uses minio.persistence while dev.deployMinio is set
+    set:
+      dev:
+        deployMinio: true
+      minio:
+        persistence:
+          enabled: true
+          size: 10Gi
+          storageClass: fast
+    asserts:
+      - equal:
+          path: spec.resources.requests.storage
+          value: 10Gi
+        documentSelector:
+          path: kind
+          value: PersistentVolumeClaim
+      - equal:
+          path: spec.storageClassName
+          value: fast
+        documentSelector:
+          path: kind
+          value: PersistentVolumeClaim
+      - equal:
+          path: spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          value: logfire-rustfs
         documentSelector:
           path: kind
           value: Deployment

@@ -84,6 +84,25 @@ Open Logfire at `http://localhost:8080` and MailDev at `http://localhost:1080`.
 MailDev is available for testing local email flows.
 Use the first-access step below to log in to the meta project.
 
+#### Upgrading a Local Evaluation Install
+
+Chart versions before 0.13.48 deployed MinIO for local evaluation. 0.13.48 and later deploy
+RustFS instead. The upgrade deletes the old `logfire-minio` resources, including its
+PersistentVolumeClaim, so local evaluation data is not carried over.
+
+Values files that still set `dev.deployMinio: true` keep working: the chart deploys RustFS
+behind the same `logfire-minio` Service name and uses the credentials from `minio.auth`, or
+from `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` when
+`minio.auth` is not set, so Logfire keeps authenticating.
+
+To move to the new names, set `dev.deployRustfs: true`, remove `dev.deployMinio`, point
+`objectStore.env.AWS_ENDPOINT` at `http://logfire-rustfs:9000`, and set
+`rustfs.auth.accessKey` and `rustfs.auth.secretKey` to the same credentials as
+`objectStore.env`.
+
+When installing from this source repository, run `helm dependency build charts/logfire` after
+pulling so the removed MinIO subchart does not linger in `charts/`.
+
 ### 3b. Production Starter
 
 A minimal production overlay is checked in at [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml). Use it as a starting point for production installs and replace the placeholder hostnames, credentials, and provider-specific settings.
@@ -477,7 +496,7 @@ Before diving deeper, verify these common configuration issues:
 | defaultStorageClassName | string | `""` | Default StorageClass for chart-managed PVCs. Set this when chart PVCs should use a specific class. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass. |
 | dev.deployCertManager | bool | `false` | Deploy cert-manager (NOT for production; includes cluster-scoped resources). |
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
-| dev.deployMinio | bool | `false` | Deprecated alias for `dev.deployRustfs`. It also keeps the `logfire-minio` Service name and the `minio.auth` credentials. |
+| dev.deployMinio | bool | `false` | Deprecated alias for `dev.deployRustfs` that existing MinIO values keep working. While set, the chart keeps the `logfire-minio` Service name and uses the credentials from `minio.auth` (or `objectStore.env` when unset) and the persistence from `minio.persistence`, so `objectStore.env` keeps matching the deployed object store. Remove it after moving to `dev.deployRustfs` and the `rustfs.*` values. |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
 | dev.deployRustfs | bool | `false` | Deploy a local RustFS instance as S3-compatible object storage (NOT for production) |
 | existingGatewaySecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret for the AI Gateway with the following keys:  - key (gateway encryption key)  - internalSecret (gateway internal secret) |
@@ -626,12 +645,12 @@ Before diving deeper, verify these common configuration issues:
 | releaseVersion | string | `"v2026-09-23.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
-| rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
+| rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Ignored while `dev.deployMinio` is set. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
 | rustfs.bucket | string | `"logfire"` | Bucket that RustFS creates at startup. Set `objectStore.uri` to `s3://<bucket>`. |
 | rustfs.image.pullPolicy | string | `""` | RustFS image pull policy. Defaults to `image.pullPolicy` when unset. |
 | rustfs.image.repository | string | `"rustfs/rustfs"` | RustFS image repository |
 | rustfs.image.tag | string | `"1.0.0"` | RustFS image tag |
-| rustfs.persistence.enabled | bool | `true` | Store data on a PersistentVolumeClaim. Set false to use an emptyDir. |
+| rustfs.persistence.enabled | bool | `true` | Store data on a PersistentVolumeClaim. Set false to use an emptyDir. Ignored while `dev.deployMinio` is set and `minio.persistence` is present. |
 | rustfs.persistence.existingClaim | string | `""` | Existing PersistentVolumeClaim to use in place of a chart-managed claim |
 | rustfs.persistence.size | string | `"32Gi"` | Size of the chart-managed claim |
 | rustfs.persistence.storageClassName | string | `""` | Storage class for the chart-managed claim. Defaults to `defaultStorageClassName`. |
