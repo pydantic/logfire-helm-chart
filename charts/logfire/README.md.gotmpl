@@ -302,6 +302,11 @@ Setting `groupOrganizationMapping` overrides mappings managed through the public
 Logfire requires object storage for data. Supported URI schemes are `s3://`, `gs://`, and `az://`.
 Provider credentials can come from `objectStore.env`, mounted secrets, or the Kubernetes service account used by Logfire.
 
+For local evaluation, `dev.deployRustfs` (or the deprecated `dev.deployMinio`) deploys RustFS and
+fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credential environment variables,
+so the workloads reach the in-cluster bucket. An `s3://` `objectStore.uri` also determines the
+bucket RustFS creates.
+
 Do not enable bucket versioning. Logfire manages its own data lifecycle, and bucket versioning can increase cost and interfere with lifecycle behavior.
 
 ### PostgreSQL

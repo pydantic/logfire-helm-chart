@@ -124,6 +124,36 @@ tests:
           path: kind
           value: Deployment
 
+  - it: creates the bucket named by objectStore.uri
+    set:
+      dev:
+        deployRustfs: true
+      objectStore:
+        uri: s3://custom-bucket/some-prefix
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].lifecycle.postStart.exec.command[2]
+          pattern: 'http://127\.0\.0\.1:9000/custom-bucket"'
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: falls back to rustfs.bucket when the object store is not S3
+    set:
+      dev:
+        deployRustfs: true
+      rustfs:
+        bucket: local-bucket
+      objectStore:
+        uri: gs://external-bucket
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].lifecycle.postStart.exec.command[2]
+          pattern: 'http://127\.0\.0\.1:9000/local-bucket"'
+        documentSelector:
+          path: kind
+          value: Deployment
+
   - it: keeps the MinIO Service name and credentials for the deprecated alias
     set:
       dev:

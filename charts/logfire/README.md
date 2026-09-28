@@ -301,6 +301,11 @@ Setting `groupOrganizationMapping` overrides mappings managed through the public
 Logfire requires object storage for data. Supported URI schemes are `s3://`, `gs://`, and `az://`.
 Provider credentials can come from `objectStore.env`, mounted secrets, or the Kubernetes service account used by Logfire.
 
+For local evaluation, `dev.deployRustfs` (or the deprecated `dev.deployMinio`) deploys RustFS and
+fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credential environment variables,
+so the workloads reach the in-cluster bucket. An `s3://` `objectStore.uri` also determines the
+bucket RustFS creates.
+
 Do not enable bucket versioning. Logfire manages its own data lifecycle, and bucket versioning can increase cost and interfere with lifecycle behavior.
 
 ### PostgreSQL
@@ -498,7 +503,7 @@ Before diving deeper, verify these common configuration issues:
 | defaultStorageClassName | string | `""` | Default StorageClass for chart-managed PVCs. Set this when chart PVCs should use a specific class. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass. |
 | dev.deployCertManager | bool | `false` | Deploy cert-manager (NOT for production; includes cluster-scoped resources). |
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
-| dev.deployMinio | bool | `false` | Deprecated alias for `dev.deployRustfs` that existing MinIO values keep working. While set, the chart keeps the `logfire-minio` Service name and uses the credentials from `minio.auth` (or `objectStore.env` when unset) and the persistence from `minio.persistence`, so `objectStore.env` keeps matching the deployed object store. Remove it after moving to `dev.deployRustfs` and the `rustfs.*` values. |
+| dev.deployMinio | bool | `false` | Deprecated alias for `dev.deployRustfs` that existing MinIO values keep working. While set, the chart keeps the `logfire-minio` Service name and uses the credentials from `minio.auth` (including `minio.auth.existingSecret`) or `objectStore.env` and the persistence from `minio.persistence`, so `objectStore.env` keeps matching the deployed object store. Remove it after moving to `dev.deployRustfs` and the `rustfs.*` values. |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
 | dev.deployRustfs | bool | `false` | Deploy a local RustFS instance as S3-compatible object storage (NOT for production) |
 | existingGatewaySecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret for the AI Gateway with the following keys:  - key (gateway encryption key)  - internalSecret (gateway internal secret) |
@@ -616,9 +621,9 @@ Before diving deeper, verify these common configuration issues:
 | maildev.securityContext | object | `{}` | Container SecurityContext for the MailDev container. Defaults to the chart-wide `securityContext` when unset. Set this when running under a restricted PodSecurity policy, e.g.:   runAsNonRoot: true   runAsUser: 1000   allowPrivilegeEscalation: false   capabilities:     drop: ["ALL"]   seccompProfile:     type: RuntimeDefault |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
 | objectStore | object | `{"env":{},"sseCKeyB64":null,"uri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
-| objectStore.env | object | `{}` | Additional environment variables for the object store connection. String values support Helm templating. |
+| objectStore.env | object | `{}` | Additional environment variables for the object store connection. String values support Helm templating. When the in-cluster RustFS store is enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. |
 | objectStore.sseCKeyB64 | string | `nil` | Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C). Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy requests. Only used when the object store is S3. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).  IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on a bucket that already contains FusionFire data will break all reads of the pre-existing objects. losing the key means losing the data — AWS does not store it. |
-| objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`). Supports Helm templating, e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release. |
+| objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`). Supports Helm templating, e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release. When `dev.deployRustfs` (or the deprecated `dev.deployMinio`) is enabled and this is empty, it defaults to `s3://<rustfs.bucket>`. |
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials |
 | otelResourceAttributes | object | `{}` | Additional OTEL resource attributes to stamp onto internal telemetry emitted by Logfire workloads. These are merged on top of the chart defaults and can override them. Example:   deployment.environment.name: prod   service.namespace: logfire |
@@ -648,7 +653,7 @@ Before diving deeper, verify these common configuration issues:
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
 | rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Ignored while `dev.deployMinio` is set. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
-| rustfs.bucket | string | `"logfire"` | Bucket that RustFS creates at startup. Set `objectStore.uri` to `s3://<bucket>`. |
+| rustfs.bucket | string | `"logfire"` | Bucket that RustFS creates at startup when `objectStore.uri` is not an `s3://` URI. With an `s3://` `objectStore.uri`, the bucket in the URI is used. |
 | rustfs.image.pullPolicy | string | `""` | RustFS image pull policy. Defaults to `image.pullPolicy` when unset. |
 | rustfs.image.repository | string | `"rustfs/rustfs"` | RustFS image repository |
 | rustfs.image.tag | string | `"1.0.0"` | RustFS image tag |
