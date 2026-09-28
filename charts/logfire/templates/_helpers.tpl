@@ -698,11 +698,14 @@ URI its bucket is authoritative, so RustFS creates the bucket the workloads actu
 {{- define "logfire.inClusterObjectStoreBucket" -}}
 {{- $uri := include "logfire.objectStoreUriValue" . -}}
 {{- $bucket := "" -}}
-{{- if hasPrefix "s3://" $uri -}}
-{{- $bucket = splitList "/" (trimPrefix "s3://" $uri) | first -}}
+{{- if hasPrefix "s3://" (trim $uri) -}}
+{{- $bucket = splitList "/" (trimPrefix "s3://" (trim $uri)) | first | trim -}}
 {{- end -}}
 {{- if not $bucket -}}
-{{- $bucket = get (.Values.rustfs | default dict) "bucket" | default "logfire" -}}
+{{- $bucket = get (.Values.rustfs | default dict) "bucket" | default "" | trim -}}
+{{- if not $bucket -}}
+{{- $bucket = "logfire" -}}
+{{- end -}}
 {{- end -}}
 {{- $bucket -}}
 {{- end -}}
@@ -810,7 +813,7 @@ default. With only `dev.deployRustfs`, `rustfs.auth` is used.
 {{/* Resolve the object store URI consistently for validation and consumers. */}}
 {{- define "logfire.objectStoreUri" -}}
 {{- $uri := include "logfire.objectStoreUriValue" . -}}
-{{- if and (not $uri) (eq (include "logfire.inClusterObjectStoreEnabled" .) "true") -}}
+{{- if and (not (trim $uri)) (eq (include "logfire.inClusterObjectStoreEnabled" .) "true") -}}
 {{- $uri = printf "s3://%s" (include "logfire.inClusterObjectStoreBucket" .) -}}
 {{- end -}}
 {{- $uri -}}

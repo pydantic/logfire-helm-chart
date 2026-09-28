@@ -122,6 +122,31 @@ tests:
           value: StatefulSet
         template: templates/logfire-ff-ingest.yaml
 
+  - it: defaults a whitespace objectStore.uri with development RustFS
+    set:
+      dev:
+        deployRustfs: true
+      objectStore:
+        uri: "   "
+    templates:
+      - templates/logfire-ff-config.yaml
+      - templates/rustfs.yaml
+    asserts:
+      - equal:
+          path: data.FF_OBJECT_STORE_URI
+          value: s3://logfire
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+        template: templates/logfire-ff-config.yaml
+      - matchRegex:
+          path: spec.template.spec.containers[0].lifecycle.postStart.exec.command[2]
+          pattern: 'http://127\.0\.0\.1:9000/logfire"'
+        documentSelector:
+          path: kind
+          value: Deployment
+        template: templates/rustfs.yaml
+
   - it: keeps explicit objectStore connection settings for the in-cluster store
     set:
       dev:
