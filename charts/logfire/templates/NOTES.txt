@@ -26,6 +26,14 @@ A PostgreSQL database has been deployed as part of this installation.
 You are using an external PostgreSQL database.
 {{- end }}
 
+{{- if .Values.dev.deployMinio }}
+
+dev.deployMinio is deprecated and will be removed in a future release. This release keeps the
+logfire-minio Service name and its credentials so existing values keep working. To migrate, set
+dev.deployRustfs=true, remove dev.deployMinio, point objectStore.env.AWS_ENDPOINT at
+http://logfire-rustfs:9000, and set rustfs.auth to the same credentials as objectStore.env.
+{{- end }}
+
 When configuring authentication with an external provider, set the redirect URI to:
 - {{ printf "%s/auth-api/callback" (include "logfire.url" .) }}
 

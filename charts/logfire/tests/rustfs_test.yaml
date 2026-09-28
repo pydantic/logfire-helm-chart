@@ -1,0 +1,367 @@
+suite: development RustFS object store
+release:
+  name: lf
+  namespace: default
+templates:
+  - templates/rustfs.yaml
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://logfire
+  dev:
+    deployPostgres: true
+tests:
+  - it: renders nothing when dev.deployRustfs is disabled
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders the secret, service, claim, and deployment when enabled
+    set:
+      dev:
+        deployRustfs: true
+    asserts:
+      - hasDocuments:
+          count: 4
+      - equal:
+          path: stringData
+          value:
+            accessKey: logfire-rustfs
+            secretKey: logfire-rustfs
+        documentSelector:
+          path: kind
+          value: Secret
+      - equal:
+          path: spec.ports[0].port
+          value: 9000
+        documentSelector:
+          path: kind
+          value: Service
+      - equal:
+          path: spec.resources.requests.storage
+          value: 32Gi
+        documentSelector:
+          path: kind
+          value: PersistentVolumeClaim
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: rustfs/rustfs:1.0.0
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          value: logfire-rustfs
+        documentSelector:
+          path: kind
+          value: Deployment
+      - matchRegex:
+          path: spec.template.spec.containers[0].lifecycle.postStart.exec.command[2]
+          pattern: 'http://127\.0\.0\.1:9000/logfire"'
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: defaults fsGroup to the RustFS image gid and lets the chart-wide context override it
+    set:
+      dev:
+        deployRustfs: true
+      podSecurityContext:
+        fsGroup: 2000
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 2000
+            fsGroupChangePolicy: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: uses the default fsGroup when no pod security context is set
+    set:
+      dev:
+        deployRustfs: true
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 10001
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: uses an emptyDir when persistence is disabled
+    set:
+      dev:
+        deployRustfs: true
+      rustfs:
+        persistence:
+          enabled: false
+    asserts:
+      - hasDocuments:
+          count: 3
+      - equal:
+          path: spec.template.spec.volumes[0].emptyDir
+          value: {}
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: mounts an existing claim without rendering a chart-managed claim
+    set:
+      dev:
+        deployRustfs: true
+      rustfs:
+        persistence:
+          existingClaim: my-claim
+    asserts:
+      - hasDocuments:
+          count: 3
+      - equal:
+          path: spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          value: my-claim
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: creates the bucket named by objectStore.uri
+    set:
+      dev:
+        deployRustfs: true
+      objectStore:
+        uri: s3://custom-bucket/some-prefix
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].lifecycle.postStart.exec.command[2]
+          pattern: 'http://127\.0\.0\.1:9000/custom-bucket"'
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: falls back to rustfs.bucket when the object store is not S3
+    set:
+      dev:
+        deployRustfs: true
+      rustfs:
+        bucket: local-bucket
+      objectStore:
+        uri: gs://external-bucket
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].lifecycle.postStart.exec.command[2]
+          pattern: 'http://127\.0\.0\.1:9000/local-bucket"'
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: keeps the MinIO Service name and credentials for the deprecated alias
+    set:
+      dev:
+        deployMinio: true
+      minio:
+        auth:
+          rootUser: logfire-minio
+          rootPassword: logfire-minio
+        persistence:
+          enabled: false
+    asserts:
+      - hasDocuments:
+          count: 4
+      - equal:
+          path: stringData
+          value:
+            accessKey: logfire-minio
+            secretKey: logfire-minio
+        documentSelector:
+          path: kind
+          value: Secret
+      - equal:
+          path: spec.ports[0].port
+          value: 9000
+        documentSelector:
+          path: metadata.name
+          value: logfire-minio
+      - equal:
+          path: spec.template.spec.volumes[0].emptyDir
+          value: {}
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: rustfs/rustfs:1.0.0
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: uses the objectStore.env credentials while dev.deployMinio is set
+    set:
+      dev:
+        deployMinio: true
+      objectStore:
+        env:
+          AWS_ACCESS_KEY_ID: env-access-key
+          AWS_SECRET_ACCESS_KEY: env-secret-key
+    asserts:
+      - equal:
+          path: stringData
+          value:
+            accessKey: env-access-key
+            secretKey: env-secret-key
+        documentSelector:
+          path: kind
+          value: Secret
+
+  - it: expands templates in the legacy objectStore.env credentials
+    set:
+      dev:
+        deployMinio: true
+      objectStore:
+        env:
+          AWS_ACCESS_KEY_ID: "{{ .Release.Name }}-access-key"
+          AWS_SECRET_ACCESS_KEY: "{{ .Release.Name }}-secret-key"
+    asserts:
+      - equal:
+          path: stringData
+          value:
+            accessKey: lf-access-key
+            secretKey: lf-secret-key
+        documentSelector:
+          path: kind
+          value: Secret
+
+  - it: prefers the objectStore.env credentials over rustfs.auth while dev.deployMinio is set
+    set:
+      dev:
+        deployMinio: true
+        deployRustfs: true
+      objectStore:
+        env:
+          AWS_ACCESS_KEY_ID: env-access-key
+          AWS_SECRET_ACCESS_KEY: env-secret-key
+      rustfs:
+        auth:
+          accessKey: new-access-key
+          secretKey: new-secret-key
+    asserts:
+      - equal:
+          path: stringData
+          value:
+            accessKey: env-access-key
+            secretKey: env-secret-key
+        documentSelector:
+          path: kind
+          value: Secret
+
+  - it: uses minio.persistence while dev.deployMinio is set
+    set:
+      dev:
+        deployMinio: true
+      minio:
+        persistence:
+          enabled: true
+          size: 10Gi
+          storageClass: fast
+    asserts:
+      - equal:
+          path: spec.resources.requests.storage
+          value: 10Gi
+        documentSelector:
+          path: kind
+          value: PersistentVolumeClaim
+      - equal:
+          path: spec.storageClassName
+          value: fast
+        documentSelector:
+          path: kind
+          value: PersistentVolumeClaim
+      - equal:
+          path: spec.template.spec.volumes[0].persistentVolumeClaim.claimName
+          value: logfire-rustfs
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: renders with template defaults when the rustfs values are absent
+    set:
+      dev:
+        deployRustfs: true
+      rustfs: null
+    asserts:
+      - hasDocuments:
+          count: 4
+      - equal:
+          path: stringData.accessKey
+          value: logfire-rustfs
+        documentSelector:
+          path: kind
+          value: Secret
+      - equal:
+          path: spec.resources.requests.storage
+          value: 32Gi
+        documentSelector:
+          path: kind
+          value: PersistentVolumeClaim
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 1Gi
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: rolls the pod when the credentials change
+    set:
+      dev:
+        deployRustfs: true
+      rustfs:
+        auth:
+          accessKey: other-key
+          secretKey: other-secret
+    asserts:
+      - notEqual:
+          path: spec.template.metadata.annotations["checksum/rustfs-credentials"]
+          value: 4cd7026689924b99bbaaf2201d0765a4600a6ecc8270c0bf70b6b7c70a487a01
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.metadata.annotations["checksum/rustfs-credentials"]
+          value: bdc9fbd65026311b4e7b0199758c9ecca2ff415a422d304b55b3db917284ff1f
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: uses the chart-wide image pull secrets
+    set:
+      dev:
+        deployRustfs: true
+      imagePullSecrets:
+        - registry-key
+    asserts:
+      - equal:
+          path: spec.template.spec.imagePullSecrets
+          value:
+            - name: registry-key
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: keeps the MinIO credentials when both flags are set without rustfs values
+    set:
+      dev:
+        deployMinio: true
+        deployRustfs: true
+      rustfs: null
+      minio:
+        auth:
+          rootUser: logfire-minio
+          rootPassword: logfire-minio
+    asserts:
+      - equal:
+          path: stringData
+          value:
+            accessKey: logfire-minio
+            secretKey: logfire-minio
+        documentSelector:
+          path: kind
+          value: Secret

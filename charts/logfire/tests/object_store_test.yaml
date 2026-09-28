@@ -27,19 +27,216 @@ tests:
           path: metadata.name
           value: logfire-ff-ingest-config
 
-  - it: renders without objectStore.uri when dev.deployMinio is enabled
+  - it: defaults objectStore.uri and connection settings for the in-cluster store
+    set:
+      dev:
+        deployRustfs: true
+    templates:
+      - templates/logfire-ff-config.yaml
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - equal:
+          path: data.FF_OBJECT_STORE_URI
+          value: s3://logfire
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+        template: templates/logfire-ff-config.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_OBJECT_STORE_URI
+            value: s3://logfire
+        documentSelector:
+          path: kind
+          value: StatefulSet
+        template: templates/logfire-ff-ingest.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ENDPOINT
+            value: http://logfire-rustfs:9000
+        documentSelector:
+          path: kind
+          value: StatefulSet
+        template: templates/logfire-ff-ingest.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ACCESS_KEY_ID
+            value: logfire-rustfs
+        documentSelector:
+          path: kind
+          value: StatefulSet
+        template: templates/logfire-ff-ingest.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_SECRET_ACCESS_KEY
+            value: logfire-rustfs
+        documentSelector:
+          path: kind
+          value: StatefulSet
+        template: templates/logfire-ff-ingest.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ALLOW_HTTP
+            value: "true"
+        documentSelector:
+          path: kind
+          value: StatefulSet
+        template: templates/logfire-ff-ingest.yaml
+
+  - it: defaults objectStore connection settings for the deprecated MinIO alias
     set:
       dev:
         deployMinio: true
     templates:
       - templates/logfire-ff-config.yaml
+      - templates/logfire-ff-ingest.yaml
     asserts:
       - equal:
           path: data.FF_OBJECT_STORE_URI
-          value: ""
+          value: s3://logfire
         documentSelector:
           path: metadata.name
           value: logfire-ff-base-config
+        template: templates/logfire-ff-config.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ENDPOINT
+            value: http://logfire-rustfs:9000
+        documentSelector:
+          path: kind
+          value: StatefulSet
+        template: templates/logfire-ff-ingest.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ACCESS_KEY_ID
+            value: logfire-minio
+        documentSelector:
+          path: kind
+          value: StatefulSet
+        template: templates/logfire-ff-ingest.yaml
+
+  - it: defaults a whitespace objectStore.uri with development RustFS
+    set:
+      dev:
+        deployRustfs: true
+      objectStore:
+        uri: "   "
+    templates:
+      - templates/logfire-ff-config.yaml
+      - templates/rustfs.yaml
+    asserts:
+      - equal:
+          path: data.FF_OBJECT_STORE_URI
+          value: s3://logfire
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+        template: templates/logfire-ff-config.yaml
+      - matchRegex:
+          path: spec.template.spec.containers[0].lifecycle.postStart.exec.command[2]
+          pattern: 'http://127\.0\.0\.1:9000/logfire"'
+        documentSelector:
+          path: kind
+          value: Deployment
+        template: templates/rustfs.yaml
+
+  - it: keeps explicit objectStore connection settings for the in-cluster store
+    set:
+      dev:
+        deployRustfs: true
+      objectStore:
+        uri: s3://custom-bucket
+        env:
+          AWS_ENDPOINT: http://custom-endpoint:9000
+          AWS_ACCESS_KEY_ID: custom-key
+          AWS_SECRET_ACCESS_KEY: custom-secret
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_OBJECT_STORE_URI
+            value: s3://custom-bucket
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ENDPOINT
+            value: http://custom-endpoint:9000
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ACCESS_KEY_ID
+            value: custom-key
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ACCESS_KEY_ID
+            value: logfire-rustfs
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: does not add default AWS credentials when a Secret reference provides them
+    set:
+      dev:
+        deployRustfs: true
+      objectStore:
+        env:
+          AWS_ACCESS_KEY_ID:
+            valueFrom:
+              secretKeyRef:
+                name: minio-creds
+                key: accessKey
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: minio-creds
+                key: accessKey
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ACCESS_KEY_ID
+            value: logfire-rustfs
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: accepts the deprecated dev.deployMinio alias without objectStore.uri
+    set:
+      dev:
+        deployMinio: true
+      objectStore:
+        uri: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notFailedTemplate: {}
 
   - it: expands helm templates in objectStore.uri
     set:
@@ -78,7 +275,7 @@ tests:
       objectStore:
         uri: s3://test-bucket
         env:
-          AWS_ENDPOINT: "http://minio-{{ .Release.Name }}:9000"
+          AWS_ENDPOINT: "http://rustfs-{{ .Release.Name }}:9000"
     templates:
       - templates/logfire-ff-ingest.yaml
     asserts:
@@ -86,7 +283,7 @@ tests:
           path: spec.template.spec.containers[0].env
           content:
             name: AWS_ENDPOINT
-            value: http://minio-lf:9000
+            value: http://rustfs-lf:9000
         documentSelector:
           path: kind
           value: StatefulSet
@@ -99,7 +296,7 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
 
   - it: rejects missing value template result in production
     set:
@@ -109,7 +306,7 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
 
   - it: rejects whitespace template result in production
     set:
@@ -119,7 +316,7 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
 
   - it: rejects whitespace literal in production
     set:
@@ -129,7 +326,7 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
 
   - it: rejects empty literal in production
     set:
@@ -139,12 +336,12 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployMinio=true instead."
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
 
-  - it: allows an empty template result with development MinIO
+  - it: defaults an empty template result to the in-cluster bucket with development RustFS
     set:
       dev:
-        deployMinio: true
+        deployRustfs: true
       objectStore:
         uri: '{{ "" }}'
     templates:
@@ -153,7 +350,7 @@ tests:
     asserts:
       - equal:
           path: data.FF_OBJECT_STORE_URI
-          value: ""
+          value: s3://logfire
         documentSelector:
           path: metadata.name
           value: logfire-ff-base-config
