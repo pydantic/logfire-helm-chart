@@ -325,6 +325,10 @@ install or upgrade before any workload rolls out.
 {{- if and (get $smtp "host") (not (get $smtp "fromAddress")) -}}
   {{- fail "smtp.fromAddress is required when smtp.host is set. Set it to the sender address of Logfire email, such as logfire@example.com, on a domain that your SMTP server may send for. Logfire does not send email as pydantic.dev from a self-hosted install." -}}
 {{- end -}}
+{{- $domain := (get $smtp "fromAddress" | default "" | toString | splitList "@" | last | trim | trimSuffix "." | lower) -}}
+{{- if or (eq $domain "pydantic.dev") (hasSuffix ".pydantic.dev" $domain) -}}
+  {{- fail "smtp.fromAddress must not be a pydantic.dev address. Set it to an address on a domain that your SMTP server may send for." -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

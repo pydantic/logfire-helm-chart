@@ -20,6 +20,19 @@ tests:
       - failedTemplate:
           errorPattern: "smtp.fromAddress is required when smtp.host is set"
 
+  # The platform refuses a pydantic.dev sender on a self-hosted install. This check says so
+  # before any workload rolls out.
+  - it: a pydantic.dev sender fails before anything rolls out
+    set:
+      smtp:
+        host: smtp.example.com
+        fromAddress: No-Reply@Alerts.Pydantic.Dev
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.fromAddress must not be a pydantic.dev address"
+
   - it: both workloads that send email get the sender
     set:
       smtp:
