@@ -1,0 +1,115 @@
+suite: email sender
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  # A self-hosted install sends through its own SMTP server, so mail as pydantic.dev would fail
+  # DMARC at the receiver. The platform refuses to start without a sender, and this check stops
+  # the install or upgrade before any workload rolls out.
+  - it: an SMTP server without a sender fails before anything rolls out
+    set:
+      smtp:
+        host: smtp.example.com
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.fromAddress is required when smtp.host is set"
+
+  # The platform refuses a pydantic.dev sender on a self-hosted install. This check says so
+  # before any workload rolls out.
+  - it: a pydantic.dev sender fails before anything rolls out
+    set:
+      smtp:
+        host: smtp.example.com
+        fromAddress: No-Reply@Alerts.Pydantic.Dev
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.fromAddress must not be a pydantic.dev address"
+
+  - it: both workloads that send email get the sender
+    set:
+      smtp:
+        host: smtp.example.com
+        fromAddress: logfire@example.com
+        fromName: Acme Logfire
+    templates:
+      - templates/logfire-task-runner.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAIL_FROM_ADDRESS
+            value: logfire@example.com
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAIL_FROM_NAME
+            value: Acme Logfire
+
+  # The worker sends alert email inline. Without ON_PREM it would treat the install as SaaS and
+  # name a pydantic.dev mailbox in the List-Owner header.
+  - it: the worker knows it is self-hosted
+    templates:
+      - templates/logfire-worker.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ON_PREM
+            value: "true"
+
+  # An empty value fails platform startup, so an unset sender must not render at all.
+  - it: an install without SMTP renders no sender variables
+    templates:
+      - templates/logfire-task-runner.yaml
+      - templates/logfire-worker.yaml
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: EMAIL_FROM_ADDRESS
+        template: templates/logfire-task-runner.yaml
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: EMAIL_FROM_NAME
+        template: templates/logfire-worker.yaml
+
+  - it: the bundled maildev gets a placeholder sender on a reserved domain
+    set:
+      dev:
+        deployMaildev: true
+      # Maildev replaces smtp.host, so a leftover host does not require a sender.
+      smtp:
+        host: smtp.example.com
+    templates:
+      - templates/logfire-task-runner.yaml
+      - templates/logfire-worker.yaml
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAIL_FROM_ADDRESS
+            value: no-reply@logfire.localhost
+        template: templates/logfire-task-runner.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAIL_FROM_ADDRESS
+            value: no-reply@logfire.localhost
+        template: templates/logfire-worker.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/logfire-validate-config.yaml
