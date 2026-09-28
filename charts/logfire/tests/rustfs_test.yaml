@@ -306,7 +306,7 @@ tests:
       dev:
         deployRustfs: true
       imagePullSecrets:
-        - name: registry-key
+        - registry-key
     asserts:
       - equal:
           path: spec.template.spec.imagePullSecrets
