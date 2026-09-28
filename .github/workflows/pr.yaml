@@ -78,39 +78,48 @@ jobs:
         with:
           config: 'ci/kind.yaml'
 
+      - name: Create the restricted namespace
+        run: |
+          kubectl create namespace logfire-restricted
+          kubectl label namespace logfire-restricted pod-security.kubernetes.io/enforce=restricted
+
       - name: Create k8s secrets
         run: |
-          kubectl create secret generic pg-dsns \
-            --from-literal="postgresDsn=postgres://postgres:postgres@logfire-postgres:5432/crud" \
-            --from-literal="postgresFFDsn=postgres://postgres:postgres@logfire-postgres:5432/ff" \
+          for ns in default logfire-restricted; do
+            kubectl create secret generic pg-dsns -n "$ns" \
+              --from-literal="postgresDsn=postgres://postgres:postgres@logfire-postgres:5432/crud" \
+              --from-literal="postgresFFDsn=postgres://postgres:postgres@logfire-postgres:5432/ff" \
 
-          kubectl create secret generic logfire-tokens \
-            --from-literal="logfire-dex-client-secret=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-meta-write-token=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-meta-frontend-token=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-unsubscribe-secret=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-encryption-key=$(head -c 32 /dev/urandom | base64 | tr -d '\n')" \
-            --from-literal="logfire-mcp-oauth-client-secret=$(date +%s%N | sha256sum | head -c 32)"
+            kubectl create secret generic logfire-tokens -n "$ns" \
+              --from-literal="logfire-dex-client-secret=$(date +%s%N | sha256sum | head -c 32)" \
+              --from-literal="logfire-meta-write-token=$(date +%s%N | sha256sum | head -c 32)" \
+              --from-literal="logfire-meta-frontend-token=$(date +%s%N | sha256sum | head -c 32)" \
+              --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)" \
+              --from-literal="logfire-unsubscribe-secret=$(date +%s%N | sha256sum | head -c 32)" \
+              --from-literal="logfire-encryption-key=$(head -c 32 /dev/urandom | base64 | tr -d '\n')" \
+              --from-literal="logfire-mcp-oauth-client-secret=$(date +%s%N | sha256sum | head -c 32)"
 
-          kubectl create secret generic logfire-admin \
-            --from-literal="logfire-admin-password=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-admin-totp-secret=$(head -c 20 /dev/urandom | base32 | tr -d '=' | head -c 32)" \
-            --from-literal="logfire-admin-totp-recovery-codes=[\"$(date +%s%N | sha256sum | head -c 32)\"]" \
-            --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)"
+            kubectl create secret generic logfire-admin -n "$ns" \
+              --from-literal="logfire-admin-password=$(date +%s%N | sha256sum | head -c 32)" \
+              --from-literal="logfire-admin-totp-secret=$(head -c 20 /dev/urandom | base32 | tr -d '=' | head -c 32)" \
+              --from-literal="logfire-admin-totp-recovery-codes=[\"$(date +%s%N | sha256sum | head -c 32)\"]" \
+              --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)"
 
-          kubectl create secret generic logfire-gateway \
-            --from-literal="key=$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '\n')" \
-            --from-literal="internalSecret=$(date +%s%N | sha256sum | head -c 32)"
+            kubectl create secret generic logfire-gateway -n "$ns" \
+              --from-literal="key=$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '\n')" \
+              --from-literal="internalSecret=$(date +%s%N | sha256sum | head -c 32)"
+          done
 
       - name: Run chart testing
         run: ct install --upgrade --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH"
 
-      - name: Install chart for integration tests
+      - name: Install chart for integration tests under the restricted Pod Security Standard
         run: |
           helm dependency update charts/logfire
           helm install lf charts/logfire \
             -f charts/logfire/ci/ci-values.yaml \
+            -f ci/restricted-values.yaml \
+            -n logfire-restricted \
             --wait --timeout 10m
 
       - name: Install uv
@@ -118,7 +127,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          kubectl port-forward -n default svc/logfire-service 8080:8080 &
+          kubectl port-forward -n logfire-restricted svc/logfire-service 8080:8080 &
           PF_PID=$!
           trap "kill ${PF_PID} 2>/dev/null || true" EXIT
           for _ in $(seq 1 30); do
@@ -127,5 +136,5 @@ jobs:
             fi
             sleep 2
           done
-          META_FRONTEND_TOKEN=$(kubectl get secret logfire-tokens -n default -o jsonpath='{.data.logfire-meta-frontend-token}' | base64 -d) \
+          META_FRONTEND_TOKEN=$(kubectl get secret logfire-tokens -n logfire-restricted -o jsonpath='{.data.logfire-meta-frontend-token}' | base64 -d) \
             uv run --directory tests/integration pytest -v

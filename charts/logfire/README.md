@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.48-rc.1](https://img.shields.io/badge/Version-0.13.48--rc.1-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
+![Version: 0.13.48-rc.2](https://img.shields.io/badge/Version-0.13.48--rc.2-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -664,7 +664,7 @@ Before diving deeper, verify these common configuration issues:
 | rustfs.podSecurityContext | object | `{}` | Pod SecurityContext for the RustFS pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 10001`. |
 | rustfs.resources | object | `{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}}` | Resource requests and limits for the RustFS container |
 | rustfs.securityContext | object | `{}` | Container SecurityContext for the RustFS container. Defaults to the chart-wide `securityContext` when unset. |
-| securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details |
+| securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details Chart-owned containers (the Python, Fusionfire, gateway, and frontend images) merge this context over chart defaults: the image's verified non-root identity, `allowPrivilegeEscalation: false`, all capabilities dropped, the `RuntimeDefault` seccomp profile, and a read-only root. A per-service `<workload>.securityContext` wins over both layers, for example `logfire-backend.securityContext`. Set a field to `null` to clear it, for example `runAsUser: null` for OpenShift, or set `readOnlyRootFilesystem: false` to restore a writable root. |
 | serviceAccount | object | `{"annotations":{},"create":false,"name":""}` | ServiceAccount configuration |
 | serviceAccount.annotations | object | `{}` | Annotations to add to the ServiceAccount (e.g., for IAM roles) Example for AWS IRSA:   annotations:     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/my-role Example for GCP Workload Identity:   annotations:     iam.gke.io/gcp-service-account: my-sa@my-project.iam.gserviceaccount.com |
 | serviceAccount.create | bool | `false` | Create a ServiceAccount |

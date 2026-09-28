@@ -1303,6 +1303,113 @@ securityContext:
 {{- end -}}
 {{- end -}}
 
+{{/*
+The numeric identity a chart-owned image runs as. The kubelet verifies `runAsNonRoot` against
+`runAsUser`, and a named image user cannot be verified. The Python, Fusionfire, bcache, and
+gateway images all run as uid/gid 1000; the frontend nginx image runs as uid/gid 33. The
+platform contract tests keep the image `USER` and these numbers in step.
+*/}}
+{{- define "logfire.containerImageIdentity" -}}
+{{- $serviceName := required "logfire.containerImageIdentity: need .serviceName" .serviceName -}}
+{{- $uidGid1000 := list
+  "logfire-backend"
+  "logfire-backend-auth"
+  "logfire-backend-migrations"
+  "logfire-worker"
+  "logfire-task-runner"
+  "logfire-remote-mcp"
+  "logfire-ai-gateway"
+  "logfire-ff-ingest"
+  "logfire-ff-ingest-processor"
+  "logfire-ff-query-api"
+  "logfire-ff-query-worker"
+  "logfire-ff-crud-api"
+  "logfire-ff-maintenance-scheduler"
+  "logfire-ff-maintenance-worker"
+  "logfire-ff-compaction-worker"
+  "logfire-ff-cache-byte"
+  "logfire-ff-migrations"
+-}}
+{{- if has $serviceName $uidGid1000 -}}
+{{- dict "uid" 1000 "gid" 1000 | toJson -}}
+{{- else if eq $serviceName "logfire-frontend-service" -}}
+{{- dict "uid" 33 "gid" 33 | toJson -}}
+{{- else -}}
+{{- fail (printf "logfire.containerImageIdentity: unknown chart-owned service %q; add its verified image identity" $serviceName) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Chart-owned container SecurityContext, merged over three layers with later layers winning:
+1. the chart-owned default: the portable controls plus the verified non-root identity, and a
+   read-only image root because every chart-owned container mounts the paths it writes;
+2. the chart-wide `.Values.securityContext`;
+3. the service's own `securityContext` value.
+
+A layer value of `null` removes the field from the result, so a user can clear `runAsUser` or
+`runAsGroup` for OpenShift or a policy-managed cluster, and can set `readOnlyRootFilesystem`
+back to false. The defaults stay in the chart rather than in values, so an upgrade that carries
+no service `securityContext` key still applies them. Returns JSON so callers can parse it with
+`fromJson`, matching `logfire.effectiveServiceValues`.
+*/}}
+{{- define "logfire.containerSecurityContext" -}}
+{{- $ctx := required "logfire.containerSecurityContext: need .ctx" .ctx -}}
+{{- $serviceName := required "logfire.containerSecurityContext: need .serviceName" .serviceName -}}
+{{- $identity := include "logfire.containerImageIdentity" (dict "serviceName" $serviceName) | fromJson -}}
+{{- $defaults := dict
+  "runAsNonRoot" true
+  "runAsUser" (get $identity "uid")
+  "runAsGroup" (get $identity "gid")
+  "allowPrivilegeEscalation" false
+  "capabilities" (dict "drop" (list "ALL"))
+  "seccompProfile" (dict "type" "RuntimeDefault")
+  "readOnlyRootFilesystem" true
+-}}
+{{- $serviceValues := get $ctx.Values $serviceName | default dict -}}
+{{- $layers := list ($ctx.Values.securityContext | default dict) (get $serviceValues "securityContext" | default dict) -}}
+{{- $merged := $defaults -}}
+{{- range $layer := $layers -}}
+  {{- $merged = mergeOverwrite $merged (deepCopy $layer) -}}
+  {{- range $key, $value := $layer -}}
+    {{- if kindIs "invalid" $value -}}
+      {{- $_ := unset $merged $key -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $merged | toJson -}}
+{{- end -}}
+
+{{/*
+The writable `/tmp` mount every chart-owned container gets. The production images keep a
+writable `HOME` or write scratch data under `/tmp`, so a read-only image root needs this
+emptyDir. List the mount before any mount nested under `/tmp`, because the kubelet applies
+container mounts in spec order and a later `/tmp` mount shadows the nested path.
+*/}}
+{{- define "logfire.tmpVolumeMounts" -}}
+- name: tmp
+  mountPath: /tmp
+{{- end -}}
+
+{{- define "logfire.tmpVolume" -}}
+- name: tmp
+  emptyDir: {}
+{{- end -}}
+
+{{/*
+The writable local object store directory for the Python workloads that use it. Self-hosted
+deployments default the session-replay and visual-test stores to `file:///var/lib/logfire`, so
+the backend and the worker need the directory writable under a read-only image root.
+*/}}
+{{- define "logfire.logfireDataVolumeMounts" -}}
+- name: logfire-data
+  mountPath: /var/lib/logfire
+{{- end -}}
+
+{{- define "logfire.logfireDataVolume" -}}
+- name: logfire-data
+  emptyDir: {}
+{{- end -}}
+
 {{- define "logfire.standardPodSpecFields" -}}
 {{- $ctx := required "logfire.standardPodSpecFields: need .ctx" .ctx -}}
 {{- $serviceName := required "logfire.standardPodSpecFields: need .serviceName" .serviceName -}}
@@ -1638,7 +1745,7 @@ Dev Postgres helpers
     - sh
     - -c
     - >-
-      until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432; do echo "Waiting for postgres..."; sleep 2; done
+      until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432 -U postgres; do echo "Waiting for postgres..."; sleep 2; done
   {{- include "logfire.securityContext" $ctx.Values.securityContext | nindent 2 }}
 {{- end -}}
 {{- end -}}

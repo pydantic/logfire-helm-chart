@@ -1460,6 +1460,12 @@ podSecurityContext: {}
 
 # -- Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container)
 # See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details
+# Chart-owned containers (the Python, Fusionfire, gateway, and frontend images) merge this context over
+# chart defaults: the image's verified non-root identity, `allowPrivilegeEscalation: false`, all
+# capabilities dropped, the `RuntimeDefault` seccomp profile, and a read-only root. A per-service
+# `<workload>.securityContext` wins over both layers, for example `logfire-backend.securityContext`.
+# Set a field to `null` to clear it, for example `runAsUser: null` for OpenShift, or set
+# `readOnlyRootFilesystem: false` to restore a writable root.
 securityContext: {}
   # capabilities:
   #   drop:

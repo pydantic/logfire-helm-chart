@@ -1,4 +1,5 @@
 {{- $serviceName := "logfire-backend-migrations" }}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -41,7 +42,7 @@ spec:
         - name: logfire-backend-migrations
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
-          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
           command:
             - "python"
             - "src/packages/logfire-db/logfire_db/migrations/main.py"
@@ -58,3 +59,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresDsn
+          volumeMounts:
+            {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
+      volumes:
+        {{- include "logfire.tmpVolume" . | nindent 8 }}
