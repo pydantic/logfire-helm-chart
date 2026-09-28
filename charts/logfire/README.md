@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.48](https://img.shields.io/badge/Version-0.13.48-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
+![Version: 0.13.48-rc.1](https://img.shields.io/badge/Version-0.13.48--rc.1-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -93,7 +93,9 @@ PersistentVolumeClaim, so local evaluation data is not carried over.
 Values files that still set `dev.deployMinio: true` keep working: the chart deploys RustFS
 behind the same `logfire-minio` Service name and uses the credentials from `minio.auth`, or
 from `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` when
-`minio.auth` is not set, so Logfire keeps authenticating.
+`minio.auth` is not set, so Logfire keeps authenticating. `minio.persistence.existingClaim` is
+not carried over: RustFS always starts from its own claim, or from an emptyDir when persistence
+is disabled.
 
 To move to the new names, set `dev.deployRustfs: true`, remove `dev.deployMinio`, point
 `objectStore.env.AWS_ENDPOINT` at `http://logfire-rustfs:9000`, and set
