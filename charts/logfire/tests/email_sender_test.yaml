@@ -90,12 +90,26 @@ tests:
     set:
       dev:
         deployMaildev: true
+      # Maildev replaces smtp.host, so a leftover host does not require a sender.
+      smtp:
+        host: smtp.example.com
     templates:
       - templates/logfire-task-runner.yaml
       - templates/logfire-worker.yaml
+      - templates/logfire-validate-config.yaml
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
           content:
             name: EMAIL_FROM_ADDRESS
             value: no-reply@logfire.localhost
+        template: templates/logfire-task-runner.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: EMAIL_FROM_ADDRESS
+            value: no-reply@logfire.localhost
+        template: templates/logfire-worker.yaml
+      - hasDocuments:
+          count: 0
+        template: templates/logfire-validate-config.yaml
