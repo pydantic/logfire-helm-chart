@@ -387,3 +387,71 @@ tests:
           path: kind
           value: StatefulSet
         template: templates/logfire-ff-ingest.yaml
+
+  - it: rejects an objectStore.volumes entry named tmp
+    set:
+      objectStore:
+        uri: s3://test-bucket
+        volumes:
+          - name: tmp
+            emptyDir: {}
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumes[0].name 'tmp' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, logfire-data, scratch-data, ingest-data."
+
+  - it: rejects an objectStore.volumes entry named logfire-data
+    set:
+      objectStore:
+        uri: s3://test-bucket
+        volumes:
+          - name: logfire-data
+            emptyDir: {}
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumes[0].name 'logfire-data' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, logfire-data, scratch-data, ingest-data."
+
+  - it: rejects an objectStore.volumeMounts entry at /tmp
+    set:
+      objectStore:
+        uri: s3://test-bucket
+        volumeMounts:
+          - name: credentials
+            mountPath: /tmp
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumeMounts[0].mountPath '/tmp' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /var/lib/logfire, /scratch, /fusionfire/ingest-data."
+
+  - it: rejects an objectStore.volumeMounts entry at /var/lib/logfire
+    set:
+      objectStore:
+        uri: s3://test-bucket
+        volumeMounts:
+          - name: credentials
+            mountPath: /var/lib/logfire
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumeMounts[0].mountPath '/var/lib/logfire' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /var/lib/logfire, /scratch, /fusionfire/ingest-data."
+
+  - it: accepts objectStore volumes and mounts outside the reserved names and paths
+    set:
+      objectStore:
+        uri: s3://test-bucket
+        volumes:
+          - name: credentials
+            secret:
+              secretName: object-store-credentials
+        volumeMounts:
+          - name: credentials
+            mountPath: /etc/object-store
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notFailedTemplate: {}

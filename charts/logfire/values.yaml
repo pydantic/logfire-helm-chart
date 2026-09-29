@@ -1379,9 +1379,13 @@ objectStore:
   # enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
   # and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store.
   env: {}
-  # -- Volume mounts for object store credentials
+  # -- Volume mounts for object store credentials. The chart reserves the mount paths `/tmp`,
+  # `/var/lib/logfire`, `/scratch`, and `/fusionfire/ingest-data` for its own writable volumes,
+  # and rejects a mount at one of them.
   volumeMounts: []
-  # -- Volumes for object store credentials
+  # -- Volumes for object store credentials. The chart reserves the volume names `tmp`,
+  # `logfire-data`, `scratch-data`, and `ingest-data` for its own volumes, and rejects an entry
+  # with one of them.
   volumes: []
 
 # Azure example:
