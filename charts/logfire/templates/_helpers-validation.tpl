@@ -18,6 +18,34 @@ Validate that objectStore.uri resolves to a nonblank value (required for product
 {{- end -}}
 
 {{/*
+Validate that objectStore.volumes and objectStore.volumeMounts entries do not collide with the
+volumes and mount paths the chart adds to the same Fusionfire pods. Kubernetes rejects a pod that
+lists the same volume name or mount path twice, so the chart reserves its generated names and
+paths here. The in-cluster TLS volumes are reserved only when that TLS mode is enabled.
+*/}}
+{{- define "logfire.validate.objectStoreVolumes" -}}
+{{- $reservedNames := list "tmp" "scratch-data" "ingest-data" -}}
+{{- $reservedMountPaths := list "/tmp" "/scratch" "/fusionfire/ingest-data" -}}
+{{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+{{- $reservedNames = concat $reservedNames (list "logfire-incluster-tls" "logfire-incluster-ca-bundle") -}}
+{{- $reservedMountPaths = concat $reservedMountPaths (list "/etc/tls" "/etc/logfire/incluster-ca") -}}
+{{- end -}}
+{{- $objectStore := .Values.objectStore | default dict -}}
+{{- range $index, $volume := (get $objectStore "volumes" | default list) -}}
+  {{- $name := get $volume "name" -}}
+  {{- if has $name $reservedNames -}}
+    {{- fail (printf "objectStore.volumes[%d].name '%s' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: %s." $index $name ($reservedNames | join ", ")) -}}
+  {{- end -}}
+{{- end -}}
+{{- range $index, $mount := (get $objectStore "volumeMounts" | default list) -}}
+  {{- $mountPath := get $mount "mountPath" -}}
+  {{- if has $mountPath $reservedMountPaths -}}
+    {{- fail (printf "objectStore.volumeMounts[%d].mountPath '%s' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: %s." $index $mountPath ($reservedMountPaths | join ", ")) -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Validate public hostnames configuration
 */}}
 {{- define "logfire.validate.ingress" -}}
@@ -323,6 +351,7 @@ Call this from templates that need to ensure configuration is valid.
 {{- $validators := list
   "logfire.validate.sizingPreset"
   "logfire.validate.objectStore"
+  "logfire.validate.objectStoreVolumes"
   "logfire.validate.ingress"
   "logfire.validate.gateway"
   "logfire.validate.ingressGatewayConflict"

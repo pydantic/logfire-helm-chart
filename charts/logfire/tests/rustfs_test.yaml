@@ -154,6 +154,29 @@ tests:
           path: kind
           value: Deployment
 
+  - it: merges the chart-wide context under rustfs.securityContext
+    set:
+      dev:
+        deployRustfs: true
+      securityContext:
+        runAsUser: 2000
+        seccompProfile:
+          type: RuntimeDefault
+      rustfs:
+        securityContext:
+          readOnlyRootFilesystem: false
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsUser: 2000
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: false
+        documentSelector:
+          path: kind
+          value: Deployment
+
   - it: keeps the MinIO Service name and credentials for the deprecated alias
     set:
       dev:

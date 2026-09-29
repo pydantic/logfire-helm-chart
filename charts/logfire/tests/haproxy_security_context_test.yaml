@@ -17,6 +17,12 @@ tests:
             runAsNonRoot: true
             runAsUser: 99
             runAsGroup: 99
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
             readOnlyRootFilesystem: true
         documentSelector:
           path: kind
@@ -38,7 +44,90 @@ tests:
             runAsNonRoot: true
             runAsUser: 1000
             runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
             readOnlyRootFilesystem: true
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: merges the chart-wide context over the HAProxy default
+    set:
+      securityContext:
+        runAsUser: 2000
+    templates:
+      - templates/logfire-service.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 2000
+            runAsGroup: 99
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: true
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: merges haproxy.securityContext over the chart-wide context and clears fields with null
+    set:
+      securityContext:
+        runAsUser: 2000
+        runAsGroup: 2000
+      haproxy:
+        securityContext:
+          runAsUser: null
+          runAsGroup: 99
+    templates:
+      - templates/logfire-service.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsGroup: 99
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: true
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: lets the chart-wide context clear the HAProxy identity
+    set:
+      securityContext:
+        runAsUser: null
+        runAsGroup: null
+    templates:
+      - templates/logfire-service.yaml
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+        documentSelector:
+          path: kind
+          value: Deployment
+      - notExists:
+          path: spec.template.spec.containers[0].securityContext.runAsGroup
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
         documentSelector:
           path: kind
           value: Deployment

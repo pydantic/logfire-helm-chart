@@ -32,7 +32,7 @@ spec:
         - name: logfire-maildev
           image: {{ include "logfire.imageRef" (dict "image" $maildevImage "defaultRepository" "maildev/maildev" "defaultTag" "latest") }}
           imagePullPolicy: {{ default .Values.image.pullPolicy (get $maildevImage "pullPolicy") | quote }}
-          {{- $maildevSecurityContext := get $maildev "securityContext" | default .Values.securityContext }}
+          {{- $maildevSecurityContext := include "logfire.mergeSecurityContext" (dict "ctx" . "serviceName" "maildev" "defaults" (dict)) | fromJson }}
           {{- include "logfire.securityContext" $maildevSecurityContext | nindent 10 }}
           ports:
             - containerPort: 1080

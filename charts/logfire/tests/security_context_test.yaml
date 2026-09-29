@@ -45,11 +45,13 @@ tests:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
             runAsUser: 1000
+            runAsGroup: 1000
             capabilities:
               drop:
                 - ALL
             seccompProfile:
               type: RuntimeDefault
+            readOnlyRootFilesystem: true
 
   - it: omits securityContext on the check-db-ready init container when unset
     asserts:

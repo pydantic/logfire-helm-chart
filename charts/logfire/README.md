@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.48-rc.2](https://img.shields.io/badge/Version-0.13.48--rc.2-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
+![Version: 0.13.48-rc.3](https://img.shields.io/badge/Version-0.13.48--rc.3-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -415,6 +415,18 @@ controller as described in External Secrets and Automatic Reloads.
 For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
 When working from this repository, run `helm dependency update charts/logfire` to fetch dependency charts.
 
+### Restricted Pod Security
+
+Chart-owned containers default to the controls a `restricted` Pod Security Standards namespace
+requires: a non-root identity, no privilege escalation, all capabilities dropped, `RuntimeDefault`
+seccomp, and a read-only root with the writable paths mounted.
+
+Containers this chart takes from other projects (Redis, Dex, MailDev, the OTel collector, RustFS,
+and the `check-db-ready` init container) keep the chart-wide `securityContext`; supply it or
+per-workload values for them. HAProxy defaults to a restricted-compatible `haproxy.securityContext`.
+`ci/restricted-values.yaml` is an example that the integration tests install into a namespace
+labeled `pod-security.kubernetes.io/enforce=restricted`.
+
 ### Istio Compatibility
 
 If you run Istio and see protocol or mTLS sidecar issues on HAProxy, migration, or infrastructure workloads, enable:
@@ -539,8 +551,9 @@ Before diving deeper, verify these common configuration issues:
 | gateway.tls | string | nil (uses ingress.tls) | Enable TLS/HTTPS for the Gateway listener. If not set, falls back to ingress.tls for backward compatibility. Also overrides the app's public URL scheme/CORS behavior (http vs https URLs) whenever set. |
 | gateway.tlsSecretName | string | nil (uses ingress.secretName) | TLS Secret name for the Gateway listener certificate. If not set, falls back to ingress.secretName for backward compatibility. |
 | groupOrganizationMapping | list | `[]` | List of mapping to automatically assign members of OIDC group to logfire roles |
-| haproxy | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.4"},"securityContext":{"readOnlyRootFilesystem":true,"runAsGroup":99,"runAsNonRoot":true,"runAsUser":99}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
-| haproxy.securityContext | object | `{"readOnlyRootFilesystem":true,"runAsGroup":99,"runAsNonRoot":true,"runAsUser":99}` | Container SecurityContext for the HAProxy proxies. The default pins the numeric identity the image already uses, so the kubelet can verify `runAsNonRoot`, and makes the image root read-only. HAProxy writes no file outside its mounts, so it needs no scratch volume. Set this to override the defaults. |
+| haproxy | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.4"},"podSecurityContext":{},"securityContext":{}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
+| haproxy.podSecurityContext | object | `{}` | Pod SecurityContext for the HAProxy pod. Defaults to the chart-wide `podSecurityContext`. |
+| haproxy.securityContext | object | `{}` | Container SecurityContext for the HAProxy proxies. The chart default pins the numeric identity the image already uses, so the kubelet can verify `runAsNonRoot`, applies the portable controls (no privilege escalation, all capabilities dropped, `RuntimeDefault` seccomp), and makes the image root read-only. The chart-wide `securityContext` merges over that default and this value merges over both; set a field to `null` to clear it. HAProxy writes no file outside its mounts, so it needs no scratch volume. |
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks) |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | imagePullSecrets | list | `[]` | Image pull secrets used by all pods |
@@ -619,14 +632,14 @@ Before diving deeper, verify these common configuration issues:
 | logfire-remote-mcp.enabled | bool | `true` | Enable the remote MCP service. When disabled, the deployment is not rendered and the `/mcp` and `/.well-known/oauth-protected-resource/mcp` haproxy routes are removed. |
 | maildev | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"maildev/maildev","tag":"latest"},"podSecurityContext":{},"securityContext":{}}` | MailDev configuration (only used when `dev.deployMaildev` is true) |
 | maildev.podSecurityContext | object | `{}` | Pod SecurityContext for the MailDev pod. Defaults to the chart-wide `podSecurityContext` when unset. |
-| maildev.securityContext | object | `{}` | Container SecurityContext for the MailDev container. Defaults to the chart-wide `securityContext` when unset. Set this when running under a restricted PodSecurity policy, e.g.:   runAsNonRoot: true   runAsUser: 1000   allowPrivilegeEscalation: false   capabilities:     drop: ["ALL"]   seccompProfile:     type: RuntimeDefault |
+| maildev.securityContext | object | `{}` | Container SecurityContext for the MailDev container. Merged over the chart-wide `securityContext`, so set fields here to override it. Set this when running under a restricted PodSecurity policy, e.g.:   runAsNonRoot: true   runAsUser: 1000   allowPrivilegeEscalation: false   capabilities:     drop: ["ALL"]   seccompProfile:     type: RuntimeDefault |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
 | objectStore | object | `{"env":{},"sseCKeyB64":null,"uri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
 | objectStore.env | object | `{}` | Additional environment variables for the object store connection. String values support Helm templating. When the in-cluster RustFS store is enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. |
 | objectStore.sseCKeyB64 | string | `nil` | Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C). Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy requests. Only used when the object store is S3. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).  IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on a bucket that already contains FusionFire data will break all reads of the pre-existing objects. losing the key means losing the data — AWS does not store it. |
 | objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`). Supports Helm templating, e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release. When `dev.deployRustfs` (or the deprecated `dev.deployMinio`) is enabled and this is empty, it defaults to `s3://<rustfs.bucket>`. |
-| objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials |
-| objectStore.volumes | list | `[]` | Volumes for object store credentials |
+| objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials. The chart reserves the mount paths `/tmp`, `/scratch`, and `/fusionfire/ingest-data` for its own Fusionfire volumes, and adds `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled. |
+| objectStore.volumes | list | `[]` | Volumes for object store credentials. The chart reserves the volume names `tmp`, `scratch-data`, and `ingest-data` for its own Fusionfire volumes, and adds `logfire-incluster-tls` and `logfire-incluster-ca-bundle` when in-cluster TLS is enabled. |
 | otelResourceAttributes | object | `{}` | Additional OTEL resource attributes to stamp onto internal telemetry emitted by Logfire workloads. These are merged on top of the chart defaults and can override them. Example:   deployment.environment.name: prod   service.namespace: logfire |
 | otel_collector | object | `{"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.160.0"},"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true},"sendingQueueBytes":67108864}` | otel-collector configuration |
 | otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
@@ -664,8 +677,8 @@ Before diving deeper, verify these common configuration issues:
 | rustfs.persistence.storageClassName | string | `""` | Storage class for the chart-managed claim. Defaults to `defaultStorageClassName`. |
 | rustfs.podSecurityContext | object | `{}` | Pod SecurityContext for the RustFS pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 10001`. |
 | rustfs.resources | object | `{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}}` | Resource requests and limits for the RustFS container |
-| rustfs.securityContext | object | `{}` | Container SecurityContext for the RustFS container. Defaults to the chart-wide `securityContext` when unset. |
-| securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details |
+| rustfs.securityContext | object | `{}` | Container SecurityContext for the RustFS container. Merged over the chart-wide `securityContext`, so set fields here to override it. |
+| securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details Chart-owned containers (the Python, Fusionfire, gateway, and frontend images) and HAProxy merge this context over chart defaults: the image's verified identity, `allowPrivilegeEscalation: false`, all capabilities dropped, the `RuntimeDefault` seccomp profile, and a read-only root. A per-workload `<workload>.securityContext` merges over both layers, for example `logfire-backend.securityContext` or `haproxy.securityContext`. Maildev and RustFS merge it under their own `securityContext` values. Set a field to `null` to clear it, for example `runAsUser: null` for OpenShift, or set `readOnlyRootFilesystem: false` to restore a writable root. |
 | serviceAccount | object | `{"annotations":{},"create":false,"name":""}` | ServiceAccount configuration |
 | serviceAccount.annotations | object | `{}` | Annotations to add to the ServiceAccount (e.g., for IAM roles) Example for AWS IRSA:   annotations:     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/my-role Example for GCP Workload Identity:   annotations:     iam.gke.io/gcp-service-account: my-sa@my-project.iam.gserviceaccount.com |
 | serviceAccount.create | bool | `false` | Create a ServiceAccount |

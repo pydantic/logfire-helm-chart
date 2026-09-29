@@ -1379,9 +1379,13 @@ objectStore:
   # enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
   # and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store.
   env: {}
-  # -- Volume mounts for object store credentials
+  # -- Volume mounts for object store credentials. The chart reserves the mount paths `/tmp`,
+  # `/scratch`, and `/fusionfire/ingest-data` for its own Fusionfire volumes, and adds
+  # `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled.
   volumeMounts: []
-  # -- Volumes for object store credentials
+  # -- Volumes for object store credentials. The chart reserves the volume names `tmp`,
+  # `scratch-data`, and `ingest-data` for its own Fusionfire volumes, and adds
+  # `logfire-incluster-tls` and `logfire-incluster-ca-bundle` when in-cluster TLS is enabled.
   volumes: []
 
 # Azure example:
@@ -1460,6 +1464,13 @@ podSecurityContext: {}
 
 # -- Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container)
 # See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details
+# Chart-owned containers (the Python, Fusionfire, gateway, and frontend images) and HAProxy merge
+# this context over chart defaults: the image's verified identity, `allowPrivilegeEscalation: false`,
+# all capabilities dropped, the `RuntimeDefault` seccomp profile, and a read-only root. A
+# per-workload `<workload>.securityContext` merges over both layers, for example
+# `logfire-backend.securityContext` or `haproxy.securityContext`. Maildev and RustFS merge it under
+# their own `securityContext` values. Set a field to `null` to clear it, for example
+# `runAsUser: null` for OpenShift, or set `readOnlyRootFilesystem: false` to restore a writable root.
 securityContext: {}
   # capabilities:
   #   drop:
@@ -1499,15 +1510,15 @@ haproxy:
     repository: haproxy
     tag: "3.4"
     pullPolicy: IfNotPresent
-  # -- Container SecurityContext for the HAProxy proxies. The default pins the numeric identity
-  # the image already uses, so the kubelet can verify `runAsNonRoot`, and makes the image root
-  # read-only. HAProxy writes no file outside its mounts, so it needs no scratch volume. Set
-  # this to override the defaults.
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 99
-    runAsGroup: 99
-    readOnlyRootFilesystem: true
+  # -- Container SecurityContext for the HAProxy proxies. The chart default pins the numeric
+  # identity the image already uses, so the kubelet can verify `runAsNonRoot`, applies the
+  # portable controls (no privilege escalation, all capabilities dropped, `RuntimeDefault`
+  # seccomp), and makes the image root read-only. The chart-wide `securityContext` merges over
+  # that default and this value merges over both; set a field to `null` to clear it. HAProxy
+  # writes no file outside its mounts, so it needs no scratch volume.
+  securityContext: {}
+  # -- Pod SecurityContext for the HAProxy pod. Defaults to the chart-wide `podSecurityContext`.
+  podSecurityContext: {}
 
 
 # ==============================================================================
@@ -1731,8 +1742,9 @@ maildev:
     pullPolicy: IfNotPresent
   # -- Pod SecurityContext for the MailDev pod. Defaults to the chart-wide `podSecurityContext` when unset.
   podSecurityContext: {}
-  # -- Container SecurityContext for the MailDev container. Defaults to the chart-wide `securityContext` when unset.
-  # Set this when running under a restricted PodSecurity policy, e.g.:
+  # -- Container SecurityContext for the MailDev container. Merged over the chart-wide
+  # `securityContext`, so set fields here to override it. Set this when running under a restricted
+  # PodSecurity policy, e.g.:
   #   runAsNonRoot: true
   #   runAsUser: 1000
   #   allowPrivilegeEscalation: false
@@ -1800,7 +1812,7 @@ rustfs:
       memory: 1Gi
   # -- Pod SecurityContext for the RustFS pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 10001`.
   podSecurityContext: {}
-  # -- Container SecurityContext for the RustFS container. Defaults to the chart-wide `securityContext` when unset.
+  # -- Container SecurityContext for the RustFS container. Merged over the chart-wide `securityContext`, so set fields here to override it.
   securityContext: {}
 
 # ==============================================================================

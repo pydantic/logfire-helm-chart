@@ -416,6 +416,18 @@ controller as described in External Secrets and Automatic Reloads.
 For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
 When working from this repository, run `helm dependency update charts/logfire` to fetch dependency charts.
 
+### Restricted Pod Security
+
+Chart-owned containers default to the controls a `restricted` Pod Security Standards namespace
+requires: a non-root identity, no privilege escalation, all capabilities dropped, `RuntimeDefault`
+seccomp, and a read-only root with the writable paths mounted.
+
+Containers this chart takes from other projects (Redis, Dex, MailDev, the OTel collector, RustFS,
+and the `check-db-ready` init container) keep the chart-wide `securityContext`; supply it or
+per-workload values for them. HAProxy defaults to a restricted-compatible `haproxy.securityContext`.
+`ci/restricted-values.yaml` is an example that the integration tests install into a namespace
+labeled `pod-security.kubernetes.io/enforce=restricted`.
+
 ### Istio Compatibility
 
 If you run Istio and see protocol or mTLS sidecar issues on HAProxy, migration, or infrastructure workloads, enable:

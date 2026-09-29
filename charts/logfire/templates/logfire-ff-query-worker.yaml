@@ -1,4 +1,5 @@
 {{- $serviceName := "logfire-ff-query-worker" }}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
 {{- $podSecurityContext := include "logfire.fusionfirePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- if (index .Values $serviceName | default dict).enabled }}
@@ -39,7 +40,7 @@ spec:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
-          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
             {{- include "logfire.ffCommandWithTempDirCleanup" . | nindent 12 }}
@@ -81,6 +82,7 @@ spec:
               {{- . | toYaml | nindent 12 }}
             {{- end }}
           volumeMounts:
+            {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
             - name: {{ include "logfire.scratchVolumeName" . }}
               mountPath: /scratch
@@ -99,6 +101,7 @@ spec:
           readinessProbe:
             {{- include "logfire.ffReadinessProbe" (dict "port" 8011) | nindent 12 }}
       volumes:
+      {{- include "logfire.tmpVolume" . | nindent 6 }}
       {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 6 }}
       {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       {{- include "logfire.scratchVolume" (dict "root" . "scratchVolume" (get $effectiveServiceValues "scratchVolume" | default dict)) | nindent 6 }}
