@@ -1,0 +1,53 @@
+suite: fusionfire console logging
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: writes only warnings and errors to the console by default
+    templates:
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_FORCE_CONSOLE_LOGGING
+          value: "true"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+      - equal:
+          path: data.FF_CONSOLE_LOG_LEVEL
+          value: warn
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+  - it: passes a configured console level through
+    set:
+      fusionfireConsoleLogLevel: info
+    templates:
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_CONSOLE_LOG_LEVEL
+          value: info
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+  - it: keeps the migrations console at INFO
+    templates:
+      - templates/logfire-ff-migrations.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: RUST_LOG
+            value: info
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_CONSOLE_LOG_LEVEL
+            value: warn

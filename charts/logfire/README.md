@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.48-rc.3](https://img.shields.io/badge/Version-0.13.48--rc.3-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
+![Version: 0.13.48-rc.4](https://img.shields.io/badge/Version-0.13.48--rc.4-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -527,7 +527,8 @@ Before diving deeper, verify these common configuration issues:
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | extraObjects | list | `[]` | Additional Kubernetes objects to render with this release. Templating is supported. |
-| fusionfireForceConsoleLogging | bool | `false` | Also write Fusionfire telemetry to the container console in addition to sending it through OTLP. |
+| fusionfireConsoleLogLevel | string | `"warn"` | The lowest level Fusionfire writes to the container console: `trace`, `debug`, `info`, `warn` or `error`. It does not filter what Fusionfire sends through OTLP. |
+| fusionfireForceConsoleLogging | bool | `true` | Also write Fusionfire telemetry to the container console in addition to sending it through OTLP. |
 | fusionfireMaterializedViews | object | `{"initialBackfillWindow":"1d","minSourceBytes":"5gb"}` | Materialized-view creation policy shared by all Fusionfire services. |
 | fusionfireMaterializedViews.initialBackfillWindow | string | `"1d"` | Maximum source-history window to materialize when a new view is created. Set to `0s` to opt into a full-history initial backfill. Existing views retain the floor stamped when they were created. |
 | fusionfireMaterializedViews.minSourceBytes | string | `"5gb"` | Minimum source data written over the trailing seven days required to materialize a new view. Set to `0` to disable the source-volume floor. |
