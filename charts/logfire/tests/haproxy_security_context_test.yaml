@@ -1,0 +1,44 @@
+suite: HAProxy proxy container identity
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: pins the image identity and a read-only root by default
+    templates:
+      - templates/logfire-service.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 99
+            runAsGroup: 99
+            readOnlyRootFilesystem: true
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: lets haproxy.securityContext override the default
+    set:
+      haproxy:
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+    templates:
+      - templates/logfire-service.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: true
+        documentSelector:
+          path: kind
+          value: Deployment
