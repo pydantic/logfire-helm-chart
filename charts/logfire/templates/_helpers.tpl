@@ -1794,7 +1794,7 @@ the dependency explicit rather than leaving it to scheduling order.
           key: postgresDsn
   {{- include "logfire.securityContext" $containerSecurityContext | nindent 2 }}
   volumeMounts:
-    {{- include "logfire.tmpVolumeMounts" $ctx | nindent 2 }}
+    {{- include "logfire.tmpVolumeMounts" $ctx | nindent 4 }}
 {{- end -}}
 
 {{- define "logfire.initContainers" -}}
