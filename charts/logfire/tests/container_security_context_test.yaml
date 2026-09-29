@@ -255,3 +255,27 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: defaults the absurd schema init container
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers
+          any: true
+          content:
+            name: wait-for-absurd-schema
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 1000
+              runAsGroup: 1000
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              seccompProfile:
+                type: RuntimeDefault
+              readOnlyRootFilesystem: true
+            volumeMounts:
+              - name: tmp
+                mountPath: /tmp

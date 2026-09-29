@@ -1761,9 +1761,12 @@ crash-loops until the `absurd` schema exists. That schema is installed by
 the dependency explicit rather than leaving it to scheduling order.
 */}}
 {{- define "logfire.absurdSchemaReady.initContainer" -}}
+{{- $ctx := .ctx -}}
+{{- $serviceName := .serviceName -}}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName) | fromJson -}}
 - name: wait-for-absurd-schema
-  image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" "logfire-task-runner" "Chart" .Chart) }}'
-  imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+  image: '{{ $ctx.Values.image.repository | default "" }}{{ $ctx.Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
+  imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
   command:
     - python
     - -c
@@ -1787,9 +1790,11 @@ the dependency explicit rather than leaving it to scheduling order.
     - name: CRUD_PG_DSN
       valueFrom:
         secretKeyRef:
-          name: {{ include "logfire.postgresSecretName" . }}
+          name: {{ include "logfire.postgresSecretName" $ctx }}
           key: postgresDsn
-  {{- include "logfire.securityContext" .Values.securityContext | nindent 2 }}
+  {{- include "logfire.securityContext" $containerSecurityContext | nindent 2 }}
+  volumeMounts:
+    {{- include "logfire.tmpVolumeMounts" $ctx | nindent 2 }}
 {{- end -}}
 
 {{- define "logfire.initContainers" -}}
@@ -1799,7 +1804,7 @@ the dependency explicit rather than leaving it to scheduling order.
 {{- $devInit := include "logfire.dev.waitForPostgres.initContainers" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
 {{- $absurdInit := "" -}}
 {{- if eq $serviceName "logfire-task-runner" -}}
-  {{- $absurdInit = include "logfire.absurdSchemaReady.initContainer" $ctx | trim -}}
+  {{- $absurdInit = include "logfire.absurdSchemaReady.initContainer" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
 {{- end -}}
 {{- $userHasCheckDbReady := dict "value" false -}}
 {{- $userHasAbsurdWait := dict "value" false -}}
