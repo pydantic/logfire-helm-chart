@@ -1,0 +1,100 @@
+suite: resource shape normalization
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+
+tests:
+  - it: legacy flat resources set requests and limits
+    set:
+      sizingPreset: standard
+      logfire-ff-ingest:
+        resources:
+          cpu: "750m"
+          memory: "3Gi"
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.cpu
+          value: 750m
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 3Gi
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.cpu
+          value: 750m
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 3Gi
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: nested requests render without limits
+    set:
+      sizingPreset: standard
+      logfire-ff-ingest:
+        resources:
+          requests:
+            cpu: "250m"
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.cpu
+          value: 250m
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - notExists:
+          path: spec.template.spec.containers[0].resources.limits
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: legacy flat override keeps the migrated preset limits for untouched dimensions
+    set:
+      sizingPreset: standard
+      logfire-ff-crud-api:
+        resources:
+          cpu: "250m"
+    templates:
+      - templates/logfire-ff-crud-api.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.cpu
+          value: 250m
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.cpu
+          value: 250m
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests.memory
+          value: 512Mi
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 512Mi
+        documentSelector:
+          path: kind
+          value: Deployment

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import secrets
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
@@ -17,15 +16,21 @@ SQL = "SELECT count(*) AS count FROM records WHERE message LIKE '%{marker}%'"
 
 
 @pytest.fixture
-def sdk(base_url: str, write_token: str) -> AsyncIterator[None]:
+def sdk(
+    base_url: str, write_token: str, monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[None]:
     """Configure the real Logfire SDK against the deployed chart.
 
     This is the one test path a raw OTLP post cannot cover: token minted through
     the API, accepted by the SDK, exported over the SDK's own OTLP pipeline into
     the same ingest the product uses. `OTEL_BSP_MAX_EXPORT_BATCH_SIZE=1` makes
     the batch processor export eagerly instead of waiting on its batch timer.
+
+    `logfire.configure` also spawns a background `check_tokens` thread that GETs
+    `/v1/info`; when the deployment does not serve that path the SDK prints a
+    warning. It is harmless — do not chase it.
     """
-    os.environ["OTEL_BSP_MAX_EXPORT_BATCH_SIZE"] = "1"
+    monkeypatch.setenv("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", "1")
     logfire.configure(
         token=write_token,
         send_to_logfire=True,
@@ -65,7 +70,11 @@ async def test_sdk_emitted_telemetry_is_queryable(
     marker = f"helm-it-sdk-{secrets.token_hex(6)}"
     with logfire.span("sdk-round-trip {marker}", marker=marker):
         logfire.info("hello from the SDK: {marker}", marker=marker)
-    logfire.force_flush()
+    # Surface export failure here rather than as a 90s poll timeout below; a
+    # failed flush logs its own warning (e.g. 401 for a rejected write token).
+    assert logfire.force_flush(timeout_millis=30_000), (
+        "Logfire SDK export failed — see the logfire warnings above"
+    )
 
     await wait_for(
         lambda: _poll_for_marker(client, read_token, marker),

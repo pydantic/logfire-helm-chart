@@ -1,4 +1,9 @@
 suite: chart-owned container security contexts
+# Precedence contract for the user-facing securityContext values: a per-service
+# context beats the chart-wide context beats the image defaults, and an explicit
+# null clear survives. The defaults themselves are restricted-PSS-compatible and
+# enforced by the CI install in a pod-security.kubernetes.io/enforce=restricted
+# namespace; only merge semantics live here (they fail silently).
 release:
   name: lf
   namespace: default
@@ -7,133 +12,6 @@ set:
   objectStore:
     uri: s3://test-bucket
 tests:
-  - it: defaults the portable controls and the Python image identity
-    templates:
-      - templates/logfire-backend.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].securityContext
-          value:
-            runAsNonRoot: true
-            runAsUser: 1000
-            runAsGroup: 1000
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            seccompProfile:
-              type: RuntimeDefault
-            readOnlyRootFilesystem: true
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].volumeMounts
-          content:
-            name: tmp
-            mountPath: /tmp
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].volumeMounts
-          content:
-            name: logfire-data
-            mountPath: /var/lib/logfire
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.volumes
-          content:
-            name: tmp
-            emptyDir: {}
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: defaults the Fusionfire image identity and a writable /tmp
-    templates:
-      - templates/logfire-ff-query-api.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].securityContext
-          value:
-            runAsNonRoot: true
-            runAsUser: 1000
-            runAsGroup: 1000
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            seccompProfile:
-              type: RuntimeDefault
-            readOnlyRootFilesystem: true
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].volumeMounts
-          content:
-            name: tmp
-            mountPath: /tmp
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.volumes
-          content:
-            name: tmp
-            emptyDir: {}
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: defaults the frontend nginx identity
-    templates:
-      - templates/logfire-frontend-service.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].securityContext
-          value:
-            runAsNonRoot: true
-            runAsUser: 33
-            runAsGroup: 33
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            seccompProfile:
-              type: RuntimeDefault
-            readOnlyRootFilesystem: true
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: defaults the gateway node identity
-    set:
-      logfire-ai-gateway:
-        enabled: true
-    templates:
-      - templates/logfire-ai-gateway.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].securityContext
-          value:
-            runAsNonRoot: true
-            runAsUser: 1000
-            runAsGroup: 1000
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            seccompProfile:
-              type: RuntimeDefault
-            readOnlyRootFilesystem: true
-        documentSelector:
-          path: kind
-          value: Deployment
-
   - it: lets the chart-wide securityContext override the defaults
     set:
       securityContext:
@@ -241,41 +119,3 @@ tests:
           path: kind
           value: Deployment
 
-  - it: leaves the bundled Redis container on the chart-wide context
-    set:
-      securityContext:
-        runAsUser: 2000
-    templates:
-      - templates/redis.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].securityContext
-          value:
-            runAsUser: 2000
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: defaults the absurd schema init container
-    templates:
-      - templates/logfire-task-runner.yaml
-    asserts:
-      - contains:
-          path: spec.template.spec.initContainers
-          any: true
-          content:
-            name: wait-for-absurd-schema
-            securityContext:
-              runAsNonRoot: true
-              runAsUser: 1000
-              runAsGroup: 1000
-              allowPrivilegeEscalation: false
-              capabilities:
-                drop:
-                  - ALL
-              seccompProfile:
-                type: RuntimeDefault
-              readOnlyRootFilesystem: true
-            volumeMounts:
-              - name: tmp
-                mountPath: /tmp

@@ -1,9 +1,10 @@
-suite: cross-component service addressing
-# Every case here asserts that two templates agree on a service DNS name, port,
-# or scheme. A mismatch deploys cleanly and fails at runtime with no hint of the
-# cause, and the TLS variants are topologies CI never deploys. Cases merged from
-# the former backend_auth, gateway_auth_service, query_worker_address,
-# mcp_resource, and backend_migrations suites.
+suite: cross-component coupling
+# Every case here asserts that two templates agree on a value — a service DNS
+# name, port, scheme, or shared constant. A mismatch deploys cleanly and fails
+# at runtime with no hint of the cause, and the TLS variants are topologies CI
+# never deploys. Cases merged from the former backend_auth, gateway_auth_service,
+# query_worker_address, mcp_resource, backend_migrations, feature_toggle,
+# cache_routing, and live_view suites.
 release:
   name: lf
   namespace: default
@@ -199,6 +200,51 @@ tests:
           path: kind
           value: Deployment
 
+  - it: points the gateway at the in-cluster ingest service over plaintext HTTP
+    set:
+      logfire-ai-gateway:
+        enabled: true
+    templates:
+      - templates/logfire-ai-gateway.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GATEWAY_INGEST_BASE_URL
+            value: http://logfire-ff-ingest:8012
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: points the gateway at the in-cluster ingest service over HTTPS when in-cluster TLS is on
+    set:
+      logfire-ai-gateway:
+        enabled: true
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-ai-gateway.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GATEWAY_INGEST_BASE_URL
+            value: https://logfire-ff-ingest:8443
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: NODE_EXTRA_CA_CERTS
+            value: /etc/logfire/incluster-ca/ca.crt
+        documentSelector:
+          path: kind
+          value: Deployment
+
   - it: addresses logfire-ff-query-api with remote worker false and TLS false
     templates:
       - templates/logfire-ff-query-api.yaml
@@ -372,3 +418,55 @@ tests:
           content:
             name: COLLECTOR_OTLP_GRPC_HOST
             value: http://logfire-otel-collector:4317
+
+  - it: includes the internal cache service names in its managed certificate
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+      dev:
+        deployCertManager: true
+    templates:
+      - templates/logfire-incluster-tls-certmanager.yaml
+    asserts:
+      # FF_BYTE_CACHE_K8S_SERVICE points at logfire-ff-cache-byte-internal; if the
+      # Service is renamed without updating the cert SANs, internal cache traffic
+      # fails TLS at runtime and CI never sees it (no cert-manager there).
+      - equal:
+          path: spec.dnsNames
+          value:
+            - logfire-ff-cache-byte
+            - logfire-ff-cache-byte.default
+            - logfire-ff-cache-byte.default.svc
+            - logfire-ff-cache-byte.default.svc.cluster.local
+            - logfire-ff-cache-byte-internal
+            - logfire-ff-cache-byte-internal.default
+            - logfire-ff-cache-byte-internal.default.svc
+            - logfire-ff-cache-byte-internal.default.svc.cluster.local
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-cache-byte-incluster-tls
+
+  - it: keeps query stability aligned with the ingest visibility budget
+    templates:
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_LIVE_TAIL_CREATED_AT_STABILITY_WINDOW
+          value: "120s"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-config
+      - equal:
+          path: data.FF_INGEST_MAX_TIME_SKEW
+          value: "120s"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-config
+      - equal:
+          path: data.FF_INGEST_MAX_TIME_SKEW
+          value: "120s"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config
