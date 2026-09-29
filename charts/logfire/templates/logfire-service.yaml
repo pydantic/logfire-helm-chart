@@ -62,7 +62,7 @@ spec:
       containers:
         - name: {{ $serviceName }}
           {{- include "logfire.securityContext" $haproxySecurityContext | nindent 10 }}
-          image: {{ include "logfire.imageRef" (dict "image" $haproxyImage "defaultRepository" "haproxy" "defaultTag" "3.2") }}
+          image: {{ include "logfire.imageRef" (dict "image" $haproxyImage "defaultRepository" "haproxy" "defaultTag" "3.4") }}
           imagePullPolicy: {{ default .Values.image.pullPolicy (get $haproxyImage "pullPolicy") | quote }}
           volumeMounts:
             - name: logfire-haproxy-config
