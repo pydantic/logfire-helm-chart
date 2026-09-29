@@ -143,7 +143,8 @@ spec:
         - name: rustfs
           image: {{ include "logfire.imageRef" (dict "image" $rustfsImage "defaultRepository" "rustfs/rustfs" "defaultTag" "1.0.0") }}
           imagePullPolicy: {{ default .Values.image.pullPolicy (get $rustfsImage "pullPolicy") | quote }}
-          {{- include "logfire.securityContext" (get $rustfs "securityContext" | default .Values.securityContext) | nindent 10 }}
+          {{- $rustfsSecurityContext := include "logfire.mergeSecurityContext" (dict "ctx" . "serviceName" "rustfs" "defaults" (dict)) | fromJson }}
+          {{- include "logfire.securityContext" $rustfsSecurityContext | nindent 10 }}
           ports:
             - name: s3
               containerPort: 9000

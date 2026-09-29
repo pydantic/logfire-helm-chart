@@ -1340,17 +1340,38 @@ platform contract tests keep the image `USER` and these numbers in step.
 {{- end -}}
 
 {{/*
-Chart-owned container SecurityContext, merged over three layers with later layers winning:
-1. the chart-owned default: the portable controls plus the verified non-root identity, and a
-   read-only image root because every chart-owned container mounts the paths it writes;
+Merge the container SecurityContext layers with later layers winning:
+1. the provided chart defaults;
 2. the chart-wide `.Values.securityContext`;
-3. the service's own `securityContext` value.
+3. the service's own `<service>.securityContext` value.
 
 A layer value of `null` removes the field from the result, so a user can clear `runAsUser` or
 `runAsGroup` for OpenShift or a policy-managed cluster, and can set `readOnlyRootFilesystem`
-back to false. The defaults stay in the chart rather than in values, so an upgrade that carries
-no service `securityContext` key still applies them. Returns JSON so callers can parse it with
-`fromJson`, matching `logfire.effectiveServiceValues`.
+back to false. Returns JSON so callers can parse it with `fromJson`.
+*/}}
+{{- define "logfire.mergeSecurityContext" -}}
+{{- $ctx := required "logfire.mergeSecurityContext: need .ctx" .ctx -}}
+{{- $serviceName := required "logfire.mergeSecurityContext: need .serviceName" .serviceName -}}
+{{- $defaults := .defaults | default dict -}}
+{{- $serviceValues := get $ctx.Values $serviceName | default dict -}}
+{{- $layers := list ($ctx.Values.securityContext | default dict) (get $serviceValues "securityContext" | default dict) -}}
+{{- $merged := $defaults -}}
+{{- range $layer := $layers -}}
+  {{- $merged = mergeOverwrite $merged (deepCopy $layer) -}}
+  {{- range $key, $value := $layer -}}
+    {{- if kindIs "invalid" $value -}}
+      {{- $_ := unset $merged $key -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $merged | toJson -}}
+{{- end -}}
+
+{{/*
+Chart-owned container SecurityContext: the chart defaults (the portable controls plus the
+verified image identity) merged with the chart-wide and per-service contexts. The defaults stay
+in the chart rather than in values, so an upgrade that carries no service `securityContext` key
+still applies them.
 */}}
 {{- define "logfire.containerSecurityContext" -}}
 {{- $ctx := required "logfire.containerSecurityContext: need .ctx" .ctx -}}
@@ -1365,18 +1386,7 @@ no service `securityContext` key still applies them. Returns JSON so callers can
   "seccompProfile" (dict "type" "RuntimeDefault")
   "readOnlyRootFilesystem" true
 -}}
-{{- $serviceValues := get $ctx.Values $serviceName | default dict -}}
-{{- $layers := list ($ctx.Values.securityContext | default dict) (get $serviceValues "securityContext" | default dict) -}}
-{{- $merged := $defaults -}}
-{{- range $layer := $layers -}}
-  {{- $merged = mergeOverwrite $merged (deepCopy $layer) -}}
-  {{- range $key, $value := $layer -}}
-    {{- if kindIs "invalid" $value -}}
-      {{- $_ := unset $merged $key -}}
-    {{- end -}}
-  {{- end -}}
-{{- end -}}
-{{- $merged | toJson -}}
+{{- include "logfire.mergeSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName "defaults" $defaults) -}}
 {{- end -}}
 
 {{/*

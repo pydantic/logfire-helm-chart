@@ -54,11 +54,21 @@ spec:
       {{- end }}
       {{- end }}
       {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
-      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
-      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- $haproxy := default (dict) .Values.haproxy }}
       {{- $haproxyImage := get $haproxy "image" | default dict }}
-      {{- $haproxySecurityContext := get $haproxy "securityContext" | default .Values.securityContext }}
+      {{- $haproxyPodSecurityContext := get $haproxy "podSecurityContext" | default .Values.podSecurityContext }}
+      {{- include "logfire.securityContext" $haproxyPodSecurityContext | nindent 6 }}
+      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- $haproxyDefaults := dict
+        "runAsNonRoot" true
+        "runAsUser" 99
+        "runAsGroup" 99
+        "allowPrivilegeEscalation" false
+        "capabilities" (dict "drop" (list "ALL"))
+        "seccompProfile" (dict "type" "RuntimeDefault")
+        "readOnlyRootFilesystem" true
+      -}}
+      {{- $haproxySecurityContext := include "logfire.mergeSecurityContext" (dict "ctx" . "serviceName" "haproxy" "defaults" $haproxyDefaults) | fromJson }}
       containers:
         - name: {{ $serviceName }}
           {{- include "logfire.securityContext" $haproxySecurityContext | nindent 10 }}
