@@ -6,7 +6,7 @@
 # supplies the contexts the restricted profile requires from them:
 #
 # - the bundled Redis, Dex, and OTel collector containers read the chart-wide `securityContext`;
-# - the HAProxy proxy reads it too until `haproxy.securityContext` lands;
+# - HAProxy pins its own restricted-compatible context in `haproxy.securityContext`;
 # - RustFS and MailDev read their own `securityContext` values.
 #
 # The chart-wide identity is uid/gid 1000, the same identity the Python, Fusionfire, and gateway

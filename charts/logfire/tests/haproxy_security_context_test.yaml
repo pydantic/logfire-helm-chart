@@ -17,6 +17,12 @@ tests:
             runAsNonRoot: true
             runAsUser: 99
             runAsGroup: 99
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
             readOnlyRootFilesystem: true
         documentSelector:
           path: kind
@@ -38,6 +44,12 @@ tests:
             runAsNonRoot: true
             runAsUser: 1000
             runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
             readOnlyRootFilesystem: true
         documentSelector:
           path: kind
