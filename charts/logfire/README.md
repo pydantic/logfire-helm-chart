@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.48-rc.1](https://img.shields.io/badge/Version-0.13.48--rc.1-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
+![Version: 0.13.48-rc.2](https://img.shields.io/badge/Version-0.13.48--rc.2-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -539,7 +539,8 @@ Before diving deeper, verify these common configuration issues:
 | gateway.tls | string | nil (uses ingress.tls) | Enable TLS/HTTPS for the Gateway listener. If not set, falls back to ingress.tls for backward compatibility. Also overrides the app's public URL scheme/CORS behavior (http vs https URLs) whenever set. |
 | gateway.tlsSecretName | string | nil (uses ingress.secretName) | TLS Secret name for the Gateway listener certificate. If not set, falls back to ingress.secretName for backward compatibility. |
 | groupOrganizationMapping | list | `[]` | List of mapping to automatically assign members of OIDC group to logfire roles |
-| haproxy | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.4"}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
+| haproxy | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.4"},"securityContext":{"readOnlyRootFilesystem":true,"runAsGroup":99,"runAsNonRoot":true,"runAsUser":99}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
+| haproxy.securityContext | object | `{"readOnlyRootFilesystem":true,"runAsGroup":99,"runAsNonRoot":true,"runAsUser":99}` | Container SecurityContext for the HAProxy proxies. The default pins the numeric identity the image already uses, so the kubelet can verify `runAsNonRoot`, and makes the image root read-only. HAProxy writes no file outside its mounts, so it needs no scratch volume. Set this to override the defaults. |
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks) |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | imagePullSecrets | list | `[]` | Image pull secrets used by all pods |
