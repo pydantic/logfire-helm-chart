@@ -1191,7 +1191,13 @@ default-checksum
 {{- $key := .key | default "postgresDsn" -}}
 {{- $annotationKey := .annotationKey | default (eq $key "postgresFFDsn" | ternary "checksum/logfire-postgres-ff-dsn" "checksum/logfire-postgres-dsn") -}}
 {{- if $ctx.Values.postgresSecret.enabled -}}
-{{- include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" $annotationKey "name" (include "logfire.postgresSecretName" $ctx) "key" $key) -}}
+{{- $name := include "logfire.postgresSecretName" $ctx | trim -}}
+{{- /* Without a name there is no Secret to checksum. Stay silent here so the
+       user-facing validation in logfire.validate.postgres reports the missing
+       postgresSecret.name instead of an internal guard error. */ -}}
+{{- if $name -}}
+{{- include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" $annotationKey "name" $name "key" $key) -}}
+{{- end -}}
 {{- else -}}
 {{- $value := eq $key "postgresFFDsn" | ternary $ctx.Values.postgresFFDsn $ctx.Values.postgresDsn -}}
 {{- printf "%s: %s" $annotationKey ($value | b64enc | sha256sum) -}}

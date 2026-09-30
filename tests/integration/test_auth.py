@@ -56,3 +56,55 @@ async def test_internal_token_lookups_are_not_exposed(
     except ValueError:
         return
     assert not isinstance(body, dict) or "state" not in body, body
+
+
+async def test_dex_jwks(client: httpx.AsyncClient) -> None:
+    response = await client.get("/auth-api/keys")
+    assert response.is_success, response.text
+    assert response.json()["keys"], response.text
+
+
+async def test_token_endpoint_rejects_bad_credentials(client: httpx.AsyncClient) -> None:
+    response = await client.post(
+        "/auth-api/token",
+        data={
+            "grant_type": "password",
+            "username": "nobody@example.com",
+            "password": "wrong",
+        },
+    )
+    assert response.status_code >= 400, response.text
+    assert "json" in response.headers.get("content-type", ""), response.headers
+
+
+async def test_device_flow_mints_a_working_user_token(
+    client: httpx.AsyncClient, meta_frontend_token: str
+) -> None:
+    """The full `logfire login` CLI flow: device code -> session approval -> user token.
+
+    The token then authenticates against the SDK's /v1/info, which is exactly what
+    the Logfire SDK's check_tokens thread does with it.
+    """
+    created = await client.post(
+        "/v1/device-auth/new/", params={"machine_name": "helm-it-e2e"}
+    )
+    assert created.is_success, created.text
+    device_code = created.json()["device_code"]
+    assert device_code in created.json()["frontend_auth_url"]
+
+    approved = await client.post(
+        "/ui-api/auth/device-auth",
+        params={"deviceCode": device_code},
+        headers={"Authorization": f"Bearer {meta_frontend_token}"},
+        json={},
+    )
+    assert approved.is_success, approved.text
+    assert approved.json()["status"] == "success", approved.text
+
+    waited = await client.get(f"/v1/device-auth/wait/{device_code}")
+    assert waited.is_success, waited.text
+    token = waited.json()["token"]
+    assert token, waited.text
+
+    info = await client.get("/v1/info", headers={"Authorization": f"Bearer {token}"})
+    assert info.is_success, info.text
