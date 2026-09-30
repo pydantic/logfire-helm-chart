@@ -19,9 +19,9 @@ gateway:
 objectStore:
   uri: s3://logfire
   env:
-    AWS_ACCESS_KEY_ID: logfire-minio
-    AWS_SECRET_ACCESS_KEY: logfire-minio
-    AWS_ENDPOINT: http://logfire-minio:9000
+    AWS_ACCESS_KEY_ID: logfire-rustfs
+    AWS_SECRET_ACCESS_KEY: logfire-rustfs
+    AWS_ENDPOINT: http://logfire-rustfs:9000
     AWS_ALLOW_HTTP: "true"
 
 ai:
@@ -31,7 +31,7 @@ ai:
 
 dev:
   deployPostgres: true
-  deployMinio: true
+  deployRustfs: true
   deployMaildev: true
 
 postgresSecret:
@@ -98,6 +98,6 @@ postgresql:
     persistence:
       size: 1Gi
 
-minio:
+rustfs:
   persistence:
     enabled: false

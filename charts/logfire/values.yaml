@@ -1361,6 +1361,8 @@ logfire-ff-cache-byte:
 objectStore:
   # -- URI for object storage (e.g., `s3://bucket`). Supports Helm templating,
   # e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release.
+  # When `dev.deployRustfs` (or the deprecated `dev.deployMinio`) is enabled and
+  # this is empty, it defaults to `s3://<rustfs.bucket>`.
   uri:
   # -- Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C).
   # Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy
@@ -1373,11 +1375,17 @@ objectStore:
   # losing the key means losing the data — AWS does not store it.
   sseCKeyB64:
   # -- Additional environment variables for the object store connection.
-  # String values support Helm templating.
+  # String values support Helm templating. When the in-cluster RustFS store is
+  # enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+  # and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store.
   env: {}
-  # -- Volume mounts for object store credentials
+  # -- Volume mounts for object store credentials. The chart reserves the mount paths `/tmp`,
+  # `/scratch`, and `/fusionfire/ingest-data` for its own Fusionfire volumes, and adds
+  # `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled.
   volumeMounts: []
-  # -- Volumes for object store credentials
+  # -- Volumes for object store credentials. The chart reserves the volume names `tmp`,
+  # `scratch-data`, and `ingest-data` for its own Fusionfire volumes, and adds
+  # `logfire-incluster-tls` and `logfire-incluster-ca-bundle` when in-cluster TLS is enabled.
   volumes: []
 
 # Azure example:
@@ -1456,6 +1464,13 @@ podSecurityContext: {}
 
 # -- Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container)
 # See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details
+# Chart-owned containers (the Python, Fusionfire, gateway, and frontend images) and HAProxy merge
+# this context over chart defaults: the image's verified identity, `allowPrivilegeEscalation: false`,
+# all capabilities dropped, the `RuntimeDefault` seccomp profile, and a read-only root. A
+# per-workload `<workload>.securityContext` merges over both layers, for example
+# `logfire-backend.securityContext` or `haproxy.securityContext`. Maildev and RustFS merge it under
+# their own `securityContext` values. Set a field to `null` to clear it, for example
+# `runAsUser: null` for OpenShift, or set `readOnlyRootFilesystem: false` to restore a writable root.
 securityContext: {}
   # capabilities:
   #   drop:
@@ -1495,6 +1510,15 @@ haproxy:
     repository: haproxy
     tag: "3.4"
     pullPolicy: IfNotPresent
+  # -- Container SecurityContext for the HAProxy proxies. The chart default pins the numeric
+  # identity the image already uses, so the kubelet can verify `runAsNonRoot`, applies the
+  # portable controls (no privilege escalation, all capabilities dropped, `RuntimeDefault`
+  # seccomp), and makes the image root read-only. The chart-wide `securityContext` merges over
+  # that default and this value merges over both; set a field to `null` to clear it. HAProxy
+  # writes no file outside its mounts, so it needs no scratch volume.
+  securityContext: {}
+  # -- Pod SecurityContext for the HAProxy pod. Defaults to the chart-wide `podSecurityContext`.
+  podSecurityContext: {}
 
 
 # ==============================================================================
@@ -1699,7 +1723,9 @@ dev:
   deployMaildev: false
   # -- Deploy internal Postgres (NOT for production)
   deployPostgres: false
-  # -- Use a local MinIO instance as object storage (NOT for production)
+  # -- Deploy a local RustFS instance as S3-compatible object storage (NOT for production)
+  deployRustfs: false
+  # -- Deprecated alias for `dev.deployRustfs` that existing MinIO values keep working. While set, the chart keeps the `logfire-minio` Service name and uses the credentials from `minio.auth` (including `minio.auth.existingSecret`) or `objectStore.env` and the persistence from `minio.persistence`, so `objectStore.env` keeps matching the deployed object store. Remove it after moving to `dev.deployRustfs` and the `rustfs.*` values.
   deployMinio: false
   # -- Deploy cert-manager (NOT for production; includes cluster-scoped resources).
   deployCertManager: false
@@ -1716,8 +1742,9 @@ maildev:
     pullPolicy: IfNotPresent
   # -- Pod SecurityContext for the MailDev pod. Defaults to the chart-wide `podSecurityContext` when unset.
   podSecurityContext: {}
-  # -- Container SecurityContext for the MailDev container. Defaults to the chart-wide `securityContext` when unset.
-  # Set this when running under a restricted PodSecurity policy, e.g.:
+  # -- Container SecurityContext for the MailDev container. Merged over the chart-wide
+  # `securityContext`, so set fields here to override it. Set this when running under a restricted
+  # PodSecurity policy, e.g.:
   #   runAsNonRoot: true
   #   runAsUser: 1000
   #   allowPrivilegeEscalation: false
@@ -1729,7 +1756,7 @@ maildev:
 
 
 # ==============================================================================
-# Embedded Postgres & MinIO defaults (dev/test)
+# Embedded Postgres & RustFS defaults (dev/test)
 # ==============================================================================
 
 postgresql:
@@ -1752,39 +1779,41 @@ postgresql:
       size: 10Gi
       mountPath: /var/lib/postgresql
 
-minio:
+# -- RustFS configuration (only used when `dev.deployRustfs` is true)
+rustfs:
   image:
-    registry: docker.io
-    repository: bitnamilegacy/minio
-  console:
-    image:
-      registry: docker.io
-      repository: bitnamilegacy/minio-object-browser
-  fullnameOverride: "logfire-minio"
+    # -- RustFS image repository
+    repository: rustfs/rustfs
+    # -- RustFS image tag
+    tag: "1.0.0"
+    # -- RustFS image pull policy. Defaults to `image.pullPolicy` when unset.
+    pullPolicy: ""
+  # -- Root credentials. Ignored while `dev.deployMinio` is set. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values.
   auth:
-    rootUser: logfire-minio
-    rootPassword: logfire-minio
+    accessKey: logfire-rustfs
+    secretKey: logfire-rustfs
+  # -- Bucket that RustFS creates at startup when `objectStore.uri` is not an `s3://` URI. With an `s3://` `objectStore.uri`, the bucket in the URI is used.
+  bucket: logfire
   persistence:
-    mountPath: /data
+    # -- Store data on a PersistentVolumeClaim. Set false to use an emptyDir. Ignored while `dev.deployMinio` is set and `minio.persistence` is present.
+    enabled: true
+    # -- Existing PersistentVolumeClaim to use in place of a chart-managed claim
+    existingClaim: ""
+    # -- Storage class for the chart-managed claim. Defaults to `defaultStorageClassName`.
+    storageClassName: ""
+    # -- Size of the chart-managed claim
     size: 32Gi
-  command:
-    - minio
-  args:
-    - server
-    - /data
-  lifecycleHooks:
-    postStart:
-      exec:
-        command:
-          - sh
-          - -c
-          - |
-            # Wait for the server to start
-            sleep 5
-            # Create a bucket
-            mc alias set local http://localhost:9000 logfire-minio logfire-minio
-            mc mb local/logfire
-            mc anonymous set public local/logfire
+  # -- Resource requests and limits for the RustFS container
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  # -- Pod SecurityContext for the RustFS pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 10001`.
+  podSecurityContext: {}
+  # -- Container SecurityContext for the RustFS container. Merged over the chart-wide `securityContext`, so set fields here to override it.
+  securityContext: {}
 
 # ==============================================================================
 # Extra Kubernetes manifests

@@ -15,7 +15,7 @@ Use the [Self-Hosted Production Requirements](https://docs.pydantic.dev/logfire/
 
 Choose one path:
 
-* **Local evaluation**: use `values.dev.yaml`. It deploys development-grade PostgreSQL, MinIO, and MailDev in the cluster.
+* **Local evaluation**: use `values.dev.yaml`. It deploys development-grade PostgreSQL, RustFS, and MailDev in the cluster.
 * **Production**: start from [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml), replace the placeholders for your external services and routing, and adjust the sizing preset if needed.
 
 > **Warning**: `values.dev.yaml` is only for local evaluation and testing. Do not use it for production deployments.
@@ -84,6 +84,27 @@ kubectl -n logfire port-forward svc/logfire-maildev 1080:1080
 Open Logfire at `http://localhost:8080` and MailDev at `http://localhost:1080`.
 MailDev is available for testing local email flows.
 Use the first-access step below to log in to the meta project.
+
+#### Upgrading a Local Evaluation Install
+
+Chart versions before 0.13.48 deployed MinIO for local evaluation. 0.13.48 and later deploy
+RustFS instead. The upgrade deletes the old `logfire-minio` resources, including its
+PersistentVolumeClaim, so local evaluation data is not carried over.
+
+Values files that still set `dev.deployMinio: true` keep working: the chart deploys RustFS
+behind the same `logfire-minio` Service name and uses the credentials from `minio.auth`, or
+from `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` when
+`minio.auth` is not set, so Logfire keeps authenticating. `minio.persistence.existingClaim` is
+not carried over: RustFS always starts from its own claim, or from an emptyDir when persistence
+is disabled.
+
+To move to the new names, set `dev.deployRustfs: true`, remove `dev.deployMinio`, point
+`objectStore.env.AWS_ENDPOINT` at `http://logfire-rustfs:9000`, and set
+`rustfs.auth.accessKey` and `rustfs.auth.secretKey` to the same credentials as
+`objectStore.env`.
+
+When installing from this source repository, run `helm dependency build charts/logfire` after
+pulling so the removed MinIO subchart does not linger in `charts/`.
 
 ### 3b. Production Starter
 
@@ -281,6 +302,11 @@ Setting `groupOrganizationMapping` overrides mappings managed through the public
 Logfire requires object storage for data. Supported URI schemes are `s3://`, `gs://`, and `az://`.
 Provider credentials can come from `objectStore.env`, mounted secrets, or the Kubernetes service account used by Logfire.
 
+For local evaluation, `dev.deployRustfs` (or the deprecated `dev.deployMinio`) deploys RustFS and
+fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credential environment variables,
+so the workloads reach the in-cluster bucket. An `s3://` `objectStore.uri` also determines the
+bucket RustFS creates.
+
 Do not enable bucket versioning. Logfire manages its own data lifecycle, and bucket versioning can increase cost and interfere with lifecycle behavior.
 
 ### PostgreSQL
@@ -389,6 +415,18 @@ controller as described in External Secrets and Automatic Reloads.
 
 For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
 When working from this repository, run `helm dependency update charts/logfire` to fetch dependency charts.
+
+### Restricted Pod Security
+
+Chart-owned containers default to the controls a `restricted` Pod Security Standards namespace
+requires: a non-root identity, no privilege escalation, all capabilities dropped, `RuntimeDefault`
+seccomp, and a read-only root with the writable paths mounted.
+
+Containers this chart takes from other projects (Redis, Dex, MailDev, the OTel collector, RustFS,
+and the `check-db-ready` init container) keep the chart-wide `securityContext`; supply it or
+per-workload values for them. HAProxy defaults to a restricted-compatible `haproxy.securityContext`.
+`ci/restricted-values.yaml` is an example that the integration tests install into a namespace
+labeled `pod-security.kubernetes.io/enforce=restricted`.
 
 ### Istio Compatibility
 

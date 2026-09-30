@@ -680,19 +680,169 @@ Create Postgres secret name
 {{- end }}
 {{- end -}}
 
-{{/* Resolve the object store URI consistently for validation and consumers. */}}
-{{- define "logfire.objectStoreUri" -}}
+{{/* Whether the chart deploys an in-cluster S3-compatible object store (RustFS, with `dev.deployMinio` as its deprecated alias). */}}
+{{- define "logfire.inClusterObjectStoreEnabled" -}}
+{{- $dev := .Values.dev | default dict -}}
+{{- if or (get $dev "deployRustfs") (get $dev "deployMinio") -}}true{{- end -}}
+{{- end -}}
+
+{{/* Service that fronts the in-cluster object store. */}}
+{{- define "logfire.inClusterObjectStoreServiceName" -}}
+logfire-rustfs
+{{- end -}}
+
+{{/*
+Bucket the in-cluster object store creates at startup. When `objectStore.uri` is an `s3://`
+URI its bucket is authoritative, so RustFS creates the bucket the workloads actually read.
+*/}}
+{{- define "logfire.inClusterObjectStoreBucket" -}}
+{{- $uri := include "logfire.objectStoreUriValue" . -}}
+{{- $bucket := "" -}}
+{{- if hasPrefix "s3://" (trim $uri) -}}
+{{- $bucket = splitList "/" (trimPrefix "s3://" (trim $uri)) | first | trim -}}
+{{- end -}}
+{{- if not $bucket -}}
+{{- $bucket = get (.Values.rustfs | default dict) "bucket" | default "" | trim -}}
+{{- if not $bucket -}}
+{{- $bucket = "logfire" -}}
+{{- end -}}
+{{- end -}}
+{{- $bucket -}}
+{{- end -}}
+
+{{/* Render objectStore.uri as configured, before in-cluster defaults. */}}
+{{- define "logfire.objectStoreUriValue" -}}
 {{- tpl (.Values.objectStore.uri | default "") . -}}
 {{- end -}}
 
+{{/*
+Credentials for the in-cluster object store, JSON encoded. While `dev.deployMinio` is set the
+legacy credentials win: `minio.auth` -> string-valued `objectStore.env` keys -> the old
+`logfire-minio` default. With only `dev.deployRustfs`, `rustfs.auth` is used.
+*/}}
+{{/*
+Resolve an objectStore.env value backed by `valueFrom.secretKeyRef`, or "" when it cannot be
+resolved (for example outside a cluster, where `lookup` returns nothing).
+*/}}
+{{- define "logfire.objectStoreEnvSecretKeyRef" -}}
+{{- $root := .root -}}
+{{- $ref := dig "valueFrom" "secretKeyRef" dict .env -}}
+{{- $name := get $ref "name" | default "" -}}
+{{- $key := get $ref "key" | default "" -}}
+{{- $value := "" -}}
+{{- if and $name $key -}}
+{{- $secret := lookup "v1" "Secret" $root.Release.Namespace (toString $name) -}}
+{{- if $secret -}}
+{{- $value = get (get $secret "data" | default dict) $key | default "" | b64dec -}}
+{{- end -}}
+{{- end -}}
+{{- $value -}}
+{{- end -}}
+
+{{/*
+Credentials for the in-cluster object store, JSON encoded. While `dev.deployMinio` is set the
+legacy credentials win: `minio.auth` (inline or through `minio.auth.existingSecret`) -> string
+values or `valueFrom.secretKeyRef` references in `objectStore.env` -> the old `logfire-minio`
+default. With only `dev.deployRustfs`, `rustfs.auth` is used.
+*/}}
+{{- define "logfire.inClusterObjectStoreAuth" -}}
+{{- $dev := .Values.dev | default dict -}}
+{{- $legacyMinio := get $dev "deployMinio" -}}
+{{- $rustfs := .Values.rustfs | default dict -}}
+{{- $minio := .Values.minio | default dict -}}
+{{- $objectStoreEnv := get (.Values.objectStore | default dict) "env" | default dict -}}
+{{- $accessKey := "" -}}
+{{- $secretKey := "" -}}
+{{- if $legacyMinio -}}
+{{- $legacyAuth := get $minio "auth" | default dict -}}
+{{- $accessKey = get $legacyAuth "rootUser" | default "" | toString -}}
+{{- $secretKey = get $legacyAuth "rootPassword" | default "" | toString -}}
+{{- $existingSecret := get $legacyAuth "existingSecret" | default "" -}}
+{{- if and $existingSecret (not (and $accessKey $secretKey)) -}}
+{{- $userKey := get $legacyAuth "existingSecretUserKey" | default "rootUser" -}}
+{{- $passwordKey := get $legacyAuth "existingSecretPasswordKey" | default "rootPassword" -}}
+{{- $secret := lookup "v1" "Secret" .Release.Namespace (toString $existingSecret) -}}
+{{- if $secret -}}
+{{- $data := get $secret "data" | default dict -}}
+{{- if not $accessKey -}}
+{{- $accessKey = get $data $userKey | default "" | b64dec -}}
+{{- end -}}
+{{- if not $secretKey -}}
+{{- $secretKey = get $data $passwordKey | default "" | b64dec -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if not (and $accessKey $secretKey) -}}
+{{- $envAccessKey := get $objectStoreEnv "AWS_ACCESS_KEY_ID" -}}
+{{- if kindIs "string" $envAccessKey -}}
+{{- $envAccessKey = tpl $envAccessKey . -}}
+{{- else if kindIs "map" $envAccessKey -}}
+{{- $envAccessKey = include "logfire.objectStoreEnvSecretKeyRef" (dict "env" $envAccessKey "root" .) -}}
+{{- else -}}
+{{- $envAccessKey = "" -}}
+{{- end -}}
+{{- $envSecretKey := get $objectStoreEnv "AWS_SECRET_ACCESS_KEY" -}}
+{{- if kindIs "string" $envSecretKey -}}
+{{- $envSecretKey = tpl $envSecretKey . -}}
+{{- else if kindIs "map" $envSecretKey -}}
+{{- $envSecretKey = include "logfire.objectStoreEnvSecretKeyRef" (dict "env" $envSecretKey "root" .) -}}
+{{- else -}}
+{{- $envSecretKey = "" -}}
+{{- end -}}
+{{- if not $accessKey -}}
+{{- $accessKey = $envAccessKey -}}
+{{- end -}}
+{{- if not $secretKey -}}
+{{- $secretKey = $envSecretKey -}}
+{{- end -}}
+{{- end -}}
+{{- if not $accessKey -}}
+{{- $accessKey = "logfire-minio" -}}
+{{- end -}}
+{{- if not $secretKey -}}
+{{- $secretKey = "logfire-minio" -}}
+{{- end -}}
+{{- else -}}
+{{- $auth := get $rustfs "auth" | default dict -}}
+{{- $accessKey = get $auth "accessKey" | default "logfire-rustfs" -}}
+{{- $secretKey = get $auth "secretKey" | default "logfire-rustfs" -}}
+{{- end -}}
+{{- dict "accessKey" $accessKey "secretKey" $secretKey | toJson -}}
+{{- end -}}
+
+{{/* Resolve the object store URI consistently for validation and consumers. */}}
+{{- define "logfire.objectStoreUri" -}}
+{{- $uri := include "logfire.objectStoreUriValue" . -}}
+{{- if and (not (trim $uri)) (eq (include "logfire.inClusterObjectStoreEnabled" .) "true") -}}
+{{- $uri = printf "s3://%s" (include "logfire.inClusterObjectStoreBucket" .) -}}
+{{- end -}}
+{{- $uri -}}
+{{- end -}}
+
 {{- define "logfire.objectStoreEnv" -}}
+{{- $objectStoreEnv := .Values.objectStore.env | default dict -}}
 - name: FF_OBJECT_STORE_URI
   value: {{ include "logfire.objectStoreUri" . | quote }}
 {{- with .Values.objectStore.sseCKeyB64 }}
 - name: FF_S3_SSE_C_KEY_B64
 {{ include "logfire.envValue" (dict "value" . "quote" true) | indent 2 }}
 {{- end }}
-{{- range $key, $value := .Values.objectStore.env }}
+{{- if eq (include "logfire.inClusterObjectStoreEnabled" .) "true" }}
+{{- $auth := include "logfire.inClusterObjectStoreAuth" . | fromJson }}
+{{- $inClusterDefaults := list
+  (dict "name" "AWS_ENDPOINT" "value" (printf "http://%s:9000" (include "logfire.inClusterObjectStoreServiceName" .)))
+  (dict "name" "AWS_ACCESS_KEY_ID" "value" $auth.accessKey)
+  (dict "name" "AWS_SECRET_ACCESS_KEY" "value" $auth.secretKey)
+  (dict "name" "AWS_ALLOW_HTTP" "value" "true")
+}}
+{{- range $default := $inClusterDefaults }}
+{{- if not (hasKey $objectStoreEnv $default.name) }}
+- name: {{ $default.name }}
+  value: {{ $default.value | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range $key, $value := $objectStoreEnv }}
 {{- if kindIs "string" $value }}
 {{- $value = tpl $value $ }}
 {{- end }}
@@ -1153,6 +1303,123 @@ securityContext:
 {{- end -}}
 {{- end -}}
 
+{{/*
+The numeric identity a chart-owned image runs as. The kubelet verifies `runAsNonRoot` against
+`runAsUser`, and a named image user cannot be verified. The Python, Fusionfire, bcache, and
+gateway images all run as uid/gid 1000; the frontend nginx image runs as uid/gid 33. The
+platform contract tests keep the image `USER` and these numbers in step.
+*/}}
+{{- define "logfire.containerImageIdentity" -}}
+{{- $serviceName := required "logfire.containerImageIdentity: need .serviceName" .serviceName -}}
+{{- $uidGid1000 := list
+  "logfire-backend"
+  "logfire-backend-auth"
+  "logfire-backend-migrations"
+  "logfire-worker"
+  "logfire-task-runner"
+  "logfire-remote-mcp"
+  "logfire-ai-gateway"
+  "logfire-ff-ingest"
+  "logfire-ff-ingest-processor"
+  "logfire-ff-query-api"
+  "logfire-ff-query-worker"
+  "logfire-ff-crud-api"
+  "logfire-ff-maintenance-scheduler"
+  "logfire-ff-maintenance-worker"
+  "logfire-ff-compaction-worker"
+  "logfire-ff-cache-byte"
+  "logfire-ff-migrations"
+-}}
+{{- if has $serviceName $uidGid1000 -}}
+{{- dict "uid" 1000 "gid" 1000 | toJson -}}
+{{- else if eq $serviceName "logfire-frontend-service" -}}
+{{- dict "uid" 33 "gid" 33 | toJson -}}
+{{- else -}}
+{{- fail (printf "logfire.containerImageIdentity: unknown chart-owned service %q; add its verified image identity" $serviceName) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Merge the container SecurityContext layers with later layers winning:
+1. the provided chart defaults;
+2. the chart-wide `.Values.securityContext`;
+3. the service's own `<service>.securityContext` value.
+
+A layer value of `null` removes the field from the result, so a user can clear `runAsUser` or
+`runAsGroup` for OpenShift or a policy-managed cluster, and can set `readOnlyRootFilesystem`
+back to false. Returns JSON so callers can parse it with `fromJson`.
+*/}}
+{{- define "logfire.mergeSecurityContext" -}}
+{{- $ctx := required "logfire.mergeSecurityContext: need .ctx" .ctx -}}
+{{- $serviceName := required "logfire.mergeSecurityContext: need .serviceName" .serviceName -}}
+{{- $defaults := .defaults | default dict -}}
+{{- $serviceValues := get $ctx.Values $serviceName | default dict -}}
+{{- $layers := list ($ctx.Values.securityContext | default dict) (get $serviceValues "securityContext" | default dict) -}}
+{{- $merged := $defaults -}}
+{{- range $layer := $layers -}}
+  {{- $merged = mergeOverwrite $merged (deepCopy $layer) -}}
+  {{- range $key, $value := $layer -}}
+    {{- if kindIs "invalid" $value -}}
+      {{- $_ := unset $merged $key -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $merged | toJson -}}
+{{- end -}}
+
+{{/*
+Chart-owned container SecurityContext: the chart defaults (the portable controls plus the
+verified image identity) merged with the chart-wide and per-service contexts. The defaults stay
+in the chart rather than in values, so an upgrade that carries no service `securityContext` key
+still applies them.
+*/}}
+{{- define "logfire.containerSecurityContext" -}}
+{{- $ctx := required "logfire.containerSecurityContext: need .ctx" .ctx -}}
+{{- $serviceName := required "logfire.containerSecurityContext: need .serviceName" .serviceName -}}
+{{- $identity := include "logfire.containerImageIdentity" (dict "serviceName" $serviceName) | fromJson -}}
+{{- $defaults := dict
+  "runAsNonRoot" true
+  "runAsUser" (get $identity "uid")
+  "runAsGroup" (get $identity "gid")
+  "allowPrivilegeEscalation" false
+  "capabilities" (dict "drop" (list "ALL"))
+  "seccompProfile" (dict "type" "RuntimeDefault")
+  "readOnlyRootFilesystem" true
+-}}
+{{- include "logfire.mergeSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName "defaults" $defaults) -}}
+{{- end -}}
+
+{{/*
+The writable `/tmp` mount every chart-owned container gets. The production images keep a
+writable `HOME` or write scratch data under `/tmp`, so a read-only image root needs this
+emptyDir. List the mount before any mount nested under `/tmp`, because the kubelet applies
+container mounts in spec order and a later `/tmp` mount shadows the nested path.
+*/}}
+{{- define "logfire.tmpVolumeMounts" -}}
+- name: tmp
+  mountPath: /tmp
+{{- end -}}
+
+{{- define "logfire.tmpVolume" -}}
+- name: tmp
+  emptyDir: {}
+{{- end -}}
+
+{{/*
+The writable local object store directory for the Python workloads that use it. Self-hosted
+deployments default the session-replay and visual-test stores to `file:///var/lib/logfire`, so
+the backend and the worker need the directory writable under a read-only image root.
+*/}}
+{{- define "logfire.logfireDataVolumeMounts" -}}
+- name: logfire-data
+  mountPath: /var/lib/logfire
+{{- end -}}
+
+{{- define "logfire.logfireDataVolume" -}}
+- name: logfire-data
+  emptyDir: {}
+{{- end -}}
+
 {{- define "logfire.standardPodSpecFields" -}}
 {{- $ctx := required "logfire.standardPodSpecFields: need .ctx" .ctx -}}
 {{- $serviceName := required "logfire.standardPodSpecFields: need .serviceName" .serviceName -}}
@@ -1488,7 +1755,7 @@ Dev Postgres helpers
     - sh
     - -c
     - >-
-      until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432; do echo "Waiting for postgres..."; sleep 2; done
+      until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432 -U postgres; do echo "Waiting for postgres..."; sleep 2; done
   {{- include "logfire.securityContext" $ctx.Values.securityContext | nindent 2 }}
 {{- end -}}
 {{- end -}}
@@ -1504,9 +1771,12 @@ crash-loops until the `absurd` schema exists. That schema is installed by
 the dependency explicit rather than leaving it to scheduling order.
 */}}
 {{- define "logfire.absurdSchemaReady.initContainer" -}}
+{{- $ctx := .ctx -}}
+{{- $serviceName := .serviceName -}}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName) | fromJson -}}
 - name: wait-for-absurd-schema
-  image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" "logfire-task-runner" "Chart" .Chart) }}'
-  imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+  image: '{{ $ctx.Values.image.repository | default "" }}{{ $ctx.Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
+  imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
   command:
     - python
     - -c
@@ -1530,9 +1800,11 @@ the dependency explicit rather than leaving it to scheduling order.
     - name: CRUD_PG_DSN
       valueFrom:
         secretKeyRef:
-          name: {{ include "logfire.postgresSecretName" . }}
+          name: {{ include "logfire.postgresSecretName" $ctx }}
           key: postgresDsn
-  {{- include "logfire.securityContext" .Values.securityContext | nindent 2 }}
+  {{- include "logfire.securityContext" $containerSecurityContext | nindent 2 }}
+  volumeMounts:
+    {{- include "logfire.tmpVolumeMounts" $ctx | nindent 4 }}
 {{- end -}}
 
 {{- define "logfire.initContainers" -}}
@@ -1542,7 +1814,7 @@ the dependency explicit rather than leaving it to scheduling order.
 {{- $devInit := include "logfire.dev.waitForPostgres.initContainers" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
 {{- $absurdInit := "" -}}
 {{- if eq $serviceName "logfire-task-runner" -}}
-  {{- $absurdInit = include "logfire.absurdSchemaReady.initContainer" $ctx | trim -}}
+  {{- $absurdInit = include "logfire.absurdSchemaReady.initContainer" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
 {{- end -}}
 {{- $userHasCheckDbReady := dict "value" false -}}
 {{- $userHasAbsurdWait := dict "value" false -}}

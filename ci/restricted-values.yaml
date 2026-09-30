@@ -1,0 +1,53 @@
+# Values for the acceptance test that installs the chart into a namespace labeled
+# `pod-security.kubernetes.io/enforce=restricted`.
+#
+# The chart defaults the portable controls and a read-only image root for its own images. The
+# containers this chart takes from other projects keep their own contexts, so this overlay
+# supplies the contexts the restricted profile requires from them:
+#
+# - the bundled Redis, Dex, and OTel collector containers read the chart-wide `securityContext`;
+# - HAProxy defaults to restricted-compatible controls in `haproxy.securityContext`;
+# - RustFS and MailDev read their own `securityContext` values.
+#
+# The chart-wide identity is uid/gid 1000, the same identity the Python, Fusionfire, and gateway
+# defaults use. `logfire-frontend-service` restores its own 33:33 identity, which the chart-wide
+# layer would otherwise replace.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+logfire-frontend-service:
+  securityContext:
+    runAsUser: 33
+    runAsGroup: 33
+
+rustfs:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+
+maildev:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
