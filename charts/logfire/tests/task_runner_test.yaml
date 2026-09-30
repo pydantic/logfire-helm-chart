@@ -62,6 +62,11 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].startupProbe.httpGet.path
           value: /health
+      # Readiness must use the database-aware check, so a replica that cannot reach Postgres
+      # stops counting as available.
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /health
 
   # The runner calls absurd.create_queue() before it serves and exits 1 until that schema
   # exists, so without this wait it crash-loops against a database the migrations Job has not
