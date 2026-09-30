@@ -1,0 +1,256 @@
+suite: values validation contract
+# Bad values must fail the install with a clear message. Integration tests only
+# exercise valid values, so this suite is the only coverage the contract has.
+#
+# This is not every fail site in the chart: the validation helpers carry ~55
+# `fail` calls and only the cases below are pinned. When you add or change a
+# fail site in _helpers-validation.tpl or logfire-validate-config.yaml, add a
+# case here.
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: existingSecret.enabled=true with empty name fails validation
+    set:
+      existingSecret:
+        enabled: true
+        name: ""
+    asserts:
+      - failedTemplate:
+          errorMessage: "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-encryption-key, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys."
+
+  - it: rejects empty template result in production
+    set:
+      objectStore:
+        uri: '{{ "" }}'
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
+
+  - it: rejects missing value template result in production
+    set:
+      objectStore:
+        uri: '{{ .Values.missingBucket | default "" }}'
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
+
+  - it: rejects whitespace template result in production
+    set:
+      objectStore:
+        uri: '{{ "   " }}'
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
+
+  - it: rejects whitespace literal in production
+    set:
+      objectStore:
+        uri: "   "
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
+
+  - it: rejects empty literal in production
+    set:
+      objectStore:
+        uri: ''
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
+
+  - it: defaults an empty template result to the in-cluster bucket with development RustFS
+    set:
+      dev:
+        deployRustfs: true
+      objectStore:
+        uri: '{{ "" }}'
+    templates:
+      - templates/logfire-validate-config.yaml
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_OBJECT_STORE_URI
+          value: s3://logfire
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+        template: templates/logfire-ff-config.yaml
+
+  - it: rejects an objectStore.volumes entry named tmp
+    set:
+      objectStore:
+        volumes:
+          - name: tmp
+            emptyDir: {}
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumes[0].name 'tmp' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, scratch-data, ingest-data."
+
+  - it: accepts an objectStore.volumes entry named logfire-data
+    set:
+      objectStore:
+        volumes:
+          - name: logfire-data
+            emptyDir: {}
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an objectStore.volumeMounts entry at /tmp
+    set:
+      objectStore:
+        volumeMounts:
+          - name: credentials
+            mountPath: /tmp
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumeMounts[0].mountPath '/tmp' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /scratch, /fusionfire/ingest-data."
+
+  - it: accepts an objectStore.volumeMounts entry at /var/lib/logfire
+    set:
+      objectStore:
+        volumeMounts:
+          - name: credentials
+            mountPath: /var/lib/logfire
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: accepts objectStore volumes and mounts outside the reserved names and paths
+    set:
+      objectStore:
+        volumes:
+          - name: credentials
+            secret:
+              secretName: object-store-credentials
+        volumeMounts:
+          - name: credentials
+            mountPath: /etc/object-store
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an objectStore.volumes entry that collides with an in-cluster TLS volume
+    set:
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+      objectStore:
+        volumes:
+          - name: logfire-incluster-tls
+            emptyDir: {}
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumes[0].name 'logfire-incluster-tls' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, scratch-data, ingest-data, logfire-incluster-tls, logfire-incluster-ca-bundle."
+
+  - it: rejects an objectStore.volumeMounts entry that collides with an in-cluster TLS mount
+    set:
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+      objectStore:
+        volumeMounts:
+          - name: credentials
+            mountPath: /etc/logfire/incluster-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumeMounts[0].mountPath '/etc/logfire/incluster-ca' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /scratch, /fusionfire/ingest-data, /etc/tls, /etc/logfire/incluster-ca."
+
+  - it: accepts in-cluster TLS volume names when in-cluster TLS is disabled
+    set:
+      objectStore:
+        volumes:
+          - name: logfire-incluster-tls
+            emptyDir: {}
+        volumeMounts:
+          - name: logfire-incluster-tls
+            mountPath: /etc/tls
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: unknown preset name fails the install
+    set:
+      sizingPreset: not-a-real-preset
+    asserts:
+      - failedTemplate:
+          errorMessage: 'Unknown sizingPreset "not-a-real-preset". Valid presets: dev, large, small, standard, tiny'
+
+  - it: rejects scratch volume quantities below 1Mi
+    set:
+      logfire-ff-cache-byte:
+        scratchVolume:
+          storage: 512Ki
+    templates:
+      - templates/logfire-ff-cache-byte.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'scratchVolume.storage "512Ki" is below the 1Mi minimum'
+
+  - it: requires a multi-region location for Gemini 3.5
+    set:
+      ai:
+        model: google-cloud:gemini-3.5-flash
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "ai.vertexAi.multiRegionLocation is required when ai.model contains Google Cloud model 'google-cloud:gemini-3.5-flash'. Set it to 'us' or 'eu'."
+
+  - it: requires a region for a regional fallback
+    set:
+      ai:
+        reasoningModel: "google-cloud:gemini-3.5-flash, google-cloud:gemini-2.5-flash"
+        vertexAi:
+          multiRegionLocation: eu
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "ai.vertexAi.region is required when ai.reasoningModel contains regional Google Cloud model 'google-cloud:gemini-2.5-flash'."
+
+  - it: accepts a mixed fallback chain when both locations are configured
+    set:
+      ai:
+        model: "google-cloud:gemini-3.5-flash,google-cloud:gemini-2.5-flash"
+        vertexAi:
+          region: europe-west4
+          multiRegionLocation: eu
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - hasDocuments:
+          count: 0

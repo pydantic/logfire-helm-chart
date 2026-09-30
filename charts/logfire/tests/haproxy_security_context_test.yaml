@@ -1,4 +1,7 @@
 suite: HAProxy proxy container identity
+# Merge-precedence contract for haproxy.securityContext over the chart-wide
+# context and the image default, including null-clearing. The default identity
+# itself is enforced by the CI install under the restricted Pod Security Standard.
 release:
   name: lf
   namespace: default
@@ -7,27 +10,6 @@ set:
   objectStore:
     uri: s3://test-bucket
 tests:
-  - it: pins the image identity and a read-only root by default
-    templates:
-      - templates/logfire-service.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[0].securityContext
-          value:
-            runAsNonRoot: true
-            runAsUser: 99
-            runAsGroup: 99
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-            seccompProfile:
-              type: RuntimeDefault
-            readOnlyRootFilesystem: true
-        documentSelector:
-          path: kind
-          value: Deployment
-
   - it: lets haproxy.securityContext override the default
     set:
       haproxy:
