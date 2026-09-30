@@ -78,12 +78,14 @@ async def test_token_endpoint_rejects_bad_credentials(client: httpx.AsyncClient)
 
 
 async def test_device_flow_mints_a_working_user_token(
-    client: httpx.AsyncClient, meta_frontend_token: str
+    client: httpx.AsyncClient, meta_frontend_token: str, project: str
 ) -> None:
-    """The full `logfire login` CLI flow: device code -> session approval -> user token.
+    """The full `logfire login` CLI flow: device code -> session approval -> SDK token.
 
-    The token then authenticates against the SDK's /v1/info, which is exactly what
-    the Logfire SDK's check_tokens thread does with it.
+    The minted token is a machine (SDK) token: SDK endpoints accept it, the ui-api
+    session endpoints deliberately do not ("SDK tokens can only be used for SDK
+    endpoints"), and /v1/info only accepts project write tokens. /v1/project-list/
+    is the SDK's own view of the user's projects, so the token is asserted there.
     """
     created = await client.post(
         "/v1/device-auth/new/", params={"machine_name": "helm-it-e2e"}
@@ -106,10 +108,8 @@ async def test_device_flow_mints_a_working_user_token(
     token = waited.json()["token"]
     assert token, waited.text
 
-    # The minted machine user token authenticates as the approving user on the
-    # session API. (/v1/info is a project write-token endpoint and deliberately
-    # does not accept user tokens.)
-    whoami = await client.get(
-        "/ui-api/account/me/", headers={"Authorization": f"Bearer {token}"}
+    listed = await client.get(
+        "/v1/project-list/", headers={"Authorization": f"Bearer {token}"}
     )
-    assert whoami.is_success, whoami.text
+    assert listed.is_success, listed.text
+    assert project in [p["project_name"] for p in listed.json()], listed.text
