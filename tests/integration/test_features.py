@@ -195,7 +195,6 @@ async def test_managed_variable_serves_over_v1_and_ofrep(
     client: httpx.AsyncClient,
     meta_frontend_token: str,
     project: str,
-    read_token: str,
 ) -> None:
     headers = {"Authorization": f"Bearer {meta_frontend_token}"}
     name = f"helm_it_flag_{secrets.token_hex(4)}"
@@ -214,15 +213,26 @@ async def test_managed_variable_serves_over_v1_and_ofrep(
     )
     assert created.status_code == 201, created.text
 
-    served = await client.get(
-        "/v1/variables/", headers={"Authorization": f"Bearer {read_token}"}
+    # The SDK serving path takes a scoped API key, not a read token.
+    minted = await client.post(
+        f"{_p(project)}/api-keys/",
+        headers=headers,
+        json={
+            "name": f"helm-it-flags-{secrets.token_hex(4)}",
+            "description": "helm integration flags key",
+            "scopes": ["project:read_variables"],
+        },
     )
+    assert minted.status_code == 201, minted.text
+    key_headers = {"Authorization": f"Bearer {minted.json()['token']}"}
+
+    served = await client.get("/v1/variables/", headers=key_headers)
     assert served.is_success, served.text
     assert name in served.json()["variables"], served.text
 
     evaluated = await client.post(
         f"/v1/ofrep/v1/evaluate/flags/{name}",
-        headers={"Authorization": f"Bearer {read_token}"},
+        headers=key_headers,
         json={"context": {"targetingKey": "helm-it-user"}},
     )
     assert evaluated.is_success, evaluated.text
@@ -236,7 +246,10 @@ async def test_sql_tooling(
 ) -> None:
     headers = {"Authorization": f"Bearer {meta_frontend_token}"}
     formatted = await client.post(
-        f"{_p(project)}/sql/format/", headers=headers, json={"secret_sql": "select 1"}
+        f"{_p(project)}/sql/format/",
+        headers=headers,
+        params={"db_system": "postgresql"},
+        json={"secret_sql": "select 1"},
     )
     assert formatted.is_success, formatted.text
     assert formatted.json()["formatted_query"], formatted.text

@@ -106,5 +106,10 @@ async def test_device_flow_mints_a_working_user_token(
     token = waited.json()["token"]
     assert token, waited.text
 
-    info = await client.get("/v1/info", headers={"Authorization": f"Bearer {token}"})
-    assert info.is_success, info.text
+    # The minted machine user token authenticates as the approving user on the
+    # session API. (/v1/info is a project write-token endpoint and deliberately
+    # does not accept user tokens.)
+    whoami = await client.get(
+        "/ui-api/account/me/", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert whoami.is_success, whoami.text

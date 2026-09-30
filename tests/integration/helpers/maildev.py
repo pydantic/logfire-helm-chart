@@ -30,4 +30,13 @@ async def wait_for_email(
                 return email
         return None
 
-    return await wait_for(_poll, timeout=timeout, interval=interval)
+    try:
+        return await wait_for(_poll, timeout=timeout, interval=interval)
+    except TimeoutError:
+        # Dump the inbox so a delivery failure is diagnosable from CI logs.
+        inbox = (await client.get("/api/email")).json()
+        subjects = [(e.get("subject"), [t.get("address") for t in e.get("to", [])]) for e in inbox]
+        raise AssertionError(
+            f"no email for {recipient!r} with subject containing {subject_contains!r} "
+            f"within {timeout}s; MailDev inbox: {subjects}"
+        ) from None

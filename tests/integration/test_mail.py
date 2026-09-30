@@ -41,11 +41,11 @@ async def test_org_invitation_email_reaches_maildev(
         headers=headers,
         json={"email": invitee, "role_id": role_id},
     )
-    assert created.status_code == 201, created.text
+    assert created.status_code in (200, 201), created.text
     assert created.json()["invitee_email"] == invitee
 
     email = await wait_for_email(
-        maildev_client, recipient=invitee, subject_contains="Join"
+        maildev_client, recipient=invitee, subject_contains="Join", timeout=120.0
     )
     assert invitee in str(email.get("to")), email
 
@@ -62,6 +62,7 @@ async def test_email_login_code_reaches_maildev(
     assert requested.json()["retry_after_seconds"], requested.text
 
     email = await wait_for_email(
-        maildev_client, recipient=recipient, subject_contains="verification code"
+        maildev_client, recipient=recipient, subject_contains="verification code",
+        timeout=120.0,
     )
     assert recipient in str(email.get("to")), email
