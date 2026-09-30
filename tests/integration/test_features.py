@@ -269,11 +269,18 @@ async def test_sql_tooling(
 @pytest.mark.xfail(
     strict=False,
     reason=(
-        "sql/format: the deployed chart answers 404 (empty detail) although the "
-        "route is registered (GET probes 405) and exists at the pinned appVersion "
-        "72768be9; the forwarded fusionfire /query/format/ call is what 404s. "
-        "Likely fusionfire image-build skew at publish time. Remove this marker "
-        "when the pinned image serves the endpoint."
+        "sql/format: the deployed chart answers 404 although the route exists in "
+        "the pinned fusionfire binary (verified in fusionfire:72768be9). Root "
+        "cause is topology: /query/format/ is mounted only by the 'query' "
+        "subcommand (query_api_router, merged in the QueryApi arm), while the "
+        "chart's default — and this CI — runs the combined 'query-worker' "
+        "subcommand (logfire-ff-query-worker is opt-in, values.yaml keeps it "
+        "commented out), whose query_router serves /query/validate/ and "
+        "/query/historic/ but never /query/format/. The backend's "
+        'POST .../sql/format/ forwards to it unconditionally. Not fixed at '
+        "platform HEAD either. Fixed when either fusionfire mounts "
+        "query_api_router in the combined arm too, or the chart defaults to the "
+        "split query topology; remove this marker then."
     ),
 )
 async def test_sql_format(
