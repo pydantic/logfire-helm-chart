@@ -1770,11 +1770,12 @@ Dev Postgres helpers
 Merge initContainers from values with dev Postgres wait initContainer.
 */}}
 {{/*
-`logfire-task-runner` calls `absurd.create_queue()` before it serves, so it exits 1 and
-crash-loops until the `absurd` schema exists. That schema is installed by
-`logfire-backend-migrations`, which is only a Helm hook when the bundled Postgres is off
-(see the annotations on that Job), so nothing otherwise orders the two. Waiting here makes
-the dependency explicit rather than leaving it to scheduling order.
+`logfire-task-runner` drains the `default` Absurd queue and exits 1 at startup when that queue is
+missing. Only `absurd.create_queue` creates the per-queue tables, and `logfire-backend-migrations`
+calls it through `ensure_queues` right after it installs the `absurd` schema (see
+`logfire_db.migrations.main`). Migrations are a Helm hook only when the bundled Postgres is off
+(see the annotations on that Job), so nothing otherwise orders the two. Waiting for the runner's
+queue here makes the dependency explicit rather than leaving it to scheduling order.
 */}}
 {{- define "logfire.absurdSchemaReady.initContainer" -}}
 {{- $ctx := .ctx -}}
@@ -1793,12 +1794,10 @@ the dependency explicit rather than leaving it to scheduling order.
       while True:
           try:
               with psycopg.connect(dsn) as conn:
-                  found = conn.execute(
-                      "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'absurd'"
-                  ).fetchone()
-              if found:
+                  (queue_ready,) = conn.execute("SELECT to_regclass('absurd.t_default')").fetchone()
+              if queue_ready:
                   break
-              print("Waiting for the absurd schema...", flush=True)
+              print("Waiting for the 'default' Absurd queue...", flush=True)
           except psycopg.OperationalError as exc:
               print(f"Waiting for postgres: {exc}", flush=True)
           time.sleep(2)
