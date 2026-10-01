@@ -265,36 +265,16 @@ async def test_sql_tooling(
     assert records.is_success, records.text
     assert "service_names" in records.json(), records.text
 
+    # Deliberately no sql/format (the SQL editor's format button) test here:
+    # POST .../sql/format/ 404s on the default topology. /query/format/ is
+    # mounted only by fusionfire's 'query' subcommand (query_api_router), while
+    # the chart runs the combined 'query-worker' subcommand (logfire-ff-query-worker
+    # is opt-in), whose router serves /query/validate/ and /query/historic/ but
+    # not /query/format/. Being fixed upstream; restore the round-trip test from
+    # PR #262's history (test_sql_format) once the pinned fusionfire build serves
+    # the endpoint on the combined arm.
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "sql/format: the deployed chart answers 404 although the route exists in "
-        "the pinned fusionfire binary (verified in fusionfire:72768be9). Root "
-        "cause is topology: /query/format/ is mounted only by the 'query' "
-        "subcommand (query_api_router, merged in the QueryApi arm), while the "
-        "chart's default — and this CI — runs the combined 'query-worker' "
-        "subcommand (logfire-ff-query-worker is opt-in, values.yaml keeps it "
-        "commented out), whose query_router serves /query/validate/ and "
-        "/query/historic/ but never /query/format/. The backend's "
-        'POST .../sql/format/ forwards to it unconditionally. Not fixed at '
-        "platform HEAD either. Fixed when either fusionfire mounts "
-        "query_api_router in the combined arm too, or the chart defaults to the "
-        "split query topology; remove this marker then."
-    ),
-)
-async def test_sql_format(
-    client: httpx.AsyncClient, meta_frontend_token: str, project: str
-) -> None:
-    headers = {"Authorization": f"Bearer {meta_frontend_token}"}
-    formatted = await client.post(
-        f"{_p(project)}/sql/format/",
-        headers=headers,
-        params={"db_system": "postgresql"},
-        json={"secret_sql": "select 1"},
-    )
-    assert formatted.is_success, formatted.text
-    assert "formatted_query" in formatted.json(), formatted.text
+
 
 
 async def test_org_members_and_project_stats(
