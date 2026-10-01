@@ -254,3 +254,462 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
+
+  # --- AI provider config ---
+  - it: rejects a multi-region location outside us/eu
+    set:
+      ai:
+        vertexAi:
+          multiRegionLocation: global
+    asserts:
+      - failedTemplate:
+          errorPattern: "multiRegionLocation must be exactly 'us' or 'eu'"
+
+  - it: requires an OpenAI API key for OpenAI models
+    set:
+      ai:
+        model: openai:gpt-4o
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.openAi\.apiKey is required'
+
+  - it: requires the Azure OpenAI endpoint
+    set:
+      ai:
+        model: azure:gpt-4o
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.azureOpenAi\.endpoint is required'
+
+  - it: requires the Azure OpenAI API key
+    set:
+      ai:
+        model: azure:gpt-4o
+        azureOpenAi:
+          endpoint: https://example.openai.azure.com
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.azureOpenAi\.apiKey is required'
+
+  - it: requires a region for Google Vertex AI models
+    set:
+      ai:
+        model: google-vertex:gemini-2.5-flash
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.vertexAi\.region is required'
+
+  - it: requires a project id for Anthropic Vertex models
+    set:
+      ai:
+        model: anthropic-vertex:claude-sonnet-4
+        vertexAi:
+          region: europe-west4
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.vertexAi\.anthropicProjectId is required'
+
+  # --- public hostnames ---
+  - it: requires at least one public hostname
+    set:
+      ingress:
+        hostnames: []
+        hostname: ""
+      gateway:
+        hostnames: []
+    asserts:
+      - failedTemplate:
+          errorPattern: 'At least one hostname is required for Logfire'
+
+  # --- postgres and dex storage ---
+  - it: requires postgresSecret.name when postgresSecret is enabled
+    set:
+      dev:
+        deployPostgres: false
+      postgresSecret:
+        enabled: true
+        name: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'postgresSecret\.name is required'
+
+  - it: requires postgresDsn without dev postgres or a secret
+    set:
+      dev:
+        deployPostgres: false
+      postgresDsn: ""
+      postgresFFDsn: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'postgresDsn is required'
+
+  - it: requires postgresFFDsn without dev postgres or a secret
+    set:
+      dev:
+        deployPostgres: false
+      postgresDsn: postgres://crud
+      postgresFFDsn: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'postgresFFDsn is required'
+
+  - it: requires the Dex postgres host when Dex stores state in postgres
+    set:
+      dev:
+        deployPostgres: false
+      postgresDsn: postgres://crud
+      postgresFFDsn: postgres://ff
+      logfire-dex:
+        config:
+          storage:
+            type: postgres
+            config:
+              host: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'storage\.config\.host is required'
+
+  # --- secrets ---
+  - it: requires adminSecret.name when adminSecret is enabled
+    set:
+      adminSecret:
+        enabled: true
+        name: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: 'adminSecret\.name is required'
+
+  - it: requires existingGatewaySecret.name when enabled
+    set:
+      logfire-ai-gateway:
+        enabled: true
+      existingGatewaySecret:
+        enabled: true
+        name: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'existingGatewaySecret\.name is required'
+
+  # --- scratch volumes ---
+  - it: requires scratchVolume.storage when a scratch volume is configured
+    set:
+      logfire-ff-query-api:
+        scratchVolume:
+          storageClassName: standard
+    asserts:
+      - failedTemplate:
+          errorPattern: 'scratchVolume\.storage is required'
+
+  # --- autoscaling ---
+  - it: rejects enabling both HPA and KEDA
+    set:
+      logfire-ff-ingest:
+        autoscaling:
+          hpa:
+            enabled: true
+            cpuAverage: 50
+          keda:
+            enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Both HPA and KEDA are enabled'
+
+  - it: rejects an HPA without metrics
+    set:
+      sizingPreset: ""
+      logfire-ff-ingest:
+        autoscaling:
+          hpa:
+            enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: 'no metrics are configured'
+
+  - it: rejects minReplicas above maxReplicas
+    set:
+      logfire-ff-ingest:
+        autoscaling:
+          minReplicas: 5
+          maxReplicas: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: 'cannot be greater than autoscaling\.maxReplicas'
+
+  # --- admin email ---
+  - it: requires adminEmail
+    set:
+      adminEmail: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: 'adminEmail is required'
+
+  - it: rejects an invalid adminEmail
+    set:
+      adminEmail: not-an-email
+    asserts:
+      - failedTemplate:
+          errorPattern: 'does not appear to be a valid email address'
+
+  # --- in-cluster TLS ---
+  - it: rejects an unknown in-cluster TLS cert mode
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: mystery
+    asserts:
+      - failedTemplate:
+          errorPattern: 'certs\.mode must be one of'
+
+  - it: rejects configuring both CA bundle sources
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: existingSecrets
+        caBundle:
+          existingConfigMap:
+            name: ca-map
+          existingSecret:
+            name: ca-secret
+    asserts:
+      - failedTemplate:
+          errorPattern: 'specify only one'
+
+  - it: rejects an unknown cert-manager issuer kind
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+          certManager:
+            issuerRef:
+              kind: Weird
+              name: my-issuer
+        caBundle:
+          existingConfigMap:
+            name: ca-map
+    asserts:
+      - failedTemplate:
+          errorPattern: 'issuerRef\.kind must be'
+
+  - it: rejects an empty issuer name with a non-namespaced issuer kind
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+          certManager:
+            issuerRef:
+              kind: ClusterIssuer
+        caBundle:
+          existingConfigMap:
+            name: ca-map
+    asserts:
+      - failedTemplate:
+          errorPattern: 'chart-managed \*namespaced\* Issuer'
+
+  - it: rejects cert-manager mode without a CA bundle or chart-managed issuer
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+          certManager:
+            issuerRef:
+              kind: Issuer
+              name: my-issuer
+        caBundle:
+          existingConfigMap:
+            name: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: 'no CA bundle was provided'
+
+  - it: requires cert-manager CRDs for certManager mode
+    set:
+      dev:
+        deployCertManager: false
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+          certManager:
+            issuerRef:
+              kind: Issuer
+              name: my-issuer
+        caBundle:
+          existingConfigMap:
+            name: ca-map
+    asserts:
+      - failedTemplate:
+          errorPattern: 'requires cert-manager CRDs'
+
+  - it: rejects existingSecrets mode without a CA bundle
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: existingSecrets
+        caBundle:
+          existingConfigMap:
+            name: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: 'no CA bundle was provided'
+
+  # --- redis ---
+  - it: requires redisDsn when the bundled redis is disabled
+    set:
+      logfire-redis:
+        enabled: false
+      redisDsn: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'redisDsn is required'
+
+  # --- gateway api ---
+  - it: requires gateway.gatewayClassName when the chart creates the Gateway
+    set:
+      ingress:
+        enabled: false
+      gateway:
+        enabled: true
+        create: true
+    asserts:
+      - failedTemplate:
+          errorPattern: 'gateway\.gatewayClassName is required'
+
+  - it: requires gateway.name when attaching to an existing Gateway
+    set:
+      ingress:
+        enabled: false
+      gateway:
+        enabled: true
+        create: false
+    asserts:
+      - failedTemplate:
+          errorPattern: 'gateway\.name is required'
+
+  - it: rejects enabling ingress and gateway together
+    set:
+      ingress:
+        enabled: true
+      gateway:
+        enabled: true
+        create: true
+        gatewayClassName: istio
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Enable only one of Ingress or Gateway API'
+
+  # --- resource quantities ---
+  - it: rejects an invalid CPU quantity
+    set:
+      logfire-ff-ingest:
+        resources:
+          cpu: not-a-quantity
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Invalid CPU format'
+
+  - it: rejects a CPU quantity below 1m
+    set:
+      logfire-ff-ingest:
+        resources:
+          cpu: 0.5m
+    asserts:
+      - failedTemplate:
+          errorPattern: 'effective millicores must be >= 1m'
+
+  - it: rejects an invalid memory quantity
+    set:
+      logfire-ff-ingest:
+        resources:
+          memory: not-a-quantity
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Invalid quantity format'
+
+  - it: rejects the removed ephemeralStorageRequest key
+    set:
+      logfire-ff-ingest:
+        resources:
+          ephemeralStorageRequest: 1Gi
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ephemeralStorageRequest is not supported'
+
+  # --- pdb ---
+  - it: rejects both pdb minAvailable and maxUnavailable
+    set:
+      logfire-backend:
+        pdb:
+          minAvailable: 1
+          maxUnavailable: 1
+    asserts:
+      - failedTemplate:
+          errorPattern: 'mutually exclusive'
+
+  # --- group organization mapping ---
+  - it: rejects a group mapping without group_id
+    set:
+      groupOrganizationMapping:
+        - organization_roles:
+            - organization_name: logfire-meta
+              role: admin
+    asserts:
+      - failedTemplate:
+          errorPattern: 'group_id. is required'
+
+  - it: rejects a group mapping without organization_roles
+    set:
+      groupOrganizationMapping:
+        - group_id: "38aad352-dcfb-4a08-946a-469abe30cdc4"
+    asserts:
+      - failedTemplate:
+          errorPattern: 'organization_roles. is required'
+
+  - it: rejects an organization role without a role
+    set:
+      groupOrganizationMapping:
+        - group_id: "38aad352-dcfb-4a08-946a-469abe30cdc4"
+          organization_roles:
+            - organization_name: logfire-meta
+    asserts:
+      - failedTemplate:
+          errorPattern: 'role. is required for organization'
+
+  - it: rejects a project role without a role
+    set:
+      groupOrganizationMapping:
+        - group_id: "38aad352-dcfb-4a08-946a-469abe30cdc4"
+          organization_roles:
+            - organization_name: logfire-meta
+              role: admin
+              project_roles:
+                - project_name: some-project
+    asserts:
+      - failedTemplate:
+          errorPattern: 'project_roles\[0\]: .role. is required'
+
+  # --- fusionfire query limits ---
+  - it: rejects a non-positive maxQueryCostPerPod
+    set:
+      logfire-ff-query-api:
+        maxQueryCostPerPod: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: 'maxQueryCostPerPod must be a positive integer'

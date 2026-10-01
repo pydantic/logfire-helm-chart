@@ -85,3 +85,52 @@ async def test_query_v2_returns_ingested_data(
         timeout=60.0,
         interval=2.0,
     )
+
+
+async def test_query_content_negotiation(
+    client: httpx.AsyncClient,
+    write_token: str,
+    read_token: str,
+) -> None:
+    """The v1 query API serves json, arrow, and csv, and rejects anything else."""
+    await _ingest_trace(client, write_token)
+    await wait_for(
+        lambda: _poll_v1_count(client, read_token),
+        timeout=60.0,
+        interval=2.0,
+    )
+
+    auth = {"Authorization": f"Bearer {read_token}"}
+    csv_response = await client.get(
+        "/v1/query",
+        params={"sql": SQL},
+        headers={**auth, "Accept": "text/csv"},
+    )
+    assert csv_response.is_success, csv_response.text
+    assert "text/csv" in csv_response.headers["content-type"], csv_response.headers
+    assert "query_results.csv" in csv_response.headers.get("content-disposition", "")
+
+    arrow_response = await client.get(
+        "/v1/query",
+        params={"sql": SQL},
+        headers={**auth, "Accept": "application/vnd.apache.arrow.stream"},
+    )
+    assert arrow_response.is_success, arrow_response.text
+    assert "application/vnd.apache.arrow.stream" in arrow_response.headers["content-type"]
+
+    rows_response = await client.get(
+        "/v1/query",
+        params={"sql": SQL, "json_rows": "true"},
+        headers={**auth, "Accept": "application/json"},
+    )
+    assert rows_response.is_success, rows_response.text
+    body = rows_response.json()
+    assert body.get("rows"), body
+    assert body.get("columns"), body
+
+    unsupported = await client.get(
+        "/v1/query",
+        params={"sql": SQL},
+        headers={**auth, "Accept": "application/xml"},
+    )
+    assert unsupported.status_code == 406, unsupported.text

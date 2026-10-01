@@ -129,7 +129,9 @@ jobs:
         run: |
           kubectl port-forward -n logfire-restricted svc/logfire-service 8080:8080 &
           PF_PID=$!
-          trap "kill ${PF_PID} 2>/dev/null || true" EXIT
+          kubectl port-forward -n logfire-restricted svc/logfire-maildev 1080:1080 &
+          MF_PID=$!
+          trap "kill ${PF_PID} ${MF_PID} 2>/dev/null || true" EXIT
           for _ in $(seq 1 30); do
             if curl -fsS http://localhost:8080/ui-api/platform-config/ >/dev/null 2>&1; then
               break

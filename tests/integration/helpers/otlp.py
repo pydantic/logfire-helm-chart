@@ -110,3 +110,50 @@ def log_payload(service_name: str) -> dict:
             },
         ],
     }
+
+
+def exception_log_payload(service_name: str, run_id: str) -> dict:
+    """A log record the issues pipeline groups into an issue.
+
+    Grouping keys off the `logfire.exception.fingerprint` attribute (the SDK's
+    exception_callback writes sha256 of its source); `exception.type` marks the
+    record as an exception, and `helm.it.run` isolates the run through the
+    filter alert's extra SQL filter.
+    """
+    now_nanos = time.time_ns()
+    attributes = [
+        {"key": "exception.type", "value": {"stringValue": "HelmItError"}},
+        {"key": "exception.message", "value": {"stringValue": "helm integration exception"}},
+        {
+            "key": "exception.stacktrace",
+            "value": {"stringValue": "HelmItError: helm integration exception"},
+        },
+        {"key": "logfire.exception.fingerprint", "value": {"stringValue": run_id}},
+        {"key": "helm.it.run", "value": {"stringValue": run_id}},
+    ]
+    return {
+        "resourceLogs": [
+            {
+                "resource": {
+                    "attributes": [
+                        {"key": "service.name", "value": {"stringValue": service_name}},
+                    ],
+                },
+                "scopeLogs": [
+                    {
+                        "scope": {"name": "helm-integration"},
+                        "logRecords": [
+                            {
+                                "timeUnixNano": str(now_nanos),
+                                "observedTimeUnixNano": str(now_nanos),
+                                "severityNumber": 17,
+                                "severityText": "ERROR",
+                                "body": {"stringValue": "helm integration exception"},
+                                "attributes": attributes,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
