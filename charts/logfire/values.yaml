@@ -313,11 +313,16 @@ smtp:
   password:
   # -- Use TLS for SMTP
   use_tls: false
+  # -- Sender address of every email Logfire sends (`From` and SMTP envelope sender), such as `logfire@example.com`. Required when `smtp.host` is set. Use an address on a domain that your SMTP server may send for. Logfire does not send email as `pydantic.dev` from a self-hosted install.
+  fromAddress:
+  # -- Sender display name of every email Logfire sends. If it is not set, the name is `Pydantic Logfire`.
+  fromName:
 
 # SMTP example using secrets:
 # smtp:
 #   host: smtp.example.com
 #   port: 587
+#   fromAddress: logfire@example.com
 #   username:
 #     valueFrom:
 #       secretKeyRef:

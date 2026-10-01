@@ -120,6 +120,7 @@ spec:
             - name: SMTP_USE_TLS
               value: {{ .Values.smtp.use_tls | quote }}
             {{ end }}
+            {{- include "logfire.emailSenderEnv" . | nindent 12 }}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}

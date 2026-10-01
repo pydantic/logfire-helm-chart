@@ -1592,6 +1592,25 @@ false
 {{- end -}}
 {{- end -}}
 
+{{/*
+The sender of every email the platform sends, for the workloads that deliver it. A self-hosted
+install (`ON_PREM`) with an SMTP server refuses to start without `EMAIL_FROM_ADDRESS`, because
+the platform does not send email as `pydantic.dev` from a self-hosted install. The bundled
+maildev accepts any sender, so it gets a placeholder on the reserved `.localhost` domain.
+*/}}
+{{- define "logfire.emailSenderEnv" -}}
+{{- $smtp := .Values.smtp | default dict -}}
+{{- $fromAddress := get $smtp "fromAddress" | default (ternary "no-reply@logfire.localhost" "" (.Values.dev.deployMaildev | default false)) -}}
+{{- with $fromAddress }}
+- name: EMAIL_FROM_ADDRESS
+  value: {{ . | quote }}
+{{- end }}
+{{- with get $smtp "fromName" }}
+- name: EMAIL_FROM_NAME
+  value: {{ . | quote }}
+{{- end }}
+{{- end -}}
+
 {{- define "logfire.inClusterTls.enabled" -}}
 {{- .Values.inClusterTls.enabled | default false -}}
 {{- end -}}
