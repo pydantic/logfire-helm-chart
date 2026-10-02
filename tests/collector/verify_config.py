@@ -83,6 +83,10 @@ def main():
         queue = Path(directory) / "queue"
         queue.mkdir(mode=0o777)
         queue.chmod(0o777)  # Synthetic local data; the Kubernetes test verifies fsGroup permissions.
+        # Pre-create this as the host user so Linux can remove it after the UID 10001 image exits.
+        compaction = queue / "compaction"
+        compaction.mkdir(mode=0o777)
+        compaction.chmod(0o777)
         path = Path(directory) / "collector.yaml"
         path.write_text(yaml.safe_dump(config))
         subprocess.run([
