@@ -47,6 +47,7 @@ def main():
     rendered = subprocess.check_output([
         "helm", "template", "lf", "charts/logfire", "--set", "adminEmail=test@example.com",
         "--set", "objectStore.uri=s3://test-bucket", "--set", "sizingPreset=standard",
+        "--set", "otel_collector.queueStorage.enabled=true",
     ], cwd=ROOT).decode()
     configmap = next(d for d in yaml.safe_load_all(rendered)
                      if d and d["kind"] == "ConfigMap" and d["metadata"]["name"] == "otel-collector-config")
