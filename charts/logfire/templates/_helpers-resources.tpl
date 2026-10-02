@@ -97,14 +97,14 @@ internal FusionFire baseline. These defaults do not render Kubernetes resources.
 Convert Kubernetes memory quantity to mebibytes (Mi).
 Supports common binary and decimal suffixes plus plain bytes.
 */}}
-{{- define "logfire.memoryToMi" -}}
+{{- define "logfire.memoryToMiFloat" -}}
 {{- $memory := trim (toString .) -}}
-{{- $pattern := "^[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?([EPTGMK]i?|[numkKMGTEP])?$" -}}
+{{- $pattern := "^[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)([eE][+-]?[0-9]+)?([EPTGMK]i?|[numkKMGTEP])?$" -}}
 {{- if not (regexMatch $pattern $memory) -}}
   {{- fail (printf "Invalid quantity format '%s'. Use Kubernetes quantity format (e.g., '1536Mi', '1.5Gi', '2G')." $memory) -}}
 {{- end -}}
-{{- $number := regexFind "^[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?" $memory -}}
-{{- $unit := regexReplaceAll "^[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?" $memory "" -}}
+{{- $number := regexFind "^[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)([eE][+-]?[0-9]+)?" $memory -}}
+{{- $unit := regexReplaceAll "^[+-]?([0-9]+(\\.[0-9]*)?|\\.[0-9]+)([eE][+-]?[0-9]+)?" $memory "" -}}
 {{- $value := float64 $number -}}
 {{- $mi := 0.0 -}}
 {{- if eq $unit "" -}}
@@ -142,5 +142,40 @@ Supports common binary and decimal suffixes plus plain bytes.
 {{- else -}}
   {{- fail (printf "Invalid quantity format '%s'." $memory) -}}
 {{- end -}}
-{{- int (floor $mi) -}}
+{{- $mi -}}
+{{- end -}}
+
+{{/* Whole-MiB floor of a Kubernetes memory quantity. Use `logfire.memoryToMiFloat` when a
+comparison must keep sub-MiB precision. */}}
+{{- define "logfire.memoryToMi" -}}
+{{- int (floor (float64 (include "logfire.memoryToMiFloat" .))) -}}
+{{- end -}}
+
+{{/* Use the actual rendered collector limit, including legacy resource normalization. */}}
+{{- define "logfire.otelCollectorMemoryLimitMi" -}}
+{{- $resources := include "logfire.resources" (dict "Values" .Values "serviceName" "logfire-otel-collector") | fromYaml -}}
+{{- $limit := dig "resources" "limits" "memory" "" $resources -}}
+{{- if $limit -}}
+{{- include "logfire.memoryToMi" $limit -}}
+{{- end -}}
+{{- end -}}
+
+{{/* Add disk queue storage budgets without inventing CPU/memory requests when none are set. */}}
+{{- define "logfire.otelCollectorResources" -}}
+{{- $rendered := include "logfire.resources" (dict "Values" .Values "serviceName" "logfire-otel-collector") | fromYaml -}}
+{{- $resources := get $rendered "resources" | default dict -}}
+{{- $storage := .Values.otel_collector.queueStorage -}}
+{{- if $storage.enabled -}}
+{{- range $entry := list (dict "kind" "requests" "value" $storage.ephemeralStorageRequest) (dict "kind" "limits" "value" $storage.ephemeralStorageLimit) -}}
+{{- $target := get $resources $entry.kind | default dict -}}
+{{- if not (hasKey $target "ephemeral-storage") -}}
+{{- $_ := set $target "ephemeral-storage" $entry.value -}}
+{{- end -}}
+{{- $_ := set $resources $entry.kind $target -}}
+{{- end -}}
+{{- end -}}
+{{- if $resources -}}
+resources:
+  {{- $resources | toYaml | nindent 2 -}}
+{{- end -}}
 {{- end -}}

@@ -1516,6 +1516,46 @@ the backend and the worker need the directory writable under a read-only image r
 {{- end -}}
 {{- end -}}
 
+{{/*
+The VAPID application-server identity every Web Push request is signed with, for the
+workloads that register a device or send to one. Emits nothing while webPush is disabled,
+where the backend reports push unavailable and the settings panel says so.
+*/}}
+{{- define "logfire.webPushEnv" -}}
+{{- if .Values.webPush.enabled -}}
+- name: WEB_PUSH_VAPID_SUBJECT
+  value: {{ .Values.webPush.subject | default (printf "mailto:%s" .Values.adminEmail) | quote }}
+- name: WEB_PUSH_VAPID_PRIVATE_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-web-push-vapid-key") }}
+      key: logfire-web-push-vapid-key
+{{- end -}}
+{{- end -}}
+
+{{/*
+Rolls the workloads that hold the VAPID key when it changes, so a rotation cannot leave one pod
+signing with the old key while another signs with the new one. Emits nothing while webPush is
+disabled.
+
+A key supplied in the values is hashed from there rather than from the live Secret, which still
+holds the pre-upgrade key while the templates render: hashing that would leave the pod template
+unchanged on the very upgrade that rotates the key, so a pod would pick the new one up only at
+some later unrelated restart. The hash is taken over the base64 value the Secret stores, which is
+what the lookup path hashes once the new key is applied, so a subsequent no-op upgrade does not
+roll the workloads a second time. The generated and existingSecret cases keep reading the
+cluster, since that is where their key lives.
+*/}}
+{{- define "logfire.webPushChecksumAnnotation" -}}
+{{- if .Values.webPush.enabled -}}
+{{- if and .Values.webPush.privateKey (not .Values.existingSecret.enabled) -}}
+{{- printf "checksum/logfire-web-push-vapid-key: %s" (.Values.webPush.privateKey | b64enc | sha256sum) -}}
+{{- else -}}
+{{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-web-push-vapid-key")) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.rateLimits" -}}
 {{- with .Values.rateLimits -}}
 {{- $queries := get . "queries" | default dict -}}
@@ -1550,6 +1590,25 @@ true
 {{- else -}}
 false
 {{- end -}}
+{{- end -}}
+
+{{/*
+The sender of every email the platform sends, for the workloads that deliver it. A self-hosted
+install (`ON_PREM`) with an SMTP server refuses to start without `EMAIL_FROM_ADDRESS`, because
+the platform does not send email as `pydantic.dev` from a self-hosted install. The bundled
+maildev accepts any sender, so it gets a placeholder on the reserved `.localhost` domain.
+*/}}
+{{- define "logfire.emailSenderEnv" -}}
+{{- $smtp := .Values.smtp | default dict -}}
+{{- $fromAddress := get $smtp "fromAddress" | default (ternary "no-reply@logfire.localhost" "" (.Values.dev.deployMaildev | default false)) -}}
+{{- with $fromAddress }}
+- name: EMAIL_FROM_ADDRESS
+  value: {{ . | quote }}
+{{- end }}
+{{- with get $smtp "fromName" }}
+- name: EMAIL_FROM_NAME
+  value: {{ . | quote }}
+{{- end }}
 {{- end -}}
 
 {{- define "logfire.inClusterTls.enabled" -}}
@@ -1770,11 +1829,12 @@ Dev Postgres helpers
 Merge initContainers from values with dev Postgres wait initContainer.
 */}}
 {{/*
-`logfire-task-runner` calls `absurd.create_queue()` before it serves, so it exits 1 and
-crash-loops until the `absurd` schema exists. That schema is installed by
-`logfire-backend-migrations`, which is only a Helm hook when the bundled Postgres is off
-(see the annotations on that Job), so nothing otherwise orders the two. Waiting here makes
-the dependency explicit rather than leaving it to scheduling order.
+`logfire-task-runner` drains the `default` Absurd queue and exits 1 at startup when that queue is
+missing. Only `absurd.create_queue` creates the per-queue tables, and `logfire-backend-migrations`
+calls it through `ensure_queues` right after it installs the `absurd` schema (see
+`logfire_db.migrations.main`). Migrations are a Helm hook only when the bundled Postgres is off
+(see the annotations on that Job), so nothing otherwise orders the two. Waiting for the runner's
+queue here makes the dependency explicit rather than leaving it to scheduling order.
 */}}
 {{- define "logfire.absurdSchemaReady.initContainer" -}}
 {{- $ctx := .ctx -}}
@@ -1793,12 +1853,10 @@ the dependency explicit rather than leaving it to scheduling order.
       while True:
           try:
               with psycopg.connect(dsn) as conn:
-                  found = conn.execute(
-                      "SELECT 1 FROM information_schema.schemata WHERE schema_name = 'absurd'"
-                  ).fetchone()
-              if found:
+                  (queue_ready,) = conn.execute("SELECT to_regclass('absurd.t_default')").fetchone()
+              if queue_ready:
                   break
-              print("Waiting for the absurd schema...", flush=True)
+              print("Waiting for the 'default' Absurd queue...", flush=True)
           except psycopg.OperationalError as exc:
               print(f"Waiting for postgres: {exc}", flush=True)
           time.sleep(2)

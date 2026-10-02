@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.48-rc.5](https://img.shields.io/badge/Version-0.13.48--rc.5-informational?style=flat-square) ![AppVersion: 72768be9](https://img.shields.io/badge/AppVersion-72768be9-informational?style=flat-square)
+![Version: 0.13.48-rc.7](https://img.shields.io/badge/Version-0.13.48--rc.7-informational?style=flat-square) ![AppVersion: d379c73e](https://img.shields.io/badge/AppVersion-d379c73e-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -371,6 +371,81 @@ logfire-worker:
 
 Nested `resources.requests` do not add mandatory limits, allowing workloads to use spare node capacity. The legacy flat resource shorthand continues to use the configured values for both requests and limits.
 
+### Collector capacity and health
+
+The `standard` preset (also inherited by `large`) requests 512Mi of memory and allows a
+2Gi limit. The request and HPA targets are unchanged, so raising the limit provides burst
+headroom without delaying autoscaling. Reserve more memory through
+`logfire-otel-collector.resources.requests.memory` when sustained usage warrants it; a
+container limit does not reserve node capacity. Memory HPA targets are percentages of the
+request, so reassess the target when changing the request.
+
+The collector sets `GOMEMLIMIT` to 60% of its rendered memory limit, before the memory
+limiter's 75% hard threshold. An explicit `GOMEMLIMIT` in `logfire-otel-collector.env`
+takes precedence. With no rendered memory limit, fixed collector/GC limits are used rather
+than percentages of node memory.
+
+Each signal has its own disk-backed exporter queue by default: standard allows 128MiB of
+serialized payload per queue, or 384MiB across traces, logs, and metrics. Processing,
+in-flight batches, and file mappings still consume memory. Exporter-side batching flushes
+after one second, with a 1MiB trigger and 4MiB maximum serialized batch size.
+Queue rejection reaches the OTLP receiver, allowing
+senders to retry; successful enqueue does not guarantee delivery. Full queues, permanent
+backend errors, retry expiry (five minutes by default), and storage loss can still lose data.
+Override queue/batch options under `otel_collector.exporter.sending_queue`.
+Debug request summaries are disabled by
+default; enable `otel_collector.debug.enabled` temporarily for troubleshooting.
+
+The `file_storage/queue` extension uses a disk-backed `emptyDir`, so queued data survives a
+container restart in the same pod. Pod replacement, rollout, eviction, and node loss remove
+the queue. This storage does not persist Prometheus series or delta-to-cumulative state.
+Set `otel_collector.queueStorage.enabled=false` to use memory queues instead. Disk reduces
+queue heap pressure and supports container-restart recovery, but its I/O can reduce throughput
+and storage exhaustion can lose records that were already acknowledged. A storage error does
+not always mean only the new request was rejected. Monitor database allocation and downstream
+delivery as well as logical queue utilization.
+
+Each pod has a 4Gi queue volume and a 512MiB limit per signal database. This provides more
+database headroom than the payload budget because index/page
+overhead and fragmentation depend on request shape. The chart requires at least four times
+the effective byte queue capacity per database, including queue overrides; this minimum does
+not guarantee that arbitrary request shapes will fit. Item/request queue sizing requires
+operator budgeting because its units cannot be compared with database bytes. Compaction
+reclaims
+disk space after queues drain; the volume must allow at least six times the database limit
+for three databases and their temporary compaction copies. Like upstream, `fsync` is off by
+default. Writes remain available on the live node filesystem for process-restart recovery,
+but an unclean host failure can lose unsynced writes or corrupt the database. Set
+`otel_collector.queueStorage.fsync=true` to force each database write to stable storage, at
+substantial I/O cost. An `emptyDir` still provides no durability across pod/node replacement.
+The pod requests 512Mi of
+ephemeral storage and allows 5Gi including container logs; explicit collector resource
+settings take precedence. Adjust `otel_collector.queueStorage` for local storage capacity
+and throughput, and monitor node disk pressure. An `emptyDir` size limit is not a disk
+reservation. Filesystem permissions use `fsGroup` without a root init container and honor
+pod/container security context overrides.
+
+Prometheus export additionally retains application series for `metric_expiration` (180m by
+default) and delta-to-cumulative state for `max_stale` (5m by default). The memory limiter
+can refuse incoming data but cannot evict this state. Inactive pod/label churn can therefore
+keep consuming memory even when queue utilization is low. Tune expiration to the longest
+expected interval between observations; reducing it removes inactive collector cache
+entries, while Prometheus keeps previously scraped history. Stream caps remain unset
+because exceeding a cap drops new streams. Metrics for a given stream must reach the same
+collector replica; cumulative state resets when that collector is replaced. Scrape each
+replica directly, and account for these semantics when configuring routing/autoscaling.
+
+Collector self-metrics are available on each pod's `self-metrics` port
+(`otel_collector.selfMetricsPort`, default 8888), separately from application metrics on
+`otel_collector.prometheus.port` (default 9090). Configure your monitoring system to scrape that pod port.
+Monitor queue utilization (`otelcol_exporter_queue_size` / `otelcol_exporter_queue_capacity`),
+`otelcol_exporter_enqueue_failed_*`, `otelcol_receiver_refused_*`, process/container memory,
+and pod OOM/restart events. Higher limits provide headroom; retained cardinality and scrape
+cost still require measurement. Startup, readiness, and liveness probes use the process
+health endpoint; exporter failures alone do not trigger liveness restarts. Rollouts retain
+existing replicas while one replacement starts, and allow 60 seconds for shutdown. This
+shutdown budget is finite and does not guarantee that a blocked queue drains.
+
 ## Advanced Configuration
 
 ### External Secrets and Automatic Reloads
@@ -522,7 +597,7 @@ Before diving deeper, verify these common configuration issues:
 | existingGatewaySecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingGatewaySecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret  - logfire-mcp-oauth-client-secret |
+| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret  - logfire-mcp-oauth-client-secret  - logfire-web-push-vapid-key (only when webPush.enabled is true) |
 | existingSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
@@ -612,6 +687,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` | Storage provisioned for each pod |
 | logfire-ff-maintenance-scheduler | object | `{"env":[]}` | Environment overrides for the maintenance scheduler pod |
 | logfire-ff-query-api | object | `{"env":[]}` | Environment overrides for the query API pod |
+| logfire-otel-collector | object | `{"livenessProbe":{"failureThreshold":3,"httpGet":{"path":"/","port":"health"},"periodSeconds":30,"timeoutSeconds":5},"readinessProbe":{"failureThreshold":3,"httpGet":{"path":"/","port":"health"},"periodSeconds":10,"timeoutSeconds":3},"startupProbe":{"failureThreshold":24,"httpGet":{"path":"/","port":"health"},"periodSeconds":5,"timeoutSeconds":3},"strategy":{"rollingUpdate":{"maxSurge":1,"maxUnavailable":0},"type":"RollingUpdate"},"terminationGracePeriodSeconds":60}` | Collector health checks and rollout settings. Override probes here, or set a probe to null to disable it. GOMEMLIMIT defaults to 60% of the rendered memory limit (409MiB with no limit); an explicit GOMEMLIMIT in env takes precedence. |
 | logfire-redis.affinity | object | `{}` | Affinity for the bundled Redis pod. |
 | logfire-redis.enabled | bool | `true` | Deploy Redis as part of this chart. Disable to use an external Redis instance.  The bundled Redis is a single-node instance intended for development, evaluation, and simple self-contained installs. It is not highly available, and upgrades that change its pod template cause a brief interruption while Redis is replaced. For production, disable this and set redisDsn to a managed Redis endpoint. |
 | logfire-redis.image | object | `{"pullPolicy":"IfNotPresent","repository":"redis","tag":"7.2"}` | Redis image configuration |
@@ -641,8 +717,21 @@ Before diving deeper, verify these common configuration issues:
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials. The chart reserves the mount paths `/tmp`, `/scratch`, and `/fusionfire/ingest-data` for its own Fusionfire volumes, and adds `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled. |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials. The chart reserves the volume names `tmp`, `scratch-data`, and `ingest-data` for its own Fusionfire volumes, and adds `logfire-incluster-tls` and `logfire-incluster-ca-bundle` when in-cluster TLS is enabled. |
 | otelResourceAttributes | object | `{}` | Additional OTEL resource attributes to stamp onto internal telemetry emitted by Logfire workloads. These are merged on top of the chart defaults and can override them. Example:   deployment.environment.name: prod   service.namespace: logfire |
-| otel_collector | object | `{"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.160.0"},"prometheus":{"add_metric_suffixes":false,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true},"sendingQueueBytes":67108864}` | otel-collector configuration |
-| otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
+| otel_collector | object | `{"debug":{"enabled":false},"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.160.0"},"prometheus":{"add_metric_suffixes":false,"delta_to_cumulative":true,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","max_stale":"5m","max_streams":10000,"metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true,"translation_strategy":""},"queueStorage":{"enabled":true,"ephemeralStorageLimit":"5Gi","ephemeralStorageRequest":"512Mi","fsync":false,"maxSizeBytes":536870912,"sizeLimit":"4Gi"},"selfMetricsPort":8888,"sendingQueueBytes":67108864}` | otel-collector configuration |
+| otel_collector.debug.enabled | bool | `false` | Emit per-request summaries to collector logs. Enable for troubleshooting; disabled by default to avoid logging every incoming telemetry request. |
+| otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
+| otel_collector.exporter.sending_queue | object | `{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}}` | Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP ingestion, so senders can retry refused data. Queue limits measure serialized bytes. The queue capacity still comes from the sizing preset or sendingQueueBytes unless queue_size is explicitly overridden here. Each signal has its own queue and consumers. |
+| otel_collector.prometheus.delta_to_cumulative | bool | `true` | Convert delta metrics to cumulative on the Prometheus pipeline with the alpha `delta_to_cumulative` processor. Only runs when the Prometheus exporter is enabled, and the otlp_http pipeline keeps its delta semantics to the backend. Set false to pass metrics through unchanged. The limiter can refuse new data but cannot evict retained streams. |
+| otel_collector.prometheus.max_stale | string | `"5m"` | Retention of inactive delta-to-cumulative streams. Independent of metric_expiration. |
+| otel_collector.prometheus.max_streams | int | `10000` | Cap on the delta-to-cumulative stream map. The in-pipeline `memory_limiter` bounds ingress but cannot evict this processor's state, so an unbounded cap lets high-cardinality attributes grow until the collector refuses telemetry. Streams past the cap are dropped, so raise this for high-cardinality scrapes. |
+| otel_collector.prometheus.resource_to_telemetry_conversion | object | `{"enabled":true}` | OpenTelemetry resource attributes exposed as Prometheus metric labels. Review this deprecated option when upgrading the collector to use resource_constant_labels instead. |
+| otel_collector.prometheus.translation_strategy | string | `""` | Override the Prometheus exporter `translation_strategy`. When empty it is derived from `add_metric_suffixes`: `UnderscoreEscapingWithoutSuffixes` when false, and `UnderscoreEscapingWithSuffixes` when true. The exporter no longer emits `add_metric_suffixes` (deprecated and ignored by recent collectors); this value drives `translation_strategy`. |
+| otel_collector.queueStorage | object | `{"enabled":true,"ephemeralStorageLimit":"5Gi","ephemeralStorageRequest":"512Mi","fsync":false,"maxSizeBytes":536870912,"sizeLimit":"4Gi"}` | Disk-backed OTLP queues on a per-pod emptyDir. Survives container restarts, but not pod replacement, rollouts, or eviction. Disable to use memory queues. Storage exhaustion can still lose already-acknowledged records. |
+| otel_collector.queueStorage.ephemeralStorageLimit | string | `"5Gi"` | Container limit for node-local storage, including queues, compaction, and logs. |
+| otel_collector.queueStorage.ephemeralStorageRequest | string | `"512Mi"` | Scheduling reservation for node-local storage, including logs. Explicit logfire-otel-collector.resources ephemeral-storage settings take precedence. |
+| otel_collector.queueStorage.fsync | bool | `false` | Force each database write to stable storage. Off by default, like upstream: process-restart recovery uses the live node filesystem; unclean host failure can lose unsynced writes or corrupt the database. Enabling this adds substantial disk I/O cost. |
+| otel_collector.queueStorage.maxSizeBytes | int | `536870912` | Per-database limit. There are three signal databases. Keep the volume large enough for all three plus their temporary compaction copies (at least 6x this value). Byte queues require at least 4x payload capacity per database for page/index overhead; this headroom minimum is not a guarantee for arbitrary request shapes or disk failure. |
+| otel_collector.selfMetricsPort | int | `8888` | Port for the collector's own Prometheus self-metrics. Must differ from `prometheus.port` (the application exporter), or the collector cannot bind both and fails to start. |
 | otel_collector.sendingQueueBytes | int | `67108864` | Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per profile; this value applies when no sizing preset is used. |
 | podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed scratch and ingest volumes. A per-service `podSecurityContext` wins over both. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
@@ -663,7 +752,7 @@ Before diving deeper, verify these common configuration issues:
 | priorityClassName | string | `""` | Pod priority class See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | rateLimits | object | `{}` | Configure Rate Limiting rules for Logfire endpoints |
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN. Change if using an external Redis instance. |
-| releaseVersion | string | `"v2026-09-23.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
+| releaseVersion | string | `"v2026-10-01.03"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
 | rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Ignored while `dev.deployMinio` is set. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
@@ -685,6 +774,8 @@ Before diving deeper, verify these common configuration issues:
 | serviceAccount.name | string | `""` | Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template. If create is false and this is not set, the default ServiceAccount is used. |
 | serviceAccountName | string | `"default"` | DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility. @deprecated |
 | sizingPreset | string | `""` | Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults. |
+| smtp.fromAddress | string | `nil` | Sender address of every email Logfire sends (`From` and SMTP envelope sender), such as `logfire@example.com`. Required when `smtp.host` is set. Use an address on a domain that your SMTP server may send for. Logfire does not send email as `pydantic.dev` from a self-hosted install. |
+| smtp.fromName | string | `nil` | Sender display name of every email Logfire sends. If it is not set, the name is `Pydantic Logfire`. |
 | smtp.host | string | `nil` | SMTP server hostname |
 | smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | smtp.port | int | `25` | SMTP server port |
@@ -699,6 +790,9 @@ Before diving deeper, verify these common configuration issues:
 | usageRedis.dsn | string | `""` | Redis DSN for usage, autocomplete, and rate limiting data. |
 | usageRedis.prefix | string | `""` | Key prefix for usage keys. |
 | variablesApiKey | string | `""` | Client-safe API key used by the frontend to evaluate external managed variables through OFREP. The key is written to the public runtime configuration, so it must only have the `project:read_external_variables` scope. |
+| webPush.enabled | bool | `false` | Let users turn on browser push notifications for alerts. Needs the deployment to be served over HTTPS, since browsers register a service worker only on a secure origin. While this is false the settings panel reports push as unavailable. |
+| webPush.privateKey | string | `""` | VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one and keep it across upgrades. Replacing it unregisters every device that had push on, which each browser recovers from by subscribing again on its next visit. |
+| webPush.subject | string | `""` | Contact the push service operator can reach you on, a `mailto:` or `https:` URL (RFC 8292). Defaults to `mailto:` and `adminEmail`. |
 
 ----------------------------------------------
 Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)

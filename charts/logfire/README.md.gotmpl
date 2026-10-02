@@ -372,6 +372,81 @@ logfire-worker:
 
 Nested `resources.requests` do not add mandatory limits, allowing workloads to use spare node capacity. The legacy flat resource shorthand continues to use the configured values for both requests and limits.
 
+### Collector capacity and health
+
+The `standard` preset (also inherited by `large`) requests 512Mi of memory and allows a
+2Gi limit. The request and HPA targets are unchanged, so raising the limit provides burst
+headroom without delaying autoscaling. Reserve more memory through
+`logfire-otel-collector.resources.requests.memory` when sustained usage warrants it; a
+container limit does not reserve node capacity. Memory HPA targets are percentages of the
+request, so reassess the target when changing the request.
+
+The collector sets `GOMEMLIMIT` to 60% of its rendered memory limit, before the memory
+limiter's 75% hard threshold. An explicit `GOMEMLIMIT` in `logfire-otel-collector.env`
+takes precedence. With no rendered memory limit, fixed collector/GC limits are used rather
+than percentages of node memory.
+
+Each signal has its own disk-backed exporter queue by default: standard allows 128MiB of
+serialized payload per queue, or 384MiB across traces, logs, and metrics. Processing,
+in-flight batches, and file mappings still consume memory. Exporter-side batching flushes
+after one second, with a 1MiB trigger and 4MiB maximum serialized batch size.
+Queue rejection reaches the OTLP receiver, allowing
+senders to retry; successful enqueue does not guarantee delivery. Full queues, permanent
+backend errors, retry expiry (five minutes by default), and storage loss can still lose data.
+Override queue/batch options under `otel_collector.exporter.sending_queue`.
+Debug request summaries are disabled by
+default; enable `otel_collector.debug.enabled` temporarily for troubleshooting.
+
+The `file_storage/queue` extension uses a disk-backed `emptyDir`, so queued data survives a
+container restart in the same pod. Pod replacement, rollout, eviction, and node loss remove
+the queue. This storage does not persist Prometheus series or delta-to-cumulative state.
+Set `otel_collector.queueStorage.enabled=false` to use memory queues instead. Disk reduces
+queue heap pressure and supports container-restart recovery, but its I/O can reduce throughput
+and storage exhaustion can lose records that were already acknowledged. A storage error does
+not always mean only the new request was rejected. Monitor database allocation and downstream
+delivery as well as logical queue utilization.
+
+Each pod has a 4Gi queue volume and a 512MiB limit per signal database. This provides more
+database headroom than the payload budget because index/page
+overhead and fragmentation depend on request shape. The chart requires at least four times
+the effective byte queue capacity per database, including queue overrides; this minimum does
+not guarantee that arbitrary request shapes will fit. Item/request queue sizing requires
+operator budgeting because its units cannot be compared with database bytes. Compaction
+reclaims
+disk space after queues drain; the volume must allow at least six times the database limit
+for three databases and their temporary compaction copies. Like upstream, `fsync` is off by
+default. Writes remain available on the live node filesystem for process-restart recovery,
+but an unclean host failure can lose unsynced writes or corrupt the database. Set
+`otel_collector.queueStorage.fsync=true` to force each database write to stable storage, at
+substantial I/O cost. An `emptyDir` still provides no durability across pod/node replacement.
+The pod requests 512Mi of
+ephemeral storage and allows 5Gi including container logs; explicit collector resource
+settings take precedence. Adjust `otel_collector.queueStorage` for local storage capacity
+and throughput, and monitor node disk pressure. An `emptyDir` size limit is not a disk
+reservation. Filesystem permissions use `fsGroup` without a root init container and honor
+pod/container security context overrides.
+
+Prometheus export additionally retains application series for `metric_expiration` (180m by
+default) and delta-to-cumulative state for `max_stale` (5m by default). The memory limiter
+can refuse incoming data but cannot evict this state. Inactive pod/label churn can therefore
+keep consuming memory even when queue utilization is low. Tune expiration to the longest
+expected interval between observations; reducing it removes inactive collector cache
+entries, while Prometheus keeps previously scraped history. Stream caps remain unset
+because exceeding a cap drops new streams. Metrics for a given stream must reach the same
+collector replica; cumulative state resets when that collector is replaced. Scrape each
+replica directly, and account for these semantics when configuring routing/autoscaling.
+
+Collector self-metrics are available on each pod's `self-metrics` port
+(`otel_collector.selfMetricsPort`, default 8888), separately from application metrics on
+`otel_collector.prometheus.port` (default 9090). Configure your monitoring system to scrape that pod port.
+Monitor queue utilization (`otelcol_exporter_queue_size` / `otelcol_exporter_queue_capacity`),
+`otelcol_exporter_enqueue_failed_*`, `otelcol_receiver_refused_*`, process/container memory,
+and pod OOM/restart events. Higher limits provide headroom; retained cardinality and scrape
+cost still require measurement. Startup, readiness, and liveness probes use the process
+health endpoint; exporter failures alone do not trigger liveness restarts. Rollouts retain
+existing replicas while one replacement starts, and allow 60 seconds for shutdown. This
+shutdown budget is finite and does not guarantee that a blocked queue drains.
+
 ## Advanced Configuration
 
 ### External Secrets and Automatic Reloads

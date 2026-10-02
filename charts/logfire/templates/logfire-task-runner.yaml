@@ -25,6 +25,9 @@ spec:
         {{- end }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
         {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-unsubscribe-secret")) | nindent 8 }}
+        {{- with (include "logfire.webPushChecksumAnnotation" . | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
@@ -55,6 +58,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 11
+          # Readiness is the database-aware check that startup uses. A replica that loses
+          # Postgres leaves the Deployment's available count, so a capacity shortfall is
+          # visible instead of counting as a ready replica that delivers nothing.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8005
           env:
             - name: LOGFIRE_SERVICE_NAME
               value: {{ $serviceName }}
@@ -76,6 +86,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-unsubscribe-secret") }}
                   key: logfire-unsubscribe-secret
+            {{- with (include "logfire.webPushEnv" . | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
             - name: LOGFIRE_REGION
@@ -107,6 +120,7 @@ spec:
             - name: SMTP_USE_TLS
               value: {{ .Values.smtp.use_tls | quote }}
             {{ end }}
+            {{- include "logfire.emailSenderEnv" . | nindent 12 }}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}

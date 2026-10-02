@@ -25,6 +25,9 @@ spec:
         {{- end }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
         {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-unsubscribe-secret" "logfire-jwt-secret")) | nindent 8 }}
+        {{- with (include "logfire.webPushChecksumAnnotation" . | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
@@ -103,6 +106,8 @@ spec:
               value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | quote }}
             - name: COLLECTOR_OTLP_GRPC_HOST
               value: http://logfire-otel-collector:4317
+            - name: ON_PREM
+              value: "true"
             - name: EMAILS_ENABLED
               value: {{ include "logfire.emailsEnabled" . | quote }}
             - name: FRONTEND_HOST
@@ -123,6 +128,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
+            {{- with (include "logfire.webPushEnv" . | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: LOGFIRE_REGION
               value: {{ .Values.logfireRegion | default "local" }}
             - name: KNOWN_LOGFIRE_REGIONS
@@ -150,6 +158,7 @@ spec:
             - name: SMTP_USE_TLS
               value: {{ .Values.smtp.use_tls | quote }}
             {{ end }}
+            {{- include "logfire.emailSenderEnv" . | nindent 12 }}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}

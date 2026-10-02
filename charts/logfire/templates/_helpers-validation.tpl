@@ -158,7 +158,11 @@ Validate existing secret configuration
 {{- define "logfire.validate.existingSecret" -}}
 {{- if .Values.existingSecret.enabled -}}
   {{- if not .Values.existingSecret.name -}}
-    {{- fail "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-encryption-key, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys." -}}
+    {{- $msg := "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-encryption-key, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys." -}}
+    {{- if .Values.webPush.enabled -}}
+      {{- $msg = printf "%s It must also hold a logfire-web-push-vapid-key key when webPush.enabled." $msg -}}
+    {{- end -}}
+    {{- fail $msg -}}
   {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -343,6 +347,24 @@ Validate that both Ingress and Gateway are not enabled simultaneously
 {{- end -}}
 
 {{/*
+Validate that an install with an SMTP server names its own email sender.
+The platform does not send email as pydantic.dev from a self-hosted install, and the task
+runner and the worker refuse to start without EMAIL_FROM_ADDRESS. This check stops the
+install or upgrade before any workload rolls out. With dev.deployMaildev, the workloads send
+through maildev instead of smtp.host and get a placeholder sender.
+*/}}
+{{- define "logfire.validate.smtp" -}}
+{{- $smtp := .Values.smtp | default dict -}}
+{{- if and (get $smtp "host") (not (get $smtp "fromAddress")) (not (.Values.dev).deployMaildev) -}}
+  {{- fail "smtp.fromAddress is required when smtp.host is set. Set it to the sender address of Logfire email, such as logfire@example.com, on a domain that your SMTP server may send for. Logfire does not send email as pydantic.dev from a self-hosted install." -}}
+{{- end -}}
+{{- $domain := (get $smtp "fromAddress" | default "" | toString | splitList "@" | last | trim | trimSuffix "." | lower) -}}
+{{- if or (eq $domain "pydantic.dev") (hasSuffix ".pydantic.dev" $domain) -}}
+  {{- fail "smtp.fromAddress must not be a pydantic.dev address. Set it to an address on a domain that your SMTP server may send for." -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Master validation template - runs all validations
 Call this from templates that need to ensure configuration is valid.
 */}}
@@ -363,10 +385,60 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.adminSecret"
   "logfire.validate.admin"
   "logfire.validate.redis"
+  "logfire.validate.smtp"
   "logfire.validate.inClusterTls"
   "logfire.validate.scratchVolumes"
   -}}
 {{- range $validator := $validators -}}
 {{- include $validator $root -}}
+{{- end -}}
+{{- end -}}
+
+{{/* Each of the three signal databases needs room for its compaction copy. */}}
+{{- define "logfire.validate.otelQueueStorage" -}}
+{{- $storage := .Values.otel_collector.queueStorage -}}
+{{- if $storage.enabled -}}
+{{- $maximum := $storage.maxSizeBytes | int64 -}}
+{{- if lt $maximum 1048576 -}}
+{{- fail "otel_collector.queueStorage.maxSizeBytes must be at least 1048576 (1MiB)." -}}
+{{- end -}}
+{{- $volumeMi := include "logfire.memoryToMi" $storage.sizeLimit | int64 -}}
+{{- if lt (mul $volumeMi 1048576) (mul $maximum 6) -}}
+{{- fail "otel_collector.queueStorage.sizeLimit must allow at least 6x maxSizeBytes for three databases and their compaction copies." -}}
+{{- end -}}
+{{- $resources := include "logfire.otelCollectorResources" . | fromYaml -}}
+{{- $limitMiPrecise := include "logfire.memoryToMiFloat" (dig "resources" "limits" "ephemeral-storage" "0" $resources) | float64 -}}
+{{- $volumeMiPrecise := include "logfire.memoryToMiFloat" $storage.sizeLimit | float64 -}}
+{{- if lt $limitMiPrecise $volumeMiPrecise -}}
+{{- fail "The collector ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit; allow extra space for container logs." -}}
+{{- end -}}
+{{- $collector := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-otel-collector") | fromJson -}}
+{{- $queueBytes := $collector.sendingQueueBytes | default .Values.otel_collector.sendingQueueBytes | default 67108864 -}}
+{{- $queue := .Values.otel_collector.exporter.sending_queue | default dict -}}
+{{- if hasKey $queue "queue_size" -}}
+{{- $queueBytes = $queue.queue_size -}}
+{{- end -}}
+{{- if and (eq ($queue.sizer | default "bytes") "bytes") (ne (dig "enabled" true $queue) false) -}}
+{{/* Small requests need bbolt page/index headroom; this minimum is not a storage-loss guarantee. */}}
+{{- if lt $maximum (mul ($queueBytes | int64) 4) -}}
+{{- fail "otel_collector.queueStorage.maxSizeBytes must allow at least 4x the effective byte queue_size for database overhead; increase the disk budgets when increasing the queue." -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/* The collector's self-metrics, OTLP receivers, health check, and application Prometheus exporter
+each bind a port, so the self-metrics port must differ from all of them or the collector cannot
+start. */}}
+{{- define "logfire.validate.otelSelfMetricsPort" -}}
+{{- $selfPort := int (.Values.otel_collector.selfMetricsPort | default 8888) -}}
+{{- if has $selfPort (list 4317 4318 13133) -}}
+{{- fail (printf "otel_collector.selfMetricsPort (%d) collides with a fixed collector port (4317 OTLP gRPC, 4318 OTLP HTTP, or 13133 health check)." $selfPort) -}}
+{{- end -}}
+{{- if include "isPrometheusExporterEnabled" . | trim | eq "true" -}}
+{{- $promPort := int ((get (.Values.otel_collector.prometheus | default dict) "port") | default 9090) -}}
+{{- if eq $selfPort $promPort -}}
+{{- fail (printf "otel_collector.selfMetricsPort (%d) must differ from otel_collector.prometheus.port (%d); the collector binds both and cannot start when they match." $selfPort $promPort) -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}

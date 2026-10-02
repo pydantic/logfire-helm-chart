@@ -1,0 +1,184 @@
+suite: otel collector config contracts
+# Only the invariants a retune must not break: explicit values win over derived
+# ones, pipelines stay isolated so the Prometheus converter cannot leak into the
+# backend metrics, and surfaces the two halves of the chart own together agree.
+# Rendered defaults (queue sizes, GC numbers, headroom, derived naming) are
+# deliberately not pinned: those are retuned regularly and must not churn tests.
+# Values that must fail the install live in validation_test.yaml.
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: keeps queues and batches inside the exporter so rejection reaches the receiver
+    set:
+      sizingPreset: standard
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'processors: \[memory_limiter, k8s_attributes\]'
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'send_batch_size'
+
+  - it: honors explicit translation and queue overrides
+    set:
+      otel_collector.prometheus.enabled: true
+      otel_collector.prometheus.translation_strategy: NoTranslation
+      otel_collector.prometheus.max_stale: 10m
+      otel_collector.exporter.sending_queue.queue_size: 123456
+      otel_collector.exporter.sending_queue.batch.min_size: 16384
+      otel_collector.exporter.sending_queue.batch.max_size: 32768
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'translation_strategy: NoTranslation'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_stale: 10m'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'queue_size: 123456'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_size: 32768'
+
+  - it: an explicit translation_strategy wins over the derived value
+    set:
+      otel_collector:
+        prometheus:
+          enabled: true
+          add_metric_suffixes: false
+          translation_strategy: NoTranslation
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'translation_strategy: NoTranslation'
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'translation_strategy: UnderscoreEscapingWithoutSuffixes'
+
+  - it: an explicit translation_strategy still wins when add_metric_suffixes is true
+    set:
+      otel_collector:
+        prometheus:
+          enabled: true
+          add_metric_suffixes: true
+          translation_strategy: NoTranslation
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'translation_strategy: NoTranslation'
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'add_metric_suffixes'
+
+  # The Prometheus exporter gets its own metrics pipeline behind delta_to_cumulative so
+  # the backend keeps delta semantics. The converter must never leak into the backend
+  # metrics pipeline: dashboards would silently misread counters.
+  - it: routes Prometheus through delta_to_cumulative on its own pipeline
+    set:
+      otel_collector:
+        prometheus:
+          enabled: true
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'metrics/prometheus:\n\s+receivers: \[otlp\]\n\s+processors: \[memory_limiter, k8s_attributes, delta_to_cumulative\]\n\s+exporters: \[prometheus\]'
+
+  - it: keeps the backend metrics pipeline free of delta_to_cumulative and prometheus
+    set:
+      otel_collector:
+        prometheus:
+          enabled: true
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'metrics:\n\s+receivers: \[otlp\]\n\s+processors: \[memory_limiter, k8s_attributes\]\n\s+exporters: \[otlp_http\]'
+
+  - it: preserves a user GC setting without adding another copy
+    set:
+      logfire-otel-collector.env:
+        - name: GOMEMLIMIT
+          value: 500MiB
+    template: templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.containers[0].env
+          count: 2
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GOMEMLIMIT
+            value: 500MiB
+
+  - it: preserves explicit disk budgets and security overrides
+    set:
+      otel_collector.queueStorage.enabled: true
+      logfire-otel-collector.resources:
+        requests:
+          ephemeral-storage: 1Gi
+        limits:
+          ephemeral-storage: 6Gi
+      podSecurityContext.fsGroup: 2000
+      logfire-otel-collector.podSecurityContext.fsGroup: 3000
+      logfire-otel-collector.securityContext.runAsUser: 3000
+    template: templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 3000
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+          value: 3000
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests["ephemeral-storage"]
+          value: 1Gi
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits["ephemeral-storage"]
+          value: 6Gi
+
+  # The self-metrics port is set in the config one template renders and bound in
+  # another; if the two disagree the scraper talks to a closed port.
+  - it: binds the self-metrics container port to the configured value
+    set:
+      otel_collector.selfMetricsPort: 9999
+    template: templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            containerPort: 9999
+            name: self-metrics
+
+  - it: honors a Recreate rollout without retaining RollingUpdate settings
+    set:
+      logfire-otel-collector.strategy.type: Recreate
+    template: templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.strategy.type
+          value: Recreate
+      - notExists:
+          path: spec.strategy.rollingUpdate

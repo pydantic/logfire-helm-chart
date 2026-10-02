@@ -40,7 +40,7 @@ adminEmail: hello@example.dev
 variablesApiKey: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: "v2026-09-23.01"
+releaseVersion: "v2026-10-01.03"
 
 # -- Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of
 # the ingress or tunnel in front of the release; if HAProxy closes an idle connection first,
@@ -313,11 +313,16 @@ smtp:
   password:
   # -- Use TLS for SMTP
   use_tls: false
+  # -- Sender address of every email Logfire sends (`From` and SMTP envelope sender), such as `logfire@example.com`. Required when `smtp.host` is set. Use an address on a domain that your SMTP server may send for. Logfire does not send email as `pydantic.dev` from a self-hosted install.
+  fromAddress:
+  # -- Sender display name of every email Logfire sends. If it is not set, the name is `Pydantic Logfire`.
+  fromName:
 
 # SMTP example using secrets:
 # smtp:
 #   host: smtp.example.com
 #   port: 587
+#   fromAddress: logfire@example.com
 #   username:
 #     valueFrom:
 #       secretKeyRef:
@@ -329,6 +334,25 @@ smtp:
 #         name: smtp
 #         key: password
 #   use_tls: true
+
+
+# ==============================================================================
+# Web push notifications
+# ==============================================================================
+
+webPush:
+  # -- Let users turn on browser push notifications for alerts. Needs the deployment to be
+  # served over HTTPS, since browsers register a service worker only on a secure origin.
+  # While this is false the settings panel reports push as unavailable.
+  enabled: false
+  # -- Contact the push service operator can reach you on, a `mailto:` or `https:` URL
+  # (RFC 8292). Defaults to `mailto:` and `adminEmail`.
+  subject: ""
+  # -- VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as
+  # `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one
+  # and keep it across upgrades. Replacing it unregisters every device that had push on, which
+  # each browser recovers from by subscribing again on its next visit.
+  privateKey: ""
 
 
 # ==============================================================================
@@ -1238,6 +1262,38 @@ logfire-ff-cache-byte:
 #     maxUnavailable: 1
 #     minAvailable: 1
 
+# -- Collector health checks and rollout settings. Override probes here, or set a probe to null
+# to disable it. GOMEMLIMIT defaults to 60% of the rendered memory limit (409MiB with no limit);
+# an explicit GOMEMLIMIT in env takes precedence.
+logfire-otel-collector:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  terminationGracePeriodSeconds: 60
+  startupProbe:
+    httpGet:
+      path: /
+      port: health
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 24
+  readinessProbe:
+    httpGet:
+      path: /
+      port: health
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  livenessProbe:
+    httpGet:
+      path: /
+      port: health
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+
 # -- OpenTelemetry collector
 # logfire-otel-collector:
 #   # -- Workload labels
@@ -1638,9 +1694,36 @@ otelResourceAttributes: {}
 
 # -- otel-collector configuration
 otel_collector:
+  # -- Disk-backed OTLP queues on a per-pod emptyDir. Survives container restarts,
+  # but not pod replacement, rollouts, or eviction. Disable to use memory queues.
+  # Storage exhaustion can still lose already-acknowledged records.
+  queueStorage:
+    enabled: true
+    sizeLimit: 4Gi
+    # -- Scheduling reservation for node-local storage, including logs.
+    # Explicit logfire-otel-collector.resources ephemeral-storage settings take precedence.
+    ephemeralStorageRequest: 512Mi
+    # -- Container limit for node-local storage, including queues, compaction, and logs.
+    ephemeralStorageLimit: 5Gi
+    # -- Force each database write to stable storage. Off by default, like upstream:
+    # process-restart recovery uses the live node filesystem; unclean host failure can lose
+    # unsynced writes or corrupt the database. Enabling this adds substantial disk I/O cost.
+    fsync: false
+    # -- Per-database limit. There are three signal databases. Keep the volume large enough
+    # for all three plus their temporary compaction copies (at least 6x this value).
+    # Byte queues require at least 4x payload capacity per database for page/index overhead;
+    # this headroom minimum is not a guarantee for arbitrary request shapes or disk failure.
+    maxSizeBytes: 536870912
+  debug:
+    # -- Emit per-request summaries to collector logs. Enable for troubleshooting; disabled
+    # by default to avoid logging every incoming telemetry request.
+    enabled: false
   # -- Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per
   # profile; this value applies when no sizing preset is used.
   sendingQueueBytes: 67108864
+  # -- Port for the collector's own Prometheus self-metrics. Must differ from `prometheus.port`
+  # (the application exporter), or the collector cannot bind both and fails to start.
+  selfMetricsPort: 8888
   # -- exporter configuration for the otlp_http exporter
   # Override these to send telemetry data to a different OTLP-compatible destination.
   exporter:
@@ -1648,6 +1731,16 @@ otel_collector:
     tls:
       insecure: true
     headers: {}
+    # -- Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP
+    # ingestion, so senders can retry refused data. Queue limits measure serialized bytes.
+    # The queue capacity still comes from the sizing preset or sendingQueueBytes unless
+    # queue_size is explicitly overridden here. Each signal has its own queue and consumers.
+    sending_queue:
+      batch:
+        sizer: bytes
+        min_size: 1048576
+        max_size: 4194304
+        flush_timeout: 1s
   image:
     repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
     tag: "0.160.0"
@@ -1660,6 +1753,25 @@ otel_collector:
     metric_expiration: 180m
     enable_open_metrics: true
     add_metric_suffixes: false
+    # -- Override the Prometheus exporter `translation_strategy`. When empty it is derived from
+    # `add_metric_suffixes`: `UnderscoreEscapingWithoutSuffixes` when false, and
+    # `UnderscoreEscapingWithSuffixes` when true. The exporter no longer emits `add_metric_suffixes`
+    # (deprecated and ignored by recent collectors); this value drives `translation_strategy`.
+    translation_strategy: ""
+    # -- Convert delta metrics to cumulative on the Prometheus pipeline with the alpha
+    # `delta_to_cumulative` processor. Only runs when the Prometheus exporter is enabled, and the
+    # otlp_http pipeline keeps its delta semantics to the backend. Set false to pass metrics
+    # through unchanged. The limiter can refuse new data but cannot evict retained streams.
+    delta_to_cumulative: true
+    # -- Retention of inactive delta-to-cumulative streams. Independent of metric_expiration.
+    max_stale: 5m
+    # -- Cap on the delta-to-cumulative stream map. The in-pipeline `memory_limiter` bounds ingress
+    # but cannot evict this processor's state, so an unbounded cap lets high-cardinality attributes
+    # grow until the collector refuses telemetry. Streams past the cap are dropped, so raise this
+    # for high-cardinality scrapes.
+    max_streams: 10000
+    # -- OpenTelemetry resource attributes exposed as Prometheus metric labels. Review this
+    # deprecated option when upgrading the collector to use resource_constant_labels instead.
     resource_to_telemetry_conversion:
       enabled: true
 
@@ -1676,6 +1788,7 @@ otel_collector:
 #  - logfire-jwt-secret
 #  - logfire-unsubscribe-secret
 #  - logfire-mcp-oauth-client-secret
+#  - logfire-web-push-vapid-key (only when webPush.enabled is true)
 existingSecret:
   # -- Use an existing Secret (recommended for Argo CD users).
   enabled: false
@@ -2977,6 +3090,7 @@ sizingPresets:
       scratchVolume:
         storage: "64Gi"
     logfire-otel-collector:
+      spreadAcrossZones: true
       # Initial canary value for the exporter sending queue. The bound is byte-based; the exact
       # value is not a memory measurement. Monitor OOMs, receiver refusals, and enqueue failures.
       sendingQueueBytes: 134217728
@@ -2985,7 +3099,8 @@ sizingPresets:
           cpu: "500m"
           memory: "512Mi"
         limits:
-          memory: "1Gi"
+          # Prometheus retains series and cumulative state in addition to three export queues.
+          memory: "2Gi"
       autoscaling:
         minReplicas: 2
         maxReplicas: 4

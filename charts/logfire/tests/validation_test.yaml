@@ -713,3 +713,120 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: 'maxQueryCostPerPod must be a positive integer'
+
+  # --- SMTP sender contract ---
+  # A self-hosted install sends through its own SMTP server, so mail as pydantic.dev would fail
+  # DMARC at the receiver. The platform refuses to start without a sender, and this check stops
+  # the install or upgrade before any workload rolls out.
+  - it: an SMTP server without a sender fails before anything rolls out
+    set:
+      smtp:
+        host: smtp.example.com
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.fromAddress is required when smtp.host is set"
+
+  # The platform refuses a pydantic.dev sender on a self-hosted install. This check says so
+  # before any workload rolls out.
+  - it: a pydantic.dev sender fails before anything rolls out
+    set:
+      smtp:
+        host: smtp.example.com
+        fromAddress: No-Reply@Alerts.Pydantic.Dev
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.fromAddress must not be a pydantic.dev address"
+
+  # --- otel collector queue and storage budgets ---
+  - it: rejects a self-metrics port equal to the Prometheus exporter port
+    set:
+      otel_collector.prometheus.enabled: true
+      otel_collector.prometheus.port: 9090
+      otel_collector.selfMetricsPort: 9090
+    asserts:
+      - failedTemplate:
+          errorPattern: 'selfMetricsPort.*must differ from otel_collector.prometheus.port'
+
+  - it: rejects an ephemeral-storage limit below queueStorage.sizeLimit by a fraction of an MiB
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.queueStorage.maxSizeBytes: 1048576
+      otel_collector.queueStorage.sizeLimit: 1536.9Mi
+      otel_collector.queueStorage.ephemeralStorageLimit: 1536.1Mi
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit'
+
+  - it: rejects a volume smaller than the database and compaction budget
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.queueStorage.sizeLimit: 1Gi
+    asserts:
+      - failedTemplate:
+          errorPattern: 'must allow at least 6x maxSizeBytes'
+
+  - it: rejects a container disk limit smaller than the queue volume
+    set:
+      otel_collector.queueStorage.enabled: true
+      logfire-otel-collector.resources.limits.ephemeral-storage: 1Gi
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit'
+
+  - it: rejects an enlarged byte queue without database headroom
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.exporter.sending_queue.queue_size: 268435456
+    asserts:
+      - failedTemplate:
+          errorPattern: 'must allow at least 4x the effective byte queue_size'
+
+  - it: uses the effective preset queue for database validation
+    set:
+      sizingPreset: standard
+      otel_collector.queueStorage.enabled: true
+      otel_collector.queueStorage.maxSizeBytes: 268435456
+    asserts:
+      - failedTemplate:
+          errorPattern: 'must allow at least 4x the effective byte queue_size'
+
+  - it: accepts an enlarged queue when all disk budgets are raised
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.queueStorage.maxSizeBytes: 1073741824
+      otel_collector.queueStorage.sizeLimit: 8Gi
+      otel_collector.queueStorage.ephemeralStorageLimit: 9Gi
+      otel_collector.exporter.sending_queue.queue_size: 268435456
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'queue_size: 268435456'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_size: 1073741824'
+
+  - it: does not compare item counts with byte database limits
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.exporter.sending_queue.sizer: items
+      otel_collector.exporter.sending_queue.queue_size: 268435456
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'sizer: items'
+
+  - it: accepts signed and decimal memory quantities
+    set:
+      otel_collector.prometheus.enabled: true
+      logfire-otel-collector.resources.limits.memory: "+1Gi"
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'limit_percentage: 75'
