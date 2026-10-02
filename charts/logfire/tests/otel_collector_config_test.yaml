@@ -25,7 +25,7 @@ tests:
           pattern: 'processors: \[memory_limiter, k8s_attributes\]'
       - notMatchRegex:
           path: data["otel-collector-config.yaml"]
-          pattern: 'send_batch_size|deltatocumulative|metrics/prometheus:|exporters: \[debug'
+          pattern: 'send_batch_size|delta_to_cumulative|metrics/prometheus:|exporters: \[debug'
   - it: converts only the Prometheus branch and preserves the dashboard metric names
     set:
       sizingPreset: standard
@@ -42,19 +42,19 @@ tests:
           pattern: 'metrics:\n\s+receivers: \[otlp\]\n\s+processors: \[memory_limiter, k8s_attributes\]\n\s+exporters: \[otlp_http\]'
       - matchRegex:
           path: data["otel-collector-config.yaml"]
-          pattern: 'metrics/prometheus:\n\s+receivers: \[otlp\]\n\s+processors: \[memory_limiter, k8s_attributes, deltatocumulative\]\n\s+exporters: \[prometheus\]'
+          pattern: 'metrics/prometheus:\n\s+receivers: \[otlp\]\n\s+processors: \[memory_limiter, k8s_attributes, delta_to_cumulative\]\n\s+exporters: \[prometheus\]'
   - it: allows disabling the alpha converter and enabling legacy suffixes
     set:
       otel_collector.prometheus.enabled: true
       otel_collector.prometheus.add_metric_suffixes: true
-      otel_collector.prometheus.deltatocumulative: false
+      otel_collector.prometheus.delta_to_cumulative: false
     asserts:
       - matchRegex:
           path: data["otel-collector-config.yaml"]
           pattern: 'translation_strategy: UnderscoreEscapingWithSuffixes'
       - notMatchRegex:
           path: data["otel-collector-config.yaml"]
-          pattern: 'deltatocumulative:'
+          pattern: 'delta_to_cumulative:'
   - it: honors explicit translation and queue overrides
     set:
       otel_collector.prometheus.enabled: true

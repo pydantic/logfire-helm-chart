@@ -4,9 +4,9 @@
 {{- $queueSizeBytes := $collectorValues.sendingQueueBytes | default .Values.otel_collector.sendingQueueBytes | default 67108864 }}
 {{- $prometheusEnabled := include "isPrometheusExporterEnabled" . | trim | eq "true" }}
 {{- $promValues := .Values.otel_collector.prometheus | default dict }}
-{{- $deltatocumulative := true }}
-{{- if hasKey $promValues "deltatocumulative" }}
-{{- $deltatocumulative = $promValues.deltatocumulative }}
+{{- $delta_to_cumulative := true }}
+{{- if hasKey $promValues "delta_to_cumulative" }}
+{{- $delta_to_cumulative = $promValues.delta_to_cumulative }}
 {{- end }}
 apiVersion: v1
 kind: ConfigMap
@@ -80,12 +80,12 @@ data:
         limit_mib: 512
         spike_limit_mib: 128
         {{- end }}
-      {{- if and $prometheusEnabled $deltatocumulative }}
+      {{- if and $prometheusEnabled $delta_to_cumulative }}
       # Delta-to-cumulative for the Prometheus exporter only. The processor is alpha. The
       # otlp_http metrics pipeline stays delta, so this conversion is scoped to the Prometheus
-      # pipeline behind `deltatocumulative`. The limiter protects ingress, but cannot evict
+      # pipeline behind `delta_to_cumulative`. The limiter protects ingress, but cannot evict
       # retained series; capacity still depends on cardinality and retention.
-      deltatocumulative:
+      delta_to_cumulative:
         max_stale: {{ $promValues.max_stale }}
       {{- end }}
       k8s_attributes:
@@ -158,12 +158,13 @@ data:
           exporters: [{{ if .Values.otel_collector.debug.enabled }}debug, {{ end }}otlp_http]
         {{- if $prometheusEnabled }}
         # The Prometheus exporter gets its own metrics pipeline so the otlp_http pipeline keeps
-        # its delta semantics to the backend. Behind `deltatocumulative` (when enabled) this
+        # its delta semantics to the backend. Behind `delta_to_cumulative` (when enabled) this
         # pipeline converts delta to cumulative, which is what Prometheus scrapes; otherwise it
-        # passes metrics through unchanged.
+        # passes metrics through unchanged. Each pipeline has its own processor instances,
+        # including Kubernetes enrichment. Debug summaries are emitted only on the OTLP branch.
         metrics/prometheus:
           receivers: [otlp]
-          processors: [memory_limiter, k8s_attributes{{ if $deltatocumulative }}, deltatocumulative{{ end }}]
+          processors: [memory_limiter, k8s_attributes{{ if $delta_to_cumulative }}, delta_to_cumulative{{ end }}]
           exporters: [prometheus]
         {{- end }}
         logs:
