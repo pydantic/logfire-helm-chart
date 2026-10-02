@@ -445,23 +445,6 @@ health endpoint; exporter failures alone do not trigger liveness restarts. Rollo
 existing replicas while one replacement starts, and allow 60 seconds for shutdown. This
 shutdown budget is finite and does not guarantee that a blocked queue drains.
 
-Run `helm unittest charts/logfire` for rendered settings and
-`python3 tests/collector/verify_config.py` (requires PyYAML and Docker) for a local collector
-smoke test of dashboard names, histogram conversion, OTLP temporality, and process health.
-Run `python3 tests/collector/verify_queue_recovery.py` to verify all three signal queues
-replay after a forced container kill. Both runtime tests use synthetic data and do not
-connect to a cluster.
-
-`tests/collector/stress_queues.py` runs manual synthetic capacity, throughput, repeated
-fill/drain, restart, and storage-full experiments. Use `--scenario`, `--mode`, and `--output` to
-select a case. Slow-I/O cases accept Docker `--io-bps` or `--io-iops` device limits; these
-apply only to the test container. `--filesystem-mib` uses tmpfs to isolate byte capacity or
-inject ENOSPC; those cases do not measure disk performance or durability. `--fsync` and
-`--no-fsync` override the chart setting. Tiny-request tests can scale queue/database limits using
-`--queue-mib` and `--database-mib`. Inspect acknowledged record IDs in the output as well
-as queue metrics. The reproducible summary in `tests/collector/queue_stress_results.json`
-records the observed tradeoffs; its local rates are not production capacity guarantees.
-
 ## Advanced Configuration
 
 ### External Secrets and Automatic Reloads

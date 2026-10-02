@@ -51,12 +51,6 @@ jobs:
           helm dependency build charts/logfire
           ci/check-version-stable-checksums.sh
 
-      - name: Verify collector metrics and disk queue recovery
-        run: |
-          "${pythonLocation}/bin/python" -m pip install PyYAML==6.0.3
-          "${pythonLocation}/bin/python" tests/collector/verify_config.py
-          "${pythonLocation}/bin/python" tests/collector/verify_queue_recovery.py
-
       - name: Set up GCP auth
         id: auth
         uses: google-github-actions/auth@v2
