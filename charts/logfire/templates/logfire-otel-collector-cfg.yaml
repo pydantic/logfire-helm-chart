@@ -4,6 +4,7 @@
 {{- $queueSizeBytes := $collectorValues.sendingQueueBytes | default .Values.otel_collector.sendingQueueBytes | default 67108864 }}
 {{- $queueStorage := .Values.otel_collector.queueStorage }}
 {{- include "logfire.validate.otelQueueStorage" . }}
+{{- include "logfire.validate.otelSelfMetricsPort" . }}
 {{- $prometheusEnabled := include "isPrometheusExporterEnabled" . | trim | eq "true" }}
 {{- $promValues := .Values.otel_collector.prometheus | default dict }}
 {{- $delta_to_cumulative := true }}
@@ -85,10 +86,13 @@ data:
       {{- if and $prometheusEnabled $delta_to_cumulative }}
       # Delta-to-cumulative for the Prometheus exporter only. The processor is alpha. The
       # otlp_http metrics pipeline stays delta, so this conversion is scoped to the Prometheus
-      # pipeline behind `delta_to_cumulative`. The limiter protects ingress, but cannot evict
-      # retained series; capacity still depends on cardinality and retention.
+      # pipeline behind `delta_to_cumulative`. `max_streams` caps the retained stream map; the
+      # in-pipeline `memory_limiter` bounds ingress but cannot evict this processor's state, so an
+      # unbounded cap lets high-cardinality attributes grow until the collector refuses telemetry.
+      # Streams past the cap are dropped, so raise it for high-cardinality scrapes.
       delta_to_cumulative:
         max_stale: {{ $promValues.max_stale | default "5m" }}
+        max_streams: {{ $promValues.max_streams | default 10000 }}
       {{- end }}
       k8s_attributes:
         filter:
@@ -161,7 +165,7 @@ data:
                 exporter:
                   prometheus:
                     host: 0.0.0.0
-                    port: 8888
+                    port: {{ .Values.otel_collector.selfMetricsPort | default 8888 }}
       extensions: [health_check{{ if $queueStorage.enabled }}, file_storage/queue{{ end }}]
       pipelines:
         traces:

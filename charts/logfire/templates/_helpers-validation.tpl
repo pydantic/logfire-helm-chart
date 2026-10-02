@@ -407,8 +407,9 @@ Call this from templates that need to ensure configuration is valid.
 {{- fail "otel_collector.queueStorage.sizeLimit must allow at least 6x maxSizeBytes for three databases and their compaction copies." -}}
 {{- end -}}
 {{- $resources := include "logfire.otelCollectorResources" . | fromYaml -}}
-{{- $limitMi := include "logfire.memoryToMi" (dig "resources" "limits" "ephemeral-storage" "0" $resources) | int64 -}}
-{{- if lt $limitMi $volumeMi -}}
+{{- $limitMiPrecise := include "logfire.memoryToMiFloat" (dig "resources" "limits" "ephemeral-storage" "0" $resources) | float64 -}}
+{{- $volumeMiPrecise := include "logfire.memoryToMiFloat" $storage.sizeLimit | float64 -}}
+{{- if lt $limitMiPrecise $volumeMiPrecise -}}
 {{- fail "The collector ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit; allow extra space for container logs." -}}
 {{- end -}}
 {{- $collector := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-otel-collector") | fromJson -}}
@@ -422,6 +423,18 @@ Call this from templates that need to ensure configuration is valid.
 {{- if lt $maximum (mul ($queueBytes | int64) 4) -}}
 {{- fail "otel_collector.queueStorage.maxSizeBytes must allow at least 4x the effective byte queue_size for database overhead; increase the disk budgets when increasing the queue." -}}
 {{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/* The collector's self-metrics and the application Prometheus exporter each bind a port, so they
+must differ or the collector cannot start. */}}
+{{- define "logfire.validate.otelSelfMetricsPort" -}}
+{{- if include "isPrometheusExporterEnabled" . | trim | eq "true" -}}
+{{- $selfPort := .Values.otel_collector.selfMetricsPort | default 8888 -}}
+{{- $promPort := (get (.Values.otel_collector.prometheus | default dict) "port") | default 9090 -}}
+{{- if eq (int $selfPort) (int $promPort) -}}
+{{- fail (printf "otel_collector.selfMetricsPort (%d) must differ from otel_collector.prometheus.port (%d); the collector binds both and cannot start when they match." (int $selfPort) (int $promPort)) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

@@ -107,3 +107,43 @@ tests:
       - matchRegex:
           path: data["otel-collector-config.yaml"]
           pattern: 'exporters: \[debug, otlp_http\]'
+  - it: caps the delta_to_cumulative stream map
+    set:
+      otel_collector.prometheus.enabled: true
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_streams: 10000'
+  - it: falls back to a finite max_streams when the value is nulled
+    set:
+      otel_collector.prometheus.enabled: true
+      otel_collector.prometheus.max_streams: null
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_streams: 10000'
+  - it: accepts signed and decimal memory quantities
+    set:
+      otel_collector.prometheus.enabled: true
+      logfire-otel-collector.resources.limits.memory: "+1Gi"
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'memory_limiter'
+  - it: rejects a self-metrics port equal to the Prometheus exporter port
+    set:
+      otel_collector.prometheus.enabled: true
+      otel_collector.prometheus.port: 9090
+      otel_collector.selfMetricsPort: 9090
+    asserts:
+      - failedTemplate:
+          errorPattern: 'selfMetricsPort.*must differ from otel_collector.prometheus.port'
+  - it: rejects an ephemeral-storage limit below queueStorage.sizeLimit by a fraction of an MiB
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.queueStorage.maxSizeBytes: 1048576
+      otel_collector.queueStorage.sizeLimit: 1536.9Mi
+      otel_collector.queueStorage.ephemeralStorageLimit: 1536.1Mi
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit'

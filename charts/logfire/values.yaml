@@ -1721,6 +1721,9 @@ otel_collector:
   # -- Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per
   # profile; this value applies when no sizing preset is used.
   sendingQueueBytes: 67108864
+  # -- Port for the collector's own Prometheus self-metrics. Must differ from `prometheus.port`
+  # (the application exporter), or the collector cannot bind both and fails to start.
+  selfMetricsPort: 8888
   # -- exporter configuration for the otlp_http exporter
   # Override these to send telemetry data to a different OTLP-compatible destination.
   exporter:
@@ -1761,8 +1764,12 @@ otel_collector:
     # through unchanged. The limiter can refuse new data but cannot evict retained streams.
     delta_to_cumulative: true
     # -- Retention of inactive delta-to-cumulative streams. Independent of metric_expiration.
-    # Stream caps intentionally remain unset: exceeding a cap drops new streams.
     max_stale: 5m
+    # -- Cap on the delta-to-cumulative stream map. The in-pipeline `memory_limiter` bounds ingress
+    # but cannot evict this processor's state, so an unbounded cap lets high-cardinality attributes
+    # grow until the collector refuses telemetry. Streams past the cap are dropped, so raise this
+    # for high-cardinality scrapes.
+    max_streams: 10000
     # -- OpenTelemetry resource attributes exposed as Prometheus metric labels. Review this
     # deprecated option when upgrading the collector to use resource_constant_labels instead.
     resource_to_telemetry_conversion:
