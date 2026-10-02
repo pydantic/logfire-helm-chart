@@ -1,4 +1,6 @@
 {{- $serviceName := "logfire-otel-collector" }}
+{{- $collectorValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson }}
+{{- $memoryLimitMi := include "logfire.otelCollectorMemoryLimitMi" . | trim }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -92,6 +94,14 @@ metadata:
 spec:
   {{- include "logfire.replicas" (dict "Values" .Values "serviceName" $serviceName) | nindent 2 }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  {{- with $collectorValues.strategy }}
+  strategy:
+    type: {{ .type }}
+    {{- if eq .type "RollingUpdate" }}
+    rollingUpdate:
+      {{- .rollingUpdate | toYaml | nindent 6 }}
+    {{- end }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "logfire.selectorLabels" . | nindent 6 }}
@@ -113,6 +123,7 @@ spec:
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
       serviceAccountName: {{ $serviceName }}
+      terminationGracePeriodSeconds: {{ $collectorValues.terminationGracePeriodSeconds }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
       {{- range . }}
@@ -121,13 +132,17 @@ spec:
       {{- end }}
       {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
-      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
+      {{- $nodeSpread := dict "maxSkew" 1 "topologyKey" "kubernetes.io/hostname" "whenUnsatisfiable" "ScheduleAnyway" "labelSelector" (dict "matchLabels" (dict "app.kubernetes.io/instance" .Release.Name "app.kubernetes.io/component" $serviceName)) }}
+      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName "defaultTopologySpreadConstraints" (list $nodeSpread)) | nindent 6}}
       {{- $otelCollector := default (dict) .Values.otel_collector }}
       {{- $otelImage := get $otelCollector "image" | default dict }}
       {{- $collectorResourceAttributes := (get .Values "otelResourceAttributes") | default dict }}
       {{- $extraEnv := (index .Values $serviceName | default dict).env | default list }}
-      {{- $envState := dict "hasOtelResourceAttributes" false }}
+      {{- $envState := dict "hasOtelResourceAttributes" false "hasGoMemLimit" false }}
       {{- range $extraEnv }}
+        {{- if eq .name "GOMEMLIMIT" }}
+          {{- $_ := set $envState "hasGoMemLimit" true }}
+        {{- end }}
         {{- if eq .name "OTEL_RESOURCE_ATTRIBUTES" }}
           {{- $_ := set $envState "hasOtelResourceAttributes" true }}
         {{- end }}
@@ -142,15 +157,31 @@ spec:
           ports:
             - containerPort: 4317
             - containerPort: 4318
+            - containerPort: 8888
+              name: internal-metrics
+            - containerPort: 13133
+              name: health
             {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
             - containerPort: {{ .Values.otel_collector.prometheus.port }}
             {{- end }}
           {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- range $probe := list "startupProbe" "readinessProbe" "livenessProbe" }}
+          {{- with get $collectorValues $probe }}
+          {{ $probe }}:
+            {{- . | toYaml | nindent 12 }}
+          {{- end }}
+          {{- end }}
           volumeMounts:
             - name: otel-collector-config
               mountPath: /etc/otel-collector
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           env:
+            {{- if not (get $envState "hasGoMemLimit") }}
+            # 80% of the memory limiter's 75% hard limit; leaves room for non-Go memory.
+            # Without a pod limit, match the fixed 512MiB limiter rather than node memory.
+            - name: GOMEMLIMIT
+              value: {{ ternary (printf "%dMiB" (int (floor (mulf (float64 $memoryLimitMi) 0.6)))) "409MiB" (ne $memoryLimitMi "") | quote }}
+            {{- end }}
             - name: LOGFIRE_META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:

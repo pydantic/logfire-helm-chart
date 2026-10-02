@@ -144,3 +144,12 @@ Supports common binary and decimal suffixes plus plain bytes.
 {{- end -}}
 {{- int (floor $mi) -}}
 {{- end -}}
+
+{{/* Use the actual rendered collector limit, including legacy resource normalization. */}}
+{{- define "logfire.otelCollectorMemoryLimitMi" -}}
+{{- $resources := include "logfire.resources" (dict "Values" .Values "serviceName" "logfire-otel-collector") | fromYaml -}}
+{{- $limit := dig "resources" "limits" "memory" "" $resources -}}
+{{- if $limit -}}
+{{- include "logfire.memoryToMi" $limit -}}
+{{- end -}}
+{{- end -}}

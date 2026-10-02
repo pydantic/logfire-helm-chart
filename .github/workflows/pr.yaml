@@ -51,6 +51,11 @@ jobs:
           helm dependency build charts/logfire
           ci/check-version-stable-checksums.sh
 
+      - name: Verify collector metrics compatibility
+        run: |
+          python -m pip install PyYAML==6.0.3
+          python tests/collector/verify_config.py
+
       - name: Set up GCP auth
         id: auth
         uses: google-github-actions/auth@v2

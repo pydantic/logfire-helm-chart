@@ -1,9 +1,6 @@
 {{- $serviceName := "logfire-otel-collector" }}
 {{- $collectorValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson }}
-{{- $collectorResources := $collectorValues.resources | default dict }}
-{{- $collectorLimits := get $collectorResources "limits" | default dict }}
-{{- $usesFlatResources := or (hasKey $collectorResources "cpu") (hasKey $collectorResources "memory") (hasKey $collectorResources "ephemeralStorage") (hasKey $collectorResources "ephemeral-storage") }}
-{{- $rendersMemoryLimit := and (or $usesFlatResources (not (empty $collectorLimits))) (or $usesFlatResources (hasKey $collectorLimits "memory")) }}
+{{- $memoryLimitMi := include "logfire.otelCollectorMemoryLimitMi" . | trim }}
 {{- $queueSizeBytes := $collectorValues.sendingQueueBytes | default .Values.otel_collector.sendingQueueBytes | default 67108864 }}
 {{- $prometheusEnabled := include "isPrometheusExporterEnabled" . | trim | eq "true" }}
 {{- $promValues := .Values.otel_collector.prometheus | default dict }}
@@ -29,7 +26,9 @@ data:
             endpoint: "0.0.0.0:4318"
 
     exporters:
+      {{- if .Values.otel_collector.debug.enabled }}
       debug:
+      {{- end }}
       {{- $exporter := .Values.otel_collector.exporter | default dict }}
       otlp_http:
         endpoint: {{ $exporter.endpoint | default "http://logfire-ff-ingest:8012" }}
@@ -46,12 +45,11 @@ data:
         # the queue into the container's memory limit. On overflow the receiver refuses new data,
         # which protects data only when the sender retries. A restart loses undrained entries.
         # Each signal pipeline has its own queue, so worst-case queued bytes are about 3x this
-        # value. The per-profile sizes are initial canary settings: monitor OOMs, receiver
-        # refusals, and enqueue failures. See tests/otel_collector_config_test.yaml.
+        # value, before heap overhead and in-flight batches. Monitor receiver refusals, queue
+        # utilization, and enqueue failures; the queue byte count is not a heap measurement.
         sending_queue:
-          enabled: true
-          sizer: bytes
-          queue_size: {{ $queueSizeBytes | int64 }}
+          {{- $queueDefaults := dict "enabled" true "sizer" "bytes" "queue_size" ($queueSizeBytes | int64) }}
+          {{- mergeOverwrite $queueDefaults (deepCopy ($exporter.sending_queue | default dict)) | toYaml | nindent 10 }}
       {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
       {{- with .Values.otel_collector.prometheus }}
       {{- $translationStrategy := .translation_strategy | default (ternary "UnderscoreEscapingWithSuffixes" "UnderscoreEscapingWithoutSuffixes" .add_metric_suffixes) }}
@@ -72,7 +70,7 @@ data:
     processors:
       memory_limiter:
         check_interval: 1s
-        {{- if $rendersMemoryLimit }}
+        {{- if $memoryLimitMi }}
         # Track the memory limit this deployment renders for the collector.
         limit_percentage: 75
         spike_limit_percentage: 15
@@ -82,15 +80,13 @@ data:
         limit_mib: 512
         spike_limit_mib: 128
         {{- end }}
-      batch:
-        timeout: 1s
-        send_batch_size: 2048
       {{- if and $prometheusEnabled $deltatocumulative }}
       # Delta-to-cumulative for the Prometheus exporter only. The processor is alpha. The
       # otlp_http metrics pipeline stays delta, so this conversion is scoped to the Prometheus
-      # pipeline behind `deltatocumulative`. `memory_limiter` runs first in that pipeline and
-      # bounds the state this conversion accumulates.
-      deltatocumulative: {}
+      # pipeline behind `deltatocumulative`. The limiter protects ingress, but cannot evict
+      # retained series; capacity still depends on cardinality and retention.
+      deltatocumulative:
+        max_stale: {{ $promValues.max_stale }}
       {{- end }}
       k8s_attributes:
         filter:
@@ -142,16 +138,24 @@ data:
         endpoint: "0.0.0.0:13133"
 
     service:
+      telemetry:
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: 0.0.0.0
+                    port: 8888
       extensions: [health_check]
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, k8s_attributes, batch]
-          exporters: [debug, otlp_http]
+          processors: [memory_limiter, k8s_attributes]
+          exporters: [{{ if .Values.otel_collector.debug.enabled }}debug, {{ end }}otlp_http]
         metrics:
           receivers: [otlp]
-          processors: [memory_limiter, k8s_attributes, batch]
-          exporters: [debug, otlp_http]
+          processors: [memory_limiter, k8s_attributes]
+          exporters: [{{ if .Values.otel_collector.debug.enabled }}debug, {{ end }}otlp_http]
         {{- if $prometheusEnabled }}
         # The Prometheus exporter gets its own metrics pipeline so the otlp_http pipeline keeps
         # its delta semantics to the backend. Behind `deltatocumulative` (when enabled) this
@@ -159,10 +163,10 @@ data:
         # passes metrics through unchanged.
         metrics/prometheus:
           receivers: [otlp]
-          processors: [memory_limiter, k8s_attributes, {{ if $deltatocumulative }}deltatocumulative, {{ end }}batch]
-          exporters: [debug, prometheus]
+          processors: [memory_limiter, k8s_attributes{{ if $deltatocumulative }}, deltatocumulative{{ end }}]
+          exporters: [prometheus]
         {{- end }}
         logs:
           receivers: [otlp]
-          processors: [memory_limiter, k8s_attributes, batch]
+          processors: [memory_limiter, k8s_attributes]
           exporters: [otlp_http]

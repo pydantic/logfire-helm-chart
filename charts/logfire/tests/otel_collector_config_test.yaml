@@ -1,0 +1,101 @@
+suite: collector capacity and metrics compatibility
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+templates:
+  - templates/logfire-otel-collector-cfg.yaml
+
+tests:
+  - it: keeps preset queues and batches inside the exporter so rejection reaches the receiver
+    set:
+      sizingPreset: standard
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'queue_size: 134217728'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_size: 4194304'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'processors: \[memory_limiter, k8s_attributes\]'
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'send_batch_size|deltatocumulative|metrics/prometheus:|exporters: \[debug'
+  - it: converts only the Prometheus branch and preserves the dashboard metric names
+    set:
+      sizingPreset: standard
+      otel_collector.prometheus.enabled: true
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'translation_strategy: UnderscoreEscapingWithoutSuffixes'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_stale: 5m'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'metrics:\n\s+receivers: \[otlp\]\n\s+processors: \[memory_limiter, k8s_attributes\]\n\s+exporters: \[otlp_http\]'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'metrics/prometheus:\n\s+receivers: \[otlp\]\n\s+processors: \[memory_limiter, k8s_attributes, deltatocumulative\]\n\s+exporters: \[prometheus\]'
+  - it: allows disabling the alpha converter and enabling legacy suffixes
+    set:
+      otel_collector.prometheus.enabled: true
+      otel_collector.prometheus.add_metric_suffixes: true
+      otel_collector.prometheus.deltatocumulative: false
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'translation_strategy: UnderscoreEscapingWithSuffixes'
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'deltatocumulative:'
+  - it: honors explicit translation and queue overrides
+    set:
+      otel_collector.prometheus.enabled: true
+      otel_collector.prometheus.translation_strategy: NoTranslation
+      otel_collector.prometheus.max_stale: 10m
+      otel_collector.exporter.sending_queue.queue_size: 123456
+      otel_collector.exporter.sending_queue.batch.min_size: 16384
+      otel_collector.exporter.sending_queue.batch.max_size: 32768
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'translation_strategy: NoTranslation'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_stale: 10m'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'queue_size: 123456'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_size: 32768'
+  - it: uses a fixed limiter when only a CPU limit is rendered
+    set:
+      sizingPreset: ""
+      logfire-otel-collector.resources:
+        requests:
+          memory: 768Mi
+          cpu: 500m
+        limits:
+          cpu: '2'
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'limit_mib: 512'
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'limit_percentage:'
+  - it: enables debug summaries only when requested
+    set:
+      otel_collector.debug.enabled: true
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'exporters: \[debug, otlp_http\]'

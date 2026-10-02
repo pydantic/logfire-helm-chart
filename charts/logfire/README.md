@@ -371,6 +371,54 @@ logfire-worker:
 
 Nested `resources.requests` do not add mandatory limits, allowing workloads to use spare node capacity. The legacy flat resource shorthand continues to use the configured values for both requests and limits.
 
+### Collector capacity and health
+
+The `standard` preset (also inherited by `large`) requests 512Mi of memory and allows a
+2Gi limit. The request and HPA targets are unchanged, so raising the limit provides burst
+headroom without delaying autoscaling. Reserve more memory through
+`logfire-otel-collector.resources.requests.memory` when sustained usage warrants it; a
+container limit does not reserve node capacity. Memory HPA targets are percentages of the
+request, so reassess the target when changing the request.
+
+The collector sets `GOMEMLIMIT` to 60% of its rendered memory limit, before the memory
+limiter's 75% hard threshold. An explicit `GOMEMLIMIT` in `logfire-otel-collector.env`
+takes precedence. With no rendered memory limit, fixed collector/GC limits are used rather
+than percentages of node memory.
+
+Each signal has its own in-memory exporter queue: standard allows 128MiB of serialized
+payload per queue, or 384MiB across traces, logs, and metrics, before heap overhead and
+in-flight batches. Exporter-side batching flushes after one second, with a 1MiB trigger and
+4MiB maximum serialized batch size. Queue rejection reaches the OTLP receiver, allowing
+senders to retry; successful enqueue does not guarantee delivery. Full queues, permanent
+backend errors, retry expiry, and restarts can still lose data. Override queue/batch options
+under `otel_collector.exporter.sending_queue`. Debug request summaries are disabled by
+default; enable `otel_collector.debug.enabled` temporarily for troubleshooting.
+
+Prometheus export additionally retains application series for `metric_expiration` (180m by
+default) and delta-to-cumulative state for `max_stale` (5m by default). The memory limiter
+can refuse incoming data but cannot evict this state. Inactive pod/label churn can therefore
+keep consuming memory even when queue utilization is low. Tune expiration to the longest
+expected interval between observations; reducing it removes inactive collector cache
+entries, while Prometheus keeps previously scraped history. Stream caps remain unset
+because exceeding a cap drops new streams. Metrics for a given stream must reach the same
+collector replica; cumulative state resets when that collector is replaced. Scrape each
+replica directly, and account for these semantics when configuring routing/autoscaling.
+
+Collector self-metrics are available on each pod's `internal-metrics` port (8888), separately
+from application metrics on 9090. Configure your monitoring system to scrape that pod port.
+Monitor queue utilization (`otelcol_exporter_queue_size` / `otelcol_exporter_queue_capacity`),
+`otelcol_exporter_enqueue_failed_*`, `otelcol_receiver_refused_*`, process/container memory,
+and pod OOM/restart events. Higher limits provide headroom; retained cardinality and scrape
+cost still require measurement. Startup, readiness, and liveness probes use the process
+health endpoint; exporter failures alone do not trigger liveness restarts. Rollouts retain
+existing replicas while one replacement starts, and allow 60 seconds for shutdown. This
+shutdown budget is finite and does not guarantee that a blocked queue drains.
+
+Run `helm unittest charts/logfire` for rendered settings and
+`python3 tests/collector/verify_config.py` (requires PyYAML and Docker) for a local collector
+smoke test of dashboard names, histogram conversion, OTLP temporality, and process health.
+The runtime test uses synthetic data and does not connect to a cluster.
+
 ## Advanced Configuration
 
 ### External Secrets and Automatic Reloads
@@ -612,6 +660,7 @@ Before diving deeper, verify these common configuration issues:
 | logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` | Storage provisioned for each pod |
 | logfire-ff-maintenance-scheduler | object | `{"env":[]}` | Environment overrides for the maintenance scheduler pod |
 | logfire-ff-query-api | object | `{"env":[]}` | Environment overrides for the query API pod |
+| logfire-otel-collector | object | `{"livenessProbe":{"failureThreshold":3,"httpGet":{"path":"/","port":"health"},"periodSeconds":30,"timeoutSeconds":5},"readinessProbe":{"failureThreshold":3,"httpGet":{"path":"/","port":"health"},"periodSeconds":10,"timeoutSeconds":3},"startupProbe":{"failureThreshold":24,"httpGet":{"path":"/","port":"health"},"periodSeconds":5,"timeoutSeconds":3},"strategy":{"rollingUpdate":{"maxSurge":1,"maxUnavailable":0},"type":"RollingUpdate"},"terminationGracePeriodSeconds":60}` | Collector health checks and rollout settings. Override probes here, or set a probe to null to disable it. GOMEMLIMIT defaults to 60% of the rendered memory limit (409MiB with no limit); an explicit GOMEMLIMIT in env takes precedence. |
 | logfire-redis.affinity | object | `{}` | Affinity for the bundled Redis pod. |
 | logfire-redis.enabled | bool | `true` | Deploy Redis as part of this chart. Disable to use an external Redis instance.  The bundled Redis is a single-node instance intended for development, evaluation, and simple self-contained installs. It is not highly available, and upgrades that change its pod template cause a brief interruption while Redis is replaced. For production, disable this and set redisDsn to a managed Redis endpoint. |
 | logfire-redis.image | object | `{"pullPolicy":"IfNotPresent","repository":"redis","tag":"7.2"}` | Redis image configuration |
@@ -641,9 +690,12 @@ Before diving deeper, verify these common configuration issues:
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials. The chart reserves the mount paths `/tmp`, `/scratch`, and `/fusionfire/ingest-data` for its own Fusionfire volumes, and adds `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled. |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials. The chart reserves the volume names `tmp`, `scratch-data`, and `ingest-data` for its own Fusionfire volumes, and adds `logfire-incluster-tls` and `logfire-incluster-ca-bundle` when in-cluster TLS is enabled. |
 | otelResourceAttributes | object | `{}` | Additional OTEL resource attributes to stamp onto internal telemetry emitted by Logfire workloads. These are merged on top of the chart defaults and can override them. Example:   deployment.environment.name: prod   service.namespace: logfire |
-| otel_collector | object | `{"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.160.0"},"prometheus":{"add_metric_suffixes":false,"deltatocumulative":true,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true,"translation_strategy":""},"sendingQueueBytes":67108864}` | otel-collector configuration |
-| otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
+| otel_collector | object | `{"debug":{"enabled":false},"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.160.0"},"prometheus":{"add_metric_suffixes":false,"deltatocumulative":true,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","max_stale":"5m","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true,"translation_strategy":""},"sendingQueueBytes":67108864}` | otel-collector configuration |
+| otel_collector.debug.enabled | bool | `false` | Emit per-request summaries to collector logs. Enable for troubleshooting; disabled by default to avoid logging every incoming telemetry request. |
+| otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
+| otel_collector.exporter.sending_queue | object | `{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}}` | Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP ingestion, so senders can retry refused data. Limits are serialized bytes, not heap bytes. The queue capacity still comes from the sizing preset or sendingQueueBytes unless queue_size is explicitly overridden here. Each signal has its own queue and consumers. |
 | otel_collector.prometheus.deltatocumulative | bool | `true` | Convert delta metrics to cumulative on the Prometheus pipeline with the alpha `deltatocumulative` processor. Only runs when the Prometheus exporter is enabled, and the otlp_http pipeline keeps its delta semantics to the backend. Set false to pass metrics through unchanged. |
+| otel_collector.prometheus.max_stale | string | `"5m"` | Retention of inactive delta-to-cumulative streams. Independent of metric_expiration. Stream caps intentionally remain unset: exceeding a cap drops new streams. |
 | otel_collector.prometheus.translation_strategy | string | `""` | Override the Prometheus exporter `translation_strategy`. When empty it is derived from `add_metric_suffixes`: `UnderscoreEscapingWithoutSuffixes` when false, and `UnderscoreEscapingWithSuffixes` when true. |
 | otel_collector.sendingQueueBytes | int | `67108864` | Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per profile; this value applies when no sizing preset is used. |
 | podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed scratch and ingest volumes. A per-service `podSecurityContext` wins over both. |

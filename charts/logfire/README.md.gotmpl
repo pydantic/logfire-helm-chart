@@ -372,6 +372,54 @@ logfire-worker:
 
 Nested `resources.requests` do not add mandatory limits, allowing workloads to use spare node capacity. The legacy flat resource shorthand continues to use the configured values for both requests and limits.
 
+### Collector capacity and health
+
+The `standard` preset (also inherited by `large`) requests 512Mi of memory and allows a
+2Gi limit. The request and HPA targets are unchanged, so raising the limit provides burst
+headroom without delaying autoscaling. Reserve more memory through
+`logfire-otel-collector.resources.requests.memory` when sustained usage warrants it; a
+container limit does not reserve node capacity. Memory HPA targets are percentages of the
+request, so reassess the target when changing the request.
+
+The collector sets `GOMEMLIMIT` to 60% of its rendered memory limit, before the memory
+limiter's 75% hard threshold. An explicit `GOMEMLIMIT` in `logfire-otel-collector.env`
+takes precedence. With no rendered memory limit, fixed collector/GC limits are used rather
+than percentages of node memory.
+
+Each signal has its own in-memory exporter queue: standard allows 128MiB of serialized
+payload per queue, or 384MiB across traces, logs, and metrics, before heap overhead and
+in-flight batches. Exporter-side batching flushes after one second, with a 1MiB trigger and
+4MiB maximum serialized batch size. Queue rejection reaches the OTLP receiver, allowing
+senders to retry; successful enqueue does not guarantee delivery. Full queues, permanent
+backend errors, retry expiry, and restarts can still lose data. Override queue/batch options
+under `otel_collector.exporter.sending_queue`. Debug request summaries are disabled by
+default; enable `otel_collector.debug.enabled` temporarily for troubleshooting.
+
+Prometheus export additionally retains application series for `metric_expiration` (180m by
+default) and delta-to-cumulative state for `max_stale` (5m by default). The memory limiter
+can refuse incoming data but cannot evict this state. Inactive pod/label churn can therefore
+keep consuming memory even when queue utilization is low. Tune expiration to the longest
+expected interval between observations; reducing it removes inactive collector cache
+entries, while Prometheus keeps previously scraped history. Stream caps remain unset
+because exceeding a cap drops new streams. Metrics for a given stream must reach the same
+collector replica; cumulative state resets when that collector is replaced. Scrape each
+replica directly, and account for these semantics when configuring routing/autoscaling.
+
+Collector self-metrics are available on each pod's `internal-metrics` port (8888), separately
+from application metrics on 9090. Configure your monitoring system to scrape that pod port.
+Monitor queue utilization (`otelcol_exporter_queue_size` / `otelcol_exporter_queue_capacity`),
+`otelcol_exporter_enqueue_failed_*`, `otelcol_receiver_refused_*`, process/container memory,
+and pod OOM/restart events. Higher limits provide headroom; retained cardinality and scrape
+cost still require measurement. Startup, readiness, and liveness probes use the process
+health endpoint; exporter failures alone do not trigger liveness restarts. Rollouts retain
+existing replicas while one replacement starts, and allow 60 seconds for shutdown. This
+shutdown budget is finite and does not guarantee that a blocked queue drains.
+
+Run `helm unittest charts/logfire` for rendered settings and
+`python3 tests/collector/verify_config.py` (requires PyYAML and Docker) for a local collector
+smoke test of dashboard names, histogram conversion, OTLP temporality, and process health.
+The runtime test uses synthetic data and does not connect to a cluster.
+
 ## Advanced Configuration
 
 ### External Secrets and Automatic Reloads
