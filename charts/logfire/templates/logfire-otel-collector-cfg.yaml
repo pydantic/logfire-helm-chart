@@ -5,6 +5,12 @@
 {{- $usesFlatResources := or (hasKey $collectorResources "cpu") (hasKey $collectorResources "memory") (hasKey $collectorResources "ephemeralStorage") (hasKey $collectorResources "ephemeral-storage") }}
 {{- $rendersMemoryLimit := and (or $usesFlatResources (not (empty $collectorLimits))) (or $usesFlatResources (hasKey $collectorLimits "memory")) }}
 {{- $queueSizeBytes := $collectorValues.sendingQueueBytes | default .Values.otel_collector.sendingQueueBytes | default 67108864 }}
+{{- $prometheusEnabled := include "isPrometheusExporterEnabled" . | trim | eq "true" }}
+{{- $promValues := .Values.otel_collector.prometheus | default dict }}
+{{- $deltatocumulative := true }}
+{{- if hasKey $promValues "deltatocumulative" }}
+{{- $deltatocumulative = $promValues.deltatocumulative }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -48,12 +54,13 @@ data:
           queue_size: {{ $queueSizeBytes | int64 }}
       {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
       {{- with .Values.otel_collector.prometheus }}
+      {{- $translationStrategy := .translation_strategy | default (ternary "UnderscoreEscapingWithSuffixes" "UnderscoreEscapingWithoutSuffixes" .add_metric_suffixes) }}
       prometheus:
         endpoint: {{ printf "%s:%s" .endpoint (.port | toString) }}
         send_timestamps: {{ .send_timestamp }}
         metric_expiration: {{ .metric_expiration }}
         enable_open_metrics: {{ .enable_open_metrics }}
-        add_metric_suffixes: {{ .add_metric_suffixes }}
+        translation_strategy: {{ $translationStrategy }}
         {{- with .resource_to_telemetry_conversion }}
         resource_to_telemetry_conversion:
         {{- . | toYaml | nindent 12 }}
@@ -78,6 +85,13 @@ data:
       batch:
         timeout: 1s
         send_batch_size: 2048
+      {{- if and $prometheusEnabled $deltatocumulative }}
+      # Delta-to-cumulative for the Prometheus exporter only. The processor is alpha. The
+      # otlp_http metrics pipeline stays delta, so this conversion is scoped to the Prometheus
+      # pipeline behind `deltatocumulative`. `memory_limiter` runs first in that pipeline and
+      # bounds the state this conversion accumulates.
+      deltatocumulative: {}
+      {{- end }}
       k8s_attributes:
         filter:
           namespace: {{ .Release.Namespace }}
@@ -137,11 +151,17 @@ data:
         metrics:
           receivers: [otlp]
           processors: [memory_limiter, k8s_attributes, batch]
-          {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
-          exporters: [debug, otlp_http, prometheus]
-          {{- else }}
           exporters: [debug, otlp_http]
-          {{- end }}
+        {{- if $prometheusEnabled }}
+        # The Prometheus exporter gets its own metrics pipeline so the otlp_http pipeline keeps
+        # its delta semantics to the backend. Behind `deltatocumulative` (when enabled) this
+        # pipeline converts delta to cumulative, which is what Prometheus scrapes; otherwise it
+        # passes metrics through unchanged.
+        metrics/prometheus:
+          receivers: [otlp]
+          processors: [memory_limiter, k8s_attributes, {{ if $deltatocumulative }}deltatocumulative, {{ end }}batch]
+          exporters: [debug, prometheus]
+        {{- end }}
         logs:
           receivers: [otlp]
           processors: [memory_limiter, k8s_attributes, batch]
