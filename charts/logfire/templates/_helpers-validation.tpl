@@ -411,5 +411,17 @@ Call this from templates that need to ensure configuration is valid.
 {{- if lt $limitMi $volumeMi -}}
 {{- fail "The collector ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit; allow extra space for container logs." -}}
 {{- end -}}
+{{- $collector := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-otel-collector") | fromJson -}}
+{{- $queueBytes := $collector.sendingQueueBytes | default .Values.otel_collector.sendingQueueBytes | default 67108864 -}}
+{{- $queue := .Values.otel_collector.exporter.sending_queue | default dict -}}
+{{- if hasKey $queue "queue_size" -}}
+{{- $queueBytes = $queue.queue_size -}}
+{{- end -}}
+{{- if and (eq ($queue.sizer | default "bytes") "bytes") (ne (dig "enabled" true $queue) false) -}}
+{{/* Small requests need bbolt page/index headroom; this minimum is not a storage-loss guarantee. */}}
+{{- if lt $maximum (mul ($queueBytes | int64) 4) -}}
+{{- fail "otel_collector.queueStorage.maxSizeBytes must allow at least 4x the effective byte queue_size for database overhead; increase the disk budgets when increasing the queue." -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}

@@ -13,18 +13,21 @@
   "method": {
     "throughput": "8 concurrent persistent HTTP clients, 3s warmup, 15s/20s measurement; one record per request; shared-host rates vary and are not production capacity guarantees",
     "delivery": "Track unique IDs of every HTTP-200-acknowledged record; follow-up cases wait for zero queue size and up to 10s for downstream delivery; report unknown client transport-error outcomes separately",
-    "storage": "Linux-local Docker volumes for normal/I/O tests; a bounded tmpfs with retained mount and filler file only for the ENOSPC fault test",
+    "storage": "Linux-local Docker volumes for completed normal/I/O tests; bounded tmpfs with a retained mount and filler file only for the completed ENOSPC fault. The full-size tmpfs tiny-capacity run was stopped before saturation and is incomplete.",
     "retry": "100ms initial / 1s maximum backoff, expiry disabled to isolate storage losses; production retry settings are unchanged",
-    "scaled_tests": "Tiny-request cases use 4MiB queue and 8MiB/16MiB database limits; these reproduce overhead/error handling, not full-size production capacity"
+    "scaled_tests": "The completed 64-byte tiny-request cases use 4MiB queues and 8MiB/16MiB databases; full-size saturation was completed on disk with 16KiB payloads. Full-size 64-byte cases were stopped before saturation; no full-size tiny-request capacity guarantee is established."
   },
   "conclusions": [
-    "Memory queues remain the default; disk is opt-in.",
+    "Disk queues are the chart default with fsync disabled, matching upstream; process-restart recovery passed, but this does not establish unclean-host durability.",
     "Three full-size mixed-signal fill/drain cycles delivered all acknowledged records in both modes; disk completed nine compactions.",
     "The 2x database budget rejected tiny requests before the byte queue filled and lost acknowledged records on storage exhaustion in two runs.",
     "The 4x database budget held the same 37263 tiny requests as memory and delivered all acknowledged records in that tested workload.",
     "Fsync adds throughput/latency cost; disabling it improved throughput in a repeat but does not fix storage-full failures.",
     "Constrained disk I/O caused seconds of receiver latency and client timeouts despite mostly empty queues.",
-    "The ENOSPC fault recovered for new traffic after space was freed, but three of six initially acknowledged records were lost."
+    "The ENOSPC fault recovered for new traffic after space was freed, but three of six initially acknowledged records were lost.",
+    "The full-size 128MiB disk queue / 512MiB database accepted 8163 requests with 16KiB payloads, rejected eight further requests with HTTP 503 at the logical queue limit, and delivered every acknowledged record without duplicates or storage-full errors.",
+    "Both SIGKILL and graceful SIGTERM recovery delivered all 750 acknowledged records with fsync disabled. Fsync-enabled SIGTERM recovery also passed.",
+    "The chart requires at least 4x the effective byte queue budget per database, including preset and queue overrides; this is a headroom guard rather than a universal loss-prevention guarantee."
   ],
   "cases": [
     {
@@ -113,7 +116,7 @@
         },
         "duplicates": 0
       },
-      "command": "python3 tests/collector/stress_queues.py --scenario cap --mode disk --duration 25 --payload-bytes 64 --concurrency 8 --cycles 3 --requests 160 --queue-mib 128 --database-mib 32 --output /tmp/cap-disk.json"
+      "command": "python3 tests/collector/stress_queues.py --scenario cap --mode disk --duration 25 --payload-bytes 64 --concurrency 8 --cycles 3 --requests 160 --queue-mib 128 --database-mib 32 --fsync --output /tmp/cap-disk.json"
     },
     {
       "name": "cap-memory",
@@ -311,7 +314,7 @@
         },
         "duplicates": 0
       },
-      "command": "python3 tests/collector/stress_queues.py --scenario cycles --mode disk --duration 15 --payload-bytes 64 --concurrency 8 --cycles 3 --requests 160 --queue-mib 128 --database-mib 256 --output /tmp/cycles-disk.json"
+      "command": "python3 tests/collector/stress_queues.py --scenario cycles --mode disk --duration 15 --payload-bytes 64 --concurrency 8 --cycles 3 --requests 160 --queue-mib 128 --database-mib 256 --fsync --output /tmp/cycles-disk.json"
     },
     {
       "name": "cycles-memory",
@@ -494,7 +497,7 @@
         },
         "duplicates": 0
       },
-      "command": "python3 tests/collector/stress_queues.py --scenario cap --mode disk --duration 25 --payload-bytes 64 --concurrency 8 --cycles 3 --requests 160 --filesystem-mib 32 --filler-mib 24 --queue-mib 128 --database-mib 512 --debug-storage --output /tmp/filesystem-full-repeat.json"
+      "command": "python3 tests/collector/stress_queues.py --scenario cap --mode disk --duration 25 --payload-bytes 64 --concurrency 8 --cycles 3 --requests 160 --filesystem-mib 32 --filler-mib 24 --queue-mib 128 --database-mib 512 --debug-storage --fsync --output /tmp/filesystem-full-repeat.json"
     },
     {
       "name": "throughput-disk-large",
@@ -565,7 +568,7 @@
         },
         "duplicates": 0
       },
-      "command": "python3 tests/collector/stress_queues.py --scenario throughput --mode disk --duration 20 --payload-bytes 65536 --concurrency 8 --cycles 3 --requests 160 --queue-mib 128 --database-mib 256 --output /tmp/throughput-disk-large.json"
+      "command": "python3 tests/collector/stress_queues.py --scenario throughput --mode disk --duration 20 --payload-bytes 65536 --concurrency 8 --cycles 3 --requests 160 --queue-mib 128 --database-mib 256 --fsync --output /tmp/throughput-disk-large.json"
     },
     {
       "name": "throughput-disk-nosync-large",
@@ -778,7 +781,7 @@
         },
         "duplicates": 0
       },
-      "command": "python3 tests/collector/stress_queues.py --scenario throughput --mode disk --duration 20 --payload-bytes 64 --concurrency 8 --cycles 3 --requests 160 --queue-mib 128 --database-mib 512 --output /tmp/throughput-disk-repeat.json"
+      "command": "python3 tests/collector/stress_queues.py --scenario throughput --mode disk --duration 20 --payload-bytes 64 --concurrency 8 --cycles 3 --requests 160 --queue-mib 128 --database-mib 512 --fsync --output /tmp/throughput-disk-repeat.json"
     },
     {
       "name": "throughput-disk-slow-tiny",
@@ -849,7 +852,7 @@
         },
         "duplicates": 0
       },
-      "command": "python3 tests/collector/stress_queues.py --scenario throughput --mode disk --duration 20 --payload-bytes 64 --concurrency 8 --cycles 3 --requests 160 --io-iops /dev/vda:40 --queue-mib 128 --database-mib 256 --output /tmp/throughput-disk-slow-tiny.json"
+      "command": "python3 tests/collector/stress_queues.py --scenario throughput --mode disk --duration 20 --payload-bytes 64 --concurrency 8 --cycles 3 --requests 160 --io-iops /dev/vda:40 --queue-mib 128 --database-mib 256 --fsync --output /tmp/throughput-disk-slow-tiny.json"
     },
     {
       "name": "throughput-disk-slow",
@@ -921,7 +924,7 @@
         },
         "duplicates": 0
       },
-      "command": "python3 tests/collector/stress_queues.py --scenario throughput --mode disk --duration 20 --payload-bytes 65536 --concurrency 8 --cycles 3 --requests 160 --io-bps /dev/vda:1048576 --queue-mib 128 --database-mib 256 --output /tmp/throughput-disk-slow.json"
+      "command": "python3 tests/collector/stress_queues.py --scenario throughput --mode disk --duration 20 --payload-bytes 65536 --concurrency 8 --cycles 3 --requests 160 --io-bps /dev/vda:1048576 --queue-mib 128 --database-mib 256 --fsync --output /tmp/throughput-disk-slow.json"
     },
     {
       "name": "throughput-disk",
@@ -974,7 +977,7 @@
         },
         "duplicates": 0
       },
-      "command": "python3 tests/collector/stress_queues.py --scenario throughput --mode disk --duration 15 --payload-bytes 64 --concurrency 8 --cycles 3 --requests 160 --queue-mib 128 --database-mib 256 --output /tmp/throughput-disk.json"
+      "command": "python3 tests/collector/stress_queues.py --scenario throughput --mode disk --duration 15 --payload-bytes 64 --concurrency 8 --cycles 3 --requests 160 --queue-mib 128 --database-mib 256 --fsync --output /tmp/throughput-disk.json"
     },
     {
       "name": "throughput-memory-large",
@@ -1241,7 +1244,7 @@
         },
         "duplicates": 0
       },
-      "command": "python3 tests/collector/stress_queues.py --scenario tiny --mode disk --duration 180 --payload-bytes 64 --concurrency 32 --cycles 3 --requests 160 --queue-mib 4 --database-mib 16 --output /tmp/tiny-disk-headroom.json"
+      "command": "python3 tests/collector/stress_queues.py --scenario tiny --mode disk --duration 180 --payload-bytes 64 --concurrency 32 --cycles 3 --requests 160 --queue-mib 4 --database-mib 16 --fsync --output /tmp/tiny-disk-headroom.json"
     },
     {
       "name": "tiny-disk-repeat",
@@ -1313,7 +1316,7 @@
         },
         "duplicates": 0
       },
-      "command": "python3 tests/collector/stress_queues.py --scenario tiny --mode disk --duration 180 --payload-bytes 64 --concurrency 32 --cycles 3 --requests 160 --queue-mib 4 --database-mib 8 --debug-storage --output /tmp/tiny-disk-repeat.json"
+      "command": "python3 tests/collector/stress_queues.py --scenario tiny --mode disk --duration 180 --payload-bytes 64 --concurrency 32 --cycles 3 --requests 160 --queue-mib 4 --database-mib 8 --debug-storage --fsync --output /tmp/tiny-disk-repeat.json"
     },
     {
       "name": "tiny-disk",
@@ -1367,7 +1370,7 @@
         },
         "duplicates": 0
       },
-      "command": "python3 tests/collector/stress_queues.py --scenario tiny --mode disk --duration 180 --payload-bytes 64 --concurrency 32 --cycles 3 --requests 160 --queue-mib 4 --database-mib 8 --output /tmp/tiny-disk.json"
+      "command": "python3 tests/collector/stress_queues.py --scenario tiny --mode disk --duration 180 --payload-bytes 64 --concurrency 32 --cycles 3 --requests 160 --queue-mib 4 --database-mib 8 --fsync --output /tmp/tiny-disk.json"
     },
     {
       "name": "tiny-memory",
@@ -1422,6 +1425,307 @@
         "duplicates": 0
       },
       "command": "python3 tests/collector/stress_queues.py --scenario tiny --mode memory --duration 180 --payload-bytes 64 --concurrency 32 --cycles 3 --requests 160 --queue-mib 4 --output /tmp/tiny-memory.json"
+    },
+    {
+      "name": "restart-disk-term-repeat",
+      "scenario": "restart",
+      "mode": "disk",
+      "fsync": true,
+      "queue_limit_bytes_per_signal": 134217728,
+      "database_limit_bytes_per_signal": 536870912,
+      "payload_bytes": 64,
+      "concurrency": 8,
+      "io_bps": null,
+      "io_iops": null,
+      "filesystem_mib": null,
+      "filler_mib": 0,
+      "state": {
+        "Running": true,
+        "OOMKilled": false,
+        "ExitCode": 0
+      },
+      "compactions": 0,
+      "storage_full_errors": 0,
+      "drain": {
+        "drained": true,
+        "elapsed_s": 11.3535843330028,
+        "missing_accepted": {
+          "traces": 0,
+          "logs": 0,
+          "metrics": 0
+        },
+        "delivered_without_http_200": {
+          "traces": 0,
+          "logs": 0,
+          "metrics": 0
+        },
+        "duplicates": 0
+      },
+      "restart_signal": "TERM",
+      "restart_exit_code": 0,
+      "final_delivery": {
+        "accepted": {
+          "traces": 250,
+          "logs": 250,
+          "metrics": 250
+        },
+        "delivered": {
+          "traces": 250,
+          "logs": 250,
+          "metrics": 250
+        },
+        "missing_accepted": {
+          "traces": 0,
+          "logs": 0,
+          "metrics": 0
+        },
+        "missing_id_sample": {
+          "traces": [],
+          "logs": [],
+          "metrics": []
+        },
+        "duplicates": 0
+      },
+      "final_disk": "4\t/queue/compaction\n164\t/queue/exporter_otlp_http__traces\n128\t/queue/exporter_otlp_http__logs\n148\t/queue/exporter_otlp_http__metrics\n4\t/queue/collector.yaml\n452\t/queue\n/queue/exporter_otlp_http__logs 131072\n/queue/exporter_otlp_http__metrics 262144\n/queue/exporter_otlp_http__traces 262144",
+      "command": "python3 tests/collector/stress_queues.py --scenario restart --mode disk --payload-bytes 64 --requests 250 --concurrency 8 --restart-signal TERM --duration 15 --drain-timeout 90 --fsync --output /tmp/restart-disk-term-repeat.json"
+    },
+    {
+      "name": "restart-disk-kill-nosync",
+      "scenario": "restart",
+      "mode": "disk",
+      "fsync": false,
+      "queue_limit_bytes_per_signal": 134217728,
+      "database_limit_bytes_per_signal": 536870912,
+      "payload_bytes": 64,
+      "concurrency": 8,
+      "io_bps": null,
+      "io_iops": null,
+      "filesystem_mib": null,
+      "filler_mib": 0,
+      "state": {
+        "Running": true,
+        "OOMKilled": false,
+        "ExitCode": 0
+      },
+      "compactions": 0,
+      "storage_full_errors": 0,
+      "drain": {
+        "drained": true,
+        "elapsed_s": 1.0209338339991518,
+        "missing_accepted": {
+          "traces": 0,
+          "logs": 0,
+          "metrics": 0
+        },
+        "delivered_without_http_200": {
+          "traces": 0,
+          "logs": 0,
+          "metrics": 0
+        },
+        "duplicates": 0
+      },
+      "restart_signal": "KILL",
+      "restart_exit_code": 137,
+      "final_delivery": {
+        "accepted": {
+          "traces": 250,
+          "logs": 250,
+          "metrics": 250
+        },
+        "delivered": {
+          "traces": 250,
+          "logs": 250,
+          "metrics": 250
+        },
+        "missing_accepted": {
+          "traces": 0,
+          "logs": 0,
+          "metrics": 0
+        },
+        "missing_id_sample": {
+          "traces": [],
+          "logs": [],
+          "metrics": []
+        },
+        "duplicates": 0
+      },
+      "final_disk": "4\t/queue/compaction\n160\t/queue/exporter_otlp_http__traces\n124\t/queue/exporter_otlp_http__logs\n144\t/queue/exporter_otlp_http__metrics\n4\t/queue/collector.yaml\n440\t/queue\n/queue/exporter_otlp_http__logs 131072\n/queue/exporter_otlp_http__metrics 262144\n/queue/exporter_otlp_http__traces 262144",
+      "command": "python3 tests/collector/stress_queues.py --scenario restart --mode disk --payload-bytes 64 --requests 250 --concurrency 8 --restart-signal KILL --duration 15 --drain-timeout 90 --no-fsync --output /tmp/restart-disk-kill-nosync.json"
+    },
+    {
+      "name": "restart-disk-term-nosync",
+      "scenario": "restart",
+      "mode": "disk",
+      "fsync": false,
+      "queue_limit_bytes_per_signal": 134217728,
+      "database_limit_bytes_per_signal": 536870912,
+      "payload_bytes": 64,
+      "concurrency": 8,
+      "io_bps": null,
+      "io_iops": null,
+      "filesystem_mib": null,
+      "filler_mib": 0,
+      "state": {
+        "Running": true,
+        "OOMKilled": false,
+        "ExitCode": 0
+      },
+      "compactions": 0,
+      "storage_full_errors": 0,
+      "drain": {
+        "drained": true,
+        "elapsed_s": 1.0241227080041426,
+        "missing_accepted": {
+          "traces": 0,
+          "logs": 0,
+          "metrics": 0
+        },
+        "delivered_without_http_200": {
+          "traces": 0,
+          "logs": 0,
+          "metrics": 0
+        },
+        "duplicates": 0
+      },
+      "restart_signal": "TERM",
+      "restart_exit_code": 0,
+      "final_delivery": {
+        "accepted": {
+          "traces": 250,
+          "logs": 250,
+          "metrics": 250
+        },
+        "delivered": {
+          "traces": 250,
+          "logs": 250,
+          "metrics": 250
+        },
+        "missing_accepted": {
+          "traces": 0,
+          "logs": 0,
+          "metrics": 0
+        },
+        "missing_id_sample": {
+          "traces": [],
+          "logs": [],
+          "metrics": []
+        },
+        "duplicates": 0
+      },
+      "final_disk": "4\t/queue/compaction\n160\t/queue/exporter_otlp_http__traces\n124\t/queue/exporter_otlp_http__logs\n144\t/queue/exporter_otlp_http__metrics\n4\t/queue/collector.yaml\n440\t/queue\n/queue/exporter_otlp_http__logs 131072\n/queue/exporter_otlp_http__metrics 262144\n/queue/exporter_otlp_http__traces 262144",
+      "command": "python3 tests/collector/stress_queues.py --scenario restart --mode disk --payload-bytes 64 --requests 250 --concurrency 8 --restart-signal TERM --duration 15 --drain-timeout 90 --no-fsync --output /tmp/restart-disk-term-nosync.json"
+    },
+    {
+      "name": "requests-disk-fullsize",
+      "scenario": "tiny",
+      "mode": "disk",
+      "fsync": false,
+      "queue_limit_bytes_per_signal": 134217728,
+      "database_limit_bytes_per_signal": 536870912,
+      "payload_bytes": 16384,
+      "concurrency": 8,
+      "io_bps": null,
+      "io_iops": null,
+      "filesystem_mib": null,
+      "filler_mib": 0,
+      "state": {
+        "Running": true,
+        "OOMKilled": false,
+        "ExitCode": 0
+      },
+      "compactions": 1,
+      "storage_full_errors": 0,
+      "drain": {
+        "drained": true,
+        "elapsed_s": 57.00178062499617,
+        "missing_accepted": {
+          "traces": 0,
+          "logs": 0,
+          "metrics": 0
+        },
+        "delivered_without_http_200": {
+          "traces": 0,
+          "logs": 0,
+          "metrics": 0
+        },
+        "duplicates": 0
+      },
+      "final_delivery": {
+        "accepted": {
+          "traces": 0,
+          "logs": 8163,
+          "metrics": 0
+        },
+        "delivered": {
+          "traces": 0,
+          "logs": 8163,
+          "metrics": 0
+        },
+        "missing_accepted": {
+          "traces": 0,
+          "logs": 0,
+          "metrics": 0
+        },
+        "missing_id_sample": {
+          "traces": [],
+          "logs": [],
+          "metrics": []
+        },
+        "duplicates": 0
+      },
+      "disk_at_rejection": "4\t/queue/compaction\n20\t/queue/exporter_otlp_http__traces\n150060\t/queue/exporter_otlp_http__logs\n20\t/queue/exporter_otlp_http__metrics\n4\t/queue/collector.yaml\n150112\t/queue\n/queue/exporter_otlp_http__logs 167981056\n/queue/exporter_otlp_http__metrics 32768\n/queue/exporter_otlp_http__traces 32768",
+      "final_disk": "4\t/queue/compaction\n20\t/queue/exporter_otlp_http__traces\n8412\t/queue/exporter_otlp_http__logs\n20\t/queue/exporter_otlp_http__metrics\n4\t/queue/collector.yaml\n8464\t/queue\n/queue/exporter_otlp_http__logs 16777216\n/queue/exporter_otlp_http__metrics 32768\n/queue/exporter_otlp_http__traces 32768",
+      "load": {
+        "duration_s": 19.510959999999614,
+        "responses": {
+          "200": 8163,
+          "503": 8
+        },
+        "accepted_requests_per_s": 418.38023346878686,
+        "latency_ms": {
+          "p50": 8.782875003817026,
+          "p95": 67.9928329991526,
+          "p99": 182.24741699668812
+        }
+      },
+      "queue_bytes_at_load_end": {
+        "otelcol_exporter_queue_size{data_type=\"logs\",exporter=\"otlp_http\"}": 134215918.0,
+        "otelcol_exporter_queue_size{data_type=\"metrics\",exporter=\"otlp_http\"}": 0.0,
+        "otelcol_exporter_queue_size{data_type=\"traces\",exporter=\"otlp_http\"}": 0.0
+      },
+      "command": "python3 tests/collector/stress_queues.py --scenario tiny --mode disk --payload-bytes 16384 --requests 160 --concurrency 8 --duration 600 --drain-timeout 300 --no-fsync --output /tmp/requests-disk-fullsize.json"
+    }
+  ],
+  "incomplete_runs": [
+    {
+      "name": "tiny-disk-fullsize",
+      "reason": "Fsync enabled; stopped after severe I/O/ingestion slowdown before saturation.",
+      "status": "incomplete; excluded from completed cases and delivery/capacity claims"
+    },
+    {
+      "name": "small-disk-fullsize",
+      "reason": "Fsync enabled, 1KiB payloads; stopped before saturation on the busy shared VM.",
+      "status": "incomplete; excluded from completed cases and delivery/capacity claims"
+    },
+    {
+      "name": "tiny-disk-fullsize-nosync",
+      "reason": "Fsync disabled; initially progressed rapidly, then stalled with client timeouts; stopped before saturation.",
+      "status": "incomplete; excluded from completed cases and delivery/capacity claims"
+    },
+    {
+      "name": "tiny-disk-fullsize-capacity",
+      "reason": "Bounded tmpfs to isolate byte capacity; stopped before saturation after the representative disk saturation test completed.",
+      "status": "incomplete; excluded from completed cases and delivery/capacity claims"
+    },
+    {
+      "name": "cycles-disk-headroom",
+      "reason": "Timed out during self-metrics collection; no completed cycle result.",
+      "status": "incomplete; excluded from completed cases and delivery/capacity claims"
+    },
+    {
+      "name": "cycles-disk-headroom-nosync",
+      "reason": "Timed out during self-metrics collection; no completed cycle result.",
+      "status": "incomplete; excluded from completed cases and delivery/capacity claims"
     }
   ]
 }

@@ -386,7 +386,7 @@ limiter's 75% hard threshold. An explicit `GOMEMLIMIT` in `logfire-otel-collecto
 takes precedence. With no rendered memory limit, fixed collector/GC limits are used rather
 than percentages of node memory.
 
-Each signal has its own in-memory exporter queue by default: standard allows 128MiB of
+Each signal has its own disk-backed exporter queue by default: standard allows 128MiB of
 serialized payload per queue, or 384MiB across traces, logs, and metrics. Processing,
 in-flight batches, and file mappings still consume memory. Exporter-side batching flushes
 after one second, with a 1MiB trigger and 4MiB maximum serialized batch size.
@@ -397,21 +397,29 @@ Override queue/batch options under `otel_collector.exporter.sending_queue`.
 Debug request summaries are disabled by
 default; enable `otel_collector.debug.enabled` temporarily for troubleshooting.
 
-Enable `otel_collector.queueStorage.enabled=true` to use the `file_storage/queue` extension
-with a disk-backed `emptyDir`, so queued data survives a
+The `file_storage/queue` extension uses a disk-backed `emptyDir`, so queued data survives a
 container restart in the same pod. Pod replacement, rollout, eviction, and node loss remove
 the queue. This storage does not persist Prometheus series or delta-to-cumulative state.
-Memory queues remain the default because disk I/O can reduce throughput and storage
-exhaustion can lose records that were already acknowledged. A storage error does not always
-mean only the new request was rejected. Test the disk option against your storage and
-traffic before enabling it; monitor both database allocation and actual downstream delivery.
+Set `otel_collector.queueStorage.enabled=false` to use memory queues instead. Disk reduces
+queue heap pressure and supports container-restart recovery, but its I/O can reduce throughput
+and storage exhaustion can lose records that were already acknowledged. A storage error does
+not always mean only the new request was rejected. Monitor database allocation and downstream
+delivery as well as logical queue utilization.
 
-When disk queues are enabled, each pod has a 4Gi queue volume and a 512MiB limit per signal
-database. This provides more database headroom than the payload budget because index/page
-overhead and fragmentation depend on request shape. Compaction reclaims
+Each pod has a 4Gi queue volume and a 512MiB limit per signal database. This provides more
+database headroom than the payload budget because index/page
+overhead and fragmentation depend on request shape. The chart requires at least four times
+the effective byte queue capacity per database, including queue overrides; this minimum does
+not guarantee that arbitrary request shapes will fit. Item/request queue sizing requires
+operator budgeting because its units cannot be compared with database bytes. Compaction
+reclaims
 disk space after queues drain; the volume must allow at least six times the database limit
-for three databases and their temporary compaction copies. Disk writes use `fsync` by
-default for crash consistency, with additional I/O cost. The pod requests 512Mi of
+for three databases and their temporary compaction copies. Like upstream, `fsync` is off by
+default. Writes remain available on the live node filesystem for process-restart recovery,
+but an unclean host failure can lose unsynced writes or corrupt the database. Set
+`otel_collector.queueStorage.fsync=true` to force each database write to stable storage, at
+substantial I/O cost. An `emptyDir` still provides no durability across pod/node replacement.
+The pod requests 512Mi of
 ephemeral storage and allows 5Gi including container logs; explicit collector resource
 settings take precedence. Adjust `otel_collector.queueStorage` for local storage capacity
 and throughput, and monitor node disk pressure. An `emptyDir` size limit is not a disk
@@ -446,9 +454,11 @@ replay after a forced container kill. Both runtime tests use synthetic data and 
 connect to a cluster.
 
 `tests/collector/stress_queues.py` runs manual synthetic capacity, throughput, repeated
-fill/drain, and storage-full experiments. Use `--scenario`, `--mode`, and `--output` to
+fill/drain, restart, and storage-full experiments. Use `--scenario`, `--mode`, and `--output` to
 select a case. Slow-I/O cases accept Docker `--io-bps` or `--io-iops` device limits; these
-apply only to the test container. Tiny-request tests can scale queue/database limits using
+apply only to the test container. `--filesystem-mib` uses tmpfs to isolate byte capacity or
+inject ENOSPC; those cases do not measure disk performance or durability. `--fsync` and
+`--no-fsync` override the chart setting. Tiny-request tests can scale queue/database limits using
 `--queue-mib` and `--database-mib`. Inspect acknowledged record IDs in the output as well
 as queue metrics. The reproducible summary in `tests/collector/queue_stress_results.json`
 records the observed tradeoffs; its local rates are not production capacity guarantees.

@@ -82,7 +82,8 @@ def main():
             receive, health = ports(name, 4318, 13133)
 
             def wait_ready():
-                for _ in range(100):
+                deadline = time.monotonic() + 60
+                while time.monotonic() < deadline:
                     try:
                         get(health, "/")
                         return

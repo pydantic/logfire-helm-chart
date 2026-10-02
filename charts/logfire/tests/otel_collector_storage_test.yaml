@@ -10,9 +10,7 @@ templates:
   - templates/logfire-otel-collector.yaml
   - templates/logfire-otel-collector-cfg.yaml
 tests:
-  - it: enables bounded disk queues and compaction when opted in
-    set:
-      otel_collector.queueStorage.enabled: true
+  - it: enables bounded disk queues and compaction by default
     template: templates/logfire-otel-collector-cfg.yaml
     asserts:
       - matchRegex:
@@ -26,7 +24,7 @@ tests:
           pattern: 'max_size: 536870912'
       - matchRegex:
           path: data["otel-collector-config.yaml"]
-          pattern: 'fsync: true'
+          pattern: 'fsync: false'
       - matchRegex:
           path: data["otel-collector-config.yaml"]
           pattern: 'on_rebound: true'
@@ -65,13 +63,17 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].resources.limits.memory
           value: 2Gi
-  - it: defaults to in-memory queues without storage extensions
+  - it: supports in-memory queues without storage extensions
+    set:
+      otel_collector.queueStorage.enabled: false
     template: templates/logfire-otel-collector-cfg.yaml
     asserts:
       - notMatchRegex:
           path: data["otel-collector-config.yaml"]
           pattern: 'file_storage|compaction'
-  - it: omits disk allocation and ownership by default
+  - it: omits disk allocation and ownership when disabled
+    set:
+      otel_collector.queueStorage.enabled: false
     template: templates/logfire-otel-collector.yaml
     documentSelector:
       path: kind
@@ -128,3 +130,53 @@ tests:
     asserts:
       - failedTemplate:
           errorMessage: The collector ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit; allow extra space for container logs.
+  - it: rejects an enlarged byte queue without database headroom
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.exporter.sending_queue.queue_size: 268435456
+    template: templates/logfire-otel-collector.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: otel_collector.queueStorage.maxSizeBytes must allow at least 4x the effective byte queue_size for database overhead; increase the disk budgets when increasing the queue.
+  - it: accepts an enlarged queue when all disk budgets are raised
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.queueStorage.maxSizeBytes: 1073741824
+      otel_collector.queueStorage.sizeLimit: 8Gi
+      otel_collector.queueStorage.ephemeralStorageLimit: 9Gi
+      otel_collector.exporter.sending_queue.queue_size: 268435456
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'queue_size: 268435456'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_size: 1073741824'
+  - it: uses the effective preset queue for database validation
+    set:
+      sizingPreset: standard
+      otel_collector.queueStorage.enabled: true
+      otel_collector.queueStorage.maxSizeBytes: 268435456
+    template: templates/logfire-otel-collector.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: otel_collector.queueStorage.maxSizeBytes must allow at least 4x the effective byte queue_size for database overhead; increase the disk budgets when increasing the queue.
+  - it: does not compare item counts with byte database limits
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.exporter.sending_queue.sizer: items
+      otel_collector.exporter.sending_queue.queue_size: 268435456
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'sizer: items'
+  - it: supports explicit fsync for stable-storage writes
+    set:
+      otel_collector.queueStorage.fsync: true
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'fsync: true'

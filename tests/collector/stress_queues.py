@@ -169,7 +169,9 @@ class Collector:
             config["service"]["extensions"].remove("file_storage/queue")
         else:
             storage = config["extensions"]["file_storage/queue"]
-            storage["fsync"] = not args.no_fsync
+            if args.fsync is not None:
+                storage["fsync"] = args.fsync
+            self.fsync = storage["fsync"]
             if args.database_mib:
                 storage["max_size"] = args.database_mib * MIB
                 storage["compaction"]["rebound_needed_threshold_mib"] = max(1, args.database_mib * 100 // 256)
@@ -189,6 +191,10 @@ class Collector:
                        "busybox:1.37", "sleep", "86400")
             docker("run", "--rm", "-v", f"{self.volume}:/queue", "busybox:1.37", "sh", "-c",
                    "mkdir -p /queue/compaction && chown -R 10001:10001 /queue")
+            # Keep the config on Linux-local storage too, so container restart tests do not
+            # depend on Docker Desktop retaining a macOS temporary-file bind mount.
+            docker("run", "--rm", "-v", f"{path}:/cfg.yaml:ro", "-v", f"{self.volume}:/queue",
+                   "busybox:1.37", "cp", "/cfg.yaml", "/queue/collector.yaml")
             if args.filler_mib:
                 docker("run", "--rm", "-v", f"{self.volume}:/queue", "busybox:1.37", "sh", "-c",
                        f"dd if=/dev/zero of=/queue/filler bs=1048576 count={args.filler_mib} conv=fsync")
@@ -198,8 +204,8 @@ class Collector:
                    *(["--add-host", "host.docker.internal:host-gateway"] if sys.platform == "linux" else []),
                    "-e", "GOMEMLIMIT=1228MiB", "-e", "LOGFIRE_META_WRITE_TOKEN=synthetic",
                    "-p", "127.0.0.1::4318", "-p", "127.0.0.1::13133", "-p", "127.0.0.1::8888",
-                   "-v", f"{path}:/cfg.yaml:ro", "-v", f"{self.volume}:/var/lib/otelcol/queue",
-                   IMAGE, "--config=/cfg.yaml")
+                   "-v", f"{self.volume}:/var/lib/otelcol/queue",
+                   IMAGE, "--config=/var/lib/otelcol/queue/collector.yaml")
             self.receive, self.health, self.telemetry = ports(self.name, 4318, 13133, 8888)
             deadline = time.monotonic() + 60
             while True:
@@ -230,7 +236,13 @@ class Collector:
     def sample_loop(self):
         while not self.sample_stop.is_set():
             try:
-                self.snapshots.append({"elapsed_s": time.monotonic() - self.started, "metrics": self.metrics()})
+                snapshot = {"elapsed_s": time.monotonic() - self.started, "metrics": self.metrics()}
+                self.snapshots.append(snapshot)
+                interval = self.args.progress_interval
+                if interval and len(self.snapshots) % interval == 0:
+                    print(json.dumps({"progress_s": round(snapshot["elapsed_s"]),
+                                      "responses": self.statuses.copy(),
+                                      "metrics": snapshot["metrics"]}), flush=True)
             except OSError:
                 pass
             self.sample_stop.wait(1)
@@ -271,7 +283,10 @@ class Collector:
                 connection.close()
 
         with ThreadPoolExecutor(max_workers=concurrency) as pool:
-            list(pool.map(worker, range(concurrency)))
+            try:
+                list(pool.map(worker, range(concurrency)))
+            finally:
+                stop.set()
         elapsed = time.monotonic() - start
         counts = {k: v - before.get(k, 0) for k, v in self.statuses.items()}
         latencies = sorted(self.latencies[latencies_before:])
@@ -281,7 +296,9 @@ class Collector:
                                for name, p in (("p50", .5), ("p95", .95), ("p99", .99))} if latencies else {},
                 "metrics": self.metrics()}
 
-    def drain(self, backend, timeout=90):
+    def drain(self, backend, timeout=None):
+        if timeout is None:
+            timeout = self.args.drain_timeout
         backend.available.set()
         before = time.monotonic()
         while time.monotonic() - before < timeout:
@@ -314,7 +331,6 @@ class Collector:
             self.sampler.join(timeout=12)
         result = subprocess.run(["docker", "logs", self.name], capture_output=True, text=True)
         self.log = result.stdout + result.stderr
-        (self.directory / "collector.log").write_text(self.log)
         subprocess.run(["docker", "rm", "-f", self.name], capture_output=True)
         if hasattr(self, "volume_holder"):
             subprocess.run(["docker", "rm", "-f", self.volume_holder], capture_output=True)
@@ -323,20 +339,24 @@ class Collector:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scenario", choices=("throughput", "tiny", "cycles", "cap"), required=True)
+    parser.add_argument("--scenario", choices=("throughput", "tiny", "cycles", "cap", "restart"), required=True)
     parser.add_argument("--mode", choices=("memory", "disk"), required=True)
     parser.add_argument("--duration", type=int, default=15)
+    parser.add_argument("--drain-timeout", type=int, default=90)
+    parser.add_argument("--progress-interval", type=int, default=0, help="Print progress every N seconds")
     parser.add_argument("--payload-bytes", type=int, default=64)
     parser.add_argument("--concurrency", type=int, default=8)
     parser.add_argument("--queue-mib", type=int)
     parser.add_argument("--database-mib", type=int)
     parser.add_argument("--filesystem-mib", type=int,
-                        help="Use a bounded tmpfs ONLY for an ENOSPC fault test, not I/O benchmarks")
+                        help="Use bounded tmpfs to isolate capacity or inject ENOSPC; never an I/O benchmark")
     parser.add_argument("--filler-mib", type=int, default=0)
     parser.add_argument("--io-bps")
     parser.add_argument("--io-iops")
-    parser.add_argument("--no-fsync", action="store_true")
+    parser.add_argument("--fsync", action=argparse.BooleanOptionalAction, default=None,
+                        help="Override the chart fsync setting for a comparison")
     parser.add_argument("--debug-storage", action="store_true")
+    parser.add_argument("--restart-signal", choices=("KILL", "TERM"), default="KILL")
     parser.add_argument("--cycles", type=int, default=3)
     parser.add_argument("--requests", type=int, default=160)
     parser.add_argument("--output", type=Path, required=True)
@@ -350,14 +370,43 @@ def main():
             collector = Collector(args, backend, directory)
             result["queue_limit_bytes_per_signal"] = collector.queue_limit
             result["database_limit_bytes_per_signal"] = getattr(collector, "database_limit", None)
+            result["fsync"] = getattr(collector, "fsync", None)
             if args.scenario == "throughput":
                 backend.available.set()
                 collector.load(3, args.concurrency, args.payload_bytes)
                 result["load"] = collector.load(args.duration, args.concurrency, args.payload_bytes)
                 result["drain"] = collector.drain(backend)
             elif args.scenario == "tiny":
-                result["load"] = collector.load(args.duration, args.concurrency, 64, ("logs",), stop_on_full=True)
+                result["load"] = collector.load(args.duration, args.concurrency, args.payload_bytes, ("logs",), stop_on_full=True)
                 result["disk_at_rejection"] = collector.disk()
+                result["drain"] = collector.drain(backend)
+            elif args.scenario == "restart":
+                connection = http.client.HTTPConnection("127.0.0.1", collector.receive, timeout=15)
+                try:
+                    for _ in range(args.requests):
+                        for signal in SIGNALS:
+                            collector.post(connection, signal, args.payload_bytes)
+                finally:
+                    connection.close()
+                time.sleep(2)  # Ensure exporter batches are retrying during the outage.
+                result["before_restart_metrics"] = collector.metrics()
+                docker("kill", "--signal=" + args.restart_signal, collector.name)
+                subprocess.run(["docker", "wait", collector.name], check=True,
+                               capture_output=True, timeout=60)
+                result["restart_signal"] = args.restart_signal
+                result["restart_exit_code"] = json.loads(docker("inspect", collector.name))[0]["State"]["ExitCode"]
+                docker("start", collector.name)
+                collector.receive, collector.health, collector.telemetry = ports(collector.name, 4318, 13133, 8888)
+                deadline = time.monotonic() + 60
+                while True:
+                    try:
+                        collector.receive, collector.health, collector.telemetry = ports(collector.name, 4318, 13133, 8888)
+                        get(collector.health, "/")
+                        break
+                    except OSError:
+                        if time.monotonic() > deadline:
+                            raise
+                        time.sleep(.2)
                 result["drain"] = collector.drain(backend)
             elif args.scenario == "cycles":
                 result["cycles"] = []

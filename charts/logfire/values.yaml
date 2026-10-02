@@ -1694,21 +1694,25 @@ otelResourceAttributes: {}
 
 # -- otel-collector configuration
 otel_collector:
-  # -- Optional disk-backed OTLP queues on a per-pod emptyDir. Survives container restarts,
-  # but not pod replacement, rollouts, or eviction. Memory queues remain the default: disk
-  # writes add latency, and storage exhaustion can lose already-acknowledged records.
+  # -- Disk-backed OTLP queues on a per-pod emptyDir. Survives container restarts,
+  # but not pod replacement, rollouts, or eviction. Disable to use memory queues.
+  # Storage exhaustion can still lose already-acknowledged records.
   queueStorage:
-    enabled: false
+    enabled: true
     sizeLimit: 4Gi
     # -- Scheduling reservation for node-local storage, including logs.
     # Explicit logfire-otel-collector.resources ephemeral-storage settings take precedence.
     ephemeralStorageRequest: 512Mi
     # -- Container limit for node-local storage, including queues, compaction, and logs.
     ephemeralStorageLimit: 5Gi
-    # -- Sync each database write. Improves crash consistency at the cost of disk I/O.
-    fsync: true
+    # -- Force each database write to stable storage. Off by default, like upstream:
+    # process-restart recovery uses the live node filesystem; unclean host failure can lose
+    # unsynced writes or corrupt the database. Enabling this adds substantial disk I/O cost.
+    fsync: false
     # -- Per-database limit. There are three signal databases. Keep the volume large enough
     # for all three plus their temporary compaction copies (at least 6x this value).
+    # Byte queues require at least 4x payload capacity per database for page/index overhead;
+    # this headroom minimum is not a guarantee for arbitrary request shapes or disk failure.
     maxSizeBytes: 536870912
   debug:
     # -- Emit per-request summaries to collector logs. Enable for troubleshooting; disabled
