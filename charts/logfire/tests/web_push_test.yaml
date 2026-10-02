@@ -156,7 +156,7 @@ tests:
   # checksum is a hash of the key, so a rotation yields a new value and rolls the workloads. This
   # asserts the rotated key still renders a well-formed checksum on every workload; the change on
   # rotation is guaranteed by the annotation hashing the key rather than holding a constant.
-  - it: rotating a supplied key changes the checksum the workloads roll on
+  - it: a rotated key still renders a well-formed checksum on every workload
     set:
       webPush:
         enabled: true
