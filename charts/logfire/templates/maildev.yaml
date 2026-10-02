@@ -30,9 +30,9 @@ spec:
       {{- include "logfire.securityContext" $maildevPodSecurityContext | nindent 6 }}
       containers:
         - name: logfire-maildev
-          image: {{ include "logfire.imageRef" (dict "image" $maildevImage "defaultRepository" "maildev/maildev" "defaultTag" "latest") }}
+          image: {{ include "logfire.imageRef" (dict "image" $maildevImage "defaultRepository" "maildev/maildev" "defaultTag" "3.0.0") }}
           imagePullPolicy: {{ default .Values.image.pullPolicy (get $maildevImage "pullPolicy") | quote }}
-          {{- $maildevSecurityContext := include "logfire.mergeSecurityContext" (dict "ctx" . "serviceName" "maildev" "defaults" (dict)) | fromJson }}
+          {{- $maildevSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" . "identity" "maildev" "readOnlyRootFilesystem" true) | fromJson }}
           {{- include "logfire.securityContext" $maildevSecurityContext | nindent 10 }}
           ports:
             - containerPort: 1080
@@ -42,6 +42,12 @@ spec:
               value: maildev
             - name: MAILDEV_INCOMING_PASS
               value: maildev
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
       restartPolicy: Always
 ---
 apiVersion: v1

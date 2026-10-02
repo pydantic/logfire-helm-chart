@@ -145,7 +145,8 @@ spec:
             {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
             - containerPort: {{ .Values.otel_collector.prometheus.port }}
             {{- end }}
-          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- $otelSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" . "identity" "otel_collector" "readOnlyRootFilesystem" true) | fromJson }}
+          {{- include "logfire.securityContext" $otelSecurityContext | nindent 10 }}
           volumeMounts:
             - name: otel-collector-config
               mountPath: /etc/otel-collector

@@ -28,7 +28,8 @@ spec:
         - name: wait
           image: curlimages/curl:8.12.1
           imagePullPolicy: IfNotPresent
-          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" . "identity" "tls-wait") | fromJson }}
+          {{- include "logfire.securityContext" $waitSecurityContext | nindent 10 }}
           command:
             - /bin/sh
             - -ec
