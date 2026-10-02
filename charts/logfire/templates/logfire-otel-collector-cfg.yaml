@@ -88,7 +88,7 @@ data:
       # pipeline behind `delta_to_cumulative`. The limiter protects ingress, but cannot evict
       # retained series; capacity still depends on cardinality and retention.
       delta_to_cumulative:
-        max_stale: {{ $promValues.max_stale }}
+        max_stale: {{ $promValues.max_stale | default "5m" }}
       {{- end }}
       k8s_attributes:
         filter:

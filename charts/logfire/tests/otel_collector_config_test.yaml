@@ -76,6 +76,14 @@ tests:
       - matchRegex:
           path: data["otel-collector-config.yaml"]
           pattern: 'max_size: 32768'
+  - it: falls back to a 5m max_stale when the value is nulled
+    set:
+      otel_collector.prometheus.enabled: true
+      otel_collector.prometheus.max_stale: null
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_stale: 5m'
   - it: uses a fixed limiter when only a CPU limit is rendered
     set:
       sizingPreset: ""
