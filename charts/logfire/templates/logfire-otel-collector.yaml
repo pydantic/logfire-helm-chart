@@ -162,7 +162,7 @@ spec:
           ports:
             - containerPort: 4317
             - containerPort: 4318
-            - containerPort: 8888
+            - containerPort: {{ .Values.otel_collector.selfMetricsPort | default 8888 }}
               name: self-metrics
             - containerPort: 13133
               name: health

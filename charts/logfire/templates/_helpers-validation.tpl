@@ -427,14 +427,18 @@ Call this from templates that need to ensure configuration is valid.
 {{- end -}}
 {{- end -}}
 
-{{/* The collector's self-metrics and the application Prometheus exporter each bind a port, so they
-must differ or the collector cannot start. */}}
+{{/* The collector's self-metrics, OTLP receivers, health check, and application Prometheus exporter
+each bind a port, so the self-metrics port must differ from all of them or the collector cannot
+start. */}}
 {{- define "logfire.validate.otelSelfMetricsPort" -}}
+{{- $selfPort := int (.Values.otel_collector.selfMetricsPort | default 8888) -}}
+{{- if has $selfPort (list 4317 4318 13133) -}}
+{{- fail (printf "otel_collector.selfMetricsPort (%d) collides with a fixed collector port (4317 OTLP gRPC, 4318 OTLP HTTP, or 13133 health check)." $selfPort) -}}
+{{- end -}}
 {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" -}}
-{{- $selfPort := .Values.otel_collector.selfMetricsPort | default 8888 -}}
-{{- $promPort := (get (.Values.otel_collector.prometheus | default dict) "port") | default 9090 -}}
-{{- if eq (int $selfPort) (int $promPort) -}}
-{{- fail (printf "otel_collector.selfMetricsPort (%d) must differ from otel_collector.prometheus.port (%d); the collector binds both and cannot start when they match." (int $selfPort) (int $promPort)) -}}
+{{- $promPort := int ((get (.Values.otel_collector.prometheus | default dict) "port") | default 9090) -}}
+{{- if eq $selfPort $promPort -}}
+{{- fail (printf "otel_collector.selfMetricsPort (%d) must differ from otel_collector.prometheus.port (%d); the collector binds both and cannot start when they match." $selfPort $promPort) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

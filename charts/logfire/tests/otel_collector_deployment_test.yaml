@@ -145,3 +145,16 @@ tests:
           value: Recreate
       - notExists:
           path: spec.strategy.rollingUpdate
+  - it: binds the self-metrics container port to the configured value
+    set:
+      otel_collector.selfMetricsPort: 9999
+    template: templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content:
+            containerPort: 9999
+            name: self-metrics

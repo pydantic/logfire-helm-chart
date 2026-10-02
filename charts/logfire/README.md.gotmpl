@@ -436,8 +436,9 @@ because exceeding a cap drops new streams. Metrics for a given stream must reach
 collector replica; cumulative state resets when that collector is replaced. Scrape each
 replica directly, and account for these semantics when configuring routing/autoscaling.
 
-Collector self-metrics are available on each pod's `self-metrics` port (8888), separately
-from application metrics on 9090. Configure your monitoring system to scrape that pod port.
+Collector self-metrics are available on each pod's `self-metrics` port
+(`otel_collector.selfMetricsPort`, default 8888), separately from application metrics on
+`otel_collector.prometheus.port` (default 9090). Configure your monitoring system to scrape that pod port.
 Monitor queue utilization (`otelcol_exporter_queue_size` / `otelcol_exporter_queue_capacity`),
 `otelcol_exporter_enqueue_failed_*`, `otelcol_receiver_refused_*`, process/container memory,
 and pod OOM/restart events. Higher limits provide headroom; retained cardinality and scrape

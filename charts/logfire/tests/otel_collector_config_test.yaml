@@ -129,7 +129,7 @@ tests:
     asserts:
       - matchRegex:
           path: data["otel-collector-config.yaml"]
-          pattern: 'memory_limiter'
+          pattern: 'limit_percentage: 75'
   - it: rejects a self-metrics port equal to the Prometheus exporter port
     set:
       otel_collector.prometheus.enabled: true
