@@ -713,3 +713,30 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: 'maxQueryCostPerPod must be a positive integer'
+
+  # --- SMTP sender contract ---
+  # A self-hosted install sends through its own SMTP server, so mail as pydantic.dev would fail
+  # DMARC at the receiver. The platform refuses to start without a sender, and this check stops
+  # the install or upgrade before any workload rolls out.
+  - it: an SMTP server without a sender fails before anything rolls out
+    set:
+      smtp:
+        host: smtp.example.com
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.fromAddress is required when smtp.host is set"
+
+  # The platform refuses a pydantic.dev sender on a self-hosted install. This check says so
+  # before any workload rolls out.
+  - it: a pydantic.dev sender fails before anything rolls out
+    set:
+      smtp:
+        host: smtp.example.com
+        fromAddress: No-Reply@Alerts.Pydantic.Dev
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.fromAddress must not be a pydantic.dev address"

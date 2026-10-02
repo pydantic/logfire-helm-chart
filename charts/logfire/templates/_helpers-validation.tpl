@@ -158,7 +158,11 @@ Validate existing secret configuration
 {{- define "logfire.validate.existingSecret" -}}
 {{- if .Values.existingSecret.enabled -}}
   {{- if not .Values.existingSecret.name -}}
-    {{- fail "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-encryption-key, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys." -}}
+    {{- $msg := "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-encryption-key, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys." -}}
+    {{- if .Values.webPush.enabled -}}
+      {{- $msg = printf "%s It must also hold a logfire-web-push-vapid-key key when webPush.enabled." $msg -}}
+    {{- end -}}
+    {{- fail $msg -}}
   {{- end -}}
 {{- end -}}
 {{- end -}}

@@ -7,32 +7,6 @@ set:
   objectStore:
     uri: s3://test-bucket
 tests:
-  # A self-hosted install sends through its own SMTP server, so mail as pydantic.dev would fail
-  # DMARC at the receiver. The platform refuses to start without a sender, and this check stops
-  # the install or upgrade before any workload rolls out.
-  - it: an SMTP server without a sender fails before anything rolls out
-    set:
-      smtp:
-        host: smtp.example.com
-    templates:
-      - templates/logfire-validate-config.yaml
-    asserts:
-      - failedTemplate:
-          errorPattern: "smtp.fromAddress is required when smtp.host is set"
-
-  # The platform refuses a pydantic.dev sender on a self-hosted install. This check says so
-  # before any workload rolls out.
-  - it: a pydantic.dev sender fails before anything rolls out
-    set:
-      smtp:
-        host: smtp.example.com
-        fromAddress: No-Reply@Alerts.Pydantic.Dev
-    templates:
-      - templates/logfire-validate-config.yaml
-    asserts:
-      - failedTemplate:
-          errorPattern: "smtp.fromAddress must not be a pydantic.dev address"
-
   - it: both workloads that send email get the sender
     set:
       smtp:
@@ -53,18 +27,15 @@ tests:
           content:
             name: EMAIL_FROM_NAME
             value: Acme Logfire
-
-  # The worker sends alert email inline. Without ON_PREM it would treat the install as SaaS and
-  # name a pydantic.dev mailbox in the List-Owner header.
-  - it: the worker knows it is self-hosted
-    templates:
-      - templates/logfire-worker.yaml
-    asserts:
+      # External contract: the worker sends alert email inline and reads ON_PREM to name the
+      # List-Owner mailbox. Without it the worker treats the install as SaaS and names a
+      # pydantic.dev mailbox, so the sender header is wrong even with a correct fromAddress.
       - contains:
           path: spec.template.spec.containers[0].env
           content:
             name: ON_PREM
             value: "true"
+        template: templates/logfire-worker.yaml
 
   # An empty value fails platform startup, so an unset sender must not render at all.
   - it: an install without SMTP renders no sender variables
