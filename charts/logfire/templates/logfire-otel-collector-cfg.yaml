@@ -7,9 +7,9 @@
 {{- $queueSizeBytes := $collectorValues.sendingQueueBytes | default .Values.otel_collector.sendingQueueBytes | default 67108864 }}
 {{- $prometheusEnabled := include "isPrometheusExporterEnabled" . | trim | eq "true" }}
 {{- $promValues := .Values.otel_collector.prometheus | default dict }}
-{{- $deltatocumulative := true }}
-{{- if hasKey $promValues "deltatocumulative" }}
-{{- $deltatocumulative = $promValues.deltatocumulative }}
+{{- $deltaToCumulative := true }}
+{{- if hasKey $promValues "delta_to_cumulative" }}
+{{- $deltaToCumulative = $promValues.delta_to_cumulative }}
 {{- end }}
 apiVersion: v1
 kind: ConfigMap
@@ -85,12 +85,13 @@ data:
       batch:
         timeout: 1s
         send_batch_size: 2048
-      {{- if and $prometheusEnabled $deltatocumulative }}
+      {{- if and $prometheusEnabled $deltaToCumulative }}
       # Delta-to-cumulative for the Prometheus exporter only. The processor is alpha. The
       # otlp_http metrics pipeline stays delta, so this conversion is scoped to the Prometheus
-      # pipeline behind `deltatocumulative`. `memory_limiter` runs first in that pipeline and
-      # bounds the state this conversion accumulates.
-      deltatocumulative: {}
+      # pipeline behind `delta_to_cumulative`. `memory_limiter` runs first in that pipeline and
+      # bounds the state this conversion accumulates; `max_streams` stays unbounded here and is
+      # limited only by that memory guard, which sheds load by refusing data rather than failing.
+      delta_to_cumulative: {}
       {{- end }}
       k8s_attributes:
         filter:
@@ -154,13 +155,16 @@ data:
           exporters: [debug, otlp_http]
         {{- if $prometheusEnabled }}
         # The Prometheus exporter gets its own metrics pipeline so the otlp_http pipeline keeps
-        # its delta semantics to the backend. Behind `deltatocumulative` (when enabled) this
+        # its delta semantics to the backend. Behind `delta_to_cumulative` (when enabled) this
         # pipeline converts delta to cumulative, which is what Prometheus scrapes; otherwise it
-        # passes metrics through unchanged.
+        # passes metrics through unchanged. Note the collector builds a processor instance per
+        # pipeline, so enabling Prometheus adds a second k8s_attributes/memory_limiter/batch
+        # (and its own informer cache) alongside the otlp_http pipeline. `debug` is omitted here
+        # so batches are not logged twice.
         metrics/prometheus:
           receivers: [otlp]
-          processors: [memory_limiter, k8s_attributes, {{ if $deltatocumulative }}deltatocumulative, {{ end }}batch]
-          exporters: [debug, prometheus]
+          processors: [memory_limiter, k8s_attributes, {{ if $deltaToCumulative }}delta_to_cumulative, {{ end }}batch]
+          exporters: [prometheus]
         {{- end }}
         logs:
           receivers: [otlp]

@@ -1,0 +1,57 @@
+suite: otel collector metrics pipelines
+release:
+  name: lf
+  namespace: default
+set:
+  objectStore:
+    uri: s3://test-bucket
+templates:
+  - templates/logfire-otel-collector-cfg.yaml
+tests:
+  # The Prometheus exporter gets its own metrics pipeline behind delta_to_cumulative so the
+  # backend keeps delta semantics. The collector builds a processor instance per pipeline, so
+  # this adds a second k8s_attributes/memory_limiter/batch; `debug` is left off so batches are
+  # not logged twice.
+  - it: routes Prometheus through delta_to_cumulative on its own pipeline
+    set:
+      otel_collector:
+        prometheus:
+          enabled: true
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'metrics/prometheus:\n\s+receivers: \[otlp\]\n\s+processors: \[memory_limiter, k8s_attributes, delta_to_cumulative, batch\]\n\s+exporters: \[prometheus\]'
+
+  - it: keeps the backend metrics pipeline free of delta_to_cumulative and prometheus
+    set:
+      otel_collector:
+        prometheus:
+          enabled: true
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'metrics:\n\s+receivers: \[otlp\]\n\s+processors: \[memory_limiter, k8s_attributes, batch\]\n\s+exporters: \[debug, otlp_http\]'
+
+  - it: drops the processor from the Prometheus pipeline when delta_to_cumulative is off
+    set:
+      otel_collector:
+        prometheus:
+          enabled: true
+          delta_to_cumulative: false
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'metrics/prometheus:\n\s+receivers: \[otlp\]\n\s+processors: \[memory_limiter, k8s_attributes, batch\]\n\s+exporters: \[prometheus\]'
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'k8s_attributes, delta_to_cumulative, batch'
+
+  - it: renders no Prometheus pipeline when the exporter is disabled
+    set:
+      otel_collector:
+        prometheus:
+          enabled: false
+    asserts:
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'metrics/prometheus'

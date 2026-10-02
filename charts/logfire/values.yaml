@@ -1686,13 +1686,18 @@ otel_collector:
     add_metric_suffixes: false
     # -- Override the Prometheus exporter `translation_strategy`. When empty it is derived from
     # `add_metric_suffixes`: `UnderscoreEscapingWithoutSuffixes` when false, and
-    # `UnderscoreEscapingWithSuffixes` when true.
+    # `UnderscoreEscapingWithSuffixes` when true. The exporter no longer emits `add_metric_suffixes`
+    # (deprecated and ignored by recent collectors); this value drives `translation_strategy`.
     translation_strategy: ""
     # -- Convert delta metrics to cumulative on the Prometheus pipeline with the alpha
-    # `deltatocumulative` processor. Only runs when the Prometheus exporter is enabled, and the
+    # `delta_to_cumulative` processor. Only runs when the Prometheus exporter is enabled, and the
     # otlp_http pipeline keeps its delta semantics to the backend. Set false to pass metrics
-    # through unchanged.
-    deltatocumulative: true
+    # through unchanged. The processor leaves `max_streams` unbounded; the pipeline's
+    # `memory_limiter` bounds it by shedding load rather than failing.
+    delta_to_cumulative: true
+    # -- OpenTelemetry resource attributes exposed as Prometheus metric labels. Deprecated in
+    # recent collectors in favour of `resource_constant_labels`; switch to
+    # `resource_constant_labels: {included: ["*"]}` before it is ignored.
     resource_to_telemetry_conversion:
       enabled: true
 
