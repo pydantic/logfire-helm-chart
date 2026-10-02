@@ -53,8 +53,8 @@ jobs:
 
       - name: Verify collector metrics compatibility
         run: |
-          python -m pip install PyYAML==6.0.3
-          python tests/collector/verify_config.py
+          "${pythonLocation}/bin/python" -m pip install PyYAML==6.0.3
+          "${pythonLocation}/bin/python" tests/collector/verify_config.py
 
       - name: Set up GCP auth
         id: auth
