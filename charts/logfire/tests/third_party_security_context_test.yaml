@@ -1,0 +1,257 @@
+suite: bundled third-party container security contexts
+# The portable controls for images the chart takes from other projects: the verified image
+# identity, all capabilities dropped, no privilege escalation, and the RuntimeDefault seccomp
+# profile. Redis, Dex, MailDev, and the OTel collector also get a read-only image root. The CI
+# install under the restricted Pod Security Standard enforces the controls; these assertions pin
+# the identity and the merge precedence.
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployRustfs: true
+    deployMaildev: true
+
+tests:
+  - it: defaults the Redis identity, portable controls, and data volume group
+    templates:
+      - templates/redis.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: true
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 999
+            fsGroupChangePolicy: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: defaults the Dex identity and portable controls
+    templates:
+      - templates/dex/deployment.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: true
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: defaults the RustFS identity and portable controls
+    templates:
+      - templates/rustfs.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: true
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 10001
+            fsGroupChangePolicy: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: defaults the MailDev identity, portable controls, and writable /tmp
+    templates:
+      - templates/maildev.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: true
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: tmp
+            mountPath: /tmp
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: defaults the OTel collector identity and portable controls
+    templates:
+      - templates/logfire-otel-collector.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: true
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: defaults the Postgres wait init container identity
+    templates:
+      - templates/logfire-worker.yaml
+    set:
+      dev:
+        deployPostgres: true
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: check-db-ready
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.initContainers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 999
+            runAsGroup: 999
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: defaults the in-cluster TLS wait container identity
+    templates:
+      - templates/logfire-incluster-tls-wait-hook.yaml
+    set:
+      dev:
+        deployCertManager: true
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 102
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+        documentSelector:
+          path: kind
+          value: Job
+
+  - it: merges the chart-wide securityContext over the third-party defaults
+    templates:
+      - templates/redis.yaml
+    set:
+      securityContext:
+        runAsUser: 2000
+        runAsGroup: 2000
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 2000
+            runAsGroup: 2000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: true
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: lets a per-service securityContext override the chart-wide context
+    templates:
+      - templates/redis.yaml
+    set:
+      securityContext:
+        runAsUser: 2000
+      logfire-redis:
+        securityContext:
+          runAsUser: 3000
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+          value: 3000
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: keeps a cleared identity field cleared
+    templates:
+      - templates/redis.yaml
+    set:
+      securityContext:
+        runAsUser: null
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+        documentSelector:
+          path: kind
+          value: Deployment

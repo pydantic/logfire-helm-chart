@@ -1466,11 +1466,12 @@ podSecurityContext: {}
 # See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details
 # Chart-owned containers (the Python, Fusionfire, gateway, and frontend images) and HAProxy merge
 # this context over chart defaults: the image's verified identity, `allowPrivilegeEscalation: false`,
-# all capabilities dropped, the `RuntimeDefault` seccomp profile, and a read-only root. A
-# per-workload `<workload>.securityContext` merges over both layers, for example
-# `logfire-backend.securityContext` or `haproxy.securityContext`. Maildev and RustFS merge it under
-# their own `securityContext` values. Set a field to `null` to clear it, for example
-# `runAsUser: null` for OpenShift, or set `readOnlyRootFilesystem: false` to restore a writable root.
+# all capabilities dropped, the `RuntimeDefault` seccomp profile, and a read-only root. The bundled
+# third-party containers (Redis, Dex, RustFS, MailDev, and the OTel collector) merge it over the
+# same portable controls with their own verified identities. A per-workload
+# `<workload>.securityContext` merges over both layers, for example `logfire-backend.securityContext`
+# or `logfire-dex.securityContext`. Set a field to `null` to clear it, for example `runAsUser: null`
+# for OpenShift, or set `readOnlyRootFilesystem: false` to restore a writable root.
 securityContext: {}
   # capabilities:
   #   drop:
@@ -1550,6 +1551,15 @@ logfire-redis:
   #   memory: "128Mi"
   # or native requests/limits.
   resources: {}
+
+  # -- Pod SecurityContext for the bundled Redis pod. Merged over the chart-wide
+  # `podSecurityContext` and a default of `fsGroup: 999` with `fsGroupChangePolicy:
+  # OnRootMismatch`, so the non-root Redis user can write a fresh data volume.
+  podSecurityContext: {}
+  # -- Container SecurityContext for the bundled Redis container. Merged over the chart-wide
+  # `securityContext` and the image defaults: uid and gid 999, all capabilities dropped, no
+  # privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root.
+  securityContext: {}
 
   # -- Redis liveness probe. Override or set to null to disable.
   livenessProbe:
@@ -1652,6 +1662,10 @@ otel_collector:
     repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
     tag: "0.160.0"
     pullPolicy: IfNotPresent
+  # -- Container SecurityContext for the OTel collector. Merged over the chart-wide
+  # `securityContext` and the image defaults: uid and gid 10001, all capabilities dropped, no
+  # privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root.
+  securityContext: {}
   prometheus:
     enabled: false
     port: 9090
@@ -1738,20 +1752,14 @@ cert-manager:
 maildev:
   image:
     repository: maildev/maildev
-    tag: latest
+    tag: "3.0.0"
     pullPolicy: IfNotPresent
   # -- Pod SecurityContext for the MailDev pod. Defaults to the chart-wide `podSecurityContext` when unset.
   podSecurityContext: {}
   # -- Container SecurityContext for the MailDev container. Merged over the chart-wide
-  # `securityContext`, so set fields here to override it. Set this when running under a restricted
-  # PodSecurity policy, e.g.:
-  #   runAsNonRoot: true
-  #   runAsUser: 1000
-  #   allowPrivilegeEscalation: false
-  #   capabilities:
-  #     drop: ["ALL"]
-  #   seccompProfile:
-  #     type: RuntimeDefault
+  # `securityContext` and the image defaults: uid and gid 1000, all capabilities dropped, no
+  # privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root with
+  # a writable `/tmp` emptyDir. Set a field here to override a default.
   securityContext: {}
 
 
@@ -1812,7 +1820,10 @@ rustfs:
       memory: 1Gi
   # -- Pod SecurityContext for the RustFS pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 10001`.
   podSecurityContext: {}
-  # -- Container SecurityContext for the RustFS container. Merged over the chart-wide `securityContext`, so set fields here to override it.
+  # -- Container SecurityContext for the RustFS container. Merged over the chart-wide
+  # `securityContext` and the image defaults: uid and gid 10001, all capabilities dropped, no
+  # privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root with
+  # the `/data` and `/logs` emptyDirs writable.
   securityContext: {}
 
 # ==============================================================================
