@@ -1396,6 +1396,65 @@ still applies them.
 {{- end -}}
 
 {{/*
+The numeric identity a bundled third-party image runs as. Each value is verified by running the
+image and reading its `USER` or its user database:
+
+- `logfire-redis`: the `redis` user in `redis:7.2`, uid and gid 999.
+- `logfire-dex`: the `USER` in the mirrored Dex image, uid and gid 1001.
+- `rustfs`: the `rustfs` user in `rustfs/rustfs:1.0.0`, uid and gid 10001.
+- `maildev`: the `node` user in `maildev/maildev:3.0.0`, uid and gid 1000.
+- `otel_collector`: the `USER` in the collector image, uid and gid 10001.
+- `postgres-wait`: the `postgres` user in `postgres:17`, uid and gid 999.
+- `tls-wait`: the `curl_user` in `curlimages/curl:8.12.1`, uid 101 and gid 102.
+*/}}
+{{- define "logfire.thirdPartyImageIdentity" -}}
+{{- $name := required "logfire.thirdPartyImageIdentity: need .name" .name -}}
+{{- if eq $name "logfire-redis" -}}
+{{- dict "uid" 999 "gid" 999 | toJson -}}
+{{- else if eq $name "logfire-dex" -}}
+{{- dict "uid" 1001 "gid" 1001 | toJson -}}
+{{- else if eq $name "rustfs" -}}
+{{- dict "uid" 10001 "gid" 10001 | toJson -}}
+{{- else if eq $name "maildev" -}}
+{{- dict "uid" 1000 "gid" 1000 | toJson -}}
+{{- else if eq $name "otel_collector" -}}
+{{- dict "uid" 10001 "gid" 10001 | toJson -}}
+{{- else if eq $name "postgres-wait" -}}
+{{- dict "uid" 999 "gid" 999 | toJson -}}
+{{- else if eq $name "tls-wait" -}}
+{{- dict "uid" 101 "gid" 102 | toJson -}}
+{{- else -}}
+{{- fail (printf "logfire.thirdPartyImageIdentity: unknown third-party image %q; add its verified image identity" $name) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Bundled third-party container SecurityContext: the portable controls plus the verified image
+identity, merged with the chart-wide and per-service contexts. The helper keeps
+`readOnlyRootFilesystem` off unless the caller sets `.readOnlyRootFilesystem`, because an image
+may write outside its data volume. The `.identity` names the image; the optional `.serviceName`
+selects the per-service `<serviceName>.securityContext` override and defaults to the identity.
+*/}}
+{{- define "logfire.thirdPartyContainerSecurityContext" -}}
+{{- $ctx := required "logfire.thirdPartyContainerSecurityContext: need .ctx" .ctx -}}
+{{- $identityName := required "logfire.thirdPartyContainerSecurityContext: need .identity" .identity -}}
+{{- $serviceName := .serviceName | default $identityName -}}
+{{- $identity := include "logfire.thirdPartyImageIdentity" (dict "name" $identityName) | fromJson -}}
+{{- $defaults := dict
+  "runAsNonRoot" true
+  "runAsUser" (get $identity "uid")
+  "runAsGroup" (get $identity "gid")
+  "allowPrivilegeEscalation" false
+  "capabilities" (dict "drop" (list "ALL"))
+  "seccompProfile" (dict "type" "RuntimeDefault")
+-}}
+{{- if .readOnlyRootFilesystem -}}
+{{- $_ := set $defaults "readOnlyRootFilesystem" true -}}
+{{- end -}}
+{{- include "logfire.mergeSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName "defaults" $defaults) -}}
+{{- end -}}
+
+{{/*
 The writable `/tmp` mount every chart-owned container gets. The production images keep a
 writable `HOME` or write scratch data under `/tmp`, so a read-only image root needs this
 emptyDir. List the mount before any mount nested under `/tmp`, because the kubelet applies
@@ -1882,7 +1941,8 @@ Dev Postgres helpers
     - -c
     - >-
       until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432 -U postgres; do echo "Waiting for postgres..."; sleep 2; done
-  {{- include "logfire.securityContext" $ctx.Values.securityContext | nindent 2 }}
+  {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" $ctx "identity" "postgres-wait" "readOnlyRootFilesystem" true) | fromJson }}
+  {{- include "logfire.securityContext" $waitSecurityContext | nindent 2 }}
 {{- end -}}
 {{- end -}}
 
