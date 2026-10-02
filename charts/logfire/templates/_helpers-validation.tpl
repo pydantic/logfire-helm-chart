@@ -393,3 +393,23 @@ Call this from templates that need to ensure configuration is valid.
 {{- include $validator $root -}}
 {{- end -}}
 {{- end -}}
+
+{{/* Each of the three signal databases needs room for its compaction copy. */}}
+{{- define "logfire.validate.otelQueueStorage" -}}
+{{- $storage := .Values.otel_collector.queueStorage -}}
+{{- if $storage.enabled -}}
+{{- $maximum := $storage.maxSizeBytes | int64 -}}
+{{- if lt $maximum 1048576 -}}
+{{- fail "otel_collector.queueStorage.maxSizeBytes must be at least 1048576 (1MiB)." -}}
+{{- end -}}
+{{- $volumeMi := include "logfire.memoryToMi" $storage.sizeLimit | int64 -}}
+{{- if lt (mul $volumeMi 1048576) (mul $maximum 6) -}}
+{{- fail "otel_collector.queueStorage.sizeLimit must allow at least 6x maxSizeBytes for three databases and their compaction copies." -}}
+{{- end -}}
+{{- $resources := include "logfire.otelCollectorResources" . | fromYaml -}}
+{{- $limitMi := include "logfire.memoryToMi" (dig "resources" "limits" "ephemeral-storage" "0" $resources) | int64 -}}
+{{- if lt $limitMi $volumeMi -}}
+{{- fail "The collector ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit; allow extra space for container logs." -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

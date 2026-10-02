@@ -48,6 +48,20 @@ def get(port, path, data=None):
     return urllib.request.urlopen(request, timeout=10).read().decode()
 
 
+def ports(name, *numbers):
+    # Docker can return from run/start before publishing ephemeral host ports.
+    for _ in range(100):
+        container = json.loads(subprocess.check_output(["docker", "inspect", name]))[0]
+        bindings = container["NetworkSettings"]["Ports"]
+        if all(bindings.get(f"{number}/tcp") for number in numbers):
+            return [int(bindings[f"{number}/tcp"][0]["HostPort"]) for number in numbers]
+        if not container["State"]["Running"]:
+            break
+        time.sleep(.1)
+    logs = subprocess.run(["docker", "logs", name], capture_output=True, text=True)
+    raise AssertionError("Collector ports unavailable: " + logs.stdout + logs.stderr)
+
+
 def main():
     server = http.server.ThreadingHTTPServer(("0.0.0.0", 0), Sink)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -66,18 +80,20 @@ def main():
         endpoint=f"http://host.docker.internal:{server.server_port}", encoding="json",
     )
     with tempfile.TemporaryDirectory() as directory:
+        queue = Path(directory) / "queue"
+        queue.mkdir(mode=0o777)
+        queue.chmod(0o777)  # Synthetic local data; the Kubernetes test verifies fsGroup permissions.
         path = Path(directory) / "collector.yaml"
         path.write_text(yaml.safe_dump(config))
         subprocess.run([
-            "docker", "run", "-d", "--name", NAME, "--memory", "2g",
+            "docker", "run", "-d", "--name", NAME, "--memory", "2g", "--read-only",
             *(["--add-host", "host.docker.internal:host-gateway"] if sys.platform == "linux" else []),
             "-e", "GOMEMLIMIT=1228MiB", "-e", "LOGFIRE_META_WRITE_TOKEN=synthetic",
             "-p", "127.0.0.1::4318", "-p", "127.0.0.1::9090", "-p", "127.0.0.1::13133",
-            "-v", f"{path}:/cfg.yaml:ro", IMAGE, "--config=/cfg.yaml",
+            "-v", f"{path}:/cfg.yaml:ro", "-v", f"{queue}:/var/lib/otelcol/queue", IMAGE, "--config=/cfg.yaml",
         ], check=True, capture_output=True)
         try:
-            bindings = json.loads(subprocess.check_output(["docker", "inspect", NAME]))[0]["NetworkSettings"]["Ports"]
-            receive, scrape, health = [int(bindings[f"{port}/tcp"][0]["HostPort"]) for port in (4318, 9090, 13133)]
+            receive, scrape, health = ports(NAME, 4318, 9090, 13133)
             for _ in range(80):
                 try:
                     get(health, "/")

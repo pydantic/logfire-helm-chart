@@ -1694,6 +1694,21 @@ otelResourceAttributes: {}
 
 # -- otel-collector configuration
 otel_collector:
+  # -- Disk-backed OTLP queues on a per-pod emptyDir. Survives container restarts, but not pod
+  # replacement, rollouts, or eviction. Set enabled=false to restore in-memory queues.
+  queueStorage:
+    enabled: true
+    sizeLimit: 2Gi
+    # -- Scheduling reservation for node-local storage, including logs.
+    # Explicit logfire-otel-collector.resources ephemeral-storage settings take precedence.
+    ephemeralStorageRequest: 512Mi
+    # -- Container limit for node-local storage, including queues, compaction, and logs.
+    ephemeralStorageLimit: 3Gi
+    # -- Sync each database write. Improves crash consistency at the cost of disk I/O.
+    fsync: true
+    # -- Per-database limit. There are three signal databases. Keep the volume large enough
+    # for all three plus their temporary compaction copies (at least 6x this value).
+    maxSizeBytes: 268435456
   debug:
     # -- Emit per-request summaries to collector logs. Enable for troubleshooting; disabled
     # by default to avoid logging every incoming telemetry request.
@@ -1709,7 +1724,7 @@ otel_collector:
       insecure: true
     headers: {}
     # -- Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP
-    # ingestion, so senders can retry refused data. Limits are serialized bytes, not heap bytes.
+    # ingestion, so senders can retry refused data. Queue limits measure serialized bytes.
     # The queue capacity still comes from the sizing preset or sendingQueueBytes unless
     # queue_size is explicitly overridden here. Each signal has its own queue and consumers.
     sending_queue:

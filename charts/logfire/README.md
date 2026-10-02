@@ -385,14 +385,31 @@ limiter's 75% hard threshold. An explicit `GOMEMLIMIT` in `logfire-otel-collecto
 takes precedence. With no rendered memory limit, fixed collector/GC limits are used rather
 than percentages of node memory.
 
-Each signal has its own in-memory exporter queue: standard allows 128MiB of serialized
-payload per queue, or 384MiB across traces, logs, and metrics, before heap overhead and
-in-flight batches. Exporter-side batching flushes after one second, with a 1MiB trigger and
-4MiB maximum serialized batch size. Queue rejection reaches the OTLP receiver, allowing
+Each signal has its own disk-backed exporter queue by default: standard allows 128MiB of
+serialized payload per queue, or 384MiB across traces, logs, and metrics. Processing,
+in-flight batches, and file mappings still consume memory. Exporter-side batching flushes
+after one second, with a 1MiB trigger and 4MiB maximum serialized batch size.
+Queue rejection reaches the OTLP receiver, allowing
 senders to retry; successful enqueue does not guarantee delivery. Full queues, permanent
-backend errors, retry expiry, and restarts can still lose data. Override queue/batch options
-under `otel_collector.exporter.sending_queue`. Debug request summaries are disabled by
+backend errors, retry expiry (five minutes by default), and storage loss can still lose data.
+Override queue/batch options under `otel_collector.exporter.sending_queue`.
+Debug request summaries are disabled by
 default; enable `otel_collector.debug.enabled` temporarily for troubleshooting.
+
+The `file_storage/queue` extension uses a disk-backed `emptyDir`, so queued data survives a
+container restart in the same pod. Pod replacement, rollout, eviction, and node loss remove
+the queue. This storage does not persist Prometheus series or delta-to-cumulative state.
+Set `otel_collector.queueStorage.enabled=false` to use in-memory queues instead.
+
+Each pod has a 2Gi queue volume and a 256MiB limit per signal database. Compaction reclaims
+disk space after queues drain; the volume must allow at least six times the database limit
+for three databases and their temporary compaction copies. Disk writes use `fsync` by
+default for crash consistency, with additional I/O cost. The pod requests 512Mi of
+ephemeral storage and allows 3Gi including container logs; explicit collector resource
+settings take precedence. Adjust `otel_collector.queueStorage` for local storage capacity
+and throughput, and monitor node disk pressure. An `emptyDir` size limit is not a disk
+reservation. Filesystem permissions use `fsGroup` without a root init container and honor
+pod/container security context overrides.
 
 Prometheus export additionally retains application series for `metric_expiration` (180m by
 default) and delta-to-cumulative state for `max_stale` (5m by default). The memory limiter
@@ -404,7 +421,7 @@ because exceeding a cap drops new streams. Metrics for a given stream must reach
 collector replica; cumulative state resets when that collector is replaced. Scrape each
 replica directly, and account for these semantics when configuring routing/autoscaling.
 
-Collector self-metrics are available on each pod's `internal-metrics` port (8888), separately
+Collector self-metrics are available on each pod's `self-metrics` port (8888), separately
 from application metrics on 9090. Configure your monitoring system to scrape that pod port.
 Monitor queue utilization (`otelcol_exporter_queue_size` / `otelcol_exporter_queue_capacity`),
 `otelcol_exporter_enqueue_failed_*`, `otelcol_receiver_refused_*`, process/container memory,
@@ -417,7 +434,9 @@ shutdown budget is finite and does not guarantee that a blocked queue drains.
 Run `helm unittest charts/logfire` for rendered settings and
 `python3 tests/collector/verify_config.py` (requires PyYAML and Docker) for a local collector
 smoke test of dashboard names, histogram conversion, OTLP temporality, and process health.
-The runtime test uses synthetic data and does not connect to a cluster.
+Run `python3 tests/collector/verify_queue_recovery.py` to verify all three signal queues
+replay after a forced container kill. Both runtime tests use synthetic data and do not
+connect to a cluster.
 
 ## Advanced Configuration
 
@@ -690,14 +709,19 @@ Before diving deeper, verify these common configuration issues:
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials. The chart reserves the mount paths `/tmp`, `/scratch`, and `/fusionfire/ingest-data` for its own Fusionfire volumes, and adds `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled. |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials. The chart reserves the volume names `tmp`, `scratch-data`, and `ingest-data` for its own Fusionfire volumes, and adds `logfire-incluster-tls` and `logfire-incluster-ca-bundle` when in-cluster TLS is enabled. |
 | otelResourceAttributes | object | `{}` | Additional OTEL resource attributes to stamp onto internal telemetry emitted by Logfire workloads. These are merged on top of the chart defaults and can override them. Example:   deployment.environment.name: prod   service.namespace: logfire |
-| otel_collector | object | `{"debug":{"enabled":false},"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.160.0"},"prometheus":{"add_metric_suffixes":false,"delta_to_cumulative":true,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","max_stale":"5m","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true,"translation_strategy":""},"sendingQueueBytes":67108864}` | otel-collector configuration |
+| otel_collector | object | `{"debug":{"enabled":false},"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.160.0"},"prometheus":{"add_metric_suffixes":false,"delta_to_cumulative":true,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","max_stale":"5m","metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true,"translation_strategy":""},"queueStorage":{"enabled":true,"ephemeralStorageLimit":"3Gi","ephemeralStorageRequest":"512Mi","fsync":true,"maxSizeBytes":268435456,"sizeLimit":"2Gi"},"sendingQueueBytes":67108864}` | otel-collector configuration |
 | otel_collector.debug.enabled | bool | `false` | Emit per-request summaries to collector logs. Enable for troubleshooting; disabled by default to avoid logging every incoming telemetry request. |
 | otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
-| otel_collector.exporter.sending_queue | object | `{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}}` | Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP ingestion, so senders can retry refused data. Limits are serialized bytes, not heap bytes. The queue capacity still comes from the sizing preset or sendingQueueBytes unless queue_size is explicitly overridden here. Each signal has its own queue and consumers. |
+| otel_collector.exporter.sending_queue | object | `{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}}` | Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP ingestion, so senders can retry refused data. Queue limits measure serialized bytes. The queue capacity still comes from the sizing preset or sendingQueueBytes unless queue_size is explicitly overridden here. Each signal has its own queue and consumers. |
 | otel_collector.prometheus.delta_to_cumulative | bool | `true` | Convert delta metrics to cumulative on the Prometheus pipeline with the alpha `delta_to_cumulative` processor. Only runs when the Prometheus exporter is enabled, and the otlp_http pipeline keeps its delta semantics to the backend. Set false to pass metrics through unchanged. The limiter can refuse new data but cannot evict retained streams. |
 | otel_collector.prometheus.max_stale | string | `"5m"` | Retention of inactive delta-to-cumulative streams. Independent of metric_expiration. Stream caps intentionally remain unset: exceeding a cap drops new streams. |
 | otel_collector.prometheus.resource_to_telemetry_conversion | object | `{"enabled":true}` | OpenTelemetry resource attributes exposed as Prometheus metric labels. Review this deprecated option when upgrading the collector to use resource_constant_labels instead. |
 | otel_collector.prometheus.translation_strategy | string | `""` | Override the Prometheus exporter `translation_strategy`. When empty it is derived from `add_metric_suffixes`: `UnderscoreEscapingWithoutSuffixes` when false, and `UnderscoreEscapingWithSuffixes` when true. The exporter no longer emits `add_metric_suffixes` (deprecated and ignored by recent collectors); this value drives `translation_strategy`. |
+| otel_collector.queueStorage | object | `{"enabled":true,"ephemeralStorageLimit":"3Gi","ephemeralStorageRequest":"512Mi","fsync":true,"maxSizeBytes":268435456,"sizeLimit":"2Gi"}` | Disk-backed OTLP queues on a per-pod emptyDir. Survives container restarts, but not pod replacement, rollouts, or eviction. Set enabled=false to restore in-memory queues. |
+| otel_collector.queueStorage.ephemeralStorageLimit | string | `"3Gi"` | Container limit for node-local storage, including queues, compaction, and logs. |
+| otel_collector.queueStorage.ephemeralStorageRequest | string | `"512Mi"` | Scheduling reservation for node-local storage, including logs. Explicit logfire-otel-collector.resources ephemeral-storage settings take precedence. |
+| otel_collector.queueStorage.fsync | bool | `true` | Sync each database write. Improves crash consistency at the cost of disk I/O. |
+| otel_collector.queueStorage.maxSizeBytes | int | `268435456` | Per-database limit. There are three signal databases. Keep the volume large enough for all three plus their temporary compaction copies (at least 6x this value). |
 | otel_collector.sendingQueueBytes | int | `67108864` | Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per profile; this value applies when no sizing preset is used. |
 | podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed scratch and ingest volumes. A per-service `podSecurityContext` wins over both. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |

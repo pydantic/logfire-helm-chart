@@ -386,14 +386,31 @@ limiter's 75% hard threshold. An explicit `GOMEMLIMIT` in `logfire-otel-collecto
 takes precedence. With no rendered memory limit, fixed collector/GC limits are used rather
 than percentages of node memory.
 
-Each signal has its own in-memory exporter queue: standard allows 128MiB of serialized
-payload per queue, or 384MiB across traces, logs, and metrics, before heap overhead and
-in-flight batches. Exporter-side batching flushes after one second, with a 1MiB trigger and
-4MiB maximum serialized batch size. Queue rejection reaches the OTLP receiver, allowing
+Each signal has its own disk-backed exporter queue by default: standard allows 128MiB of
+serialized payload per queue, or 384MiB across traces, logs, and metrics. Processing,
+in-flight batches, and file mappings still consume memory. Exporter-side batching flushes
+after one second, with a 1MiB trigger and 4MiB maximum serialized batch size.
+Queue rejection reaches the OTLP receiver, allowing
 senders to retry; successful enqueue does not guarantee delivery. Full queues, permanent
-backend errors, retry expiry, and restarts can still lose data. Override queue/batch options
-under `otel_collector.exporter.sending_queue`. Debug request summaries are disabled by
+backend errors, retry expiry (five minutes by default), and storage loss can still lose data.
+Override queue/batch options under `otel_collector.exporter.sending_queue`.
+Debug request summaries are disabled by
 default; enable `otel_collector.debug.enabled` temporarily for troubleshooting.
+
+The `file_storage/queue` extension uses a disk-backed `emptyDir`, so queued data survives a
+container restart in the same pod. Pod replacement, rollout, eviction, and node loss remove
+the queue. This storage does not persist Prometheus series or delta-to-cumulative state.
+Set `otel_collector.queueStorage.enabled=false` to use in-memory queues instead.
+
+Each pod has a 2Gi queue volume and a 256MiB limit per signal database. Compaction reclaims
+disk space after queues drain; the volume must allow at least six times the database limit
+for three databases and their temporary compaction copies. Disk writes use `fsync` by
+default for crash consistency, with additional I/O cost. The pod requests 512Mi of
+ephemeral storage and allows 3Gi including container logs; explicit collector resource
+settings take precedence. Adjust `otel_collector.queueStorage` for local storage capacity
+and throughput, and monitor node disk pressure. An `emptyDir` size limit is not a disk
+reservation. Filesystem permissions use `fsGroup` without a root init container and honor
+pod/container security context overrides.
 
 Prometheus export additionally retains application series for `metric_expiration` (180m by
 default) and delta-to-cumulative state for `max_stale` (5m by default). The memory limiter
@@ -405,7 +422,7 @@ because exceeding a cap drops new streams. Metrics for a given stream must reach
 collector replica; cumulative state resets when that collector is replaced. Scrape each
 replica directly, and account for these semantics when configuring routing/autoscaling.
 
-Collector self-metrics are available on each pod's `internal-metrics` port (8888), separately
+Collector self-metrics are available on each pod's `self-metrics` port (8888), separately
 from application metrics on 9090. Configure your monitoring system to scrape that pod port.
 Monitor queue utilization (`otelcol_exporter_queue_size` / `otelcol_exporter_queue_capacity`),
 `otelcol_exporter_enqueue_failed_*`, `otelcol_receiver_refused_*`, process/container memory,
@@ -418,7 +435,9 @@ shutdown budget is finite and does not guarantee that a blocked queue drains.
 Run `helm unittest charts/logfire` for rendered settings and
 `python3 tests/collector/verify_config.py` (requires PyYAML and Docker) for a local collector
 smoke test of dashboard names, histogram conversion, OTLP temporality, and process health.
-The runtime test uses synthetic data and does not connect to a cluster.
+Run `python3 tests/collector/verify_queue_recovery.py` to verify all three signal queues
+replay after a forced container kill. Both runtime tests use synthetic data and do not
+connect to a cluster.
 
 ## Advanced Configuration
 

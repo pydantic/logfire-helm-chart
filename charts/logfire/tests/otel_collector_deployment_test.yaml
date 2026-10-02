@@ -107,7 +107,9 @@ tests:
       value: Deployment
     asserts:
       - notExists:
-          path: spec.template.spec.containers[0].resources
+          path: spec.template.spec.containers[0].resources.limits.memory
+      - notExists:
+          path: spec.template.spec.containers[0].resources.requests.memory
       - contains:
           path: spec.template.spec.containers[0].env
           content:

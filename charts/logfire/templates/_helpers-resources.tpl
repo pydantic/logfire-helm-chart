@@ -153,3 +153,23 @@ Supports common binary and decimal suffixes plus plain bytes.
 {{- include "logfire.memoryToMi" $limit -}}
 {{- end -}}
 {{- end -}}
+
+{{/* Add disk queue storage budgets without inventing CPU/memory requests when none are set. */}}
+{{- define "logfire.otelCollectorResources" -}}
+{{- $rendered := include "logfire.resources" (dict "Values" .Values "serviceName" "logfire-otel-collector") | fromYaml -}}
+{{- $resources := get $rendered "resources" | default dict -}}
+{{- $storage := .Values.otel_collector.queueStorage -}}
+{{- if $storage.enabled -}}
+{{- range $entry := list (dict "kind" "requests" "value" $storage.ephemeralStorageRequest) (dict "kind" "limits" "value" $storage.ephemeralStorageLimit) -}}
+{{- $target := get $resources $entry.kind | default dict -}}
+{{- if not (hasKey $target "ephemeral-storage") -}}
+{{- $_ := set $target "ephemeral-storage" $entry.value -}}
+{{- end -}}
+{{- $_ := set $resources $entry.kind $target -}}
+{{- end -}}
+{{- end -}}
+{{- if $resources -}}
+resources:
+  {{- $resources | toYaml | nindent 2 -}}
+{{- end -}}
+{{- end -}}

@@ -2,6 +2,8 @@
 {{- $collectorValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson }}
 {{- $memoryLimitMi := include "logfire.otelCollectorMemoryLimitMi" . | trim }}
 {{- $queueSizeBytes := $collectorValues.sendingQueueBytes | default .Values.otel_collector.sendingQueueBytes | default 67108864 }}
+{{- $queueStorage := .Values.otel_collector.queueStorage }}
+{{- include "logfire.validate.otelQueueStorage" . }}
 {{- $prometheusEnabled := include "isPrometheusExporterEnabled" . | trim | eq "true" }}
 {{- $promValues := .Values.otel_collector.prometheus | default dict }}
 {{- $delta_to_cumulative := true }}
@@ -41,14 +43,14 @@ data:
         headers:
           Authorization: "Bearer ${LOGFIRE_META_WRITE_TOKEN}"
         {{- end }}
-        # Byte-bounded, in-memory sending queue. Bounding keeps a slow destination from growing
-        # the queue into the container's memory limit. On overflow the receiver refuses new data,
-        # which protects data only when the sender retries. A restart loses undrained entries.
-        # Each signal pipeline has its own queue, so worst-case queued bytes are about 3x this
-        # value, before heap overhead and in-flight batches. Monitor receiver refusals, queue
-        # utilization, and enqueue failures; the queue byte count is not a heap measurement.
+        # Each signal has its own byte-bounded queue. Disk mode survives container crashes,
+        # but the per-pod emptyDir is lost on pod replacement. Receiver rejection lets senders
+        # retry queue/storage overflow; successful enqueue does not guarantee delivery.
         sending_queue:
           {{- $queueDefaults := dict "enabled" true "sizer" "bytes" "queue_size" ($queueSizeBytes | int64) }}
+          {{- if $queueStorage.enabled }}
+          {{- $_ := set $queueDefaults "storage" "file_storage/queue" }}
+          {{- end }}
           {{- mergeOverwrite $queueDefaults (deepCopy ($exporter.sending_queue | default dict)) | toYaml | nindent 10 }}
       {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
       {{- with .Values.otel_collector.prometheus }}
@@ -134,6 +136,20 @@ data:
               key: app.kubernetes.io/managed-by
               from: pod
     extensions:
+      {{- if $queueStorage.enabled }}
+      file_storage/queue:
+        directory: /var/lib/otelcol/queue
+        create_directory: true
+        fsync: {{ $queueStorage.fsync }}
+        max_size: {{ $queueStorage.maxSizeBytes | int64 }}
+        compaction:
+          directory: /var/lib/otelcol/queue/compaction
+          on_rebound: true
+          # Reclaim disk and mmap allocations after an outage drains.
+          rebound_needed_threshold_mib: {{ min 100 (div ($queueStorage.maxSizeBytes | int64) 1048576) }}
+          rebound_trigger_threshold_mib: {{ min 10 (div ($queueStorage.maxSizeBytes | int64) 1048576) }}
+          cleanup_on_start: true
+      {{- end }}
       health_check:
         endpoint: "0.0.0.0:13133"
 
@@ -146,7 +162,7 @@ data:
                   prometheus:
                     host: 0.0.0.0
                     port: 8888
-      extensions: [health_check]
+      extensions: [health_check{{ if $queueStorage.enabled }}, file_storage/queue{{ end }}]
       pipelines:
         traces:
           receivers: [otlp]

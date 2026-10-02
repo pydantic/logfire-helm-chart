@@ -1,0 +1,128 @@
+suite: collector disk queues
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+templates:
+  - templates/logfire-otel-collector.yaml
+  - templates/logfire-otel-collector-cfg.yaml
+tests:
+  - it: enables bounded disk queues and compaction by default
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'storage: file_storage/queue'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'extensions: \[health_check, file_storage/queue\]'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_size: 268435456'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'fsync: true'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'on_rebound: true'
+  - it: uses node-local disk with writable non-root ownership and storage accounting
+    template: templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    set:
+      sizingPreset: standard
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: sending-queue
+            emptyDir:
+              sizeLimit: 2Gi
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: sending-queue
+            mountPath: /var/lib/otelcol/queue
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 10001
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests["ephemeral-storage"]
+          value: 512Mi
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits["ephemeral-storage"]
+          value: 3Gi
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 2Gi
+  - it: restores in-memory queues without storage extensions when disabled
+    set:
+      otel_collector.queueStorage.enabled: false
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'file_storage|compaction'
+  - it: omits disk allocation and ownership when disabled
+    set:
+      otel_collector.queueStorage.enabled: false
+    template: templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.volumes
+          count: 1
+      - notExists:
+          path: spec.template.spec.securityContext.fsGroup
+      - notExists:
+          path: spec.template.spec.containers[0].resources
+  - it: preserves explicit disk budgets and security overrides
+    set:
+      logfire-otel-collector.resources:
+        requests:
+          ephemeral-storage: 1Gi
+        limits:
+          ephemeral-storage: 4Gi
+      podSecurityContext.fsGroup: 2000
+      logfire-otel-collector.podSecurityContext.fsGroup: 3000
+      logfire-otel-collector.securityContext.runAsUser: 3000
+    template: templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 3000
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+          value: 3000
+      - equal:
+          path: spec.template.spec.containers[0].resources.requests["ephemeral-storage"]
+          value: 1Gi
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits["ephemeral-storage"]
+          value: 4Gi
+  - it: rejects a volume smaller than the database and compaction budget
+    set:
+      otel_collector.queueStorage.sizeLimit: 1Gi
+    template: templates/logfire-otel-collector.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: otel_collector.queueStorage.sizeLimit must allow at least 6x maxSizeBytes for three databases and their compaction copies.
+  - it: rejects a container disk limit smaller than the queue volume
+    set:
+      logfire-otel-collector.resources.limits.ephemeral-storage: 1Gi
+    template: templates/logfire-otel-collector.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: The collector ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit; allow extra space for container logs.
