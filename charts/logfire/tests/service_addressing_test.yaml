@@ -430,23 +430,67 @@ tests:
     templates:
       - templates/logfire-incluster-tls-certmanager.yaml
     asserts:
-      # FF_BYTE_CACHE_K8S_SERVICE points at logfire-ff-cache-byte-internal; if the
+      # FF_BCACHE_K8S_SERVICE points at logfire-ff-bcache-internal; if the
       # Service is renamed without updating the cert SANs, internal cache traffic
       # fails TLS at runtime and CI never sees it (no cert-manager there).
       - equal:
           path: spec.dnsNames
           value:
-            - logfire-ff-cache-byte
-            - logfire-ff-cache-byte.default
-            - logfire-ff-cache-byte.default.svc
-            - logfire-ff-cache-byte.default.svc.cluster.local
-            - logfire-ff-cache-byte-internal
-            - logfire-ff-cache-byte-internal.default
-            - logfire-ff-cache-byte-internal.default.svc
-            - logfire-ff-cache-byte-internal.default.svc.cluster.local
+            - logfire-ff-bcache
+            - logfire-ff-bcache.default
+            - logfire-ff-bcache.default.svc
+            - logfire-ff-bcache.default.svc.cluster.local
+            - logfire-ff-bcache-internal
+            - logfire-ff-bcache-internal.default
+            - logfire-ff-bcache-internal.default.svc
+            - logfire-ff-bcache-internal.default.svc.cluster.local
         documentSelector:
           path: metadata.name
-          value: logfire-ff-cache-byte-incluster-tls
+          value: logfire-ff-bcache-incluster-tls
+
+  - it: points readers at the bcache service name and port name
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+      dev:
+        deployCertManager: true
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # A reader lists the EndpointSlices of FF_BCACHE_K8S_SERVICE and picks the
+      # port named FF_BCACHE_K8S_PORT_NAME. A mismatch makes every read fall back
+      # to object storage with no error.
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_K8S_SERVICE
+            value: logfire-ff-bcache-internal
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_K8S_PORT_NAME
+            value: https
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.ports
+          content:
+            name: https
+            port: 9443
+            targetPort: https
+        template: templates/logfire-ff-bcache.yaml
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-bcache-internal
 
   - it: keeps query stability aligned with the ingest visibility budget
     templates:

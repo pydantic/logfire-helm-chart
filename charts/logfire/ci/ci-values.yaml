@@ -77,12 +77,11 @@ logfire-ff-ingest:
     storageClassName: standard
     storage: "1Gi"
 
-logfire-ff-cache-byte:
-  autoscaling:
-    minReplicas: 1
+logfire-ff-bcache:
+  replicas: 1
   pdb:
     minAvailable: 0
-  scratchVolume:
+  disk:
     storageClassName: standard
     storage: "1Gi"
 

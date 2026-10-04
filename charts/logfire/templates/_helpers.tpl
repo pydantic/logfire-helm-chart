@@ -133,7 +133,7 @@ Only sizing and portable availability keys are inherited from presets.
       {{- $_ := set $presetServiceValues "autoscaling" $autoscaling -}}
     {{- end -}}
   {{- end -}}
-  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "maxQueryCostPerPod" "queryParallelism" "datafusionThreads" "datafusionTargetPartitions" "datafusionBatchSize" "ioThreads" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "cacheDiskCapacity" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" "spreadAcrossZones" "sendingQueueBytes" -}}
+  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "maxQueryCostPerPod" "queryParallelism" "datafusionThreads" "datafusionTargetPartitions" "datafusionBatchSize" "ioThreads" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "scratchVolume" "disk" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" "spreadAcrossZones" "sendingQueueBytes" -}}
     {{- if hasKey $presetServiceValues $key -}}
       {{- $_ := set $merged $key (deepCopy (get $presetServiceValues $key)) -}}
     {{- end -}}
@@ -157,7 +157,7 @@ replicas: {{ dig "replicas" "1" $serviceValues }}
 {{- include "logfire.validate.autoscaling" (dict "Values" .Values "serviceName" .serviceName) -}}
 {{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" .serviceName) | fromJson -}}
 {{- if index $serviceValues "autoscaling" }}
-{{- $kind := (not (eq .serviceName "logfire-ff-ingest") | ternary "Deployment" "StatefulSet" ) }}
+{{- $kind := (has .serviceName (list "logfire-ff-ingest" "logfire-ff-bcache") | ternary "StatefulSet" "Deployment") }}
 {{- with index $serviceValues "autoscaling" }}
   {{- $ctx := deepCopy . -}}
   {{- $_ := set $ctx "serviceName" $.serviceName -}}
@@ -1333,7 +1333,7 @@ platform contract tests keep the image `USER` and these numbers in step.
   "logfire-ff-maintenance-scheduler"
   "logfire-ff-maintenance-worker"
   "logfire-ff-compaction-worker"
-  "logfire-ff-cache-byte"
+  "logfire-ff-bcache"
   "logfire-ff-migrations"
 -}}
 {{- if has $serviceName $uidGid1000 -}}

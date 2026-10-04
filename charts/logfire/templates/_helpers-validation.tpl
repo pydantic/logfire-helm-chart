@@ -197,7 +197,7 @@ Validate gateway secret configuration
 Validate scratch volume configuration.
 */}}
 {{- define "logfire.validate.scratchVolumes" -}}
-{{- range $serviceName := list "logfire-ff-cache-byte" "logfire-ff-compaction-worker" "logfire-ff-maintenance-worker" "logfire-ff-query-api" "logfire-ff-query-worker" -}}
+{{- range $serviceName := list "logfire-ff-compaction-worker" "logfire-ff-maintenance-worker" "logfire-ff-query-api" "logfire-ff-query-worker" -}}
   {{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" $.Values "serviceName" $serviceName) | fromJson -}}
   {{- $scratchVolume := get $serviceValues "scratchVolume" | default dict -}}
   {{- if and $scratchVolume (not (get $scratchVolume "storage")) -}}

@@ -349,7 +349,7 @@ Query API capacity is resource-oriented:
 Query cost capacity defaults to the effective execution-worker CPU rounded up to a whole core. With separate query workers enabled, both the dispatcher and workers derive it from query-worker CPU. Advanced installations can override it with `logfire-ff-query-api.maxQueryCostPerPod`.
 
 The `standard` preset keeps the public request path, query API, and ingest path at a minimum of three replicas.
-The `large` preset inherits `standard` and increases selected FusionFire worker, ingest processor, and byte-cache capacity.
+The `large` preset inherits `standard` and increases selected FusionFire worker, ingest processor, and bcache capacity.
 The `small` preset keeps ingest and the edge service more available while preserving a smaller footprint.
 The `tiny` preset intentionally favors the smallest resource footprint over high availability.
 
@@ -477,14 +477,13 @@ CA bundle requirements by mode:
 * `inClusterTls.certs.mode=certManager` with custom `issuerRef.name`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
 * `inClusterTls.certs.mode=existingSecrets`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
 
-Cache consumers dial the headless `logfire-ff-cache-byte-internal` service directly and verify
-that hostname, so the service certificate must include the bare `logfire-ff-cache-byte-internal`
-DNS name. Keep the `logfire-ff-cache-byte` names and the namespace and cluster-domain variants as
-well: existing certificates already carry them, and they keep the certificate valid if you roll
-back to a chart that still runs the cache proxy.
+Fusionfire readers dial the headless `logfire-ff-bcache-internal` service directly and verify
+that hostname, so the bcache certificate must include the bare `logfire-ff-bcache-internal`
+DNS name. Include the `logfire-ff-bcache` names and the namespace and cluster-domain variants as
+well.
 
-The cache loads its certificate at startup, so after rotating the Secret restart
-`deployment/logfire-ff-cache-byte` so the pods serve the new certificate, or configure a reload
+bcache loads its certificate at startup, so after rotating the Secret restart
+`statefulset/logfire-ff-bcache` so the pods serve the new certificate, or configure a reload
 controller as described in External Secrets and Automatic Reloads.
 
 For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
@@ -665,10 +664,9 @@ Before diving deeper, verify these common configuration issues:
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-cache-byte | object | `{"clientSideRouting":{"zoneAware":false},"pdb":{},"replicas":3,"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
-| logfire-ff-cache-byte.clientSideRouting.zoneAware | bool | `false` | Restrict direct routing to zone-local cache pods. Requires nodes/get cluster RBAC and adds soft zone/hostname spreading. Cache replicas must cover every cache-consumer zone; local misses use durable storage. |
-| logfire-ff-cache-byte.replicas | int | `3` | Number of byte-cache replicas when autoscaling is not configured. |
-| logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume. storage accepts Kubernetes quantities (e.g. 32Gi, 1.5Gi, 10G) of at least 1Mi. |
+| logfire-ff-bcache | object | `{"disk":{"storage":"32Gi"},"pdb":{},"replicas":3}` | Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use |
+| logfire-ff-bcache.disk | object | `{"storage":"32Gi"}` | Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it. |
+| logfire-ff-bcache.replicas | int | `3` | Number of bcache replicas when autoscaling is not configured. |
 | logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn,otel::tracing=info"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
