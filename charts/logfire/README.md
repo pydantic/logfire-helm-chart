@@ -482,6 +482,10 @@ that hostname, so the bcache certificate must include the bare `logfire-ff-bcach
 DNS name. Include the `logfire-ff-bcache` names and the namespace and cluster-domain variants as
 well.
 
+bcache keeps its disk tier in one PersistentVolumeClaim per pod. A StatefulSet cannot change its volume claim templates, so changing
+`logfire-ff-bcache.disk.storage` after install fails `helm upgrade`. To resize, expand the existing `bcache-data-*` PVCs if the
+storage class allows it, or run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
+
 bcache loads its certificate at startup, so after rotating the Secret restart
 `statefulset/logfire-ff-bcache` so the pods serve the new certificate, or configure a reload
 controller as described in External Secrets and Automatic Reloads.
@@ -664,8 +668,8 @@ Before diving deeper, verify these common configuration issues:
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-bcache | object | `{"disk":{"storage":"32Gi"},"pdb":{},"replicas":3}` | Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use |
-| logfire-ff-bcache.disk | object | `{"storage":"32Gi"}` | Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it. |
+| logfire-ff-bcache | object | `{"disk":{},"pdb":{},"replicas":3}` | Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use |
+| logfire-ff-bcache.disk | object | `{}` | Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it. A StatefulSet cannot change its volumeClaimTemplates, so a later change to storage fails `helm upgrade`. To resize, expand the existing `bcache-data-*` PVCs if the storage class allows it, or delete the StatefulSet with `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade. Unset `disk.storage` takes the sizing preset's size, or 32Gi without a preset. |
 | logfire-ff-bcache.replicas | int | `3` | Number of bcache replicas when autoscaling is not configured. |
 | logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn,otel::tracing=info"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |

@@ -483,6 +483,10 @@ that hostname, so the bcache certificate must include the bare `logfire-ff-bcach
 DNS name. Include the `logfire-ff-bcache` names and the namespace and cluster-domain variants as
 well.
 
+bcache keeps its disk tier in one PersistentVolumeClaim per pod. A StatefulSet cannot change its volume claim templates, so changing
+`logfire-ff-bcache.disk.storage` after install fails `helm upgrade`. To resize, expand the existing `bcache-data-*` PVCs if the
+storage class allows it, or run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
+
 bcache loads its certificate at startup, so after rotating the Secret restart
 `statefulset/logfire-ff-bcache` so the pods serve the new certificate, or configure a reload
 controller as described in External Secrets and Automatic Reloads.
