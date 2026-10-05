@@ -307,12 +307,22 @@ smtp:
   host:
   # -- SMTP server port
   port: 25
-  # -- SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
+  # -- SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). Leave both username and password unset for a relay that does not use authentication; set both or neither.
   username:
   # -- SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
   password:
-  # -- Use TLS for SMTP
+  # -- Use implicit TLS from the first byte, for SMTPS ports such as 465. If it is false, Logfire connects in plaintext and upgrades with STARTTLS whenever the server offers it, which is what a port 25 or 587 relay expects.
   use_tls: false
+  # -- (bool) Verify the SMTP server certificate. If it is not set, Logfire verifies it. Setting it to false sends email, including password reset links, over a connection open to interception. Prefer `smtp.caBundle` for a relay signed by an internal CA.
+  validate_certs:
+  # -- CA bundle (PEM) that verifies the SMTP server certificate, for a relay signed by an internal CA. Provide exactly one of existingConfigMap or existingSecret, in the release namespace. The bundle becomes the default trust store of `logfire-task-runner` and `logfire-worker`, so include any other CA that those workloads need from the system trust store. In-cluster TLS is not affected.
+  caBundle:
+    existingConfigMap:
+      name: ""
+      key: "ca.crt"
+    existingSecret:
+      name: ""
+      key: "ca.crt"
   # -- Sender address of every email Logfire sends (`From` and SMTP envelope sender), such as `logfire@example.com`. Required when `smtp.host` is set. Use an address on a domain that your SMTP server may send for. Logfire does not send email as `pydantic.dev` from a self-hosted install.
   fromAddress:
   # -- Sender display name of every email Logfire sends. If it is not set, the name is `Pydantic Logfire`.

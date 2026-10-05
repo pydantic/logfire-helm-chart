@@ -1611,6 +1611,67 @@ maildev accepts any sender, so it gets a placeholder on the reserved `.localhost
 {{- end }}
 {{- end -}}
 
+{{/*
+The CA bundle that verifies the SMTP server certificate, for relays signed by an internal CA.
+It is its own volume, separate from the in-cluster TLS CA bundle, so the two never share a
+volume name or mount path. Not used with the bundled maildev, which replaces smtp.host.
+*/}}
+{{- define "logfire.smtp.caBundle.source" -}}
+{{- $caBundle := (.Values.smtp | default dict).caBundle | default dict -}}
+{{- $configMapName := dig "existingConfigMap" "name" "" $caBundle -}}
+{{- $secretName := dig "existingSecret" "name" "" $caBundle -}}
+{{- if and (not (.Values.dev).deployMaildev) (or $configMapName $secretName) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+TLS settings of the SMTP client, beside the SMTP_* variables. `SSL_CERT_FILE` makes the mounted
+bundle the default trust store of the pod, which is where the SMTP client looks. In-cluster TLS
+is unaffected: those clients trust `LOGFIRE_CA_PATH` explicitly, not the default trust store.
+*/}}
+{{- define "logfire.smtp.tlsEnv" -}}
+{{- if not (.Values.dev).deployMaildev -}}
+{{- $validateCerts := (.Values.smtp | default dict).validate_certs -}}
+{{- if not (kindIs "invalid" $validateCerts) }}
+- name: SMTP_VALIDATE_CERTS
+  value: {{ $validateCerts | toString | quote }}
+{{- end }}
+{{- if include "logfire.smtp.caBundle.source" . }}
+- name: SSL_CERT_FILE
+  value: /etc/logfire/smtp-ca/ca.crt
+{{- end }}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.smtp.caBundle.volumeMount" -}}
+{{- if include "logfire.smtp.caBundle.source" . -}}
+- name: logfire-smtp-ca-bundle
+  mountPath: /etc/logfire/smtp-ca
+  readOnly: true
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.smtp.caBundle.volume" -}}
+{{- if include "logfire.smtp.caBundle.source" . -}}
+{{- $caBundle := .Values.smtp.caBundle -}}
+- name: logfire-smtp-ca-bundle
+  {{- if dig "existingConfigMap" "name" "" $caBundle }}
+  configMap:
+    name: {{ $caBundle.existingConfigMap.name }}
+    items:
+      - key: {{ dig "existingConfigMap" "key" "ca.crt" $caBundle }}
+        path: ca.crt
+  {{- else }}
+  secret:
+    secretName: {{ $caBundle.existingSecret.name }}
+    items:
+      - key: {{ dig "existingSecret" "key" "ca.crt" $caBundle }}
+        path: ca.crt
+  {{- end }}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.inClusterTls.enabled" -}}
 {{- .Values.inClusterTls.enabled | default false -}}
 {{- end -}}
