@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.48-rc.7](https://img.shields.io/badge/Version-0.13.48--rc.7-informational?style=flat-square) ![AppVersion: d379c73e](https://img.shields.io/badge/AppVersion-d379c73e-informational?style=flat-square)
+![Version: 0.13.48-rc.8](https://img.shields.io/badge/Version-0.13.48--rc.8-informational?style=flat-square) ![AppVersion: d379c73e](https://img.shields.io/badge/AppVersion-d379c73e-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -774,13 +774,15 @@ Before diving deeper, verify these common configuration issues:
 | serviceAccount.name | string | `""` | Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template. If create is false and this is not set, the default ServiceAccount is used. |
 | serviceAccountName | string | `"default"` | DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility. @deprecated |
 | sizingPreset | string | `""` | Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults. |
+| smtp.caBundle | object | `{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}}` | CA bundle (PEM) that verifies the SMTP server certificate, for a relay signed by an internal CA. Provide exactly one of existingConfigMap or existingSecret, in the release namespace. The bundle becomes the default trust store of `logfire-task-runner` and `logfire-worker`, so include any other CA that those workloads need from the system trust store. In-cluster TLS is not affected. |
 | smtp.fromAddress | string | `nil` | Sender address of every email Logfire sends (`From` and SMTP envelope sender), such as `logfire@example.com`. Required when `smtp.host` is set. Use an address on a domain that your SMTP server may send for. Logfire does not send email as `pydantic.dev` from a self-hosted install. |
 | smtp.fromName | string | `nil` | Sender display name of every email Logfire sends. If it is not set, the name is `Pydantic Logfire`. |
 | smtp.host | string | `nil` | SMTP server hostname |
 | smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | smtp.port | int | `25` | SMTP server port |
-| smtp.use_tls | bool | `false` | Use TLS for SMTP |
-| smtp.username | string | `nil` | SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
+| smtp.use_tls | bool | `false` | Use implicit TLS from the first byte, for SMTPS ports such as 465. If it is false, Logfire connects in plaintext and upgrades with STARTTLS whenever the server offers it, which is what a port 25 or 587 relay expects. |
+| smtp.username | string | `nil` | SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). Leave both username and password unset for a relay that does not use authentication; set both or neither. |
+| smtp.validate_certs | bool | `nil` | Verify the SMTP server certificate. If it is not set, Logfire verifies it. Setting it to false sends email, including password reset links, over a connection open to interception. Prefer `smtp.caBundle` for a relay signed by an internal CA. |
 | tokenRedis | object | `{"dsn":"","prefix":""}` | Redis settings for auth token caches. Empty DSN falls back to `redisDsn`. Use a prefix only when sharing one Redis instance with other data. |
 | tokenRedis.dsn | string | `""` | Redis DSN for auth token caches. |
 | tokenRedis.prefix | string | `""` | Key prefix for auth token cache keys. |

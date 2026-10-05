@@ -84,3 +84,123 @@ tests:
       - hasDocuments:
           count: 0
         template: templates/logfire-validate-config.yaml
+
+  # External contract: the platform reads SMTP_VALIDATE_CERTS, and only an explicit false turns
+  # verification off. A false value must still render, and an unset one must not render at all.
+  - it: certificate verification renders only when set
+    set:
+      smtp:
+        host: smtp.example.com
+        fromAddress: logfire@example.com
+        validate_certs: false
+    templates:
+      - templates/logfire-task-runner.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SMTP_VALIDATE_CERTS
+            value: "false"
+
+  - it: certificate verification is left to the platform default when unset
+    set:
+      smtp:
+        host: smtp.example.com
+        fromAddress: logfire@example.com
+    templates:
+      - templates/logfire-task-runner.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: SMTP_VALIDATE_CERTS
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: SSL_CERT_FILE
+
+  # Cross-template coupling: SSL_CERT_FILE must name the file the SMTP CA volume mounts, and the
+  # in-cluster CA must keep its own volume, mount and LOGFIRE_CA_PATH beside it.
+  - it: the SMTP CA bundle is trusted without displacing the in-cluster CA
+    set:
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: incluster-ca
+      smtp:
+        host: smtp.example.com
+        fromAddress: logfire@example.com
+        caBundle:
+          existingSecret:
+            name: smtp-ca
+            key: bundle.pem
+    templates:
+      - templates/logfire-task-runner.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SSL_CERT_FILE
+            value: /etc/logfire/smtp-ca/ca.crt
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: logfire-smtp-ca-bundle
+            mountPath: /etc/logfire/smtp-ca
+            readOnly: true
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: logfire-smtp-ca-bundle
+            secret:
+              secretName: smtp-ca
+              items:
+                - key: bundle.pem
+                  path: ca.crt
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOGFIRE_CA_PATH
+            value: /etc/logfire/incluster-ca/ca.crt
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: logfire-incluster-ca-bundle
+            mountPath: /etc/logfire/incluster-ca
+            readOnly: true
+
+  # Maildev replaces smtp.host, so the SMTP TLS settings of a leftover host must not apply to it.
+  - it: the bundled maildev ignores the SMTP TLS settings
+    set:
+      dev:
+        deployMaildev: true
+      smtp:
+        validate_certs: false
+        caBundle:
+          existingConfigMap:
+            name: smtp-ca
+    templates:
+      - templates/logfire-task-runner.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: SMTP_VALIDATE_CERTS
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: SSL_CERT_FILE
+      - notContains:
+          path: spec.template.spec.volumes
+          any: true
+          content:
+            name: logfire-smtp-ca-bundle

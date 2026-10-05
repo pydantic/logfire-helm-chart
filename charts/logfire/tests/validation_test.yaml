@@ -741,6 +741,38 @@ tests:
       - failedTemplate:
           errorPattern: "smtp.fromAddress must not be a pydantic.dev address"
 
+  - it: an SMTP CA bundle from both a ConfigMap and a Secret fails
+    set:
+      smtp:
+        host: smtp.example.com
+        fromAddress: logfire@example.com
+        caBundle:
+          existingConfigMap:
+            name: smtp-ca
+          existingSecret:
+            name: smtp-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.caBundle: specify only one of existingConfigMap.name or existingSecret.name"
+
+  # A bundle with verification off would be silently ignored, so the install fails instead.
+  - it: an SMTP CA bundle with certificate verification off fails
+    set:
+      smtp:
+        host: smtp.example.com
+        fromAddress: logfire@example.com
+        validate_certs: false
+        caBundle:
+          existingConfigMap:
+            name: smtp-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.caBundle is set but smtp.validate_certs is false"
+
   # --- otel collector queue and storage budgets ---
   - it: rejects a self-metrics port equal to the Prometheus exporter port
     set:
