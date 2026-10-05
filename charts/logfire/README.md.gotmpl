@@ -497,6 +497,11 @@ Chart-owned containers default to the controls a `restricted` Pod Security Stand
 requires: a non-root identity, no privilege escalation, all capabilities dropped, `RuntimeDefault`
 seccomp, and a read-only root with the writable paths mounted.
 
+Volume ownership follows that non-root default. `logfire-ff-ingest` uses
+`fsGroupChangePolicy: Always`, so each pod start repairs a spool that a root-running release
+left root-owned. The other Fusionfire and bcache workloads keep `OnRootMismatch`, because their
+scratch volumes are fresh when the pod starts.
+
 Containers this chart takes from other projects (Redis, Dex, MailDev, the OTel collector, RustFS,
 and the `check-db-ready` init container) keep the chart-wide `securityContext`; supply it or
 per-workload values for them. HAProxy defaults to a restricted-compatible `haproxy.securityContext`.

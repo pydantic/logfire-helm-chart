@@ -496,6 +496,11 @@ Chart-owned containers default to the controls a `restricted` Pod Security Stand
 requires: a non-root identity, no privilege escalation, all capabilities dropped, `RuntimeDefault`
 seccomp, and a read-only root with the writable paths mounted.
 
+Volume ownership follows that non-root default. `logfire-ff-ingest` uses
+`fsGroupChangePolicy: Always`, so each pod start repairs a spool that a root-running release
+left root-owned. The other Fusionfire and bcache workloads keep `OnRootMismatch`, because their
+scratch volumes are fresh when the pod starts.
+
 Containers this chart takes from other projects (Redis, Dex, MailDev, the OTel collector, RustFS,
 and the `check-db-ready` init container) keep the chart-wide `securityContext`; supply it or
 per-workload values for them. HAProxy defaults to a restricted-compatible `haproxy.securityContext`.
@@ -733,7 +738,7 @@ Before diving deeper, verify these common configuration issues:
 | otel_collector.queueStorage.maxSizeBytes | int | `536870912` | Per-database limit. There are three signal databases. Keep the volume large enough for all three plus their temporary compaction copies (at least 6x this value). Byte queues require at least 4x payload capacity per database for page/index overhead; this headroom minimum is not a guarantee for arbitrary request shapes or disk failure. |
 | otel_collector.selfMetricsPort | int | `8888` | Port for the collector's own Prometheus self-metrics. Must differ from `prometheus.port` (the application exporter), or the collector cannot bind both and fails to start. |
 | otel_collector.sendingQueueBytes | int | `67108864` | Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per profile; this value applies when no sizing preset is used. |
-| podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed scratch and ingest volumes. A per-service `podSecurityContext` wins over both. |
+| podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed scratch volumes. `logfire-ff-ingest` defaults to `fsGroupChangePolicy: Always` instead, because its spool is a retained volume that `OnRootMismatch` can leave unrepaired. A per-service `podSecurityContext` wins over both. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
 | postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
