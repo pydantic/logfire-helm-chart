@@ -1514,7 +1514,9 @@ revisionHistoryLimit: 2
 # See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details
 # Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and
 # `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed
-# scratch and ingest volumes. A per-service `podSecurityContext` wins over both.
+# scratch volumes. `logfire-ff-ingest` defaults to `fsGroupChangePolicy: Always` instead,
+# because its spool is a retained volume that `OnRootMismatch` can leave unrepaired. A
+# per-service `podSecurityContext` wins over both.
 podSecurityContext: {}
   # fsGroup: 2000
 

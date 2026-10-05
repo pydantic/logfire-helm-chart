@@ -1,0 +1,72 @@
+suite: chart-owned pod security contexts
+# Volume-ownership contract for the fsGroup defaults. The retained ingest spool needs the
+# recursive ownership pass at every pod start, because a release that ran as root leaves
+# bucket directories the root check cannot repair. Scratch volumes are fresh when the pod
+# starts, so they keep the cheap policy. Merge semantics match the container contexts: a
+# per-service `podSecurityContext` beats the chart-wide one beats the defaults.
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: repairs the retained ingest spool at every pod start
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 1000
+            fsGroupChangePolicy: Always
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: leaves the scratch volumes on the cheap policy
+    templates:
+      - templates/logfire-ff-compaction-worker.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: merges the chart-wide podSecurityContext under the ingest policy
+    set:
+      podSecurityContext:
+        fsGroup: 2000
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 2000
+            fsGroupChangePolicy: Always
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: lets a per-service podSecurityContext override the ingest policy
+    set:
+      logfire-ff-ingest:
+        podSecurityContext:
+          fsGroupChangePolicy: OnRootMismatch
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+        documentSelector:
+          path: kind
+          value: StatefulSet
