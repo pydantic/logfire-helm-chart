@@ -77,7 +77,12 @@ spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
-      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
+      {{- /* The bundled redis stays on the chart-wide contexts for now. Per-workload
+             `logfire-redis.podSecurityContext` still wins, so an installation can supply the
+             restricted controls itself. */}}
+      {{- $podSecurityContext := deepCopy (.Values.podSecurityContext | default dict) }}
+      {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy (get $redisValues "podSecurityContext" | default dict)) }}
+      {{- include "logfire.securityContext" $podSecurityContext | nindent 6 }}
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- $redisImage := get $redisValues "image" | default dict }}
       {{- $redisImagePullPolicy := default "IfNotPresent" (default .Values.image.pullPolicy $redisImage.pullPolicy) }}
@@ -85,7 +90,8 @@ spec:
         - name: redis
           image: {{ include "logfire.imageRef" (dict "image" $redisImage "defaultRepository" "redis" "defaultTag" "7.2") }}
           imagePullPolicy: {{ $redisImagePullPolicy | quote }}
-          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- $redisSecurityContext := include "logfire.mergeSecurityContext" (dict "ctx" . "serviceName" $serviceName "defaults" (dict)) | fromJson }}
+          {{- include "logfire.securityContext" $redisSecurityContext | nindent 10 }}
           ports:
             - name: redis
               containerPort: 6379

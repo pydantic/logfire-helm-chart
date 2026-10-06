@@ -94,3 +94,52 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: leaves the bundled redis on the chart-wide contexts
+    templates:
+      - templates/redis.yaml
+    asserts:
+      # The redis defaults are deferred so its pod template matches the previous
+      # stable and the upgrade does not replace the pod. Its per-workload
+      # overrides must still work, because that is how an installation supplies
+      # the restricted controls in the meantime.
+      - notExists:
+          path: spec.template.spec.securityContext
+        documentSelector:
+          path: kind
+          value: Deployment
+      - notExists:
+          path: spec.template.spec.containers[0].securityContext
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: honours the per-workload redis contexts while the defaults are deferred
+    set:
+      logfire-redis:
+        podSecurityContext:
+          fsGroup: 999
+        securityContext:
+          runAsUser: 999
+          runAsNonRoot: true
+    templates:
+      - templates/redis.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 999
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+          value: 999
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsNonRoot
+          value: true
+        documentSelector:
+          path: kind
+          value: Deployment
