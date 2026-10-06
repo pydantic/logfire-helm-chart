@@ -492,6 +492,76 @@ tests:
           path: metadata.name
           value: logfire-ff-bcache-internal
 
+  - it: gives bcache enough grace period to finish draining its disk tier
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # `/health` answers 503 for the whole shutdown, so the pod must outlive the
+      # readiness delay, shutdown timeout and tier drain plus an exit margin.
+      # SIGKILL mid-drain leaves the disk tier unclean.
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 45
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_READINESS_DELAY
+            value: "10s"
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_SHUTDOWN_TIMEOUT
+            value: "25s"
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_TIER_DRAIN_TIMEOUT
+            value: "5s"
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: keeps the bcache disk tier across a StatefulSet replacement
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # `volumeClaimTemplates` is force-new, so a routine template change plans a
+      # replacement. Deleting the claims would take the warm cache with it.
+      - equal:
+          path: spec.persistentVolumeClaimRetentionPolicy.whenDeleted
+          value: Retain
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: sizes the bcache disk from disk.storage rather than scratchVolume
+    set:
+      logfire-ff-bcache:
+        scratchVolume:
+          storage: 128Gi
+        disk:
+          storage: 4Gi
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # The sizing presets once named `scratchVolume`, which the template never
+      # reads, so the preset size was silently dropped in favour of the default.
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          value: 4Gi
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
   - it: keeps query stability aligned with the ingest visibility budget
     templates:
       - templates/logfire-ff-config.yaml

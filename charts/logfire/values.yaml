@@ -2213,7 +2213,7 @@ sizingPresets:
         maxReplicas: 24
         hpa:
           enabled: true
-          cpuAverage: 25
+          cpuAverage: 50
     logfire-ff-maintenance-worker:
       resources:
         requests:
@@ -2582,7 +2582,7 @@ sizingPresets:
         maxReplicas: 24
         hpa:
           enabled: true
-          cpuAverage: 25
+          cpuAverage: 50
           # Byte-cache replicas are expensive and safe to drain gradually once
           # a burst has passed, so do not retain peak capacity for 15 minutes.
           behavior: &byteCacheHpaBehavior
@@ -3041,9 +3041,9 @@ sizingPresets:
         maxReplicas: 24
         hpa:
           enabled: true
-          cpuAverage: 25
+          cpuAverage: 50
           behavior: *byteCacheHpaBehavior
-      scratchVolume:
+      disk:
         storage: 32Gi
       pdb:
         minAvailable: 2
