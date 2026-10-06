@@ -42,7 +42,7 @@ tests:
 
   - it: merges the chart-wide securityContext over the third-party defaults
     templates:
-      - templates/redis.yaml
+      - templates/dex/deployment.yaml
     set:
       securityContext:
         runAsUser: 2000
@@ -67,11 +67,11 @@ tests:
 
   - it: lets a per-service securityContext override the chart-wide context
     templates:
-      - templates/redis.yaml
+      - templates/dex/deployment.yaml
     set:
       securityContext:
         runAsUser: 2000
-      logfire-redis:
+      logfire-dex:
         securityContext:
           runAsUser: 3000
     asserts:
@@ -84,7 +84,7 @@ tests:
 
   - it: keeps a cleared identity field cleared
     templates:
-      - templates/redis.yaml
+      - templates/dex/deployment.yaml
     set:
       securityContext:
         runAsUser: null
