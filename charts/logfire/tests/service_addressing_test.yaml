@@ -530,15 +530,15 @@ tests:
           path: kind
           value: StatefulSet
 
-  - it: keeps the bcache disk tier across a StatefulSet replacement
+  - it: releases the bcache disk tier with its StatefulSet
     templates:
       - templates/logfire-ff-bcache.yaml
     asserts:
-      # `volumeClaimTemplates` is force-new, so a routine template change plans a
-      # replacement. Deleting the claims would take the warm cache with it.
+      # A claim kept across a replacement would hold its old storage class and
+      # size, because `volumeClaimTemplates` is immutable. The cache regenerates.
       - equal:
           path: spec.persistentVolumeClaimRetentionPolicy.whenDeleted
-          value: Retain
+          value: Delete
         documentSelector:
           path: kind
           value: StatefulSet

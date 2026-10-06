@@ -62,9 +62,10 @@ spec:
     rollingUpdate:
       maxUnavailable: 25%
   persistentVolumeClaimRetentionPolicy:
-    # Keep the cache across a StatefulSet replacement. `volumeClaimTemplates` is force-new, so a
-    # routine template change plans a replacement, and Delete would take the warm cache with it.
-    whenDeleted: Retain
+    # The cache is regenerable, and a claim kept across a replacement would hold its old storage
+    # class and size because `volumeClaimTemplates` is immutable. Releasing both keeps the cache on
+    # whatever the values say.
+    whenDeleted: Delete
     # A scaled-in pod can stay away for hours. Its disk would come back with
     # blocks of objects that were deleted meanwhile, so the claim goes with it.
     whenScaled: Delete
