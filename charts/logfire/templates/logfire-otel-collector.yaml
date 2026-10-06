@@ -169,8 +169,8 @@ spec:
             {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
             - containerPort: {{ .Values.otel_collector.prometheus.port }}
             {{- end }}
-          {{- $containerContext := mergeOverwrite (dict "readOnlyRootFilesystem" true) (deepCopy (.Values.securityContext | default dict)) (deepCopy ($collectorValues.securityContext | default dict)) }}
-          {{- include "logfire.securityContext" $containerContext | nindent 10 }}
+          {{- $otelSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" . "identity" "otel_collector" "serviceName" "logfire-otel-collector" "readOnlyRootFilesystem" true) | fromJson }}
+          {{- include "logfire.securityContext" $otelSecurityContext | nindent 10 }}
           {{- range $probe := list "startupProbe" "readinessProbe" "livenessProbe" }}
           {{- with get $collectorValues $probe }}
           {{ $probe }}:

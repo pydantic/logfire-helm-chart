@@ -74,7 +74,8 @@ spec:
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       containers:
         - name: {{ $serviceName }}
-          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- $dexSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" . "identity" "logfire-dex" "readOnlyRootFilesystem" true) | fromJson }}
+          {{- include "logfire.securityContext" $dexSecurityContext | nindent 10 }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.dexImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
