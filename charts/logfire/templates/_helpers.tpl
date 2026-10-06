@@ -1992,20 +1992,69 @@ queue here makes the dependency explicit rather than leaving it to scheduling or
     {{- include "logfire.tmpVolumeMounts" $ctx | nindent 4 }}
 {{- end -}}
 
+{{/*
+The bundled Redis is one replica that a template change replaces outright, so a workload that
+starts during the replacement finds nothing listening and exits. Waiting for it here stops a Redis
+restart from restarting everything that reads from it. Like `check-db-ready`, this runs only for the
+bundled Redis; an external endpoint is the operator's to make ready.
+*/}}
+{{- define "logfire.redisReady.initContainer" -}}
+{{- $ctx := .ctx -}}
+{{- $serviceName := .serviceName -}}
+{{- $redisValues := get $ctx.Values "logfire-redis" | default dict -}}
+{{- if and (get $redisValues "enabled") (has $serviceName (list
+  "logfire-backend"
+  "logfire-backend-auth"
+  "logfire-worker"
+  "logfire-task-runner"
+  "logfire-dex"
+  "logfire-backend-migrations"
+  "logfire-ff-migrations"
+  "logfire-ff-crud-api"
+  "logfire-ff-maintenance-scheduler"
+  "logfire-ff-maintenance-worker"
+  "logfire-ff-compaction-worker"
+  "logfire-ff-query-api"
+  "logfire-ff-query-worker"
+  "logfire-ff-ingest"
+  "logfire-ff-ingest-processor"
+  "logfire-ai-gateway"
+  "logfire-remote-mcp"
+)) -}}
+{{- $redisImage := get $redisValues "image" | default dict }}
+{{- $redisImagePullPolicy := default "IfNotPresent" (default $ctx.Values.image.pullPolicy $redisImage.pullPolicy) }}
+- name: check-redis-ready
+  image: {{ include "logfire.imageRef" (dict "image" $redisImage "defaultRepository" "redis" "defaultTag" "7.2") }}
+  imagePullPolicy: {{ $redisImagePullPolicy | quote }}
+  command:
+    - sh
+    - -c
+    - >-
+      until redis-cli -u "{{ include "logfire.redisDsnFor" (dict "root" $ctx "valuesKey" $serviceName) }}" ping >/dev/null 2>&1; do echo "Waiting for redis..."; sleep 2; done
+  {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" $ctx "identity" "logfire-redis" "readOnlyRootFilesystem" true) | fromJson }}
+  {{- include "logfire.securityContext" $waitSecurityContext | nindent 2 }}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.initContainers" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := required "logfire.initContainers: serviceName is required" .serviceName -}}
 {{- $userInit := (index $ctx.Values $serviceName | default dict).initContainers -}}
 {{- $devInit := include "logfire.dev.waitForPostgres.initContainers" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
+{{- $redisInit := include "logfire.redisReady.initContainer" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
 {{- $absurdInit := "" -}}
 {{- if eq $serviceName "logfire-task-runner" -}}
   {{- $absurdInit = include "logfire.absurdSchemaReady.initContainer" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
 {{- end -}}
 {{- $userHasCheckDbReady := dict "value" false -}}
+{{- $userHasCheckRedisReady := dict "value" false -}}
 {{- $userHasAbsurdWait := dict "value" false -}}
 {{- range $userInit }}
   {{- if eq .name "check-db-ready" }}
     {{- $_ := set $userHasCheckDbReady "value" true -}}
+  {{- end -}}
+  {{- if eq .name "check-redis-ready" }}
+    {{- $_ := set $userHasCheckRedisReady "value" true -}}
   {{- end -}}
   {{- if eq .name "wait-for-absurd-schema" }}
     {{- $_ := set $userHasAbsurdWait "value" true -}}
@@ -2015,10 +2064,14 @@ queue here makes the dependency explicit rather than leaving it to scheduling or
   {{- $absurdInit = "" -}}
 {{- end -}}
 {{- $includeDevInit := and $devInit (not $userHasCheckDbReady.value) -}}
-{{- if or $includeDevInit $userInit $absurdInit -}}
+{{- $includeRedisInit := and $redisInit (not $userHasCheckRedisReady.value) -}}
+{{- if or $includeDevInit $includeRedisInit $userInit $absurdInit -}}
 initContainers:
 {{- if $includeDevInit }}
 {{ $devInit | nindent 2 }}
+{{- end }}
+{{- if $includeRedisInit }}
+{{ $redisInit | nindent 2 }}
 {{- end }}
 {{- if $absurdInit }}
 {{ $absurdInit | nindent 2 }}

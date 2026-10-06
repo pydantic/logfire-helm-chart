@@ -593,6 +593,75 @@ tests:
           path: kind
           value: StatefulSet
 
+  - it: waits for the bundled redis before starting a workload
+    set:
+      dev:
+        deployPostgres: false
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    asserts:
+      # The bundled redis is one replica that a template change replaces outright,
+      # so a workload that starts during the replacement finds nothing listening
+      # and exits. Waiting here keeps a redis restart from restarting everything.
+      - lengthEqual:
+          path: spec.template.spec.initContainers
+          count: 1
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: check-redis-ready
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: redis:7.2
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: omits the redis wait when the bundled redis is not deployed
+    set:
+      dev:
+        deployPostgres: false
+      logfire-redis:
+        enabled: false
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    asserts:
+      - notExists:
+          path: spec.template.spec.initContainers
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: keeps a user-supplied check-redis-ready instead of adding a second one
+    set:
+      dev:
+        deployPostgres: false
+      logfire-ff-query-api:
+        initContainers:
+          - name: check-redis-ready
+            image: custom-probe:1
+            command: ["true"]
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.initContainers
+          count: 1
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: custom-probe:1
+        documentSelector:
+          path: kind
+          value: Deployment
+
   - it: keeps query stability aligned with the ingest visibility budget
     templates:
       - templates/logfire-ff-config.yaml
