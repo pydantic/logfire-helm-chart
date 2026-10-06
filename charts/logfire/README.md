@@ -504,10 +504,16 @@ Volume ownership follows that non-root default. `logfire-ff-ingest` uses
 left root-owned. The other Fusionfire and bcache workloads keep `OnRootMismatch`, because their
 scratch volumes are fresh when the pod starts.
 
-The images this chart takes from other projects (Redis, Dex, RustFS, MailDev, the OTel collector,
-and the `check-db-ready` and in-cluster TLS wait containers) default to the same controls with
-their own verified identities. Override the chart-wide `securityContext` or a per-workload
+The images this chart takes from other projects (Dex, RustFS, MailDev, the OTel collector, and
+the `check-db-ready` and in-cluster TLS wait containers) default to the same controls with their
+own verified identities. Override the chart-wide `securityContext` or a per-workload
 `<workload>.securityContext` when your cluster needs a different identity.
+
+The bundled Redis is the exception for now. It keeps the chart-wide `securityContext`, so a
+`restricted` namespace rejects it unless you set `logfire-redis.securityContext`. Hardening it
+changes its pod template, which replaces the pod, and a Fusionfire workload that starts during
+that window exits because it cannot reach Redis. It takes the same defaults once that startup
+behaviour is fixed.
 
 ### Istio Compatibility
 
