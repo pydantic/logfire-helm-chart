@@ -3,6 +3,7 @@
 {{- $nameHash := sha256sum $releaseIdentity | trunc 8 -}}
 {{- $namePrefix := $identity | trunc 54 | trimSuffix "-" -}}
 {{- $name := printf "%s-%s" $namePrefix $nameHash -}}
+{{- $topology := include "logfire.bcacheTopology" (dict "ctx" .) | fromJson -}}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -28,3 +29,35 @@ subjects:
   - kind: ServiceAccount
     name: {{ include "logfire.serviceAccountName" . }}
     namespace: {{ .Release.Namespace }}
+{{- if $topology.needsNodeRead }}
+{{- /* The zone lookup reads `topology.kubernetes.io/zone` off this pod's node at startup, so it
+       needs a cluster-wide read. Opt in with `logfire-ff-bcache.topology.zoneAware`, and make
+       sure every zone runs a cache pod: the reader routes to its own zone only. Set
+       `logfire-ff-bcache.topology.zone` instead when the cluster will not grant this. */}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "logfire.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

@@ -593,6 +593,88 @@ tests:
           path: kind
           value: StatefulSet
 
+  - it: keeps the readers zoneless by default
+    set:
+      dev:
+        deployPostgres: false
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-cache-routing-rbac.yaml
+    asserts:
+      # Zoneless routing is right for a single-zone cluster, and the zone lookup needs a
+      # cluster-wide `nodes` `get` role that nobody should get by default.
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_NODE_NAME
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_ZONE
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: opts the readers into zone routing with the node-read cluster role
+    set:
+      dev:
+        deployPostgres: false
+      logfire-ff-bcache:
+        topology:
+          zoneAware: true
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-cache-routing-rbac.yaml
+    asserts:
+      # FF_NODE_NAME makes the reader read its own node's topology label at startup.
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - containsDocument:
+          kind: ClusterRole
+          apiVersion: rbac.authorization.k8s.io/v1
+          any: true
+        template: templates/logfire-ff-cache-routing-rbac.yaml
+
+  - it: takes a static zone without granting the node-read cluster role
+    set:
+      dev:
+        deployPostgres: false
+      logfire-ff-bcache:
+        topology:
+          zoneAware: true
+          zone: eu
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-cache-routing-rbac.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_ZONE
+            value: eu
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      # The Role and RoleBinding for endpoint discovery only. No cluster role.
+      - hasDocuments:
+          count: 2
+        template: templates/logfire-ff-cache-routing-rbac.yaml
+
   - it: keeps query stability aligned with the ingest visibility budget
     templates:
       - templates/logfire-ff-config.yaml

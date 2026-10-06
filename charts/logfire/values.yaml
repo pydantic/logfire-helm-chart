@@ -1065,6 +1065,15 @@ logfire-ff-bcache:
   disk: {}
   #  storage: 32Gi
   #  storageClassName: my-storage-class
+  # -- Topology routing for the readers that use this cache. Zone routing is off by default.
+  topology:
+    # -- Route reads to cache pods in this pod's topology zone. The reader resolves the zone from
+    # its own node label at startup, so this needs a cluster-wide `nodes` `get` role, and every
+    # zone must run a cache pod or reads in the other zones get no caching at all.
+    zoneAware: false
+    # -- Static topology zone, for tests and for clusters that will not grant node-read RBAC.
+    # Takes precedence over `zoneAware`, and then no cluster role is created.
+    zone: ""
 
 
 # -- Maintenance worker

@@ -44,8 +44,26 @@ service's EndpointSlices, so each request reaches a pod IP. Keep these defaults
 before service-specific env so operators can override them. A read-once reader,
 such as maintenance, sets `noWarm` so its reads do not displace query data.
 */}}
+{{/*
+Resolved topology settings for the bcache readers, shared by the reader env and the RBAC that
+the zone lookup needs.
+
+`FF_ZONE` resolves the pod's zone directly, so it needs no node read. `FF_NODE_NAME` makes the
+reader read `topology.kubernetes.io/zone` off its own node at startup, which needs a read-only
+`nodes` `get` ClusterRole. With neither, the reader runs zoneless and routes on one global ring,
+which is right for a single-zone cluster.
+*/}}
+{{- define "logfire.bcacheTopology" -}}
+{{- $ctx := required "logfire.bcacheTopology: need .ctx" .ctx -}}
+{{- $topology := get (get $ctx.Values "logfire-ff-bcache" | default dict) "topology" | default dict -}}
+{{- $zone := get $topology "zone" | default "" -}}
+{{- $zoneAware := get $topology "zoneAware" | default false -}}
+{{- dict "zone" $zone "zoneAware" $zoneAware "needsNodeRead" (and $zoneAware (not $zone)) | toJson -}}
+{{- end -}}
+
 {{- define "logfire.ffBcacheReaderEnv" -}}
 {{- $root := .root -}}
+{{- $topology := include "logfire.bcacheTopology" (dict "ctx" $root) | fromJson -}}
 - name: FF_READ_PATH
   value: v2
 - name: FF_BCACHE_URI
@@ -60,6 +78,16 @@ such as maintenance, sets `noWarm` so its reads do not displace query data.
   value: {{ ternary "https" "http" ($root.Values.inClusterTls.enabled | default false) }}
 - name: FF_BCACHE_HTTP_VERSION
   value: http1
+{{- with $topology.zone }}
+- name: FF_ZONE
+  value: {{ . | quote }}
+{{- end }}
+{{- if $topology.zoneAware }}
+- name: FF_NODE_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: spec.nodeName
+{{- end }}
 {{- if .noWarm }}
 - name: FF_READ_NO_WARM
   value: "true"
