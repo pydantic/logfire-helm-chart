@@ -637,6 +637,21 @@ tests:
           path: kind
           value: Deployment
 
+  - it: does not make the python workloads wait for redis
+    set:
+      dev:
+        deployPostgres: false
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      # They treat a Redis failure as retryable, so they have nothing to wait for.
+      # Only the Fusionfire binary exits when Redis is down at startup.
+      - notExists:
+          path: spec.template.spec.initContainers
+        documentSelector:
+          path: kind
+          value: Deployment
+
   - it: keeps a user-supplied check-redis-ready instead of adding a second one
     set:
       dev:

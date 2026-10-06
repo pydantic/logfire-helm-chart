@@ -1994,22 +1994,17 @@ queue here makes the dependency explicit rather than leaving it to scheduling or
 
 {{/*
 The bundled Redis is one replica that a template change replaces outright, so a workload that
-starts during the replacement finds nothing listening and exits. Waiting for it here stops a Redis
-restart from restarting everything that reads from it. Like `check-db-ready`, this runs only for the
-bundled Redis; an external endpoint is the operator's to make ready.
+starts during the replacement finds nothing listening. The Fusionfire binary exits on that
+(`fusionfire_crosspod_cache::pool::from_dsn` in `fusionfire/src/entrypoints.rs`), so its workloads
+wait here and a Redis restart no longer restarts them. The Python workloads treat a Redis failure
+as retryable and so do not wait. Like `check-db-ready`, this runs only for the bundled Redis; an
+external endpoint is the operator's to make ready.
 */}}
 {{- define "logfire.redisReady.initContainer" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := .serviceName -}}
 {{- $redisValues := get $ctx.Values "logfire-redis" | default dict -}}
 {{- if and (get $redisValues "enabled") (has $serviceName (list
-  "logfire-backend"
-  "logfire-backend-auth"
-  "logfire-worker"
-  "logfire-task-runner"
-  "logfire-dex"
-  "logfire-backend-migrations"
-  "logfire-ff-migrations"
   "logfire-ff-crud-api"
   "logfire-ff-maintenance-scheduler"
   "logfire-ff-maintenance-worker"
@@ -2018,8 +2013,7 @@ bundled Redis; an external endpoint is the operator's to make ready.
   "logfire-ff-query-worker"
   "logfire-ff-ingest"
   "logfire-ff-ingest-processor"
-  "logfire-ai-gateway"
-  "logfire-remote-mcp"
+  "logfire-ff-migrations"
 )) -}}
 {{- $redisImage := get $redisValues "image" | default dict }}
 {{- $redisImagePullPolicy := default "IfNotPresent" (default $ctx.Values.image.pullPolicy $redisImage.pullPolicy) }}
