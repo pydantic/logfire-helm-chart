@@ -118,7 +118,6 @@ jobs:
           helm dependency update charts/logfire
           helm install lf charts/logfire \
             -f charts/logfire/ci/ci-values.yaml \
-            -f ci/restricted-values.yaml \
             -n logfire-restricted \
             --wait --timeout 10m
 

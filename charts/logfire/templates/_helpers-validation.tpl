@@ -362,6 +362,13 @@ through maildev instead of smtp.host and get a placeholder sender.
 {{- if or (eq $domain "pydantic.dev") (hasSuffix ".pydantic.dev" $domain) -}}
   {{- fail "smtp.fromAddress must not be a pydantic.dev address. Set it to an address on a domain that your SMTP server may send for." -}}
 {{- end -}}
+{{- $caBundle := get $smtp "caBundle" | default dict -}}
+{{- if and (dig "existingConfigMap" "name" "" $caBundle) (dig "existingSecret" "name" "" $caBundle) -}}
+  {{- fail "smtp.caBundle: specify only one of existingConfigMap.name or existingSecret.name" -}}
+{{- end -}}
+{{- if and (include "logfire.smtp.caBundle.source" .) (eq (toString (get $smtp "validate_certs")) "false") -}}
+  {{- fail "smtp.caBundle is set but smtp.validate_certs is false, so the bundle would never be used. Remove smtp.validate_certs to verify the SMTP server against the bundle." -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

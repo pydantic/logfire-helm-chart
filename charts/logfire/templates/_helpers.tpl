@@ -1396,6 +1396,65 @@ still applies them.
 {{- end -}}
 
 {{/*
+The numeric identity a bundled third-party image runs as. Each value is verified by running the
+image and reading its `USER` or its user database:
+
+- `logfire-redis`: the `redis` user in `redis:7.2`, uid and gid 999.
+- `logfire-dex`: the `USER` in the mirrored Dex image, uid and gid 1001.
+- `rustfs`: the `rustfs` user in `rustfs/rustfs:1.0.0`, uid and gid 10001.
+- `maildev`: the `node` user in `maildev/maildev:3.0.0`, uid and gid 1000.
+- `otel_collector`: the `USER` in the collector image, uid and gid 10001.
+- `postgres-wait`: the `postgres` user in `postgres:17`, uid and gid 999.
+- `tls-wait`: the `curl_user` in `curlimages/curl:8.12.1`, uid 101 and gid 102.
+*/}}
+{{- define "logfire.thirdPartyImageIdentity" -}}
+{{- $name := required "logfire.thirdPartyImageIdentity: need .name" .name -}}
+{{- if eq $name "logfire-redis" -}}
+{{- dict "uid" 999 "gid" 999 | toJson -}}
+{{- else if eq $name "logfire-dex" -}}
+{{- dict "uid" 1001 "gid" 1001 | toJson -}}
+{{- else if eq $name "rustfs" -}}
+{{- dict "uid" 10001 "gid" 10001 | toJson -}}
+{{- else if eq $name "maildev" -}}
+{{- dict "uid" 1000 "gid" 1000 | toJson -}}
+{{- else if eq $name "otel_collector" -}}
+{{- dict "uid" 10001 "gid" 10001 | toJson -}}
+{{- else if eq $name "postgres-wait" -}}
+{{- dict "uid" 999 "gid" 999 | toJson -}}
+{{- else if eq $name "tls-wait" -}}
+{{- dict "uid" 101 "gid" 102 | toJson -}}
+{{- else -}}
+{{- fail (printf "logfire.thirdPartyImageIdentity: unknown third-party image %q; add its verified image identity" $name) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Bundled third-party container SecurityContext: the portable controls plus the verified image
+identity, merged with the chart-wide and per-service contexts. The helper keeps
+`readOnlyRootFilesystem` off unless the caller sets `.readOnlyRootFilesystem`, because an image
+may write outside its data volume. The `.identity` names the image; the optional `.serviceName`
+selects the per-service `<serviceName>.securityContext` override and defaults to the identity.
+*/}}
+{{- define "logfire.thirdPartyContainerSecurityContext" -}}
+{{- $ctx := required "logfire.thirdPartyContainerSecurityContext: need .ctx" .ctx -}}
+{{- $identityName := required "logfire.thirdPartyContainerSecurityContext: need .identity" .identity -}}
+{{- $serviceName := .serviceName | default $identityName -}}
+{{- $identity := include "logfire.thirdPartyImageIdentity" (dict "name" $identityName) | fromJson -}}
+{{- $defaults := dict
+  "runAsNonRoot" true
+  "runAsUser" (get $identity "uid")
+  "runAsGroup" (get $identity "gid")
+  "allowPrivilegeEscalation" false
+  "capabilities" (dict "drop" (list "ALL"))
+  "seccompProfile" (dict "type" "RuntimeDefault")
+-}}
+{{- if .readOnlyRootFilesystem -}}
+{{- $_ := set $defaults "readOnlyRootFilesystem" true -}}
+{{- end -}}
+{{- include "logfire.mergeSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName "defaults" $defaults) -}}
+{{- end -}}
+
+{{/*
 The writable `/tmp` mount every chart-owned container gets. The production images keep a
 writable `HOME` or write scratch data under `/tmp`, so a read-only image root needs this
 emptyDir. List the mount before any mount nested under `/tmp`, because the kubelet applies
@@ -1611,6 +1670,67 @@ maildev accepts any sender, so it gets a placeholder on the reserved `.localhost
 {{- end }}
 {{- end -}}
 
+{{/*
+The CA bundle that verifies the SMTP server certificate, for relays signed by an internal CA.
+It is its own volume, separate from the in-cluster TLS CA bundle, so the two never share a
+volume name or mount path. Not used with the bundled maildev, which replaces smtp.host.
+*/}}
+{{- define "logfire.smtp.caBundle.source" -}}
+{{- $caBundle := (.Values.smtp | default dict).caBundle | default dict -}}
+{{- $configMapName := dig "existingConfigMap" "name" "" $caBundle -}}
+{{- $secretName := dig "existingSecret" "name" "" $caBundle -}}
+{{- if and (not (.Values.dev).deployMaildev) (or $configMapName $secretName) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+TLS settings of the SMTP client, beside the SMTP_* variables. `SSL_CERT_FILE` makes the mounted
+bundle the default trust store of the pod, which is where the SMTP client looks. In-cluster TLS
+is unaffected: those clients trust `LOGFIRE_CA_PATH` explicitly, not the default trust store.
+*/}}
+{{- define "logfire.smtp.tlsEnv" -}}
+{{- if not (.Values.dev).deployMaildev -}}
+{{- $validateCerts := (.Values.smtp | default dict).validate_certs -}}
+{{- if not (kindIs "invalid" $validateCerts) }}
+- name: SMTP_VALIDATE_CERTS
+  value: {{ $validateCerts | toString | quote }}
+{{- end }}
+{{- if include "logfire.smtp.caBundle.source" . }}
+- name: SSL_CERT_FILE
+  value: /etc/logfire/smtp-ca/ca.crt
+{{- end }}
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.smtp.caBundle.volumeMount" -}}
+{{- if include "logfire.smtp.caBundle.source" . -}}
+- name: logfire-smtp-ca-bundle
+  mountPath: /etc/logfire/smtp-ca
+  readOnly: true
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.smtp.caBundle.volume" -}}
+{{- if include "logfire.smtp.caBundle.source" . -}}
+{{- $caBundle := .Values.smtp.caBundle -}}
+- name: logfire-smtp-ca-bundle
+  {{- if dig "existingConfigMap" "name" "" $caBundle }}
+  configMap:
+    name: {{ $caBundle.existingConfigMap.name }}
+    items:
+      - key: {{ dig "existingConfigMap" "key" "ca.crt" $caBundle }}
+        path: ca.crt
+  {{- else }}
+  secret:
+    secretName: {{ $caBundle.existingSecret.name }}
+    items:
+      - key: {{ dig "existingSecret" "key" "ca.crt" $caBundle }}
+        path: ca.crt
+  {{- end }}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.inClusterTls.enabled" -}}
 {{- .Values.inClusterTls.enabled | default false -}}
 {{- end -}}
@@ -1821,7 +1941,8 @@ Dev Postgres helpers
     - -c
     - >-
       until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432 -U postgres; do echo "Waiting for postgres..."; sleep 2; done
-  {{- include "logfire.securityContext" $ctx.Values.securityContext | nindent 2 }}
+  {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" $ctx "identity" "postgres-wait" "readOnlyRootFilesystem" true) | fromJson }}
+  {{- include "logfire.securityContext" $waitSecurityContext | nindent 2 }}
 {{- end -}}
 {{- end -}}
 

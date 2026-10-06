@@ -8,17 +8,31 @@ Helpers specific to Fusionfire workloads and configuration.
 {{/*
 Merge the Fusionfire volume-ownership defaults under the chart-wide and per-service
 pod security contexts. The uid 1000 Fusionfire and bcache images need `fsGroup: 1000`
-to write chart-managed scratch and ingest volumes, and `fsGroupChangePolicy: OnRootMismatch`
-skips the recursive chown after the first mount. Later layers win, and the defaults
-apply even when an upgrade with `--reuse-values` carries no `podSecurityContext` key.
-Returns JSON so callers can parse it with `fromJson`, matching
-`logfire.effectiveServiceValues`.
+to write chart-managed scratch and ingest volumes.
+
+`fsGroupChangePolicy: OnRootMismatch` skips the recursive ownership pass when the
+volume root already carries the fsGroup. That skip is safe for scratch volumes,
+which are fresh when the pod starts. It is not safe for the retained ingest spool.
+A release that ran as root leaves bucket directories owned by root with mode 0755
+below a volume root that already matches `fsGroup: 1000`. The root check then skips
+the repair, and every disk write fails with EACCES. `logfire-ff-ingest` therefore
+defaults to `Always`, which walks the spool at each pod start and adds group write
+to those directories. The pass changes ownership and permissions only. It never
+touches file contents.
+
+Later layers win, and the defaults apply even when an upgrade with `--reuse-values`
+carries no `podSecurityContext` key. Returns JSON so callers can parse it with
+`fromJson`, matching `logfire.effectiveServiceValues`.
 */}}
 {{- define "logfire.fusionfirePodSecurityContext" -}}
 {{- $ctx := required "logfire.fusionfirePodSecurityContext: need .ctx" .ctx -}}
 {{- $serviceName := required "logfire.fusionfirePodSecurityContext: need .serviceName" .serviceName -}}
 {{- $serviceValues := get $ctx.Values $serviceName | default dict -}}
-{{- $podSecurityContext := dict "fsGroup" 1000 "fsGroupChangePolicy" "OnRootMismatch" -}}
+{{- $fsGroupChangePolicy := "OnRootMismatch" -}}
+{{- if eq $serviceName "logfire-ff-ingest" -}}
+{{- $fsGroupChangePolicy = "Always" -}}
+{{- end -}}
+{{- $podSecurityContext := dict "fsGroup" 1000 "fsGroupChangePolicy" $fsGroupChangePolicy -}}
 {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy ($ctx.Values.podSecurityContext | default dict)) -}}
 {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy (get $serviceValues "podSecurityContext" | default dict)) -}}
 {{- $podSecurityContext | toJson -}}
