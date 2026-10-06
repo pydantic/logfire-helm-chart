@@ -39,26 +39,30 @@ carries no `podSecurityContext` key. Returns JSON so callers can parse it with
 {{- end -}}
 
 {{/*
-Byte-cache clients discover cache pods directly via EndpointSlice.
-Zone-local routing is opt-in: it needs nodes/get ClusterRole and cache
-replicas covering every cache-consumer zone.
-Keep these defaults before service-specific env so operators can override them.
+Point a Fusionfire reader at bcache (read path v2). The reader lists the headless
+service's EndpointSlices, so each request reaches a pod IP. Keep these defaults
+before service-specific env so operators can override them. A read-once reader,
+such as maintenance, sets `noWarm` so its reads do not displace query data.
 */}}
-{{- define "logfire.ffByteCacheClientRoutingEnv" -}}
-{{- $routing := get (get .Values "logfire-ff-cache-byte" | default dict) "clientSideRouting" | default dict -}}
-- name: FF_BYTE_CACHE_K8S_SERVICE
-  value: logfire-ff-cache-byte-internal
-- name: FF_BYTE_CACHE_K8S_NAMESPACE
+{{- define "logfire.ffBcacheReaderEnv" -}}
+{{- $root := .root -}}
+- name: FF_READ_PATH
+  value: v2
+- name: FF_BCACHE_URI
+  value: "{{ include "logfire.scheme" $root }}://logfire-ff-bcache-internal:9443"
+- name: FF_BCACHE_K8S_SERVICE
+  value: logfire-ff-bcache-internal
+- name: FF_BCACHE_K8S_NAMESPACE
   valueFrom:
     fieldRef:
       fieldPath: metadata.namespace
-- name: FF_BYTE_CACHE_K8S_PORT_NAME
-  value: {{ ternary "https" "http" .Values.inClusterTls.enabled }}
-{{- if get $routing "zoneAware" }}
-- name: FF_NODE_NAME
-  valueFrom:
-    fieldRef:
-      fieldPath: spec.nodeName
+- name: FF_BCACHE_K8S_PORT_NAME
+  value: {{ ternary "https" "http" ($root.Values.inClusterTls.enabled | default false) }}
+- name: FF_BCACHE_HTTP_VERSION
+  value: http1
+{{- if .noWarm }}
+- name: FF_READ_NO_WARM
+  value: "true"
 {{- end }}
 {{- end -}}
 
@@ -129,25 +133,6 @@ overhead. No quota is derived for emptyDir scratch storage.
 {{- with (get $scratchVolume "storage") -}}
 {{- $storageMi := int (include "logfire.storageQuantityToMi" .) -}}
 {{- printf "%dMB" (max 1 (div $storageMi 2)) -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Byte-cache disk capacity. Explicit cacheDiskCapacity wins; otherwise 80% of
-the scratch volume size. Sized from the declared volume, not the filesystem:
-network filesystems can report effectively unlimited free space, and
-free-space sizing then OOMs the pod at startup. Not derived for emptyDir.
-*/}}
-{{- define "logfire.ffCacheDiskCapacity" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- with (get $effectiveServiceValues "cacheDiskCapacity") -}}
-{{- . -}}
-{{- else -}}
-{{- $scratchVolume := get $effectiveServiceValues "scratchVolume" | default dict -}}
-{{- with (get $scratchVolume "storage") -}}
-{{- $storageMi := int (include "logfire.storageQuantityToMi" .) -}}
-{{- printf "%dMB" (max 1 (div (mul $storageMi 4) 5)) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -311,8 +296,7 @@ in the container command itself; keeping it in the chart (not the image entrypoi
 means running the binary outside Kubernetes never deletes anything.
 
 The swept path comes from FF_TEMP_DIR at runtime so the script and the binary always
-agree on the location; workloads without FF_TEMP_DIR (e.g. the byte cache, whose
-/scratch mount holds reusable cache data) skip the sweep. `find` rather than a shell
+agree on the location; workloads without FF_TEMP_DIR skip the sweep. `find` rather than a shell
 glob because tempfile names everything `.tmp*` and sh globs skip dotfiles.
 
 Emits the `command:` list entries; the fusionfire subcommand and flags stay in `args:`.

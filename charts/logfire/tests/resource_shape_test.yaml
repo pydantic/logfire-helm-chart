@@ -98,3 +98,24 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: a sizing preset sizes the bcache disk and its capacity
+    set:
+      sizingPreset: small
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          value: 4Gi
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_DISK_CAPACITY
+            value: "3276MB"
+        documentSelector:
+          path: kind
+          value: StatefulSet

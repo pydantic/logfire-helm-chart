@@ -211,11 +211,11 @@ tests:
 
   - it: rejects scratch volume quantities below 1Mi
     set:
-      logfire-ff-cache-byte:
+      logfire-ff-compaction-worker:
         scratchVolume:
           storage: 512Ki
     templates:
-      - templates/logfire-ff-cache-byte.yaml
+      - templates/logfire-ff-compaction-worker.yaml
     asserts:
       - failedTemplate:
           errorPattern: 'scratchVolume.storage "512Ki" is below the 1Mi minimum'

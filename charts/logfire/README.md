@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.48](https://img.shields.io/badge/Version-0.13.48-informational?style=flat-square) ![AppVersion: d379c73e](https://img.shields.io/badge/AppVersion-d379c73e-informational?style=flat-square)
+![Version: 0.13.48](https://img.shields.io/badge/Version-0.13.48-informational?style=flat-square) ![AppVersion: ed13e35a](https://img.shields.io/badge/AppVersion-ed13e35a-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -349,7 +349,7 @@ Query API capacity is resource-oriented:
 Query cost capacity defaults to the effective execution-worker CPU rounded up to a whole core. With separate query workers enabled, both the dispatcher and workers derive it from query-worker CPU. Advanced installations can override it with `logfire-ff-query-api.maxQueryCostPerPod`.
 
 The `standard` preset keeps the public request path, query API, and ingest path at a minimum of three replicas.
-The `large` preset inherits `standard` and increases selected FusionFire worker, ingest processor, and byte-cache capacity.
+The `large` preset inherits `standard` and increases selected FusionFire worker, ingest processor, and bcache capacity.
 The `small` preset keeps ingest and the edge service more available while preserving a smaller footprint.
 The `tiny` preset intentionally favors the smallest resource footprint over high availability.
 
@@ -477,14 +477,17 @@ CA bundle requirements by mode:
 * `inClusterTls.certs.mode=certManager` with custom `issuerRef.name`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
 * `inClusterTls.certs.mode=existingSecrets`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
 
-Cache consumers dial the headless `logfire-ff-cache-byte-internal` service directly and verify
-that hostname, so the service certificate must include the bare `logfire-ff-cache-byte-internal`
-DNS name. Keep the `logfire-ff-cache-byte` names and the namespace and cluster-domain variants as
-well: existing certificates already carry them, and they keep the certificate valid if you roll
-back to a chart that still runs the cache proxy.
+Fusionfire readers dial the headless `logfire-ff-bcache-internal` service directly and verify
+that hostname, so the bcache certificate must include the bare `logfire-ff-bcache-internal`
+DNS name. Include the `logfire-ff-bcache` names and the namespace and cluster-domain variants as
+well.
 
-The cache loads its certificate at startup, so after rotating the Secret restart
-`deployment/logfire-ff-cache-byte` so the pods serve the new certificate, or configure a reload
+bcache keeps its disk tier in one PersistentVolumeClaim per pod. A StatefulSet cannot change its volume claim templates, so changing
+`logfire-ff-bcache.disk.storage` after install fails `helm upgrade`. To resize, expand the existing `bcache-data-*` PVCs if the
+storage class allows it, or run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
+
+bcache loads its certificate at startup, so after rotating the Secret restart
+`statefulset/logfire-ff-bcache` so the pods serve the new certificate, or configure a reload
 controller as described in External Secrets and Automatic Reloads.
 
 For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
@@ -669,10 +672,9 @@ Before diving deeper, verify these common configuration issues:
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-cache-byte | object | `{"clientSideRouting":{"zoneAware":false},"pdb":{},"replicas":3,"scratchVolume":{"storage":"32Gi"}}` | Autoscaling & resources for the byte cache pods |
-| logfire-ff-cache-byte.clientSideRouting.zoneAware | bool | `false` | Restrict direct routing to zone-local cache pods. Requires nodes/get cluster RBAC and adds soft zone/hostname spreading. Cache replicas must cover every cache-consumer zone; local misses use durable storage. |
-| logfire-ff-cache-byte.replicas | int | `3` | Number of byte-cache replicas when autoscaling is not configured. |
-| logfire-ff-cache-byte.scratchVolume | object | `{"storage":"32Gi"}` | Cache byte ephemeral volume. storage accepts Kubernetes quantities (e.g. 32Gi, 1.5Gi, 10G) of at least 1Mi. |
+| logfire-ff-bcache | object | `{"disk":{},"pdb":{},"replicas":3}` | Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use |
+| logfire-ff-bcache.disk | object | `{}` | Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it. A StatefulSet cannot change its volumeClaimTemplates, so a later change to storage fails `helm upgrade`. To resize, expand the existing `bcache-data-*` PVCs if the storage class allows it, or delete the StatefulSet with `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade. Unset `disk.storage` takes the sizing preset's size, or 32Gi without a preset. |
+| logfire-ff-bcache.replicas | int | `3` | Number of bcache replicas when autoscaling is not configured. |
 | logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn,otel::tracing=info"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
@@ -758,7 +760,7 @@ Before diving deeper, verify these common configuration issues:
 | priorityClassName | string | `""` | Pod priority class See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | rateLimits | object | `{}` | Configure Rate Limiting rules for Logfire endpoints |
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN. Change if using an external Redis instance. |
-| releaseVersion | string | `"v2026-10-01.03"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
+| releaseVersion | string | `"v2026-10-06.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
 | rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Ignored while `dev.deployMinio` is set. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |

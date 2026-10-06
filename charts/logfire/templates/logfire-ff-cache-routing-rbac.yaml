@@ -1,4 +1,3 @@
-{{- $routing := get (get .Values "logfire-ff-cache-byte" | default dict) "clientSideRouting" | default dict -}}
 {{- $identity := printf "%s-%s-ff-cache-routing" (include "logfire.fullname" .) .Release.Namespace -}}
 {{- $releaseIdentity := printf "%s/%s" .Release.Namespace .Release.Name -}}
 {{- $nameHash := sha256sum $releaseIdentity | trunc 8 -}}
@@ -29,31 +28,3 @@ subjects:
   - kind: ServiceAccount
     name: {{ include "logfire.serviceAccountName" . }}
     namespace: {{ .Release.Namespace }}
-{{- if get $routing "zoneAware" }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: {{ $name }}
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-rules:
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: {{ $name }}
-  labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: {{ $name }}
-subjects:
-  - kind: ServiceAccount
-    name: {{ include "logfire.serviceAccountName" . }}
-    namespace: {{ .Release.Namespace }}
-{{- end }}
