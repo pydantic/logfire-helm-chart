@@ -40,7 +40,7 @@ adminEmail: hello@example.dev
 variablesApiKey: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: "v2026-10-01.03"
+releaseVersion: "v2026-10-06.01"
 
 # -- Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of
 # the ingress or tunnel in front of the release; if HAProxy closes an idle connection first,
@@ -1029,13 +1029,8 @@ logfire-remote-mcp:
 #     minAvailable: 1
 
 
-# -- Autoscaling & resources for the byte cache pods
-logfire-ff-cache-byte:
-  clientSideRouting:
-    # -- Restrict direct routing to zone-local cache pods.
-    # Requires nodes/get cluster RBAC and adds soft zone/hostname spreading.
-    # Cache replicas must cover every cache-consumer zone; local misses use durable storage.
-    zoneAware: false
+# -- Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use
+logfire-ff-bcache:
 #   # -- Workload labels
 #   labels: {}
 #   # -- Workload annotations
@@ -1044,7 +1039,7 @@ logfire-ff-cache-byte:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-  # -- Number of byte-cache replicas when autoscaling is not configured.
+  # -- Number of bcache replicas when autoscaling is not configured.
   replicas: 3
 #   resources:
 #     cpu: "1"
@@ -1054,33 +1049,22 @@ logfire-ff-cache-byte:
 #     maxReplicas: 6
 #     hpa:
 #       enabled: true
-#       memAverage: 65
-#       cpuAverage: 20
-#     keda:
-#       enabled: true
-#       triggers:
-#         - type: cpu
-#           metricType: Utilization
-#           metadata:
-#             value: "50"
+#       cpuAverage: 60
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
-#   # -- PodDisruptionBudget for byte-cache pods.
+#   # -- PodDisruptionBudget for bcache pods.
 #   pdb:
 #     maxUnavailable: 1
   pdb: {}
-  # -- Cache byte ephemeral volume. storage accepts Kubernetes quantities (e.g. 32Gi, 1.5Gi, 10G) of at least 1Mi.
-  scratchVolume:
-    storage: 32Gi
-    #  storageClassName: my-storage-class
-
-#     labels:
-#       type: my-volume
-
-#   # -- Disk-cache capacity. Defaults to 80% of scratchVolume.storage.
-#   # Ignored by image tags older than de12a70b, which size from free space.
-#   cacheDiskCapacity: "24GB"
+  # -- Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it.
+  # A StatefulSet cannot change its volumeClaimTemplates, so a later change to storage fails `helm upgrade`.
+  # To resize, expand the existing `bcache-data-*` PVCs if the storage class allows it,
+  # or delete the StatefulSet with `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
+  # Unset `disk.storage` takes the sizing preset's size, or 32Gi without a preset.
+  disk: {}
+  #  storage: 32Gi
+  #  storageClassName: my-storage-class
 
 
 # -- Maintenance worker
@@ -1566,6 +1550,8 @@ image:
   frontendImage: frontend
   # @ignored
   fusionfireImage: fusionfire
+  # @ignored
+  bcacheImage: bcache
   # @ignored
   dexImage: dex
   # @ignored
@@ -2213,14 +2199,14 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
-    logfire-ff-cache-byte:
+    logfire-ff-bcache:
       resources:
         requests:
           cpu: "1"
           memory: "6Gi"
         limits:
           memory: "6Gi"
-      scratchVolume:
+      disk:
         storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -2581,7 +2567,7 @@ sizingPresets:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: logfire-service
-    logfire-ff-cache-byte:
+    logfire-ff-bcache:
       spreadAcrossZones: true
       resources:
         requests:
@@ -2589,7 +2575,7 @@ sizingPresets:
           memory: "6Gi"
         limits:
           memory: "6Gi"
-      scratchVolume:
+      disk:
         storage: "4Gi"
       autoscaling:
         minReplicas: 2
@@ -3043,7 +3029,7 @@ sizingPresets:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: logfire-service
-    logfire-ff-cache-byte:
+    logfire-ff-bcache:
       resources:
         requests:
           cpu: "1"
@@ -3143,7 +3129,7 @@ sizingPresets:
     logfire-service:
       autoscaling:
         maxReplicas: 12
-    logfire-ff-cache-byte:
+    logfire-ff-bcache:
       autoscaling:
         minReplicas: 9
         maxReplicas: 24
