@@ -208,6 +208,18 @@ Validate scratch volume configuration.
 
 
 {{/*
+The v1 byte cache values block is gone. Its settings moved to `logfire-ff-bcache`, and a value
+left under the old key is silently ignored. That would turn zone routing off with no error, so
+name the move instead of letting the install quietly change behaviour.
+*/}}
+{{- define "logfire.validate.removedByteCacheValues" -}}
+{{- if hasKey .Values "logfire-ff-cache-byte" -}}
+  {{- fail "logfire-ff-cache-byte is no longer a values block. Move its settings to logfire-ff-bcache: replica, resource, autoscaling and PDB settings keep their names, scratchVolume and cacheDiskCapacity become logfire-ff-bcache.disk.storage, and clientSideRouting.zoneAware becomes logfire-ff-bcache.topology.zoneAware." -}}
+{{- end -}}
+{{- end -}}
+
+
+{{/*
 Validate autoscaling configuration - warn if both HPA and KEDA are enabled
 */}}
 {{- define "logfire.validate.sizingPreset" -}}
@@ -395,6 +407,7 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.smtp"
   "logfire.validate.inClusterTls"
   "logfire.validate.scratchVolumes"
+  "logfire.validate.removedByteCacheValues"
   -}}
 {{- range $validator := $validators -}}
 {{- include $validator $root -}}
