@@ -410,6 +410,17 @@ tests:
       - failedTemplate:
           errorPattern: 'scratchVolume\.storage is required'
 
+  # --- removed values blocks ---
+  - it: names the move when the v1 byte cache values block is still set
+    set:
+      logfire-ff-cache-byte:
+        clientSideRouting:
+          zoneAware: true
+    asserts:
+      # The key is ignored otherwise, so zone routing would silently turn off.
+      - failedTemplate:
+          errorPattern: 'logfire-ff-cache-byte is no longer a values block'
+
   # --- autoscaling ---
   - it: rejects enabling both HPA and KEDA
     set:

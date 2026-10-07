@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.13.48-rc.11](https://img.shields.io/badge/Version-0.13.48--rc.11-informational?style=flat-square) ![AppVersion: ed13e35a](https://img.shields.io/badge/AppVersion-ed13e35a-informational?style=flat-square)
+![Version: 0.14.0](https://img.shields.io/badge/Version-0.14.0-informational?style=flat-square) ![AppVersion: ed13e35a](https://img.shields.io/badge/AppVersion-ed13e35a-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -504,10 +504,16 @@ Volume ownership follows that non-root default. `logfire-ff-ingest` uses
 left root-owned. The other Fusionfire and bcache workloads keep `OnRootMismatch`, because their
 scratch volumes are fresh when the pod starts.
 
-The images this chart takes from other projects (Redis, Dex, RustFS, MailDev, the OTel collector,
-and the `check-db-ready` and in-cluster TLS wait containers) default to the same controls with
-their own verified identities. Override the chart-wide `securityContext` or a per-workload
+The images this chart takes from other projects (Dex, RustFS, MailDev, the OTel collector, and
+the `check-db-ready` and in-cluster TLS wait containers) default to the same controls with their
+own verified identities. Override the chart-wide `securityContext` or a per-workload
 `<workload>.securityContext` when your cluster needs a different identity.
+
+The bundled Redis is the exception for now. It keeps the chart-wide `securityContext`, so a
+`restricted` namespace rejects it unless you set `logfire-redis.securityContext`. Hardening it
+changes its pod template, which replaces the pod, and a Fusionfire workload that starts during
+that window exits because it cannot reach Redis. It takes the same defaults once that startup
+behaviour is fixed.
 
 ### Istio Compatibility
 
@@ -672,9 +678,12 @@ Before diving deeper, verify these common configuration issues:
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-bcache | object | `{"disk":{},"pdb":{},"replicas":3}` | Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use |
+| logfire-ff-bcache | object | `{"disk":{},"pdb":{},"replicas":3,"topology":{"zone":"","zoneAware":false}}` | Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use |
 | logfire-ff-bcache.disk | object | `{}` | Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it. A StatefulSet cannot change its volumeClaimTemplates, so a later change to storage fails `helm upgrade`. To resize, expand the existing `bcache-data-*` PVCs if the storage class allows it, or delete the StatefulSet with `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade. Unset `disk.storage` takes the sizing preset's size, or 32Gi without a preset. |
 | logfire-ff-bcache.replicas | int | `3` | Number of bcache replicas when autoscaling is not configured. |
+| logfire-ff-bcache.topology | object | `{"zone":"","zoneAware":false}` | Topology routing for the readers that use this cache. Zone routing is off by default. |
+| logfire-ff-bcache.topology.zone | string | `""` | Static topology zone, for tests and for single-zone clusters whose nodes carry no zone label. Every pod gets this zone, so it must match the zone the pods run in. It does not serve a multi-zone cluster that refuses node-read RBAC: leave `zoneAware` off there and take global routing instead. Takes precedence over `zoneAware`, and then no cluster role is created. |
+| logfire-ff-bcache.topology.zoneAware | bool | `false` | Route reads to cache pods in this pod's topology zone. The reader resolves the zone from its own node label at startup, so this needs a cluster-wide `nodes` `get` role, and every zone must run a cache pod or reads in the other zones get no caching at all. |
 | logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn,otel::tracing=info"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |

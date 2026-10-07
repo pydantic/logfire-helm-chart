@@ -8,7 +8,15 @@
 {{- $disk := get $effectiveServiceValues "disk" | default dict -}}
 {{- $diskStorage := get $disk "storage" | default "32Gi" -}}
 {{- $diskMi := int (include "logfire.storageQuantityToMi" $diskStorage) -}}
-{{- $grace := 35 -}}
+{{- $readinessDelaySeconds := 10 -}}
+{{- $shutdownTimeoutSeconds := 25 -}}
+{{- $tierDrainTimeoutSeconds := 5 -}}
+{{/*
+The pod needs its three shutdown phases plus an exit margin before SIGKILL arrives. A shorter
+grace period cuts the tier drain short and leaves the disk tier unclean, so derive it from the
+timeouts below instead of holding a second copy of the numbers.
+*/}}
+{{- $grace := add (add (add $readinessDelaySeconds $shutdownTimeoutSeconds) $tierDrainTimeoutSeconds) 5 -}}
 {{- $selector := dict "matchLabels" (dict "app.kubernetes.io/component" $serviceName) -}}
 {{- $defaultTopologySpreadConstraints := list
   (dict "maxSkew" 1 "topologyKey" "topology.kubernetes.io/zone" "whenUnsatisfiable" "ScheduleAnyway" "labelSelector" $selector)
@@ -54,6 +62,9 @@ spec:
     rollingUpdate:
       maxUnavailable: 25%
   persistentVolumeClaimRetentionPolicy:
+    # The cache is regenerable, and a claim kept across a replacement would hold its old storage
+    # class and size because `volumeClaimTemplates` is immutable. Releasing both keeps the cache on
+    # whatever the values say.
     whenDeleted: Delete
     # A scaled-in pod can stay away for hours. Its disk would come back with
     # blocks of objects that were deleted meanwhile, so the claim goes with it.
@@ -110,11 +121,11 @@ spec:
             - name: FF_BCACHE_DISK_CAPACITY
               value: {{ printf "%dMB" (max 1 (div (mul $diskMi 4) 5)) | quote }}
             - name: FF_BCACHE_READINESS_DELAY
-              value: "10s"
+              value: {{ printf "%ds" $readinessDelaySeconds | quote }}
             - name: FF_BCACHE_SHUTDOWN_TIMEOUT
-              value: "25s"
+              value: {{ printf "%ds" $shutdownTimeoutSeconds | quote }}
             - name: FF_BCACHE_TIER_DRAIN_TIMEOUT
-              value: "5s"
+              value: {{ printf "%ds" $tierDrainTimeoutSeconds | quote }}
             {{- if $tls }}
             - name: FF_TLS_MODE
               value: require
