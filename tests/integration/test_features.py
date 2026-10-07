@@ -249,7 +249,7 @@ async def test_managed_variable_serves_over_v1_and_ofrep(
     assert evaluated.is_success, evaluated.text
     body = evaluated.json()
     assert body["key"] == name, body
-    assert body.get("value") is not None, body
+    assert body["value"] is True, body
 
 
 async def test_sql_tooling(

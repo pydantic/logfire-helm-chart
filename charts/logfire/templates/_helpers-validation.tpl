@@ -123,29 +123,28 @@ Validate AI configuration consistency - if model is set, required provider confi
       {{- else if not (get $vertexAi "region") -}}
         {{- fail (printf "ai.vertexAi.region is required when %s contains regional Google Cloud model '%s'." $name $fallback) -}}
       {{- end -}}
-    {{- end -}}
-  {{- end -}}
-  {{- if or (hasPrefix "openai:" $model) (hasPrefix "openai-chat:" $model) (hasPrefix "openai-responses:" $model) -}}
-    {{- if not (get $openAi "apiKey") -}}
-      {{- fail (printf "ai.openAi.apiKey is required when %s uses OpenAI model '%s'. Provide your OpenAI API key." $name $model) -}}
-    {{- end -}}
-  {{- else if hasPrefix "azure:" $model -}}
-    {{- if not (get $azureOpenAi "endpoint") -}}
-      {{- fail (printf "ai.azureOpenAi.endpoint is required when %s uses Azure OpenAI model '%s'." $name $model) -}}
-    {{- end -}}
-    {{- if not (get $azureOpenAi "apiKey") -}}
-      {{- fail (printf "ai.azureOpenAi.apiKey is required when %s uses Azure OpenAI model '%s'." $name $model) -}}
-    {{- end -}}
-  {{- else if hasPrefix "google-vertex:" $model -}}
-    {{- if not (get $vertexAi "region") -}}
-      {{- fail (printf "ai.vertexAi.region is required when %s uses Google Vertex AI model '%s'." $name $model) -}}
-    {{- end -}}
-  {{- else if hasPrefix "anthropic-vertex:" $model -}}
-    {{- if not (get $vertexAi "region") -}}
-      {{- fail (printf "ai.vertexAi.region is required when %s uses Anthropic Vertex model '%s'." $name $model) -}}
-    {{- end -}}
-    {{- if not (get $vertexAi "anthropicProjectId") -}}
-      {{- fail (printf "ai.vertexAi.anthropicProjectId is required when %s uses Anthropic Vertex model '%s'." $name $model) -}}
+    {{- else if or (hasPrefix "openai:" $fallback) (hasPrefix "openai-chat:" $fallback) (hasPrefix "openai-responses:" $fallback) -}}
+      {{- if not (get $openAi "apiKey") -}}
+        {{- fail (printf "ai.openAi.apiKey is required when %s uses OpenAI model '%s'. Provide your OpenAI API key." $name $fallback) -}}
+      {{- end -}}
+    {{- else if hasPrefix "azure:" $fallback -}}
+      {{- if not (get $azureOpenAi "endpoint") -}}
+        {{- fail (printf "ai.azureOpenAi.endpoint is required when %s uses Azure OpenAI model '%s'." $name $fallback) -}}
+      {{- end -}}
+      {{- if not (get $azureOpenAi "apiKey") -}}
+        {{- fail (printf "ai.azureOpenAi.apiKey is required when %s uses Azure OpenAI model '%s'." $name $fallback) -}}
+      {{- end -}}
+    {{- else if hasPrefix "google-vertex:" $fallback -}}
+      {{- if not (get $vertexAi "region") -}}
+        {{- fail (printf "ai.vertexAi.region is required when %s uses Google Vertex AI model '%s'." $name $fallback) -}}
+      {{- end -}}
+    {{- else if hasPrefix "anthropic-vertex:" $fallback -}}
+      {{- if not (get $vertexAi "region") -}}
+        {{- fail (printf "ai.vertexAi.region is required when %s uses Anthropic Vertex model '%s'." $name $fallback) -}}
+      {{- end -}}
+      {{- if not (get $vertexAi "anthropicProjectId") -}}
+        {{- fail (printf "ai.vertexAi.anthropicProjectId is required when %s uses Anthropic Vertex model '%s'." $name $fallback) -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

@@ -144,11 +144,14 @@ Only sizing and portable availability keys are inherited from presets.
 {{- end -}}
 
 {{/*
-Render spec.replicas only when autoscaling is not configured for the workload.
+Render spec.replicas only when no autoscaler is enabled for the workload.
 */}}
 {{- define "logfire.replicas" -}}
 {{- $serviceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- if not (hasKey $serviceValues "autoscaling") -}}
+{{- $autoscaling := get $serviceValues "autoscaling" | default dict -}}
+{{- $hpaEnabled := include "logfire.hpa.enabled" $autoscaling | eq "true" -}}
+{{- $kedaEnabled := include "logfire.keda.enabled" $autoscaling | eq "true" -}}
+{{- if not (or $hpaEnabled $kedaEnabled) -}}
 replicas: {{ dig "replicas" "1" $serviceValues }}
 {{- end -}}
 {{- end -}}
@@ -874,7 +877,7 @@ Create dex config secret name
 Create dex configuration secret, merging backend static clients with user provided storage and oauth connectors.
 */}}
 {{- define "logfire.dexConfig" -}}
-{{- $dexConfig := dig "config" dict (index .Values "logfire-dex" | default dict) -}}
+{{- $dexConfig := dig "config" dict (index .Values "logfire-dex" | default dict) | deepCopy -}}
 {{- $staticClients := list -}}
 {{- $logfireFrontend := (include "logfire.url" .) -}}
 {{- $logfireUrls := include "logfire.all_urls" . | splitList " " }}
