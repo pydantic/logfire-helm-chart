@@ -1071,8 +1071,11 @@ logfire-ff-bcache:
     # its own node label at startup, so this needs a cluster-wide `nodes` `get` role, and every
     # zone must run a cache pod or reads in the other zones get no caching at all.
     zoneAware: false
-    # -- Static topology zone, for tests and for clusters that will not grant node-read RBAC.
-    # Takes precedence over `zoneAware`, and then no cluster role is created.
+    # -- Static topology zone, for tests and for single-zone clusters whose nodes carry no zone
+    # label. Every pod gets this zone, so it must match the zone the pods run in. It does not
+    # serve a multi-zone cluster that refuses node-read RBAC: leave `zoneAware` off there and
+    # take global routing instead. Takes precedence over `zoneAware`, and then no cluster role
+    # is created.
     zone: ""
 
 
