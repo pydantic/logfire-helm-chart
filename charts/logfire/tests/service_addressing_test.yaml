@@ -492,6 +492,189 @@ tests:
           path: metadata.name
           value: logfire-ff-bcache-internal
 
+  - it: gives bcache enough grace period to finish draining its disk tier
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # `/health` answers 503 for the whole shutdown, so the pod must outlive the
+      # readiness delay, shutdown timeout and tier drain plus an exit margin.
+      # SIGKILL mid-drain leaves the disk tier unclean.
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 45
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_READINESS_DELAY
+            value: "10s"
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_SHUTDOWN_TIMEOUT
+            value: "25s"
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_TIER_DRAIN_TIMEOUT
+            value: "5s"
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: releases the bcache disk tier with its StatefulSet
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # A claim kept across a replacement would hold its old storage class and
+      # size, because `volumeClaimTemplates` is immutable. The cache regenerates.
+      - equal:
+          path: spec.persistentVolumeClaimRetentionPolicy.whenDeleted
+          value: Delete
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: sizes the bcache disk from disk.storage rather than scratchVolume
+    set:
+      logfire-ff-bcache:
+        scratchVolume:
+          storage: 128Gi
+        disk:
+          storage: 4Gi
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # The sizing presets once named `scratchVolume`, which the template never
+      # reads, so the preset size was silently dropped in favour of the default.
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          value: 4Gi
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: places the bcache disk on the chart-wide default storage class
+    set:
+      defaultStorageClassName: slow-ssd
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # A claim with no storage class lands on the cluster default, which may not
+      # exist. Pin the class the operator asked for.
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.storageClassName
+          value: slow-ssd
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: lets the bcache disk name its own storage class over the default
+    set:
+      defaultStorageClassName: slow-ssd
+      logfire-ff-bcache:
+        disk:
+          storageClassName: fast-ssd
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.storageClassName
+          value: fast-ssd
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: keeps the readers zoneless by default
+    set:
+      dev:
+        deployPostgres: false
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-cache-routing-rbac.yaml
+    asserts:
+      # Zoneless routing is right for a single-zone cluster, and the zone lookup needs a
+      # cluster-wide `nodes` `get` role that nobody should get by default.
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_NODE_NAME
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_ZONE
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: opts the readers into zone routing with the node-read cluster role
+    set:
+      dev:
+        deployPostgres: false
+      logfire-ff-bcache:
+        topology:
+          zoneAware: true
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-cache-routing-rbac.yaml
+    asserts:
+      # FF_NODE_NAME makes the reader read its own node's topology label at startup.
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - containsDocument:
+          kind: ClusterRole
+          apiVersion: rbac.authorization.k8s.io/v1
+          any: true
+        template: templates/logfire-ff-cache-routing-rbac.yaml
+
+  - it: takes a static zone without granting the node-read cluster role
+    set:
+      dev:
+        deployPostgres: false
+      logfire-ff-bcache:
+        topology:
+          zoneAware: true
+          zone: eu
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-cache-routing-rbac.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_ZONE
+            value: eu
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      # The Role and RoleBinding for endpoint discovery only. No cluster role.
+      - hasDocuments:
+          count: 2
+        template: templates/logfire-ff-cache-routing-rbac.yaml
+
   - it: keeps query stability aligned with the ingest visibility budget
     templates:
       - templates/logfire-ff-config.yaml

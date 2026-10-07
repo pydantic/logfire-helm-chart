@@ -36,6 +36,21 @@ one-toggle-one-assert presence checks. They restate the template, churn on every
 refactor, and a real install plus the integration suite already catches what
 matters there.
 
+## Writing the tests that stay
+
+Two conventions keep the remaining suites stable and deterministic:
+
+- **Match validation messages with `errorPattern`, never an exact
+  `errorMessage`.** Pin the stable instruction fragment of the message, not the
+  quoted values or indexes around it. Exact pins broke en masse when the MinIO
+  rename reworded six messages at once.
+- **Leave `failedTemplate` asserts unscoped when the guard runs from more than
+  one template.** A render surfaces the error of whichever template fails
+  first, so a template-scoped assert passes or fails by luck when a shared
+  guard (e.g. in `_helpers-validation.tpl`) is included from several templates.
+  Unscoped means "the chart must fail with this message" and is deterministic.
+  Scope with `templates:` only when the guard lives in exactly that template.
+
 When deleting or rewriting a suite here, check first whether its scenario is
 already exercised by `tests/integration/` — if not, port it there rather than
 losing it.

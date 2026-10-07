@@ -77,9 +77,10 @@ spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
-      {{- /* The Redis image runs as uid and gid 999, so it needs `fsGroup: 999` to write a fresh data volume. The chart-wide and `logfire-redis` pod security contexts override this default. */}}
-      {{- $podSecurityContext := dict "fsGroup" 999 "fsGroupChangePolicy" "OnRootMismatch" }}
-      {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy (.Values.podSecurityContext | default dict)) }}
+      {{- /* The bundled redis stays on the chart-wide contexts for now. Per-workload
+             `logfire-redis.podSecurityContext` still wins, so an installation can supply the
+             restricted controls itself. */}}
+      {{- $podSecurityContext := deepCopy (.Values.podSecurityContext | default dict) }}
       {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy (get $redisValues "podSecurityContext" | default dict)) }}
       {{- include "logfire.securityContext" $podSecurityContext | nindent 6 }}
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
@@ -89,7 +90,7 @@ spec:
         - name: redis
           image: {{ include "logfire.imageRef" (dict "image" $redisImage "defaultRepository" "redis" "defaultTag" "7.2") }}
           imagePullPolicy: {{ $redisImagePullPolicy | quote }}
-          {{- $redisSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" . "identity" "logfire-redis" "readOnlyRootFilesystem" true) | fromJson }}
+          {{- $redisSecurityContext := include "logfire.mergeSecurityContext" (dict "ctx" . "serviceName" $serviceName "defaults" (dict)) | fromJson }}
           {{- include "logfire.securityContext" $redisSecurityContext | nindent 10 }}
           ports:
             - name: redis

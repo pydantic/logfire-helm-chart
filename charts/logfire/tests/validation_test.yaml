@@ -279,11 +279,9 @@ tests:
         chatModel: "google-cloud:gemini-3.5-flash, openai-chat:gpt-4o"
         vertexAi:
           multiRegionLocation: eu
-    templates:
-      - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "ai.openAi.apiKey is required when ai.chatModel uses OpenAI model 'openai-chat:gpt-4o'. Provide your OpenAI API key."
+          errorPattern: 'ai\.openAi\.apiKey is required when ai\.chatModel uses OpenAI model'
 
   - it: requires the Azure endpoint for a secondary fallback
     set:
@@ -291,8 +289,6 @@ tests:
         model: "openai:gpt-4o, azure:gpt-4o"
         openAi:
           apiKey: test
-    templates:
-      - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
           errorPattern: 'ai\.azureOpenAi\.endpoint is required'
@@ -305,8 +301,6 @@ tests:
           apiKey: test
         azureOpenAi:
           endpoint: https://example.openai.azure.com
-    templates:
-      - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
           errorPattern: 'ai\.azureOpenAi\.apiKey is required'
@@ -317,8 +311,6 @@ tests:
         reasoningModel: "openai:gpt-4o, google-vertex:gemini-2.5-flash"
         openAi:
           apiKey: test
-    templates:
-      - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
           errorPattern: 'ai\.vertexAi\.region is required'
@@ -331,8 +323,6 @@ tests:
           apiKey: test
         vertexAi:
           region: europe-west4
-    templates:
-      - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
           errorPattern: 'ai\.vertexAi\.anthropicProjectId is required'
@@ -490,6 +480,17 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: 'scratchVolume\.storage is required'
+
+  # --- removed values blocks ---
+  - it: names the move when the v1 byte cache values block is still set
+    set:
+      logfire-ff-cache-byte:
+        clientSideRouting:
+          zoneAware: true
+    asserts:
+      # The key is ignored otherwise, so zone routing would silently turn off.
+      - failedTemplate:
+          errorPattern: 'logfire-ff-cache-byte is no longer a values block'
 
   # --- autoscaling ---
   - it: rejects enabling both HPA and KEDA

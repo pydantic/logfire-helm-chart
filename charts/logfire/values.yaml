@@ -1065,6 +1065,18 @@ logfire-ff-bcache:
   disk: {}
   #  storage: 32Gi
   #  storageClassName: my-storage-class
+  # -- Topology routing for the readers that use this cache. Zone routing is off by default.
+  topology:
+    # -- Route reads to cache pods in this pod's topology zone. The reader resolves the zone from
+    # its own node label at startup, so this needs a cluster-wide `nodes` `get` role, and every
+    # zone must run a cache pod or reads in the other zones get no caching at all.
+    zoneAware: false
+    # -- Static topology zone, for tests and for single-zone clusters whose nodes carry no zone
+    # label. Every pod gets this zone, so it must match the zone the pods run in. It does not
+    # serve a multi-zone cluster that refuses node-read RBAC: leave `zoneAware` off there and
+    # take global routing instead. Takes precedence over `zoneAware`, and then no cluster role
+    # is created.
+    zone: ""
 
 
 # -- Maintenance worker
@@ -2213,7 +2225,7 @@ sizingPresets:
         maxReplicas: 24
         hpa:
           enabled: true
-          cpuAverage: 25
+          cpuAverage: 50
     logfire-ff-maintenance-worker:
       resources:
         requests:
@@ -2582,7 +2594,7 @@ sizingPresets:
         maxReplicas: 24
         hpa:
           enabled: true
-          cpuAverage: 25
+          cpuAverage: 50
           # Byte-cache replicas are expensive and safe to drain gradually once
           # a burst has passed, so do not retain peak capacity for 15 minutes.
           behavior: &byteCacheHpaBehavior
@@ -3041,9 +3053,9 @@ sizingPresets:
         maxReplicas: 24
         hpa:
           enabled: true
-          cpuAverage: 25
+          cpuAverage: 50
           behavior: *byteCacheHpaBehavior
-      scratchVolume:
+      disk:
         storage: 32Gi
       pdb:
         minAvailable: 2
