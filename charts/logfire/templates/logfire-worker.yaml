@@ -35,7 +35,7 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
     spec:
-      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName "podSecurityContext" (include "logfire.scheduledQueryResultsPodSecurityContext" . | fromJson)) | nindent 6 }}
+      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       terminationGracePeriodSeconds: 60
       containers:
         - name: {{ $serviceName }}
@@ -109,7 +109,6 @@ spec:
               value: http://logfire-otel-collector:4317
             - name: ON_PREM
               value: "true"
-            {{- include "logfire.scheduledQueryResultsEnv" . | nindent 12 }}
             - name: EMAILS_ENABLED
               value: {{ include "logfire.emailsEnabled" . | quote }}
             - name: FRONTEND_HOST
@@ -168,11 +167,9 @@ spec:
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
             {{- include "logfire.logfireDataVolumeMounts" . | nindent 12 }}
-            {{- include "logfire.scheduledQueryResultsVolumeMounts" . | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
             {{- include "logfire.smtp.caBundle.volumeMount" . | nindent 12 }}
       volumes:
-        {{- include "logfire.scheduledQueryResultsVolumes" . | nindent 8 }}
         {{- include "logfire.tmpVolume" . | nindent 8 }}
         {{- include "logfire.logfireDataVolume" . | nindent 8 }}
         {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}

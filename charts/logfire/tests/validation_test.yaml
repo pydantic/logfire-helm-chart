@@ -105,9 +105,8 @@ tests:
       - failedTemplate:
           errorMessage: "objectStore.volumes[0].name 'tmp' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, scratch-data, ingest-data."
 
-  - it: accepts a Fusionfire-only object-store volume named logfire-data
+  - it: accepts an objectStore.volumes entry named logfire-data
     set:
-      scheduledQueryResults.uri: gs://results
       objectStore:
         volumes:
           - name: logfire-data
@@ -129,9 +128,8 @@ tests:
       - failedTemplate:
           errorMessage: "objectStore.volumeMounts[0].mountPath '/tmp' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /scratch, /fusionfire/ingest-data."
 
-  - it: accepts a Fusionfire-only object-store mount at /var/lib/logfire
+  - it: accepts an objectStore.volumeMounts entry at /var/lib/logfire
     set:
-      scheduledQueryResults.uri: gs://results
       objectStore:
         volumeMounts:
           - name: credentials
@@ -192,7 +190,6 @@ tests:
 
   - it: accepts in-cluster TLS volume names when in-cluster TLS is disabled
     set:
-      scheduledQueryResults.uri: gs://results
       objectStore:
         volumes:
           - name: logfire-incluster-tls

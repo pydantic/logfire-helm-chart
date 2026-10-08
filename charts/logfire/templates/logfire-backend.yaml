@@ -98,7 +98,7 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
     spec:
-      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName "podSecurityContext" (include "logfire.scheduledQueryResultsPodSecurityContext" . | fromJson)) | nindent 6 }}
+      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       containers:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
@@ -184,7 +184,6 @@ spec:
                   key: logfire-dex-client-secret
             - name: ON_PREM
               value: "true"
-            {{- include "logfire.scheduledQueryResultsEnv" . | nindent 12 }}
             - name: BROWSER_TELEMETRY_COLLECTOR_OTLP_HTTP_HOST
               value: http://logfire-otel-collector:4318
             - name: COLLECTOR_OTLP_GRPC_HOST
@@ -311,11 +310,9 @@ spec:
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
             {{- include "logfire.logfireDataVolumeMounts" . | nindent 12 }}
-            {{- include "logfire.scheduledQueryResultsVolumeMounts" . | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
             {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
       volumes:
-        {{- include "logfire.scheduledQueryResultsVolumes" . | nindent 8 }}
         {{- include "logfire.tmpVolume" . | nindent 8 }}
         {{- include "logfire.logfireDataVolume" . | nindent 8 }}
         {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}

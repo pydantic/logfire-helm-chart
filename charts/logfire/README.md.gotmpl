@@ -172,7 +172,6 @@ Before installing in production, confirm that you have:
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
 * StorageClass behavior chosen for chart-managed PVCs: use the cluster default, or set `defaultStorageClassName` in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
-* Read, write, list, and delete access to scheduled-query result objects in the configured object store.
 
 Install with your production values file:
 
@@ -449,41 +448,6 @@ existing replicas while one replacement starts, and allow 60 seconds for shutdow
 shutdown budget is finite and does not guarantee that a blocked queue drains.
 
 ## Advanced Configuration
-
-### Scheduled Query Results
-
-Scheduled queries write Parquet results that the backend serves as Parquet or CSV downloads.
-By default, the backend and worker reuse `objectStore.uri`, `objectStore.env`, and the
-object-store credential volumes and mounts. No additional PVC or StorageClass is required.
-Results use the `scheduled-query-results/` key prefix under the configured store root.
-The identity needs read, write, list, and delete access to that prefix. Let the application
-clean up this prefix. Avoid bucket lifecycle expiry that deletes results earlier, including
-the last ten runs retained for each query.
-
-To use a separate GCS, S3, or Azure store, set `scheduledQueryResults.uri` and provide its
-credentials with `scheduledQueryResults.env`, `volumes`, and `volumeMounts`. An explicit URI
-uses those dedicated credentials instead of inheriting `objectStore` credentials.
-Use this option when the backend and worker should have access only to query results.
-
-A shared filesystem is optional:
-
-```yaml
-scheduledQueryResults:
-  persistence:
-    enabled: true
-    storageClass: shared-rwx
-    storage: 10Gi
-```
-
-Alternatively, set `scheduledQueryResults.persistence.existingClaim` to an existing shared
-claim in the release namespace. The chart adds `fsGroup: 1000` to the backend and worker
-unless `podSecurityContext.fsGroup` overrides it. The directory must be writable by that group.
-Use `ReadWriteMany` for pods on different nodes. `ReadWriteOnce` is suitable only for a
-single-node cluster. Do not set a results URI together with persistence.
-
-Earlier per-pod results are not migrated. Helm retains a chart-managed results PVC on
-uninstall or when switching to object storage. Delete it manually after copying results
-you need. Changing a bound claim's access modes or StorageClass requires a new claim and a data copy.
 
 ### External Secrets and Automatic Reloads
 

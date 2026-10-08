@@ -171,7 +171,6 @@ Before installing in production, confirm that you have:
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
 * StorageClass behavior chosen for chart-managed PVCs: use the cluster default, or set `defaultStorageClassName` in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
-* Read, write, list, and delete access to scheduled-query result objects in the configured object store.
 
 Install with your production values file:
 
@@ -448,41 +447,6 @@ existing replicas while one replacement starts, and allow 60 seconds for shutdow
 shutdown budget is finite and does not guarantee that a blocked queue drains.
 
 ## Advanced Configuration
-
-### Scheduled Query Results
-
-Scheduled queries write Parquet results that the backend serves as Parquet or CSV downloads.
-By default, the backend and worker reuse `objectStore.uri`, `objectStore.env`, and the
-object-store credential volumes and mounts. No additional PVC or StorageClass is required.
-Results use the `scheduled-query-results/` key prefix under the configured store root.
-The identity needs read, write, list, and delete access to that prefix. Let the application
-clean up this prefix. Avoid bucket lifecycle expiry that deletes results earlier, including
-the last ten runs retained for each query.
-
-To use a separate GCS, S3, or Azure store, set `scheduledQueryResults.uri` and provide its
-credentials with `scheduledQueryResults.env`, `volumes`, and `volumeMounts`. An explicit URI
-uses those dedicated credentials instead of inheriting `objectStore` credentials.
-Use this option when the backend and worker should have access only to query results.
-
-A shared filesystem is optional:
-
-```yaml
-scheduledQueryResults:
-  persistence:
-    enabled: true
-    storageClass: shared-rwx
-    storage: 10Gi
-```
-
-Alternatively, set `scheduledQueryResults.persistence.existingClaim` to an existing shared
-claim in the release namespace. The chart adds `fsGroup: 1000` to the backend and worker
-unless `podSecurityContext.fsGroup` overrides it. The directory must be writable by that group.
-Use `ReadWriteMany` for pods on different nodes. `ReadWriteOnce` is suitable only for a
-single-node cluster. Do not set a results URI together with persistence.
-
-Earlier per-pod results are not migrated. Helm retains a chart-managed results PVC on
-uninstall or when switching to object storage. Delete it manually after copying results
-you need. Changing a bound claim's access modes or StorageClass requires a new claim and a data copy.
 
 ### External Secrets and Automatic Reloads
 
@@ -820,16 +784,6 @@ Before diving deeper, verify these common configuration issues:
 | rustfs.podSecurityContext | object | `{}` | Pod SecurityContext for the RustFS pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 10001`. |
 | rustfs.resources | object | `{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}}` | Resource requests and limits for the RustFS container |
 | rustfs.securityContext | object | `{}` | Container SecurityContext for the RustFS container. Merged over the chart-wide `securityContext` and the image defaults: uid and gid 10001, all capabilities dropped, no privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root with the `/data` and `/logs` emptyDirs writable. |
-| scheduledQueryResults | object | `{"env":{},"persistence":{"accessModes":["ReadWriteMany"],"enabled":false,"existingClaim":"","storage":"10Gi","storageClass":""},"uri":"","volumeMounts":[],"volumes":[]}` | Shared results storage for scheduled queries. The backend downloads files written by the worker. |
-| scheduledQueryResults.env | object | `{}` | Credentials environment variables supplied to both the backend and worker. Values can use valueFrom.secretKeyRef. |
-| scheduledQueryResults.persistence.accessModes | list | `["ReadWriteMany"]` | Access modes of the created claim. ReadWriteOnce is suitable only when every backend and worker pod runs on one node. |
-| scheduledQueryResults.persistence.enabled | bool | `false` | Use a shared results PVC instead of the existing object store. |
-| scheduledQueryResults.persistence.existingClaim | string | `""` | An existing shared claim. When persistence is enabled, empty creates a claim retained on uninstall. |
-| scheduledQueryResults.persistence.storage | string | `"10Gi"` | Size of the created shared claim. |
-| scheduledQueryResults.persistence.storageClass | string | `""` | StorageClass of the created claim. Empty uses the cluster default; use a class that supports ReadWriteMany on multi-node clusters. |
-| scheduledQueryResults.uri | string | `""` | A GCS, S3, or Azure URI with optional prefix. Empty reuses objectStore.uri and its credentials and mounts, unless persistence is enabled. |
-| scheduledQueryResults.volumeMounts | list | `[]` | Mounts for the additional credential volumes. |
-| scheduledQueryResults.volumes | list | `[]` | Additional volumes for credentials, supplied to both consumers. |
 | securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details Chart-owned containers (the Python, Fusionfire, gateway, and frontend images) and HAProxy merge this context over chart defaults: the image's verified identity, `allowPrivilegeEscalation: false`, all capabilities dropped, the `RuntimeDefault` seccomp profile, and a read-only root. The bundled third-party containers (Redis, Dex, RustFS, MailDev, and the OTel collector) merge it over the same portable controls with their own verified identities. A per-workload `<workload>.securityContext` merges over both layers, for example `logfire-backend.securityContext` or `logfire-dex.securityContext`. Set a field to `null` to clear it, for example `runAsUser: null` for OpenShift, or set `readOnlyRootFilesystem: false` to restore a writable root. |
 | serviceAccount | object | `{"annotations":{},"create":false,"name":""}` | ServiceAccount configuration |
 | serviceAccount.annotations | object | `{}` | Annotations to add to the ServiceAccount (e.g., for IAM roles) Example for AWS IRSA:   annotations:     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/my-role Example for GCP Workload Identity:   annotations:     iam.gke.io/gcp-service-account: my-sa@my-project.iam.gserviceaccount.com |

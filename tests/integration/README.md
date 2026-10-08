@@ -33,8 +33,6 @@ To run HTTP tests against an existing installation, set `LOGFIRE_BASE_URL`,
 uv run --directory tests/integration pytest -v
 ```
 
-Set `LOGFIRE_TEST_NAMESPACE` and, optionally, `LOGFIRE_TEST_KUBE_CONTEXT` to include pod
-replacement and stored-file checks against Kind. CI requires the namespace to be set.
 `LOGFIRE_PUBLIC_HOST` and `LOGFIRE_PUBLIC_URL` must match a customized public hostname
 and URL when exercising MCP and problem responses.
 
@@ -45,22 +43,13 @@ The release checks cover:
 | Stable upgrade | An exact trace remains queryable after migrations and rollouts |
 | SQL format | Dialect-specific output and invalid syntax on combined and split query modes |
 | Remote MCP | Authentication, initialization, tool discovery, and a literal query result |
-| Scheduled queries | Real cron execution, literal CSV/Parquet results, downloads after backend/worker replacement, and deletion of result objects |
-| Worker shutdown budget | Deployed grace period accommodates the worker's documented drain budget |
 | OTLP errors | Invalid-token errors decode as JSON and protobuf for all three signals |
 | Query errors | v1/v2 legacy and problem-response negotiation, including the public error URL |
 | Variable SSE | An immediate first frame reaches the client through the service |
 | Metric storage | An ingested counter is queried through its value struct |
 
-Kind uses the existing RustFS S3 bucket and credentials for results. It proves writes,
-downloads across pod restarts, and object cleanup without an additional results PVC.
-Helm tests check shared URI, S3/GCS/Azure credentials and mounts, SSE-C, and optional PVCs.
-The suite does not test live cloud IAM or a multi-node RWX driver. The shutdown budget
-check does not claim every possible long-running job can finish within that budget. The
-metric fixture uses a numeric JSON int: the pinned platform decoder drops string-valued
+Kind uses RustFS for the existing telemetry object store. The suite does not test live
+cloud IAM. Scheduled-query storage remains a follow-up while Reports is experimental.
+The metric fixture uses a numeric JSON int: the pinned platform decoder drops string-valued
 `asInt` points, including canonical OTLP JSON int64 strings. That compatibility defect
 also exists in 0.14.0 and needs an upstream fix.
-
-To test an app image before publication, set `LOGFIRE_TEST_RC_VALUES` to a values file
-with the RC image overrides. The stable baseline keeps its published image and configuration.
-Do not use local image overrides as evidence that the chart's configured published image passes.

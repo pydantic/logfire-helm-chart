@@ -299,33 +299,6 @@ postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
 
 
 # ==============================================================================
-# Scheduled Query Results
-# ==============================================================================
-
-# -- Shared results storage for scheduled queries. The backend downloads files written by the worker.
-scheduledQueryResults:
-  # -- A GCS, S3, or Azure URI with optional prefix. Empty reuses objectStore.uri and its credentials and mounts, unless persistence is enabled.
-  uri: ""
-  # -- Credentials environment variables supplied to both the backend and worker. Values can use valueFrom.secretKeyRef.
-  env: {}
-  # -- Additional volumes for credentials, supplied to both consumers.
-  volumes: []
-  # -- Mounts for the additional credential volumes.
-  volumeMounts: []
-  persistence:
-    # -- Use a shared results PVC instead of the existing object store.
-    enabled: false
-    # -- An existing shared claim. When persistence is enabled, empty creates a claim retained on uninstall.
-    existingClaim: ""
-    # -- Size of the created shared claim.
-    storage: 10Gi
-    # -- StorageClass of the created claim. Empty uses the cluster default; use a class that supports ReadWriteMany on multi-node clusters.
-    storageClass: ""
-    # -- Access modes of the created claim. ReadWriteOnce is suitable only when every backend and worker pod runs on one node.
-    accessModes:
-      - ReadWriteMany
-
-# ==============================================================================
 # SMTP
 # ==============================================================================
 
