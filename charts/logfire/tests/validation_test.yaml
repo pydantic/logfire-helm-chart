@@ -273,6 +273,77 @@ tests:
       - failedTemplate:
           errorPattern: 'ai\.openAi\.apiKey is required'
 
+  - it: requires an OpenAI API key for a secondary fallback
+    set:
+      ai:
+        chatModel: "google-cloud:gemini-3.5-flash, openai-chat:gpt-4o"
+        vertexAi:
+          multiRegionLocation: eu
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.openAi\.apiKey is required when ai\.chatModel uses OpenAI model'
+
+  - it: requires the Azure endpoint for a secondary fallback
+    set:
+      ai:
+        model: "openai:gpt-4o, azure:gpt-4o"
+        openAi:
+          apiKey: test
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.azureOpenAi\.endpoint is required'
+
+  - it: requires the Azure API key for a secondary fallback
+    set:
+      ai:
+        model: "openai:gpt-4o, azure:gpt-4o"
+        openAi:
+          apiKey: test
+        azureOpenAi:
+          endpoint: https://example.openai.azure.com
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.azureOpenAi\.apiKey is required'
+
+  - it: requires a region for a secondary Google Vertex fallback
+    set:
+      ai:
+        reasoningModel: "openai:gpt-4o, google-vertex:gemini-2.5-flash"
+        openAi:
+          apiKey: test
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.vertexAi\.region is required'
+
+  - it: requires a project id for a secondary Anthropic Vertex fallback
+    set:
+      ai:
+        llmJudgeModel: "openai:gpt-4o, anthropic-vertex:claude-sonnet-4"
+        openAi:
+          apiKey: test
+        vertexAi:
+          region: europe-west4
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.vertexAi\.anthropicProjectId is required'
+
+  - it: accepts a cross-provider fallback chain with provider configuration
+    set:
+      ai:
+        model: "openai:gpt-4o, azure:gpt-4o, google-vertex:gemini-2.5-flash, anthropic-vertex:claude-sonnet-4"
+        openAi:
+          apiKey: test
+        azureOpenAi:
+          endpoint: https://example.openai.azure.com
+          apiKey: test
+        vertexAi:
+          region: europe-west4
+          anthropicProjectId: test-project
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notFailedTemplate: {}
+
   - it: requires the Azure OpenAI endpoint
     set:
       ai:

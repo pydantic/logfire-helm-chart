@@ -66,7 +66,8 @@ def metric_payload(service_name: str) -> dict:
                                     "aggregationTemporality": 2,
                                     "dataPoints": [
                                         {
-                                            "asInt": "1",
+                                            # The pinned server decoder drops string asInt values.
+                                            "asInt": 1,
                                             "startTimeUnixNano": str(start_nanos),
                                             "timeUnixNano": str(now_nanos),
                                             "attributes": [],

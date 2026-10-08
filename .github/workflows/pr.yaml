@@ -20,6 +20,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check release notes updates
+        run: node ci/check-release-notes.cjs
+
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
@@ -44,7 +47,7 @@ jobs:
       - name: Chart linting
         run: ct lint --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH"
 
-      - name: Check version-stable configuration checksums
+      - name: Check configuration rendering
         run: |
           helm repo add bitnami https://charts.bitnami.com/bitnami
           helm repo add jetstack https://charts.jetstack.io
@@ -58,7 +61,7 @@ jobs:
           workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.SERVICE_ACCOUNT }}
           token_format: 'access_token'
-          access_token_lifetime: 900s
+          access_token_lifetime: 3600s
 
       - name: Generate pull secret
         env:
@@ -116,29 +119,10 @@ jobs:
       - name: Run chart testing
         run: ct install --upgrade --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH"
 
-      - name: Install chart for integration tests under the restricted Pod Security Standard
-        run: |
-          helm dependency update charts/logfire
-          helm install lf charts/logfire \
-            -f charts/logfire/ci/ci-values.yaml \
-            -n logfire-restricted \
-            --wait --timeout 10m
-
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Run integration tests
-        run: |
-          kubectl port-forward -n logfire-restricted svc/logfire-service 8080:8080 &
-          PF_PID=$!
-          kubectl port-forward -n logfire-restricted svc/logfire-maildev 1080:1080 &
-          MF_PID=$!
-          trap "kill ${PF_PID} ${MF_PID} 2>/dev/null || true" EXIT
-          for _ in $(seq 1 30); do
-            if curl -fsS http://localhost:8080/ui-api/platform-config/ >/dev/null 2>&1; then
-              break
-            fi
-            sleep 2
-          done
-          META_FRONTEND_TOKEN=$(kubectl get secret logfire-tokens -n logfire-restricted -o jsonpath='{.data.logfire-meta-frontend-token}' | base64 -d) \
-            uv run --directory tests/integration pytest -v
+      - name: Test stable upgrade, release contracts, and split query topology
+        env:
+          LOGFIRE_TEST_NAMESPACE: logfire-restricted
+        run: ci/run-kind-tests.sh

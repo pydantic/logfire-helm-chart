@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.0](https://img.shields.io/badge/Version-0.14.0-informational?style=flat-square) ![AppVersion: ed13e35a](https://img.shields.io/badge/AppVersion-ed13e35a-informational?style=flat-square)
+![Version: 0.14.1-rc.1](https://img.shields.io/badge/Version-0.14.1--rc.1-informational?style=flat-square) ![AppVersion: 92fe3870](https://img.shields.io/badge/AppVersion-92fe3870-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -491,7 +491,14 @@ bcache loads its certificate at startup, so after rotating the Secret restart
 controller as described in External Secrets and Automatic Reloads.
 
 For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
-When working from this repository, run `helm dependency update charts/logfire` to fetch dependency charts.
+When working from this repository, run `helm dependency build charts/logfire` to fetch the locked dependency charts.
+
+If you enable in-cluster TLS with bundled cert-manager on a fresh install, omit `--wait`.
+Also omit `--atomic` on Helm 3 or `--rollback-on-failure` on Helm 4, because those flags enable readiness waits.
+The chart creates its TLS certificates in post-install hooks, which run after Helm waits for ordinary workloads.
+Those workloads need the certificate Secrets to become ready, so a readiness wait cannot finish.
+Check workload readiness after the hooks finish.
+For installations that require readiness waits or automatic rollback, install cert-manager separately and leave `dev.deployCertManager=false`.
 
 ### Restricted Pod Security
 
@@ -769,7 +776,7 @@ Before diving deeper, verify these common configuration issues:
 | priorityClassName | string | `""` | Pod priority class See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | rateLimits | object | `{}` | Configure Rate Limiting rules for Logfire endpoints |
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN. Change if using an external Redis instance. |
-| releaseVersion | string | `"v2026-10-06.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
+| releaseVersion | string | `"v2026-10-07.02"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
 | rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Ignored while `dev.deployMinio` is set. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
