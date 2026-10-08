@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.1](https://img.shields.io/badge/Version-0.14.1-informational?style=flat-square) ![AppVersion: ed13e35a](https://img.shields.io/badge/AppVersion-ed13e35a-informational?style=flat-square)
+![Version: 0.14.2](https://img.shields.io/badge/Version-0.14.2-informational?style=flat-square) ![AppVersion: ed13e35a](https://img.shields.io/badge/AppVersion-ed13e35a-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -491,7 +491,14 @@ bcache loads its certificate at startup, so after rotating the Secret restart
 controller as described in External Secrets and Automatic Reloads.
 
 For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
-When working from this repository, run `helm dependency update charts/logfire` to fetch dependency charts.
+When working from this repository, run `helm dependency build charts/logfire` to fetch the locked dependency charts.
+
+If you enable in-cluster TLS with bundled cert-manager on a fresh install, omit `--wait`.
+Also omit `--atomic` on Helm 3 or `--rollback-on-failure` on Helm 4, because those flags enable readiness waits.
+The chart creates its TLS certificates in post-install hooks, which run after Helm waits for ordinary workloads.
+Those workloads need the certificate Secrets to become ready, so a readiness wait cannot finish.
+Check workload readiness after the hooks finish.
+For installations that require readiness waits or automatic rollback, install cert-manager separately and leave `dev.deployCertManager=false`.
 
 ### Restricted Pod Security
 
