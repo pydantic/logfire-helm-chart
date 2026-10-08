@@ -16,7 +16,6 @@ from pyarrow import parquet
 pytestmark = pytest.mark.anyio
 
 ORG = "logfire-meta"
-RESULTS_ROOT = "/var/lib/logfire/scheduled-query-results"
 
 
 async def _kind_target() -> tuple[str, str] | None:
@@ -49,9 +48,11 @@ async def _kubectl(target: tuple[str, str], *args: str) -> str:
 
 async def _stored_files(target: tuple[str, str], directory: str) -> list[str]:
     script = (
-        "import json, sys; from pathlib import Path; "
-        "root = Path(sys.argv[1]); "
-        "print(json.dumps(sorted(str(p.relative_to(root)) for p in root.rglob('*.parquet'))))"
+        "import json, os, sys, obstore; "
+        "from logfire_services.scheduled_query_results_store import results_store_from_uri; "
+        "store = results_store_from_uri(os.environ['SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI']); "
+        "print(json.dumps(sorted(meta['path'] for batch in obstore.list(store._store, sys.argv[1]) "
+        "for meta in batch)))"
     )
     output = await _kubectl(
         target,
@@ -166,10 +167,10 @@ async def test_scheduled_query_runs_and_keeps_its_result_across_pod_restarts(
 
         if target is not None:
             directory = (
-                f"{RESULTS_ROOT}/scheduled-query-results/{scheduled['organization_id']}/"
-                f"{scheduled['project_id']}/{scheduled['id']}"
+                f"scheduled-query-results/{scheduled['organization_id']}/"
+                f"{scheduled['project_id']}/{scheduled['id']}/"
             )
-            expected_files = [f"{run['id']}-a0.parquet"]
+            expected_files = [f"{directory}{run['id']}-a0.parquet"]
             assert await _stored_files(target, directory) == expected_files
             for deployment in ("logfire-worker", "logfire-backend"):
                 await _kubectl(target, "rollout", "restart", f"deployment/{deployment}")

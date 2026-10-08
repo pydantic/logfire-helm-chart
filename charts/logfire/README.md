@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.0-rc.1](https://img.shields.io/badge/Version-0.15.0--rc.1-informational?style=flat-square) ![AppVersion: 92fe3870](https://img.shields.io/badge/AppVersion-92fe3870-informational?style=flat-square)
+![Version: 0.14.1-rc.1](https://img.shields.io/badge/Version-0.14.1--rc.1-informational?style=flat-square) ![AppVersion: 92fe3870](https://img.shields.io/badge/AppVersion-92fe3870-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -171,7 +171,7 @@ Before installing in production, confirm that you have:
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
 * StorageClass behavior chosen for chart-managed PVCs: use the cluster default, or set `defaultStorageClassName` in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
-* Shared storage for scheduled query results, as described below.
+* Read, write, list, and delete access to scheduled-query result objects in the configured object store.
 
 Install with your production values file:
 
@@ -451,55 +451,38 @@ shutdown budget is finite and does not guarantee that a blocked queue drains.
 
 ### Scheduled Query Results
 
-Starting with 0.15.0, scheduled queries write Parquet results that the backend serves as
-Parquet or CSV downloads. The worker and backend must use the same persistent store.
-This store is separate from `objectStore`, which stores telemetry.
+Scheduled queries write Parquet results that the backend serves as Parquet or CSV downloads.
+By default, the backend and worker reuse `objectStore.uri`, `objectStore.env`, and the
+object-store credential volumes and mounts. No additional PVC or StorageClass is required.
+Results use the `scheduled-query-results/` key prefix under the configured store root.
+The identity needs read, write, list, and delete access to that prefix. Let the application
+clean up this prefix. Avoid bucket lifecycle expiry that deletes results earlier, including
+the last ten runs retained for each query.
 
-By default the chart creates a retained 10Gi `ReadWriteMany` PVC named
-`<release>-scheduled-query-results`. Choose a StorageClass that supports simultaneous
-access from backend and worker pods on different nodes:
+To use a separate GCS, S3, or Azure store, set `scheduledQueryResults.uri` and provide its
+credentials with `scheduledQueryResults.env`, `volumes`, and `volumeMounts`. An explicit URI
+uses those dedicated credentials instead of inheriting `objectStore` credentials.
+Use this option when the backend and worker should have access only to query results.
+
+A shared filesystem is optional:
 
 ```yaml
 scheduledQueryResults:
   persistence:
+    enabled: true
     storageClass: shared-rwx
     storage: 10Gi
 ```
 
 Alternatively, set `scheduledQueryResults.persistence.existingClaim` to an existing shared
-claim in the release namespace. The chart adds `fsGroup: 1000` to these two workloads
-unless `podSecurityContext.fsGroup` overrides it; the store must be writable by that group.
-`values.dev.yaml` uses `ReadWriteOnce` for a single-node evaluation cluster. Do not use that
-setting on a multi-node cluster.
+claim in the release namespace. The chart adds `fsGroup: 1000` to the backend and worker
+unless `podSecurityContext.fsGroup` overrides it. The directory must be writable by that group.
+Use `ReadWriteMany` for pods on different nodes. `ReadWriteOnce` is suitable only for a
+single-node cluster. Do not set a results URI together with persistence.
 
-GCS is also supported. Set a bucket URI and provide Application Default Credentials to
-both consumers through workload identity or a mounted Secret:
-
-```yaml
-scheduledQueryResults:
-  uri: gs://logfire-query-results/prefix
-  env:
-    GOOGLE_APPLICATION_CREDENTIALS: /credentials/adc.json
-  volumes:
-    - name: results-credentials
-      secret:
-        secretName: logfire-results-gcs
-  volumeMounts:
-    - name: results-credentials
-      mountPath: /credentials
-      readOnly: true
-```
-
-The identity needs read, write, list, and delete access to the result objects. `gs://` and
-`gcs://` URIs are supported; S3 and Azure results stores are not supported by this release.
-Setting `uri` disables the chart-managed results PVC. Do not also set `existingClaim`.
-
-On upgrade from 0.14.x, configure the store before enabling scheduled queries. A cluster
-whose default StorageClass cannot provision RWX must use a suitable class, an existing
-claim, or GCS. Earlier per-pod result files are not migrated. Helm retains the managed
-PVC when uninstalling the chart or switching to GCS; delete it manually only after copying
-any results you need. Changing a bound claim's access modes or StorageClass requires a
-new claim and a data copy.
+Earlier per-pod results are not migrated. Helm retains a chart-managed results PVC on
+uninstall or when switching to object storage. Delete it manually after copying results
+you need. Changing a bound claim's access modes or StorageClass requires a new claim and a data copy.
 
 ### External Secrets and Automatic Reloads
 
@@ -837,13 +820,14 @@ Before diving deeper, verify these common configuration issues:
 | rustfs.podSecurityContext | object | `{}` | Pod SecurityContext for the RustFS pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 10001`. |
 | rustfs.resources | object | `{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}}` | Resource requests and limits for the RustFS container |
 | rustfs.securityContext | object | `{}` | Container SecurityContext for the RustFS container. Merged over the chart-wide `securityContext` and the image defaults: uid and gid 10001, all capabilities dropped, no privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root with the `/data` and `/logs` emptyDirs writable. |
-| scheduledQueryResults | object | `{"env":{},"persistence":{"accessModes":["ReadWriteMany"],"existingClaim":"","storage":"10Gi","storageClass":""},"uri":"","volumeMounts":[],"volumes":[]}` | Shared results storage for scheduled queries. The backend downloads files written by the worker. |
+| scheduledQueryResults | object | `{"env":{},"persistence":{"accessModes":["ReadWriteMany"],"enabled":false,"existingClaim":"","storage":"10Gi","storageClass":""},"uri":"","volumeMounts":[],"volumes":[]}` | Shared results storage for scheduled queries. The backend downloads files written by the worker. |
 | scheduledQueryResults.env | object | `{}` | Credentials environment variables supplied to both the backend and worker. Values can use valueFrom.secretKeyRef. |
 | scheduledQueryResults.persistence.accessModes | list | `["ReadWriteMany"]` | Access modes of the created claim. ReadWriteOnce is suitable only when every backend and worker pod runs on one node. |
-| scheduledQueryResults.persistence.existingClaim | string | `""` | An existing shared claim. Empty creates a claim retained on uninstall. |
+| scheduledQueryResults.persistence.enabled | bool | `false` | Use a shared results PVC instead of the existing object store. |
+| scheduledQueryResults.persistence.existingClaim | string | `""` | An existing shared claim. When persistence is enabled, empty creates a claim retained on uninstall. |
 | scheduledQueryResults.persistence.storage | string | `"10Gi"` | Size of the created shared claim. |
 | scheduledQueryResults.persistence.storageClass | string | `""` | StorageClass of the created claim. Empty uses the cluster default; use a class that supports ReadWriteMany on multi-node clusters. |
-| scheduledQueryResults.uri | string | `""` | A gs:// or gcs:// bucket URI, with optional prefix. Empty uses the shared PVC below. S3 and Azure are not supported by the results-store implementation in this release. |
+| scheduledQueryResults.uri | string | `""` | A GCS, S3, or Azure URI with optional prefix. Empty reuses objectStore.uri and its credentials and mounts, unless persistence is enabled. |
 | scheduledQueryResults.volumeMounts | list | `[]` | Mounts for the additional credential volumes. |
 | scheduledQueryResults.volumes | list | `[]` | Additional volumes for credentials, supplied to both consumers. |
 | securityContext | object | `{}` | Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details Chart-owned containers (the Python, Fusionfire, gateway, and frontend images) and HAProxy merge this context over chart defaults: the image's verified identity, `allowPrivilegeEscalation: false`, all capabilities dropped, the `RuntimeDefault` seccomp profile, and a read-only root. The bundled third-party containers (Redis, Dex, RustFS, MailDev, and the OTel collector) merge it over the same portable controls with their own verified identities. A per-workload `<workload>.securityContext` merges over both layers, for example `logfire-backend.securityContext` or `logfire-dex.securityContext`. Set a field to `null` to clear it, for example `runAsUser: null` for OpenShift, or set `readOnlyRootFilesystem: false` to restore a writable root. |

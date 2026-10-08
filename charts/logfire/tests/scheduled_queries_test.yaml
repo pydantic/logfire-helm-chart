@@ -6,8 +6,346 @@ set:
   adminEmail: test@example.com
   objectStore.uri: s3://test-bucket
 tests:
-- it: default results store is shared by its writer and reader
+- it: default results store reuses telemetry without a new claim
   set: {}
+  templates:
+  - templates/logfire-backend.yaml
+  - templates/logfire-worker.yaml
+  - templates/logfire-scheduled-query-results.yaml
+  asserts:
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: s3://test-bucket
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: s3://test-bucket
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - hasDocuments:
+      count: 0
+    template: templates/logfire-scheduled-query-results.yaml
+- it: RustFS defaults reach both results consumers
+  set:
+    objectStore.uri: ''
+    dev.deployRustfs: true
+  templates:
+  - templates/logfire-backend.yaml
+  - templates/logfire-worker.yaml
+  - templates/logfire-scheduled-query-results.yaml
+  asserts:
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: s3://logfire
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: &id001
+        name: AWS_ENDPOINT
+        value: http://logfire-rustfs:9000
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: &id002
+        name: AWS_ACCESS_KEY_ID
+        value: logfire-rustfs
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: &id003
+        name: AWS_SECRET_ACCESS_KEY
+        value: logfire-rustfs
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: &id004
+        name: AWS_ALLOW_HTTP
+        value: 'true'
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: s3://logfire
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: *id001
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: *id002
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: *id003
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: *id004
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - hasDocuments:
+      count: 0
+    template: templates/logfire-scheduled-query-results.yaml
+- it: S3 credential Secret references reach both results consumers
+  set:
+    objectStore.uri: s3://telemetry/root
+    objectStore.env.AWS_SECRET_ACCESS_KEY: &id010
+      valueFrom: &id005
+        secretKeyRef:
+          name: object-creds
+          key: secret
+  templates:
+  - templates/logfire-backend.yaml
+  - templates/logfire-worker.yaml
+  - templates/logfire-scheduled-query-results.yaml
+  asserts:
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: s3://telemetry/root
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: &id006
+        name: AWS_SECRET_ACCESS_KEY
+        valueFrom: *id005
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: s3://telemetry/root
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: *id006
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - hasDocuments:
+      count: 0
+    template: templates/logfire-scheduled-query-results.yaml
+- it: GCS credentials and mounts are inherited by both results consumers
+  set:
+    objectStore.uri: gs://telemetry/root
+    objectStore.env.GOOGLE_APPLICATION_CREDENTIALS: /credentials/adc.json
+    objectStore.volumes:
+    - &id007
+      name: adc
+      secret:
+        secretName: object-creds
+    objectStore.volumeMounts:
+    - &id008
+      name: adc
+      mountPath: /credentials
+      readOnly: true
+  templates:
+  - templates/logfire-backend.yaml
+  - templates/logfire-worker.yaml
+  - templates/logfire-scheduled-query-results.yaml
+  asserts:
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: gs://telemetry/root
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: &id009
+        name: GOOGLE_APPLICATION_CREDENTIALS
+        value: /credentials/adc.json
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.volumes
+      content: *id007
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].volumeMounts
+      content: *id008
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: gs://telemetry/root
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: *id009
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.volumes
+      content: *id007
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].volumeMounts
+      content: *id008
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - hasDocuments:
+      count: 0
+    template: templates/logfire-scheduled-query-results.yaml
+- it: Azure account credentials reach both results consumers
+  set:
+    objectStore.uri: az://telemetry/root
+    objectStore.env.AZURE_STORAGE_ACCOUNT_NAME: account
+    objectStore.env.AZURE_STORAGE_ACCOUNT_KEY: *id010
+  templates:
+  - templates/logfire-backend.yaml
+  - templates/logfire-worker.yaml
+  - templates/logfire-scheduled-query-results.yaml
+  asserts:
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: az://telemetry/root
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: &id011
+        name: AZURE_STORAGE_ACCOUNT_NAME
+        value: account
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: &id012
+        name: AZURE_STORAGE_ACCOUNT_KEY
+        valueFrom: *id005
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: az://telemetry/root
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: *id011
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: *id012
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - hasDocuments:
+      count: 0
+    template: templates/logfire-scheduled-query-results.yaml
+- it: SSE-C uses the same key for both results consumers
+  set:
+    objectStore.sseCKeyB64: *id010
+  templates:
+  - templates/logfire-backend.yaml
+  - templates/logfire-worker.yaml
+  - templates/logfire-scheduled-query-results.yaml
+  asserts:
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: s3://test-bucket
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: &id013
+        name: AWS_SERVER_SIDE_ENCRYPTION
+        value: sse-c
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: &id014
+        name: AWS_SSE_CUSTOMER_KEY_BASE64
+        valueFrom: *id005
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: s3://test-bucket
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: *id013
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content: *id014
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - hasDocuments:
+      count: 0
+    template: templates/logfire-scheduled-query-results.yaml
+- it: rejects conflicting results configuration chart-owned volume name
+  set:
+    objectStore.volumes:
+    - name: logfire-data
+      emptyDir: {}
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: chart-owned volume name
+- it: rejects conflicting results configuration chart-owned mount path
+  set:
+    objectStore.volumeMounts:
+    - name: adc
+      mountPath: /var/lib/logfire
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: chart-owned mount path
+- it: rejects conflicting results configuration Set either
+  set:
+    scheduledQueryResults.persistence.enabled: true
+    scheduledQueryResults.uri: s3://results
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: Set either
+- it: an optional results PVC is shared by its writer and reader
+  set:
+    scheduledQueryResults.persistence.enabled: true
   templates:
   - templates/logfire-backend.yaml
   - templates/logfire-worker.yaml
@@ -305,22 +643,22 @@ tests:
       value: 2000
     template: templates/logfire-worker.yaml
     documentIndex: 0
-- it: rejects S3 results storage
+- it: rejects unsupported results storage
   set:
-    scheduledQueryResults.uri: s3://results
+    scheduledQueryResults.uri: ftp://results
   templates:
   - templates/logfire-validate-config.yaml
   asserts:
   - failedTemplate:
-      errorPattern: S3 and Azure are not supported
-- it: rejects Azure results storage
+      errorPattern: must be a GCS, S3, or Azure
+- it: rejects results storage with whitespace
   set:
-    scheduledQueryResults.uri: az://results
+    scheduledQueryResults.uri: az://results bad
   templates:
   - templates/logfire-validate-config.yaml
   asserts:
   - failedTemplate:
-      errorPattern: S3 and Azure are not supported
+      errorPattern: must be a GCS, S3, or Azure
 - it: rejects an empty GCS bucket
   set:
     scheduledQueryResults.uri: gs://
@@ -328,7 +666,7 @@ tests:
   - templates/logfire-validate-config.yaml
   asserts:
   - failedTemplate:
-      errorPattern: must be a gs:// or gcs://
+      errorPattern: must be a GCS, S3, or Azure
 - it: rejects two result stores
   set:
     scheduledQueryResults.uri: gcs://results
@@ -340,6 +678,7 @@ tests:
       errorPattern: Set either
 - it: rejects a claim without a storage size
   set:
+    scheduledQueryResults.persistence.enabled: true
     scheduledQueryResults.persistence.storage: ''
   templates:
   - templates/logfire-validate-config.yaml
@@ -348,6 +687,7 @@ tests:
       errorPattern: persistence.storage is required
 - it: rejects a claim without access modes
   set:
+    scheduledQueryResults.persistence.enabled: true
     scheduledQueryResults.persistence.accessModes: []
   templates:
   - templates/logfire-validate-config.yaml
@@ -377,6 +717,54 @@ tests:
     scheduledQueryResults.volumeMounts:
     - name: adc
       mountPath: /var/lib/logfire
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: chart-owned mount path
+- it: rejects bypassing the shared URI through inherited environment
+  set:
+    objectStore.env.SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI: s3://other
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: Set scheduledQueryResults.uri instead
+- it: rejects a divergent URI in logfire-backend env
+  set:
+    logfire-backend.env:
+    - name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+      value: s3://other
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: Set scheduledQueryResults.uri instead
+- it: rejects a divergent URI in logfire-worker env
+  set:
+    logfire-worker.env:
+    - name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+      value: s3://other
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: Set scheduledQueryResults.uri instead
+- it: rejects an inherited credential mount at /var/lib
+  set:
+    objectStore.volumeMounts:
+    - name: credentials
+      mountPath: /var/lib
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: chart-owned mount path
+- it: rejects an inherited credential mount at /
+  set:
+    objectStore.volumeMounts:
+    - name: credentials
+      mountPath: /
   templates:
   - templates/logfire-validate-config.yaml
   asserts:

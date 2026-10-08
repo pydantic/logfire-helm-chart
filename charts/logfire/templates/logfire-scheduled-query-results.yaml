@@ -1,4 +1,4 @@
-{{- if and (not (tpl .Values.scheduledQueryResults.uri . | trim)) (not .Values.scheduledQueryResults.persistence.existingClaim) }}
+{{- if and .Values.scheduledQueryResults.persistence.enabled (not .Values.scheduledQueryResults.persistence.existingClaim) }}
 {{- include "logfire.validateConfig" . -}}
 apiVersion: v1
 kind: PersistentVolumeClaim

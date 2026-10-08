@@ -820,13 +820,17 @@ default. With only `dev.deployRustfs`, `rustfs.auth` is used.
 {{- end -}}
 
 {{- define "logfire.objectStoreEnv" -}}
-{{- $objectStoreEnv := .Values.objectStore.env | default dict -}}
 - name: FF_OBJECT_STORE_URI
   value: {{ include "logfire.objectStoreUri" . | quote }}
 {{- with .Values.objectStore.sseCKeyB64 }}
 - name: FF_S3_SSE_C_KEY_B64
 {{ include "logfire.envValue" (dict "value" . "quote" true) | indent 2 }}
 {{- end }}
+{{ include "logfire.objectStoreCredentialsEnv" . }}
+{{- end -}}
+
+{{- define "logfire.objectStoreCredentialsEnv" -}}
+{{- $objectStoreEnv := .Values.objectStore.env | default dict -}}
 {{- if eq (include "logfire.inClusterObjectStoreEnabled" .) "true" }}
 {{- $auth := include "logfire.inClusterObjectStoreAuth" . | fromJson }}
 {{- $inClusterDefaults := list

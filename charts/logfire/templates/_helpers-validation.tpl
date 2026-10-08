@@ -386,13 +386,13 @@ through maildev instead of smtp.host and get a placeholder sender.
 {{- define "logfire.validate.scheduledQueryResults" -}}
 {{- $results := .Values.scheduledQueryResults -}}
 {{- $uri := tpl $results.uri . | trim -}}
-{{- if and $uri (not (regexMatch "^g(cs|s)://[^/[:space:]]+(/[^[:space:]]*)?$" $uri)) -}}
-{{- fail "scheduledQueryResults.uri must be a gs:// or gcs:// bucket URI. Leave it empty to use shared persistent file storage; S3 and Azure are not supported for scheduled-query results." -}}
+{{- if and $uri (not (regexMatch "^(gcs|gs|s3|s3a|az|azure|adl|abfs|abfss)://[^/[:space:]]+(/[^[:space:]]*)?$" $uri)) -}}
+{{- fail "scheduledQueryResults.uri must be a GCS, S3, or Azure bucket URI. Leave it empty to reuse objectStore, or enable persistence to use a shared PVC." -}}
 {{- end -}}
-{{- if and $uri $results.persistence.existingClaim -}}
-{{- fail "Set either scheduledQueryResults.uri or scheduledQueryResults.persistence.existingClaim, not both." -}}
+{{- if and $uri (eq (include "logfire.scheduledQueryResultsUsesPersistence" .) "true") -}}
+{{- fail "Set either scheduledQueryResults.uri or scheduledQueryResults.persistence, not both." -}}
 {{- end -}}
-{{- if and (not $uri) (not $results.persistence.existingClaim) -}}
+{{- if and $results.persistence.enabled (not $results.persistence.existingClaim) -}}
 {{- if not $results.persistence.storage -}}
 {{- fail "scheduledQueryResults.persistence.storage is required when creating the shared results claim." -}}
 {{- end -}}
@@ -400,17 +400,43 @@ through maildev instead of smtp.host and get a placeholder sender.
 {{- fail "scheduledQueryResults.persistence.accessModes must contain an access mode for the shared results claim." -}}
 {{- end -}}
 {{- end -}}
-{{- if hasKey $results.env "SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI" -}}
-{{- fail "Set scheduledQueryResults.uri instead of overriding SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI in scheduledQueryResults.env." -}}
+{{- if or (hasKey $results.env "SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI") (and (eq (include "logfire.scheduledQueryResultsReusesObjectStore" .) "true") (hasKey .Values.objectStore.env "SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI")) -}}
+{{- fail "Set scheduledQueryResults.uri instead of overriding SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI in objectStore.env or scheduledQueryResults.env." -}}
 {{- end -}}
-{{- range $results.volumes -}}
+{{- range $service := list "logfire-backend" "logfire-worker" -}}
+{{- range (index $.Values $service).env -}}
+{{- if eq .name "SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI" -}}
+{{- fail "Set scheduledQueryResults.uri instead of overriding SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI in a workload env list." -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $volumes := $results.volumes -}}
+{{- $mounts := $results.volumeMounts -}}
+{{- if eq (include "logfire.scheduledQueryResultsReusesObjectStore" .) "true" -}}
+{{- $volumes = concat $volumes .Values.objectStore.volumes -}}
+{{- $mounts = concat $mounts .Values.objectStore.volumeMounts -}}
+{{- end -}}
+{{- $names := list -}}
+{{- range $volumes -}}
+{{- if has .name $names -}}
+{{- fail "Scheduled-query results credential volumes contain a duplicate name." -}}
+{{- end -}}
+{{- $names = append $names .name -}}
 {{- if has .name (list "scheduled-query-results" "tmp" "logfire-data" "logfire-incluster-ca-bundle" "logfire-incluster-tls" "logfire-smtp-ca-bundle") -}}
 {{- fail "scheduledQueryResults.volumes contains a chart-owned volume name. Rename the credential volume." -}}
 {{- end -}}
 {{- end -}}
-{{- range $results.volumeMounts -}}
-{{- if has .mountPath (list "/var/lib/logfire/scheduled-query-results" "/var/lib/logfire" "/tmp" "/etc/logfire/incluster-ca" "/etc/logfire/smtp-ca" "/etc/tls") -}}
+{{- $paths := list -}}
+{{- range $mounts -}}
+{{- if has .mountPath $paths -}}
+{{- fail "Scheduled-query results credential mounts contain a duplicate path." -}}
+{{- end -}}
+{{- $paths = append $paths .mountPath -}}
+{{- $mountPath := trimSuffix "/" .mountPath -}}
+{{- range $reservedPath := list "/var/lib/logfire/scheduled-query-results" "/var/lib/logfire" "/tmp" "/etc/logfire/incluster-ca" "/etc/logfire/smtp-ca" "/etc/tls" -}}
+{{- if or (eq $mountPath $reservedPath) (hasPrefix (printf "%s/" $mountPath) $reservedPath) -}}
 {{- fail "scheduledQueryResults.volumeMounts contains a chart-owned mount path. Choose another path for credentials." -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

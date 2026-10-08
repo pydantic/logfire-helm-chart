@@ -34,6 +34,15 @@ if [[ -n "${LOGFIRE_TEST_VALUES:-}" ]]; then
   values+=(-f "$LOGFIRE_TEST_VALUES")
 fi
 
+rc_values=("${values[@]}")
+if [[ -n "${LOGFIRE_TEST_RC_VALUES:-}" ]]; then
+  if [[ ! -f "$LOGFIRE_TEST_RC_VALUES" ]]; then
+    echo "LOGFIRE_TEST_RC_VALUES must name a values file" >&2
+    exit 1
+  fi
+  rc_values+=(-f "$LOGFIRE_TEST_RC_VALUES")
+fi
+
 tmp_dir=$(mktemp -d "${TMPDIR:-/tmp}/logfire-kind-tests.XXXXXX")
 state_file="$tmp_dir/upgrade-state.json"
 forward_pids=()
@@ -52,7 +61,7 @@ upgrade_current() {
   local split=$1
   helm upgrade "$release" "$repo_root/charts/logfire" \
     --kube-context "$context" --namespace "$namespace" \
-    --reset-values "${values[@]}" \
+    --reset-values "${rc_values[@]}" \
     --set "logfire-ff-query-worker.enabled=$split" \
     --wait --wait-for-jobs --timeout 10m
 }

@@ -304,7 +304,7 @@ postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
 
 # -- Shared results storage for scheduled queries. The backend downloads files written by the worker.
 scheduledQueryResults:
-  # -- A gs:// or gcs:// bucket URI, with optional prefix. Empty uses the shared PVC below. S3 and Azure are not supported by the results-store implementation in this release.
+  # -- A GCS, S3, or Azure URI with optional prefix. Empty reuses objectStore.uri and its credentials and mounts, unless persistence is enabled.
   uri: ""
   # -- Credentials environment variables supplied to both the backend and worker. Values can use valueFrom.secretKeyRef.
   env: {}
@@ -313,7 +313,9 @@ scheduledQueryResults:
   # -- Mounts for the additional credential volumes.
   volumeMounts: []
   persistence:
-    # -- An existing shared claim. Empty creates a claim retained on uninstall.
+    # -- Use a shared results PVC instead of the existing object store.
+    enabled: false
+    # -- An existing shared claim. When persistence is enabled, empty creates a claim retained on uninstall.
     existingClaim: ""
     # -- Size of the created shared claim.
     storage: 10Gi
