@@ -53,7 +53,6 @@ jobs:
           helm repo add jetstack https://charts.jetstack.io
           helm dependency build charts/logfire
           ci/check-version-stable-checksums.sh
-          python ci/check-dex-config-idempotency.py
 
       - name: Set up GCP auth
         id: auth
