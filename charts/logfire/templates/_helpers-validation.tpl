@@ -383,6 +383,38 @@ through maildev instead of smtp.host and get a placeholder sender.
 {{- end -}}
 {{- end -}}
 
+{{- define "logfire.validate.scheduledQueryResults" -}}
+{{- $results := .Values.scheduledQueryResults -}}
+{{- $uri := tpl $results.uri . | trim -}}
+{{- if and $uri (not (regexMatch "^g(cs|s)://[^/[:space:]]+(/[^[:space:]]*)?$" $uri)) -}}
+{{- fail "scheduledQueryResults.uri must be a gs:// or gcs:// bucket URI. Leave it empty to use shared persistent file storage; S3 and Azure are not supported for scheduled-query results." -}}
+{{- end -}}
+{{- if and $uri $results.persistence.existingClaim -}}
+{{- fail "Set either scheduledQueryResults.uri or scheduledQueryResults.persistence.existingClaim, not both." -}}
+{{- end -}}
+{{- if and (not $uri) (not $results.persistence.existingClaim) -}}
+{{- if not $results.persistence.storage -}}
+{{- fail "scheduledQueryResults.persistence.storage is required when creating the shared results claim." -}}
+{{- end -}}
+{{- if not $results.persistence.accessModes -}}
+{{- fail "scheduledQueryResults.persistence.accessModes must contain an access mode for the shared results claim." -}}
+{{- end -}}
+{{- end -}}
+{{- if hasKey $results.env "SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI" -}}
+{{- fail "Set scheduledQueryResults.uri instead of overriding SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI in scheduledQueryResults.env." -}}
+{{- end -}}
+{{- range $results.volumes -}}
+{{- if has .name (list "scheduled-query-results" "tmp" "logfire-data" "logfire-incluster-ca-bundle" "logfire-incluster-tls" "logfire-smtp-ca-bundle") -}}
+{{- fail "scheduledQueryResults.volumes contains a chart-owned volume name. Rename the credential volume." -}}
+{{- end -}}
+{{- end -}}
+{{- range $results.volumeMounts -}}
+{{- if has .mountPath (list "/var/lib/logfire/scheduled-query-results" "/var/lib/logfire" "/tmp" "/etc/logfire/incluster-ca" "/etc/logfire/smtp-ca" "/etc/tls") -}}
+{{- fail "scheduledQueryResults.volumeMounts contains a chart-owned mount path. Choose another path for credentials." -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{/*
 Master validation template - runs all validations
 Call this from templates that need to ensure configuration is valid.
@@ -393,6 +425,7 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.sizingPreset"
   "logfire.validate.objectStore"
   "logfire.validate.objectStoreVolumes"
+  "logfire.validate.scheduledQueryResults"
   "logfire.validate.ingress"
   "logfire.validate.gateway"
   "logfire.validate.ingressGatewayConflict"

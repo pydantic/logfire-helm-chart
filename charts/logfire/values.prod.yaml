@@ -13,6 +13,12 @@ adminEmail: sre@example.com
 # sizing preset. Per-workload storageClassName values still take precedence.
 # defaultStorageClassName: fast-storage
 
+# Required: use a StorageClass that supports ReadWriteMany across nodes, an
+# existing shared claim, or scheduledQueryResults.uri with a GCS bucket.
+scheduledQueryResults:
+  persistence:
+    storageClass: REPLACE_WITH_RWX_STORAGE_CLASS
+
 ingress:
   # Gateway API is enabled below; leave the default Ingress disabled.
   enabled: false

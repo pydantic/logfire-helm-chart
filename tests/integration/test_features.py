@@ -265,16 +265,30 @@ async def test_sql_tooling(
     assert records.is_success, records.text
     assert "service_names" in records.json(), records.text
 
-    # Deliberately no sql/format (the SQL editor's format button) test here:
-    # POST .../sql/format/ 404s on the default topology. /query/format/ is
-    # mounted only by fusionfire's 'query' subcommand (query_api_router), while
-    # the chart runs the combined 'query-worker' subcommand (logfire-ff-query-worker
-    # is opt-in), whose router serves /query/validate/ and /query/historic/ but
-    # not /query/format/. Being fixed upstream; restore the round-trip test from
-    # PR #262's history (test_sql_format) once the pinned fusionfire build serves
-    # the endpoint on the combined arm.
 
 
+@pytest.mark.parametrize(
+    ("sql", "expected"),
+    [
+        ("SELECT TOP 5 [name] FROM t", "SELECT TOP 5 [name]\nFROM t"),
+        ("select 'unterminated", None),
+    ],
+)
+async def test_sql_format(
+    client: httpx.AsyncClient,
+    meta_frontend_token: str,
+    project: str,
+    sql: str,
+    expected: str | None,
+) -> None:
+    response = await client.post(
+        f"{_p(project)}/sql/format/",
+        params={"db_system": "mssql"},
+        headers={"Authorization": f"Bearer {meta_frontend_token}"},
+        json={"secret_sql": sql},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"formatted_query": expected}
 
 
 async def test_org_members_and_project_stats(

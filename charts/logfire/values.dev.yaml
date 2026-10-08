@@ -7,6 +7,11 @@ imagePullSecrets:
 
 adminEmail: hello@example.dev
 
+# The local evaluation cluster must have a single node for this shared claim.
+scheduledQueryResults:
+  persistence:
+    accessModes: [ReadWriteOnce]
+
 ingress:
   enabled: false
   tls: false

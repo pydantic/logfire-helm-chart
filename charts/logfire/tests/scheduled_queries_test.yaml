@@ -1,0 +1,384 @@
+suite: scheduled query shared storage contracts
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore.uri: s3://test-bucket
+tests:
+- it: default results store is shared by its writer and reader
+  set: {}
+  templates:
+  - templates/logfire-backend.yaml
+  - templates/logfire-worker.yaml
+  - templates/logfire-scheduled-query-results.yaml
+  asserts:
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: file:///var/lib/logfire/scheduled-query-results
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.volumes
+      content:
+        name: scheduled-query-results
+        persistentVolumeClaim:
+          claimName: lf-scheduled-query-results
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].volumeMounts
+      content:
+        name: scheduled-query-results
+        mountPath: /var/lib/logfire/scheduled-query-results
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - equal:
+      path: spec.template.spec.securityContext.fsGroup
+      value: 1000
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: file:///var/lib/logfire/scheduled-query-results
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.volumes
+      content:
+        name: scheduled-query-results
+        persistentVolumeClaim:
+          claimName: lf-scheduled-query-results
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].volumeMounts
+      content:
+        name: scheduled-query-results
+        mountPath: /var/lib/logfire/scheduled-query-results
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - equal:
+      path: spec.template.spec.securityContext.fsGroup
+      value: 1000
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - equal:
+      path: metadata.name
+      value: lf-scheduled-query-results
+    template: templates/logfire-scheduled-query-results.yaml
+    documentIndex: 0
+  - equal:
+      path: metadata.annotations["helm.sh/resource-policy"]
+      value: keep
+    template: templates/logfire-scheduled-query-results.yaml
+    documentIndex: 0
+  - equal:
+      path: spec.template.spec.containers[0].volumeMounts[1].mountPath
+      value: /var/lib/logfire
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - equal:
+      path: spec.template.spec.containers[0].volumeMounts[2].mountPath
+      value: /var/lib/logfire/scheduled-query-results
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - equal:
+      path: spec.template.spec.containers[0].volumeMounts[1].mountPath
+      value: /var/lib/logfire
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - equal:
+      path: spec.template.spec.containers[0].volumeMounts[2].mountPath
+      value: /var/lib/logfire/scheduled-query-results
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+- it: an existing shared claim is used by both consumers
+  set:
+    scheduledQueryResults.persistence.existingClaim: results-rwx
+  templates:
+  - templates/logfire-backend.yaml
+  - templates/logfire-worker.yaml
+  - templates/logfire-scheduled-query-results.yaml
+  asserts:
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: file:///var/lib/logfire/scheduled-query-results
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.volumes
+      content:
+        name: scheduled-query-results
+        persistentVolumeClaim:
+          claimName: results-rwx
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].volumeMounts
+      content:
+        name: scheduled-query-results
+        mountPath: /var/lib/logfire/scheduled-query-results
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - equal:
+      path: spec.template.spec.securityContext.fsGroup
+      value: 1000
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: file:///var/lib/logfire/scheduled-query-results
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.volumes
+      content:
+        name: scheduled-query-results
+        persistentVolumeClaim:
+          claimName: results-rwx
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].volumeMounts
+      content:
+        name: scheduled-query-results
+        mountPath: /var/lib/logfire/scheduled-query-results
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - equal:
+      path: spec.template.spec.securityContext.fsGroup
+      value: 1000
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - hasDocuments:
+      count: 0
+    template: templates/logfire-scheduled-query-results.yaml
+  - equal:
+      path: spec.template.spec.containers[0].volumeMounts[1].mountPath
+      value: /var/lib/logfire
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - equal:
+      path: spec.template.spec.containers[0].volumeMounts[2].mountPath
+      value: /var/lib/logfire/scheduled-query-results
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - equal:
+      path: spec.template.spec.containers[0].volumeMounts[1].mountPath
+      value: /var/lib/logfire
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - equal:
+      path: spec.template.spec.containers[0].volumeMounts[2].mountPath
+      value: /var/lib/logfire/scheduled-query-results
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+- it: GCS URI and secret credentials reach both consumers
+  set:
+    scheduledQueryResults.uri: gs://results/prefix
+    scheduledQueryResults.env.GOOGLE_APPLICATION_CREDENTIALS: /credentials/adc.json
+    scheduledQueryResults.volumes:
+    - name: results-credentials
+      secret:
+        secretName: results-credentials
+    scheduledQueryResults.volumeMounts:
+    - name: results-credentials
+      mountPath: /credentials
+      readOnly: true
+    scheduledQueryResults.env.GOOGLE_CLOUD_PROJECT:
+      valueFrom:
+        secretKeyRef:
+          name: results-credentials
+          key: project
+  templates:
+  - templates/logfire-backend.yaml
+  - templates/logfire-worker.yaml
+  - templates/logfire-scheduled-query-results.yaml
+  asserts:
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: gs://results/prefix
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: GOOGLE_APPLICATION_CREDENTIALS
+        value: /credentials/adc.json
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.volumes
+      content:
+        name: results-credentials
+        secret:
+          secretName: results-credentials
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].volumeMounts
+      content:
+        name: results-credentials
+        mountPath: /credentials
+        readOnly: true
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+        value: gs://results/prefix
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: GOOGLE_APPLICATION_CREDENTIALS
+        value: /credentials/adc.json
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.volumes
+      content:
+        name: results-credentials
+        secret:
+          secretName: results-credentials
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - contains:
+      path: spec.template.spec.containers[0].volumeMounts
+      content:
+        name: results-credentials
+        mountPath: /credentials
+        readOnly: true
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+  - hasDocuments:
+      count: 0
+    template: templates/logfire-scheduled-query-results.yaml
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: GOOGLE_CLOUD_PROJECT
+        valueFrom:
+          secretKeyRef:
+            name: results-credentials
+            key: project
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - contains:
+      path: spec.template.spec.containers[0].env
+      content:
+        name: GOOGLE_CLOUD_PROJECT
+        valueFrom:
+          secretKeyRef:
+            name: results-credentials
+            key: project
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+- it: an operator fsGroup reaches both shared-volume consumers
+  set:
+    podSecurityContext.fsGroup: 2000
+  templates:
+  - templates/logfire-backend.yaml
+  - templates/logfire-worker.yaml
+  - templates/logfire-scheduled-query-results.yaml
+  asserts:
+  - equal:
+      path: spec.template.spec.securityContext.fsGroup
+      value: 2000
+    template: templates/logfire-backend.yaml
+    documentIndex: 1
+  - equal:
+      path: spec.template.spec.securityContext.fsGroup
+      value: 2000
+    template: templates/logfire-worker.yaml
+    documentIndex: 0
+- it: rejects S3 results storage
+  set:
+    scheduledQueryResults.uri: s3://results
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: S3 and Azure are not supported
+- it: rejects Azure results storage
+  set:
+    scheduledQueryResults.uri: az://results
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: S3 and Azure are not supported
+- it: rejects an empty GCS bucket
+  set:
+    scheduledQueryResults.uri: gs://
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: must be a gs:// or gcs://
+- it: rejects two result stores
+  set:
+    scheduledQueryResults.uri: gcs://results
+    scheduledQueryResults.persistence.existingClaim: results
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: Set either
+- it: rejects a claim without a storage size
+  set:
+    scheduledQueryResults.persistence.storage: ''
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: persistence.storage is required
+- it: rejects a claim without access modes
+  set:
+    scheduledQueryResults.persistence.accessModes: []
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: accessModes must contain
+- it: rejects bypassing the shared URI
+  set:
+    scheduledQueryResults.env.SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI: gs://other
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: Set scheduledQueryResults.uri instead
+- it: rejects an overlapping volume
+  set:
+    scheduledQueryResults.volumes:
+    - name: logfire-smtp-ca-bundle
+      emptyDir: {}
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: chart-owned volume name
+- it: rejects an overlapping credential mount
+  set:
+    scheduledQueryResults.volumeMounts:
+    - name: adc
+      mountPath: /var/lib/logfire
+  templates:
+  - templates/logfire-validate-config.yaml
+  asserts:
+  - failedTemplate:
+      errorPattern: chart-owned mount path

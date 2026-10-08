@@ -12,6 +12,7 @@ data:
   RUST_LOG: "info"
   FF_SEND_TO_LOGFIRE: "true"
   FF_FORCE_CONSOLE_LOGGING: {{ .Values.fusionfireForceConsoleLogging | quote }}
+  FRONTEND_HOST: {{ include "logfire.url" . | quote }}
   FF_MV_INITIAL_BACKFILL_WINDOW: {{ dig "initialBackfillWindow" "1d" $materializedViews | quote }}
   FF_MV_MIN_SOURCE_BYTES: {{ dig "minSourceBytes" "5gb" $materializedViews | quote }}
   FF_COLLECT_STATISTICS_FROM_ZONE_MAP_INDEXES: "false"

@@ -1,6 +1,12 @@
 adminEmail: hello@example.dev
 sizingPreset: tiny
 
+# Kind has one node, so all results-store consumers share one RWO volume.
+scheduledQueryResults:
+  persistence:
+    accessModes: [ReadWriteOnce]
+    storage: 1Gi
+
 # -- test with security context
 podSecurityContext:
   fsGroup: 2000
