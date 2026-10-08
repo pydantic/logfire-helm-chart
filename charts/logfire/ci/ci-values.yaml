@@ -68,6 +68,14 @@ logfire-backend:
   pdb:
     minUnavailable: 1
 
+logfire-ff-query-api:
+  replicas: 2
+  autoscaling:
+    hpa:
+      enabled: false
+    keda:
+      enabled: false
+
 logfire-ff-maintenance-worker:
   scratchVolume:
     storageClassName: standard

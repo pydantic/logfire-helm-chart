@@ -25,6 +25,8 @@ the database, admin, and gateway Secrets used by `charts/logfire/ci/ci-values.ya
 Set `LOGFIRE_TEST_VALUES` to an additional values file for image pull credentials or
 local resource sizing. Set `LOGFIRE_TEST_BASELINE_CHART` to an already downloaded
 0.14.0 `.tgz` to avoid fetching the baseline package again.
+Keep `logfire-ff-query-api.replicas=2` in local overrides so the installed replica-count
+check exercises the same disabled-autoscaler configuration as CI.
 
 To run HTTP tests against an existing installation, set `LOGFIRE_BASE_URL`,
 `META_FRONTEND_TOKEN`, and `MAILDEV_BASE_URL`, then run:
@@ -41,6 +43,7 @@ The release checks cover:
 | Contract | Evidence |
 | --- | --- |
 | Stable upgrade | An exact trace remains queryable after migrations and rollouts |
+| Replica ownership | Both requested query API replicas become ready with HPA and KEDA disabled |
 | SQL format | Dialect-specific output and invalid syntax on combined and split query modes |
 | Remote MCP | Authentication, initialization, tool discovery, and a literal query result |
 | OTLP errors | Invalid-token errors decode as JSON and protobuf for all three signals |
