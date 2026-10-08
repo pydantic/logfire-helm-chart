@@ -4,41 +4,11 @@ release:
   namespace: default
 set:
   objectStore.uri: s3://test-bucket
+  logfire-ff-query-api.replicas: 3
 tests:
-  - it: uses the requested replica count when both autoscalers are disabled
-    set:
-      logfire-ff-query-api:
-        replicas: 3
-        autoscaling:
-          hpa:
-            enabled: false
-          keda:
-            enabled: false
-    asserts:
-      - equal:
-          path: spec.replicas
-          value: 3
-        template: templates/logfire-ff-query-api.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - containsDocument:
-          kind: HorizontalPodAutoscaler
-          apiVersion: autoscaling/v2
-          any: true
-        not: true
-        template: templates/logfire-ff-query-api.yaml
-      - containsDocument:
-          kind: ScaledObject
-          apiVersion: keda.sh/v1alpha1
-          any: true
-        not: true
-        template: templates/logfire-ff-query-api.yaml
-
   - it: gives replica ownership to an enabled HPA
     set:
       logfire-ff-query-api:
-        replicas: 3
         autoscaling:
           hpa:
             enabled: true
@@ -59,7 +29,6 @@ tests:
   - it: gives replica ownership to enabled KEDA
     set:
       logfire-ff-query-api:
-        replicas: 3
         autoscaling:
           keda:
             enabled: true

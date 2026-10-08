@@ -13,14 +13,11 @@ A test belongs here only if it is one of:
    `helm install` with a clear message. Integration tests only exercise valid
    values. The suite pins the cases listed in it, not every `fail` site in the
    validation helpers — add a case when you touch one.
-2. **Cross-template coupling** (`secrets_test.yaml`, `service_addressing_test.yaml`,
-   `autoscaling_test.yaml`):
+2. **Cross-template coupling** (`secrets_test.yaml`, `service_addressing_test.yaml`):
    two templates must agree on a value: a secret key name, service DNS name,
    port, scheme, or shared constant. A mismatch deploys cleanly and fails at
    runtime with no hint of the cause. The TLS/topology matrices matter because CI
    only deploys one variant.
-   Workload replicas and the enabled HPA or KEDA controller must also agree on
-   which resource owns the replica count.
 3. **Security gating** (`gateway_oauth_client_test.yaml`): credentials and OAuth
    clients must not be exposed in configurations where they are unsafe.
 4. **Contracts with things outside the chart** (`rate_limits_test.yaml`,

@@ -7,11 +7,6 @@ on:
     tags:
       - 'logfire-*'
 
-concurrency:
-  group: chart-release
-  queue: max
-  cancel-in-progress: false
-
 jobs:
   release:
     permissions:
@@ -117,11 +112,10 @@ jobs:
               throw error;
             }
 
-            const { data: releaseCommit } = await github.rest.repos.getCommit({ owner, repo, ref: tag });
             const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
               owner,
               repo,
-              commit_sha: releaseCommit.sha,
+              commit_sha: context.sha,
               per_page: 50,
             });
 
@@ -130,7 +124,7 @@ jobs:
               prs.find((p) => p.base?.ref === 'main') ||
               prs[0];
             if (!pr) {
-              core.info(`No PR associated with commit ${releaseCommit.sha}; skipping release notes update.`);
+              core.info(`No PR associated with commit ${context.sha}; skipping release notes update.`);
               return;
             }
 
@@ -186,7 +180,7 @@ jobs:
             if (existingBody.includes(markerStart) && existingBody.includes(markerEnd)) {
               finalBody = existingBody.replace(
                 new RegExp(`${markerStart}[\\s\\S]*?${markerEnd}`),
-                () => curatedBlock,
+                curatedBlock,
               );
             } else if (existingBody) {
               finalBody = `${curatedBlock}\n\n---\n\n${existingBody}`;
