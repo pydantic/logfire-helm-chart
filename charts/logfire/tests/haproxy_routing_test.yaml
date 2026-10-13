@@ -1,0 +1,25 @@
+suite: HAProxy ingest routing
+# The paths that HAProxy sends to logfire-ff-ingest. A path missing here goes to
+# the backend, which answers 404, so an ingest route that fusionfire serves is
+# unreachable until it is added.
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: sends Amazon Data Firehose deliveries to ingest
+    template: templates/logfire-service-config.yaml
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: 'acl path_ingest path_reg -i \^/v1/\(traces\|metrics\|logs\|firehose/logs\)\$'
+
+  - it: answers CORS preflight only for the OTLP paths, because Firehose is not a browser
+    template: templates/logfire-service-config.yaml
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: 'acl cors_path_ingest path_reg -i \^/v1/\(traces\|metrics\|logs\)\$'
