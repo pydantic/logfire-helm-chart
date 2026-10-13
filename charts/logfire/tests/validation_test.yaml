@@ -16,6 +16,63 @@ set:
   dev:
     deployPostgres: true
 tests:
+  - it: rejects extra exporters that replace the backend exporter
+    set:
+      otel_collector.extraExporters:
+        otlp_http:
+          endpoint: https://elsewhere.example.com
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraExporters cannot replace chart-owned component "otlp_http"'
+
+  - it: rejects extra processors that replace the memory limiter
+    set:
+      otel_collector.extraProcessors:
+        memory_limiter:
+          limit_mib: 1
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraProcessors cannot replace chart-owned component "memory_limiter"'
+
+  - it: rejects extra pipelines that replace backend metrics
+    set:
+      otel_collector.extraPipelines:
+        metrics:
+          exporters: [debug]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraPipelines cannot replace chart-owned component "metrics"'
+
+  - it: reserves the Prometheus pipeline even while disabled
+    set:
+      otel_collector.extraPipelines:
+        metrics/prometheus:
+          exporters: [debug]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraPipelines cannot replace chart-owned component "metrics/prometheus"'
+
+  - it: rejects an exporter list
+    set:
+      otel_collector.extraExporters: [googlecloud]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraExporters must be a map'
+
+  - it: rejects a processor list
+    set:
+      otel_collector.extraProcessors: [resourcedetection]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraProcessors must be a map'
+
+  - it: rejects a pipeline list
+    set:
+      otel_collector.extraPipelines: [metrics/gcp]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraPipelines must be a map'
+
   - it: existingSecret.enabled=true with empty name fails validation
     set:
       existingSecret:
