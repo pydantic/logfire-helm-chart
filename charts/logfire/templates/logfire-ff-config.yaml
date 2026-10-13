@@ -19,8 +19,6 @@ data:
   FF_SHARED_REDIS_DSN: {{ .Values.redisDsn }}
   FF_TOKEN_REDIS_DSN: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "tokenRedis") }}
   FF_TOKEN_REDIS_PREFIX: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "tokenRedis") | quote }}
-  FF_USAGE_REDIS_DSN: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "usageRedis") }}
-  FF_USAGE_REDIS_PREFIX: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "usageRedis") | quote }}
   FF_OBJECT_STORE_URI: {{ include "logfire.objectStoreUri" . | quote }}
   FF_PG_TRANSACTION_TIMEOUT: "30s"
 {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}

@@ -845,7 +845,11 @@ default. With only `dev.deployRustfs`, `rustfs.auth` is used.
 {{- end }}
 {{- end }}
 {{- end }}
-{{- range $key, $value := $objectStoreEnv }}
+{{- include "logfire.objectStoreProviderEnv" . }}
+{{- end -}}
+
+{{- define "logfire.objectStoreProviderEnv" -}}
+{{- range $key, $value := .Values.objectStore.env }}
 {{- if kindIs "string" $value }}
 {{- $value = tpl $value $ }}
 {{- end }}
@@ -1475,16 +1479,28 @@ container mounts in spec order and a later `/tmp` mount shadows the nested path.
 
 {{/* The backend and the worker share one durable store for recordings, screenshots and report results. */}}
 {{- define "logfire.pythonObjectStoreClaimName" -}}
-{{- .Values.pythonObjectStore.persistence.existingClaim | default "logfire-python-object-store" -}}
+{{- .Values.pythonObjectStore.persistence.existingClaim | default (printf "%s-python-object-store" .Release.Name | trunc 63 | trimSuffix "-") -}}
+{{- end -}}
+
+{{- define "logfire.pythonObjectStoreUsesGcs" -}}
+{{- $uri := include "logfire.objectStoreUri" . | trim | lower -}}
+{{- and (not .Values.pythonObjectStore.persistence.existingClaim) (or (hasPrefix "gs://" $uri) (hasPrefix "gcs://" $uri)) -}}
 {{- end -}}
 
 {{- define "logfire.pythonObjectStoreEnv" -}}
+{{- $base := "file:///var/lib/logfire" -}}
+{{- if eq (include "logfire.pythonObjectStoreUsesGcs" .) "true" -}}
+{{- $base = include "logfire.objectStoreUri" . | trim | trimSuffix "/" -}}
+{{- end -}}
 - name: SESSION_REPLAY_OBJECT_STORE_URI
-  value: file:///var/lib/logfire/session-replays
+  value: {{ printf "%s/session-replays" $base | quote }}
 - name: VISUAL_TESTS_OBJECT_STORE_URI
-  value: file:///var/lib/logfire/visual-tests
+  value: {{ printf "%s/visual-tests" $base | quote }}
 - name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
-  value: file:///var/lib/logfire/scheduled-query-results
+  value: {{ printf "%s/scheduled-query-results" $base | quote }}
+{{- if eq (include "logfire.pythonObjectStoreUsesGcs" .) "true" }}
+{{- include "logfire.objectStoreProviderEnv" . }}
+{{- end -}}
 {{- end -}}
 
 {{- define "logfire.pythonObjectStorePodSecurityContext" -}}
@@ -1497,14 +1513,22 @@ container mounts in spec order and a later `/tmp` mount shadows the nested path.
 {{- end -}}
 
 {{- define "logfire.logfireDataVolumeMounts" -}}
+{{- if eq (include "logfire.pythonObjectStoreUsesGcs" .) "true" -}}
+{{- include "logfire.objectStoreVolumeMounts" . -}}
+{{- else -}}
 - name: logfire-data
   mountPath: /var/lib/logfire
 {{- end -}}
+{{- end -}}
 
 {{- define "logfire.logfireDataVolume" -}}
+{{- if eq (include "logfire.pythonObjectStoreUsesGcs" .) "true" -}}
+{{- include "logfire.objectStoreVolumes" . -}}
+{{- else -}}
 - name: logfire-data
   persistentVolumeClaim:
     claimName: {{ include "logfire.pythonObjectStoreClaimName" . }}
+{{- end -}}
 {{- end -}}
 
 {{- define "logfire.standardPodSpecFields" -}}

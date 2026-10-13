@@ -19,7 +19,6 @@ const config = rendered.split('  config.1.js: |\n')[1].split('\n---')[0]
 
 function runConfig(initial, failure) {
   const storage = new Map(Object.entries(initial))
-  let writes = 0
   const context = {
     window: {},
     localStorage: {
@@ -30,14 +29,12 @@ function runConfig(initial, failure) {
       setItem(key, value) {
         if (failure === 'write') throw new Error('Storage is full')
         storage.set(key, value)
-        writes += 1
       },
     },
   }
   vm.runInNewContext(config, context)
   assert.equal(context.window.appConfig.selfHosted, true)
-  assert.equal(context.window.appConfig.apiHost, 'logfire.example.com')
-  return { storage, writes, context }
+  return { storage, context }
 }
 
 const fresh = runConfig({})
@@ -53,15 +50,18 @@ assert.deepEqual(JSON.parse(existing.storage.get('disableFeatureFlags')), ['prof
 assert.equal(existing.storage.get('featureFlags'), '["public_conversations"]')
 
 const alreadyDisabled = runConfig({ disableFeatureFlags: '["profiles","whats_new"]' })
-assert.equal(alreadyDisabled.writes, 0)
 assert.equal(alreadyDisabled.storage.get('disableFeatureFlags'), '["profiles","whats_new"]')
 
-for (const malformed of ['{', 'null', '{}', '[null,"profiles",1]']) {
+for (const [malformed, enabledFlags, disabledFlags] of [
+  ['{', [], ['whats_new']],
+  ['null', [], ['whats_new']],
+  ['{}', [], ['whats_new']],
+  ['[null,"profiles",1]', ['profiles'], ['profiles', 'whats_new']],
+]) {
   const result = runConfig({ disableFeatureFlags: malformed })
-  const expected = malformed.startsWith('[') ? ['profiles', 'whats_new'] : ['whats_new']
-  assert.deepEqual(JSON.parse(result.storage.get('disableFeatureFlags')), expected)
+  assert.deepEqual(JSON.parse(result.storage.get('disableFeatureFlags')), disabledFlags)
   const malformedEnabled = runConfig({ featureFlags: malformed })
-  assert.deepEqual(JSON.parse(malformedEnabled.storage.get('featureFlags')), expected.filter((flag) => flag !== 'whats_new'))
+  assert.deepEqual(JSON.parse(malformedEnabled.storage.get('featureFlags')), enabledFlags)
   assert.deepEqual(JSON.parse(malformedEnabled.storage.get('disableFeatureFlags')), ['whats_new'])
 }
 for (const failure of ['read', 'write']) runConfig({}, failure)

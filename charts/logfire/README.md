@@ -167,7 +167,7 @@ Before installing in production, confirm that you have:
 * Public hostname and TLS values set through `ingress.*` or `gateway.*`, even if you expose the Service another way.
 * External PostgreSQL databases for `crud`, `ff`, and `dex`.
 * Object storage using `s3://`, `gs://`, or `az://`.
-* A shared `ReadWriteMany` volume for Python feature files. Configure `pythonObjectStore.persistence.storageClassName` or `pythonObjectStore.persistence.existingClaim`.
+* A shared `ReadWriteMany` volume for Python feature files when the object store uses S3 or Azure. Configure `pythonObjectStore.persistence.storageClassName` or `pythonObjectStore.persistence.existingClaim`.
 * A managed Redis endpoint configured through `redisDsn`.
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
@@ -311,12 +311,19 @@ Do not enable bucket versioning. Logfire manages its own data lifecycle, and buc
 
 ### Python feature files
 
-Session replays, visual tests, and scheduled-query results use a shared persistent volume at `/var/lib/logfire`.
-The backend and worker mount the same claim because each process must read files that the other process writes.
-This storage is separate from `objectStore.uri`, which stores Fusionfire telemetry.
-The pinned report-results implementation does not support an S3 URI.
+Session replays, visual tests, and scheduled-query results reuse `objectStore.uri` by default when it uses `gs://` or `gcs://`.
+The chart places each feature under its own prefix in that bucket.
+The backend and worker receive the existing object-store environment and credential mounts.
+Both processes need Google Application Default Credentials, such as workload identity or `GOOGLE_APPLICATION_CREDENTIALS`.
+Fusionfire-specific credentials do not replace Python Application Default Credentials.
+Set `pythonObjectStore.persistence.existingClaim` to use a shared filesystem instead, including when the telemetry store uses GCS.
 
-The chart creates a `ReadWriteMany` claim named `logfire-python-object-store` by default.
+The pinned Python implementations accept GCS and filesystem URIs.
+They do not accept S3 or Azure URIs.
+For these providers, the backend and worker use a shared persistent volume at `/var/lib/logfire`.
+Both processes mount the same claim because each process must read files that the other process writes.
+
+For a non-GCS object store, the chart creates a `ReadWriteMany` claim named `<release>-python-object-store`.
 Set a StorageClass that supports shared access across nodes:
 
 ```yaml
@@ -337,7 +344,7 @@ Include this volume in your backup and retention procedures.
 Helm retains a chart-managed claim when you uninstall or roll back the release.
 Delete the retained claim separately only when you no longer need its files.
 
-An upgrade from a chart that uses per-pod `emptyDir` storage does not copy its existing feature files into the shared claim.
+An upgrade from per-pod `emptyDir` storage does not copy existing feature files into GCS or the shared claim.
 Copy any files that you need before the upgrade replaces those pods.
 
 ### Product announcements
@@ -348,11 +355,9 @@ This compatibility disable requires browser storage.
 An explicit browser override can enable it again in this image.
 Release-specific announcements require a frontend image with that support.
 
-### Usage Redis
+### Redis
 
-The pinned worker reads usage from `redisDsn` without a namespace prefix.
-Thus `usageRedis.dsn` must be empty or equal to `redisDsn`, and `usageRedis.prefix` must be empty.
-The chart rejects a separate usage Redis destination until the worker supports it.
+All workloads use `redisDsn` for shared Redis data, including usage, autocomplete, and rate limiting.
 
 ### PostgreSQL
 
@@ -824,13 +829,13 @@ Before diving deeper, verify these common configuration issues:
 | postgresql.primary.persistence.size | string | `"10Gi"` |  |
 | postgresql.primary.resourcesPreset | string | `"small"` |  |
 | priorityClassName | string | `""` | Pod priority class See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
-| pythonObjectStore | object | `{"persistence":{"accessModes":["ReadWriteMany"],"annotations":{},"enabled":true,"existingClaim":"","size":"10Gi","storageClassName":""}}` | Shared filesystem for Python recordings, screenshots and report results. This store is separate from the Fusionfire telemetry bucket. |
+| pythonObjectStore | object | `{"persistence":{"accessModes":["ReadWriteMany"],"annotations":{},"enabled":true,"existingClaim":"","size":"10Gi","storageClassName":""}}` | Filesystem storage for Python recordings, screenshots and report results. GCS deployments reuse objectStore.uri unless an existing claim is supplied. |
 | pythonObjectStore.persistence.accessModes | list | `["ReadWriteMany"]` | Access modes for a chart-managed claim. ReadWriteOnce is supported only for single-node development. |
 | pythonObjectStore.persistence.annotations | object | `{}` | Annotations for a chart-managed claim. |
-| pythonObjectStore.persistence.enabled | bool | `true` | Keep enabled. The backend and worker must share persistent storage. |
-| pythonObjectStore.persistence.existingClaim | string | `""` | Existing shared claim. When empty, the chart creates `logfire-python-object-store`. |
+| pythonObjectStore.persistence.enabled | bool | `true` | Keep enabled for filesystem storage. GCS reuse does not need a claim. |
+| pythonObjectStore.persistence.existingClaim | string | `""` | Existing shared claim. Takes precedence over GCS reuse. When empty, non-GCS deployments create `<release>-python-object-store`. |
 | pythonObjectStore.persistence.size | string | `"10Gi"` | Capacity for recordings, screenshots and report results. |
-| pythonObjectStore.persistence.storageClassName | string | `""` | StorageClass for the shared claim. Production requires ReadWriteMany support. An empty value uses `defaultStorageClassName` or the cluster default. |
+| pythonObjectStore.persistence.storageClassName | string | `""` | StorageClass for a chart-managed shared claim. Production requires ReadWriteMany support. An empty value uses `defaultStorageClassName` or the cluster default. |
 | rateLimits | object | `{}` | Configure Rate Limiting rules for Logfire endpoints |
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN. Change if using an external Redis instance. |
 | releaseVersion | string | `"v2026-10-07.02"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
@@ -869,9 +874,6 @@ Before diving deeper, verify these common configuration issues:
 | tokenRedis.prefix | string | `""` | Key prefix for auth token cache keys. |
 | tolerations | list | `[]` | Tolerations applied to all workloads |
 | topologySpreadConstraints | list | `[]` | topologySpreadConstraints applied to all workloads |
-| usageRedis | object | `{"dsn":"","prefix":""}` | Redis settings for usage, autocomplete, and rate limiting data. The pinned worker requires the same instance as `redisDsn` and no prefix. |
-| usageRedis.dsn | string | `""` | Leave empty to use `redisDsn`. A separate instance is unsupported by the pinned worker. |
-| usageRedis.prefix | string | `""` | Leave empty. Usage key prefixes are unsupported by the pinned worker. |
 | variablesApiKey | string | `""` | Client-safe API key used by the frontend to evaluate external managed variables through OFREP. The key is written to the public runtime configuration, so it must only have the `project:read_external_variables` scope. |
 | webPush.enabled | bool | `false` | Let users turn on browser push notifications for alerts. Needs the deployment to be served over HTTPS, since browsers register a service worker only on a secure origin. While this is false the settings panel reports push as unavailable. |
 | webPush.privateKey | string | `""` | VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one and keep it across upgrades. Replacing it unregisters every device that had push on, which each browser recovers from by subscribing again on its next visit. |

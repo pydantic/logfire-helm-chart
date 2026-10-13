@@ -168,7 +168,7 @@ Before installing in production, confirm that you have:
 * Public hostname and TLS values set through `ingress.*` or `gateway.*`, even if you expose the Service another way.
 * External PostgreSQL databases for `crud`, `ff`, and `dex`.
 * Object storage using `s3://`, `gs://`, or `az://`.
-* A shared `ReadWriteMany` volume for Python feature files. Configure `pythonObjectStore.persistence.storageClassName` or `pythonObjectStore.persistence.existingClaim`.
+* A shared `ReadWriteMany` volume for Python feature files when the object store uses S3 or Azure. Configure `pythonObjectStore.persistence.storageClassName` or `pythonObjectStore.persistence.existingClaim`.
 * A managed Redis endpoint configured through `redisDsn`.
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
@@ -312,12 +312,19 @@ Do not enable bucket versioning. Logfire manages its own data lifecycle, and buc
 
 ### Python feature files
 
-Session replays, visual tests, and scheduled-query results use a shared persistent volume at `/var/lib/logfire`.
-The backend and worker mount the same claim because each process must read files that the other process writes.
-This storage is separate from `objectStore.uri`, which stores Fusionfire telemetry.
-The pinned report-results implementation does not support an S3 URI.
+Session replays, visual tests, and scheduled-query results reuse `objectStore.uri` by default when it uses `gs://` or `gcs://`.
+The chart places each feature under its own prefix in that bucket.
+The backend and worker receive the existing object-store environment and credential mounts.
+Both processes need Google Application Default Credentials, such as workload identity or `GOOGLE_APPLICATION_CREDENTIALS`.
+Fusionfire-specific credentials do not replace Python Application Default Credentials.
+Set `pythonObjectStore.persistence.existingClaim` to use a shared filesystem instead, including when the telemetry store uses GCS.
 
-The chart creates a `ReadWriteMany` claim named `logfire-python-object-store` by default.
+The pinned Python implementations accept GCS and filesystem URIs.
+They do not accept S3 or Azure URIs.
+For these providers, the backend and worker use a shared persistent volume at `/var/lib/logfire`.
+Both processes mount the same claim because each process must read files that the other process writes.
+
+For a non-GCS object store, the chart creates a `ReadWriteMany` claim named `<release>-python-object-store`.
 Set a StorageClass that supports shared access across nodes:
 
 ```yaml
@@ -338,7 +345,7 @@ Include this volume in your backup and retention procedures.
 Helm retains a chart-managed claim when you uninstall or roll back the release.
 Delete the retained claim separately only when you no longer need its files.
 
-An upgrade from a chart that uses per-pod `emptyDir` storage does not copy its existing feature files into the shared claim.
+An upgrade from per-pod `emptyDir` storage does not copy existing feature files into GCS or the shared claim.
 Copy any files that you need before the upgrade replaces those pods.
 
 ### Product announcements
@@ -349,11 +356,9 @@ This compatibility disable requires browser storage.
 An explicit browser override can enable it again in this image.
 Release-specific announcements require a frontend image with that support.
 
-### Usage Redis
+### Redis
 
-The pinned worker reads usage from `redisDsn` without a namespace prefix.
-Thus `usageRedis.dsn` must be empty or equal to `redisDsn`, and `usageRedis.prefix` must be empty.
-The chart rejects a separate usage Redis destination until the worker supports it.
+All workloads use `redisDsn` for shared Redis data, including usage, autocomplete, and rate limiting.
 
 ### PostgreSQL
 

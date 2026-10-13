@@ -1,3 +1,4 @@
+{{- if ne (include "logfire.pythonObjectStoreUsesGcs" .) "true" -}}
 {{- include "logfire.validate.pythonObjectStore" . -}}
 {{- $persistence := .Values.pythonObjectStore.persistence -}}
 {{- if not $persistence.existingClaim }}
@@ -17,4 +18,5 @@ spec:
   resources:
     requests:
       storage: {{ $persistence.size | quote }}
+{{- end }}
 {{- end }}

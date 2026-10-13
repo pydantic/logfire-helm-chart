@@ -329,14 +329,10 @@ Validate Redis configuration
     {{- fail "redisDsn is required when logfire-redis.enabled is false. Provide a Redis DSN for your external Redis instance." -}}
   {{- end -}}
 {{- end -}}
-{{- $usageDsn := include "logfire.redisDsnFor" (dict "root" . "valuesKey" "usageRedis") -}}
-{{- $usagePrefix := include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "usageRedis") -}}
-{{- if or (ne $usageDsn .Values.redisDsn) $usagePrefix -}}
-  {{- fail "The pinned platform worker cannot consume separate usage Redis data. Leave usageRedis.dsn empty or equal to redisDsn, and leave usageRedis.prefix empty." -}}
-{{- end -}}
 {{- end -}}
 
 {{- define "logfire.validate.pythonObjectStore" -}}
+{{- if ne (include "logfire.pythonObjectStoreUsesGcs" .) "true" -}}
 {{- $persistence := .Values.pythonObjectStore.persistence -}}
 {{- if not $persistence.enabled -}}
   {{- fail "pythonObjectStore.persistence.enabled must remain true. The backend and worker need shared persistent storage for recordings, screenshots and report results. Set pythonObjectStore.persistence.existingClaim to use an existing claim." -}}
@@ -348,6 +344,7 @@ Validate Redis configuration
   {{- if not (or (has "ReadWriteMany" $persistence.accessModes) (and .Values.dev.deployPostgres (has "ReadWriteOnce" $persistence.accessModes))) -}}
     {{- fail "pythonObjectStore.persistence.accessModes must include ReadWriteMany. ReadWriteOnce is supported only for single-node development with dev.deployPostgres=true. Use a shared claim or a StorageClass that supports ReadWriteMany." -}}
   {{- end -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 

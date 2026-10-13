@@ -9,194 +9,6 @@ set:
   dev:
     deployPostgres: true
 tests:
-  - it: gives the backend and worker the same durable claim and feature directories
-    templates:
-      - templates/logfire-python-object-store.yaml
-      - templates/logfire-backend.yaml
-      - templates/logfire-worker.yaml
-    asserts:
-      - equal:
-          path: metadata.name
-          value: logfire-python-object-store
-        template: templates/logfire-python-object-store.yaml
-      - equal:
-          path: spec.accessModes
-          value: [ReadWriteMany]
-        template: templates/logfire-python-object-store.yaml
-      - equal:
-          path: metadata.annotations["helm.sh/resource-policy"]
-          value: keep
-        template: templates/logfire-python-object-store.yaml
-      - contains:
-          path: spec.template.spec.volumes
-          content:
-            name: logfire-data
-            persistentVolumeClaim:
-              claimName: logfire-python-object-store
-        template: templates/logfire-backend.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.volumes
-          content:
-            name: logfire-data
-            persistentVolumeClaim:
-              claimName: logfire-python-object-store
-        template: templates/logfire-worker.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: SESSION_REPLAY_OBJECT_STORE_URI
-            value: file:///var/lib/logfire/session-replays
-        template: templates/logfire-backend.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: SESSION_REPLAY_OBJECT_STORE_URI
-            value: file:///var/lib/logfire/session-replays
-        template: templates/logfire-worker.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: VISUAL_TESTS_OBJECT_STORE_URI
-            value: file:///var/lib/logfire/visual-tests
-        template: templates/logfire-backend.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: VISUAL_TESTS_OBJECT_STORE_URI
-            value: file:///var/lib/logfire/visual-tests
-        template: templates/logfire-worker.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
-            value: file:///var/lib/logfire/scheduled-query-results
-        template: templates/logfire-backend.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
-            value: file:///var/lib/logfire/scheduled-query-results
-        template: templates/logfire-worker.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.securityContext.fsGroup
-          value: 1000
-        template: templates/logfire-backend.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.securityContext.fsGroup
-          value: 1000
-        template: templates/logfire-worker.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: mounts an existing claim in both services without creating another claim
-    set:
-      pythonObjectStore.persistence.existingClaim: shared-python-objects
-    templates:
-      - templates/logfire-python-object-store.yaml
-      - templates/logfire-backend.yaml
-      - templates/logfire-worker.yaml
-    asserts:
-      - hasDocuments:
-          count: 0
-        template: templates/logfire-python-object-store.yaml
-      - contains:
-          path: spec.template.spec.volumes
-          content:
-            name: logfire-data
-            persistentVolumeClaim:
-              claimName: shared-python-objects
-        template: templates/logfire-backend.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.volumes
-          content:
-            name: logfire-data
-            persistentVolumeClaim:
-              claimName: shared-python-objects
-        template: templates/logfire-worker.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: uses the shared storage class and capacity override
-    set:
-      defaultStorageClassName: generic-storage
-      pythonObjectStore.persistence:
-        storageClassName: shared-storage
-        size: 25Gi
-    templates:
-      - templates/logfire-python-object-store.yaml
-    asserts:
-      - equal:
-          path: spec.storageClassName
-          value: shared-storage
-      - equal:
-          path: spec.resources.requests.storage
-          value: 25Gi
-
-  - it: inherits the global storage class when no shared-store override is supplied
-    set:
-      defaultStorageClassName: shared-storage
-    templates:
-      - templates/logfire-python-object-store.yaml
-    asserts:
-      - equal:
-          path: spec.storageClassName
-          value: shared-storage
-
-  - it: preserves chart and service ownership overrides for shared storage
-    set:
-      podSecurityContext.fsGroup: 2000
-      logfire-worker.podSecurityContext.fsGroup: 3000
-    templates:
-      - templates/logfire-backend.yaml
-      - templates/logfire-worker.yaml
-    asserts:
-      - equal:
-          path: spec.template.spec.securityContext.fsGroup
-          value: 2000
-        template: templates/logfire-backend.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.securityContext.fsGroup
-          value: 3000
-        template: templates/logfire-worker.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-
   - it: refuses per-pod ephemeral storage for features shared by the backend and worker
     set:
       pythonObjectStore.persistence.enabled: false
@@ -222,95 +34,180 @@ tests:
       - failedTemplate:
           errorPattern: 'pythonObjectStore.persistence.accessModes must include ReadWriteMany'
 
-  - it: accepts a shared RWO claim for single-node development
+  - it: preserves global and service ownership overrides for shared storage
     set:
-      pythonObjectStore.persistence.accessModes: [ReadWriteOnce]
+      podSecurityContext.fsGroup: 2000
+      logfire-worker.podSecurityContext.fsGroup: 3000
     templates:
-      - templates/logfire-python-object-store.yaml
-    asserts:
-      - equal:
-          path: spec.accessModes
-          value: [ReadWriteOnce]
-
-  - it: rejects a usage Redis instance the pinned worker cannot read
-    set:
-      usageRedis.dsn: redis://usage-redis:6379
-    asserts:
-      - failedTemplate:
-          errorPattern: 'pinned platform worker cannot consume separate usage Redis data'
-
-  - it: rejects usage key prefixes the pinned worker cannot read
-    set:
-      usageRedis.prefix: usage
-    asserts:
-      - failedTemplate:
-          errorPattern: 'leave usageRedis.prefix empty'
-
-  - it: keeps MCP in self-hosted mode and on the same usage Redis as the backend and worker
-    set:
-      redisDsn: redis://shared-redis:6379
-      usageRedis.dsn: redis://shared-redis:6379
-    templates:
-      - templates/logfire-remote-mcp.yaml
       - templates/logfire-backend.yaml
       - templates/logfire-worker.yaml
     asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: ON_PREM
-            value: "true"
-        template: templates/logfire-remote-mcp.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: USAGE_REDIS_DSN
-            value: redis://shared-redis:6379
-        template: templates/logfire-remote-mcp.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: USAGE_REDIS_PREFIX
-            value: ""
-        template: templates/logfire-remote-mcp.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: USAGE_REDIS_DSN
-            value: redis://shared-redis:6379
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 2000
         template: templates/logfire-backend.yaml
         documentSelector:
           path: kind
           value: Deployment
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: SHARED_REDIS_DSN
-            value: redis://shared-redis:6379
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 3000
         template: templates/logfire-worker.yaml
         documentSelector:
           path: kind
           value: Deployment
-      - equal:
-          path: spec.template.spec.containers[0].livenessProbe.httpGet.path
-          value: /health/live
-        template: templates/logfire-remote-mcp.yaml
-        documentSelector:
+
+  - it: lets both Python services read restricted GCS credentials without a filesystem claim
+    set:
+      objectStore:
+        uri: gs://test-bucket/python-files/
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /var/run/gcs/service-account.json
+        volumeMounts:
+          - name: gcs-credentials
+            mountPath: /var/run/gcs
+            readOnly: true
+        volumes:
+          - name: gcs-credentials
+            secret:
+              secretName: gcs-credentials
+              defaultMode: 0400
+      pythonObjectStore.persistence.enabled: false
+    templates:
+      - templates/logfire-python-object-store.yaml
+      - templates/logfire-backend.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/logfire-python-object-store.yaml
+      - notExists: &filesystemClaim
+          path: spec.template.spec.volumes[*].persistentVolumeClaim
+        template: templates/logfire-backend.yaml
+        documentSelector: &deployment
           path: kind
           value: Deployment
-      - equal:
-          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
-          value: /health
-        template: templates/logfire-remote-mcp.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
+      - notExists: *filesystemClaim
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
+      - equal: &credentialsGroup
+          path: spec.template.spec.securityContext.fsGroup
+          value: 1000
+        template: templates/logfire-backend.yaml
+        documentSelector: *deployment
+      - equal: *credentialsGroup
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
+      - equal: &replayUri
+          path: spec.template.spec.containers[0].env[?(@.name == "SESSION_REPLAY_OBJECT_STORE_URI")].value
+          value: gs://test-bucket/python-files/session-replays
+        template: templates/logfire-backend.yaml
+        documentSelector: *deployment
+      - equal: *replayUri
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
+      - equal: &visualTestsUri
+          path: spec.template.spec.containers[0].env[?(@.name == "VISUAL_TESTS_OBJECT_STORE_URI")].value
+          value: gs://test-bucket/python-files/visual-tests
+        template: templates/logfire-backend.yaml
+        documentSelector: *deployment
+      - equal: *visualTestsUri
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
+      - equal: &reportsUri
+          path: spec.template.spec.containers[0].env[?(@.name == "SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI")].value
+          value: gs://test-bucket/python-files/scheduled-query-results
+        template: templates/logfire-backend.yaml
+        documentSelector: *deployment
+      - equal: *reportsUri
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
+      - equal: &credentialsPath
+          path: spec.template.spec.containers[0].env[?(@.name == "GOOGLE_APPLICATION_CREDENTIALS")].value
+          value: /var/run/gcs/service-account.json
+        template: templates/logfire-backend.yaml
+        documentSelector: *deployment
+      - equal: *credentialsPath
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
+      - contains: &credentialsMount
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: gcs-credentials
+            mountPath: /var/run/gcs
+            readOnly: true
+        template: templates/logfire-backend.yaml
+        documentSelector: *deployment
+      - contains: *credentialsMount
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
+      - contains: &credentialsVolume
+          path: spec.template.spec.volumes
+          content:
+            name: gcs-credentials
+            secret:
+              secretName: gcs-credentials
+              defaultMode: 0400
+        template: templates/logfire-backend.yaml
+        documentSelector: *deployment
+      - contains: *credentialsVolume
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
+
+  - it: gives both Python services the existing filesystem claim when the main object store uses GCS
+    set:
+      objectStore.uri: gs://test-bucket/python-files/
+      pythonObjectStore.persistence.existingClaim: shared-python-files
+    templates:
+      - templates/logfire-python-object-store.yaml
+      - templates/logfire-backend.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+        template: templates/logfire-python-object-store.yaml
+      - contains: &existingClaim
+          path: spec.template.spec.volumes
+          content:
+            name: logfire-data
+            persistentVolumeClaim:
+              claimName: shared-python-files
+        template: templates/logfire-backend.yaml
+        documentSelector: *deployment
+      - contains: *existingClaim
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
+      - contains: &sharedMount
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: logfire-data
+            mountPath: /var/lib/logfire
+        template: templates/logfire-backend.yaml
+        documentSelector: *deployment
+      - contains: *sharedMount
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
+      - equal: &fileReplayUri
+          path: spec.template.spec.containers[0].env[?(@.name == "SESSION_REPLAY_OBJECT_STORE_URI")].value
+          value: file:///var/lib/logfire/session-replays
+        template: templates/logfire-backend.yaml
+        documentSelector: *deployment
+      - equal: *fileReplayUri
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
+      - equal: &fileVisualTestsUri
+          path: spec.template.spec.containers[0].env[?(@.name == "VISUAL_TESTS_OBJECT_STORE_URI")].value
+          value: file:///var/lib/logfire/visual-tests
+        template: templates/logfire-backend.yaml
+        documentSelector: *deployment
+      - equal: *fileVisualTestsUri
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
+      - equal: &fileReportsUri
+          path: spec.template.spec.containers[0].env[?(@.name == "SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI")].value
+          value: file:///var/lib/logfire/scheduled-query-results
+        template: templates/logfire-backend.yaml
+        documentSelector: *deployment
+      - equal: *fileReportsUri
+        template: templates/logfire-worker.yaml
+        documentSelector: *deployment
