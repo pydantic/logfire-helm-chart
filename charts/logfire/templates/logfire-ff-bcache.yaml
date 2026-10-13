@@ -2,6 +2,13 @@
 {{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
 {{- $podSecurityContext := include "logfire.fusionfirePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $extraEnv := (index .Values $serviceName | default dict).env | default list -}}
+{{- $hasRustLog := false -}}
+{{- range $extraEnv -}}
+  {{- if eq .name "RUST_LOG" -}}
+    {{- $hasRustLog = true -}}
+  {{- end -}}
+{{- end -}}
 {{- $tls := include "logfire.inClusterTls.enabled" . | eq "true" -}}
 {{- $portName := ternary "https" "http" $tls -}}
 {{- $scheme := ternary "HTTPS" "HTTP" $tls -}}
@@ -104,6 +111,13 @@ spec:
           {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           env:
+            {{- if not $hasRustLog }}
+            - name: RUST_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: logfire-ff-base-config
+                  key: RUST_LOG
+            {{- end }}
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             {{- include "logfire.objectStoreEnv" . | nindent 12 }}
             {{- include "logfire.ffResourceEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
@@ -134,7 +148,7 @@ spec:
             - name: FF_TLS_KEY_PATH
               value: /etc/tls/tls.key
             {{- end }}
-            {{- with (index .Values $serviceName | default dict).env }}
+            {{- with $extraEnv }}
               {{- . | toYaml | nindent 12 }}
             {{- end }}
           volumeMounts:
