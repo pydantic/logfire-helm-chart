@@ -5,6 +5,7 @@
 {{- $queueStorage := .Values.otel_collector.queueStorage }}
 {{- include "logfire.validate.otelQueueStorage" . }}
 {{- include "logfire.validate.otelSelfMetricsPort" . }}
+{{- include "logfire.validate.otelExtraComponents" . }}
 {{- $prometheusEnabled := include "isPrometheusExporterEnabled" . | trim | eq "true" }}
 {{- $promValues := .Values.otel_collector.prometheus | default dict }}
 {{- $delta_to_cumulative := true }}
@@ -67,6 +68,9 @@ data:
         {{- . | toYaml | nindent 12 }}
         {{- end }}
       {{- end }}
+      {{- end }}
+      {{- with .Values.otel_collector.extraExporters }}
+      {{- toYaml . | nindent 6 }}
       {{- end }}
 
 
@@ -139,6 +143,9 @@ data:
             - tag_name: kube_app_managed_by
               key: app.kubernetes.io/managed-by
               from: pod
+      {{- with .Values.otel_collector.extraProcessors }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
     extensions:
       {{- if $queueStorage.enabled }}
       file_storage/queue:
@@ -191,3 +198,6 @@ data:
           receivers: [otlp]
           processors: [memory_limiter, k8s_attributes]
           exporters: [otlp_http]
+        {{- with .Values.otel_collector.extraPipelines }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}

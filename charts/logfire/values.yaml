@@ -1714,6 +1714,15 @@ otelResourceAttributes: {}
 
 # -- otel-collector configuration
 otel_collector:
+  serviceAccount:
+    # -- Annotations for the collector's ServiceAccount, for example a Workload Identity binding.
+    annotations: {}
+  # -- Additional collector exporters. Chart-owned component names are reserved.
+  extraExporters: {}
+  # -- Additional collector processors. These only run in pipelines that reference them.
+  extraProcessors: {}
+  # -- Additional collector pipelines. The chart's existing telemetry pipelines stay unchanged.
+  extraPipelines: {}
   # -- Disk-backed OTLP queues on a per-pod emptyDir. Survives container restarts,
   # but not pod replacement, rollouts, or eviction. Disable to use memory queues.
   # Storage exhaustion can still lose already-acknowledged records.

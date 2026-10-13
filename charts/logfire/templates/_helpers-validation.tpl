@@ -413,6 +413,27 @@ Call this from templates that need to ensure configuration is valid.
 {{- end -}}
 {{- end -}}
 
+{{/* Extra collector components must not replace the chart's telemetry path. */}}
+{{- define "logfire.validate.otelExtraComponents" -}}
+{{- $otel := .Values.otel_collector -}}
+{{- $reserved := dict
+  "extraExporters" (list "otlp_http" "debug" "prometheus")
+  "extraProcessors" (list "memory_limiter" "k8s_attributes" "delta_to_cumulative")
+  "extraPipelines" (list "traces" "metrics" "logs" "metrics/prometheus")
+  -}}
+{{- range $key, $names := $reserved -}}
+  {{- $components := get $otel $key | default dict -}}
+  {{- if not (kindIs "map" $components) -}}
+    {{- fail (printf "otel_collector.%s must be a map of collector component names to configuration." $key) -}}
+  {{- end -}}
+  {{- range $name, $_ := $components -}}
+    {{- if has $name $names -}}
+      {{- fail (printf "otel_collector.%s cannot replace chart-owned component %q. Use a different component name." $key $name) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{/* Each of the three signal databases needs room for its compaction copy. */}}
 {{- define "logfire.validate.otelQueueStorage" -}}
 {{- $storage := .Values.otel_collector.queueStorage -}}
