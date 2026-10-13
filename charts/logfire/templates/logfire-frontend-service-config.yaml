@@ -35,27 +35,6 @@ data:
       variablesApiKey: {{ . | toJson }}
       {{- end }}
     }
-    // The pinned frontend reads its feature overrides from local storage.
-    // Disable the live SaaS changelog until the image supports self-hosted release notes.
-    try {
-      for (const key of ['featureFlags', 'disableFeatureFlags']) {
-        const current = localStorage.getItem(key)
-        let flags = []
-        try {
-          const savedFlags = JSON.parse(current ?? '[]')
-          if (Array.isArray(savedFlags)) {
-            flags = savedFlags.filter((flag) => typeof flag === 'string')
-          }
-        } catch {}
-        if (key === 'disableFeatureFlags' && !flags.includes('whats_new')) {
-          flags.push('whats_new')
-        }
-        const updated = JSON.stringify(flags)
-        if ((current !== null || flags.length > 0) && current !== updated) {
-          localStorage.setItem(key, updated)
-        }
-      }
-    } catch {}
 ---
 apiVersion: v1
 kind: ConfigMap

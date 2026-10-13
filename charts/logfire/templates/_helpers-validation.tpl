@@ -331,23 +331,6 @@ Validate Redis configuration
 {{- end -}}
 {{- end -}}
 
-{{- define "logfire.validate.pythonObjectStore" -}}
-{{- if ne (include "logfire.pythonObjectStoreUsesGcs" .) "true" -}}
-{{- $persistence := .Values.pythonObjectStore.persistence -}}
-{{- if not $persistence.enabled -}}
-  {{- fail "pythonObjectStore.persistence.enabled must remain true. The backend and worker need shared persistent storage for recordings, screenshots and report results. Set pythonObjectStore.persistence.existingClaim to use an existing claim." -}}
-{{- end -}}
-{{- if not $persistence.existingClaim -}}
-  {{- if not $persistence.size -}}
-    {{- fail "pythonObjectStore.persistence.size is required for the shared object-store claim." -}}
-  {{- end -}}
-  {{- if not (or (has "ReadWriteMany" $persistence.accessModes) (and .Values.dev.deployPostgres (has "ReadWriteOnce" $persistence.accessModes))) -}}
-    {{- fail "pythonObjectStore.persistence.accessModes must include ReadWriteMany. ReadWriteOnce is supported only for single-node development with dev.deployPostgres=true. Use a shared claim or a StorageClass that supports ReadWriteMany." -}}
-  {{- end -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
-
 {{/*
 Validate Gateway API configuration
 */}}
@@ -420,7 +403,6 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.adminSecret"
   "logfire.validate.admin"
   "logfire.validate.redis"
-  "logfire.validate.pythonObjectStore"
   "logfire.validate.smtp"
   "logfire.validate.inClusterTls"
   "logfire.validate.scratchVolumes"

@@ -845,11 +845,7 @@ default. With only `dev.deployRustfs`, `rustfs.auth` is used.
 {{- end }}
 {{- end }}
 {{- end }}
-{{- include "logfire.objectStoreProviderEnv" . }}
-{{- end -}}
-
-{{- define "logfire.objectStoreProviderEnv" -}}
-{{- range $key, $value := .Values.objectStore.env }}
+{{- range $key, $value := $objectStoreEnv }}
 {{- if kindIs "string" $value }}
 {{- $value = tpl $value $ }}
 {{- end }}
@@ -1477,58 +1473,19 @@ container mounts in spec order and a later `/tmp` mount shadows the nested path.
   emptyDir: {}
 {{- end -}}
 
-{{/* The backend and the worker share one durable store for recordings, screenshots and report results. */}}
-{{- define "logfire.pythonObjectStoreClaimName" -}}
-{{- .Values.pythonObjectStore.persistence.existingClaim | default (printf "%s-python-object-store" .Release.Name | trunc 63 | trimSuffix "-") -}}
-{{- end -}}
-
-{{- define "logfire.pythonObjectStoreUsesGcs" -}}
-{{- $uri := include "logfire.objectStoreUri" . | trim | lower -}}
-{{- and (not .Values.pythonObjectStore.persistence.existingClaim) (or (hasPrefix "gs://" $uri) (hasPrefix "gcs://" $uri)) -}}
-{{- end -}}
-
-{{- define "logfire.pythonObjectStoreEnv" -}}
-{{- $base := "file:///var/lib/logfire" -}}
-{{- if eq (include "logfire.pythonObjectStoreUsesGcs" .) "true" -}}
-{{- $base = include "logfire.objectStoreUri" . | trim | trimSuffix "/" -}}
-{{- end -}}
-- name: SESSION_REPLAY_OBJECT_STORE_URI
-  value: {{ printf "%s/session-replays" $base | quote }}
-- name: VISUAL_TESTS_OBJECT_STORE_URI
-  value: {{ printf "%s/visual-tests" $base | quote }}
-- name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
-  value: {{ printf "%s/scheduled-query-results" $base | quote }}
-{{- if eq (include "logfire.pythonObjectStoreUsesGcs" .) "true" }}
-{{- include "logfire.objectStoreProviderEnv" . }}
-{{- end -}}
-{{- end -}}
-
-{{- define "logfire.pythonObjectStorePodSecurityContext" -}}
-{{- $ctx := .ctx -}}
-{{- $serviceValues := get $ctx.Values .serviceName | default dict -}}
-{{- $context := dict "fsGroup" 1000 "fsGroupChangePolicy" "OnRootMismatch" -}}
-{{- $context = mergeOverwrite $context (deepCopy ($ctx.Values.podSecurityContext | default dict)) -}}
-{{- $context = mergeOverwrite $context (deepCopy (get $serviceValues "podSecurityContext" | default dict)) -}}
-{{- $context | toJson -}}
-{{- end -}}
-
+{{/*
+The writable local object store directory for the Python workloads that use it. Self-hosted
+deployments default the session-replay and visual-test stores to `file:///var/lib/logfire`, so
+the backend and the worker need the directory writable under a read-only image root.
+*/}}
 {{- define "logfire.logfireDataVolumeMounts" -}}
-{{- if eq (include "logfire.pythonObjectStoreUsesGcs" .) "true" -}}
-{{- include "logfire.objectStoreVolumeMounts" . -}}
-{{- else -}}
 - name: logfire-data
   mountPath: /var/lib/logfire
 {{- end -}}
-{{- end -}}
 
 {{- define "logfire.logfireDataVolume" -}}
-{{- if eq (include "logfire.pythonObjectStoreUsesGcs" .) "true" -}}
-{{- include "logfire.objectStoreVolumes" . -}}
-{{- else -}}
 - name: logfire-data
-  persistentVolumeClaim:
-    claimName: {{ include "logfire.pythonObjectStoreClaimName" . }}
-{{- end -}}
+  emptyDir: {}
 {{- end -}}
 
 {{- define "logfire.standardPodSpecFields" -}}

@@ -1,6 +1,5 @@
 {{- $serviceName := "logfire-backend" }}
 {{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
-{{- $podSecurityContext := include "logfire.pythonObjectStorePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
 {{- $oauthEnabled := or (include "logfire.effective_tls" . | eq "true") (eq (include "logfire.primary_hostname" .) "localhost") }}
 {{- $gatewayStaticOauthEnabled := and
   (not (include "logfire.effective_tls" . | eq "true"))
@@ -99,7 +98,7 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
     spec:
-      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName "podSecurityContext" $podSecurityContext) | nindent 6 }}
+      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       containers:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
@@ -150,6 +149,10 @@ spec:
               value: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "tokenRedis") }}
             - name: TOKEN_REDIS_PREFIX
               value: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "tokenRedis") | quote }}
+            - name: USAGE_REDIS_DSN
+              value: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "usageRedis") }}
+            - name: USAGE_REDIS_PREFIX
+              value: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "usageRedis") | quote }}
             - name: REDIS_DSN
               value: {{ .Values.redisDsn }}
             - name: WORKER_REDIS_DSN
@@ -181,7 +184,6 @@ spec:
                   key: logfire-dex-client-secret
             - name: ON_PREM
               value: "true"
-            {{- include "logfire.pythonObjectStoreEnv" . | nindent 12 }}
             - name: BROWSER_TELEMETRY_COLLECTOR_OTLP_HTTP_HOST
               value: http://logfire-otel-collector:4318
             - name: COLLECTOR_OTLP_GRPC_HOST

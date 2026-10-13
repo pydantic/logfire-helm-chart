@@ -51,11 +51,9 @@ The release checks cover:
 | Variable SSE | An immediate first frame reaches the client through the service |
 | Metric storage | An ingested counter is queried through its value struct |
 | Frontend contracts | The image serves its build identity, worker and frame policies, and setup Markdown |
-| Python feature storage | Backend and worker processes read each other's files through the shared claim |
 
-Kind uses RustFS for the existing telemetry object store and a shared filesystem claim for Python feature files.
-The suite does not test live cloud IAM or a production ReadWriteMany storage provider.
-The shared-file check verifies volume access. It does not run the experimental Reports workflow.
+Kind uses RustFS for the existing telemetry object store. The suite does not test live
+cloud IAM. Scheduled-query storage remains a follow-up while Reports is experimental.
 The metric fixture uses a numeric JSON int: the pinned platform decoder drops string-valued
 `asInt` points, including canonical OTLP JSON int64 strings. That compatibility defect
 also exists in 0.14.0 and needs an upstream fix.

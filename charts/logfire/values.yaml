@@ -1692,22 +1692,13 @@ tokenRedis:
   # -- Key prefix for auth token cache keys.
   prefix: ""
 
-# -- Filesystem storage for Python recordings, screenshots and report results. GCS deployments reuse objectStore.uri unless an existing claim is supplied.
-pythonObjectStore:
-  persistence:
-    # -- Keep enabled for filesystem storage. GCS reuse does not need a claim.
-    enabled: true
-    # -- Existing shared claim. Takes precedence over GCS reuse. When empty, non-GCS deployments create `<release>-python-object-store`.
-    existingClaim: ""
-    # -- StorageClass for a chart-managed shared claim. Production requires ReadWriteMany support. An empty value uses `defaultStorageClassName` or the cluster default.
-    storageClassName: ""
-    # -- Access modes for a chart-managed claim. ReadWriteOnce is supported only for single-node development.
-    accessModes:
-      - ReadWriteMany
-    # -- Capacity for recordings, screenshots and report results.
-    size: 10Gi
-    # -- Annotations for a chart-managed claim.
-    annotations: {}
+# -- Redis settings for usage, autocomplete, and rate limiting data. Empty DSN falls back to `redisDsn`.
+# Use a prefix only when sharing one Redis instance with other data.
+usageRedis:
+  # -- Redis DSN for usage, autocomplete, and rate limiting data.
+  dsn: ""
+  # -- Key prefix for usage keys.
+  prefix: ""
 
 
 # ==============================================================================

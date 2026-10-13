@@ -9,12 +9,6 @@ imagePullSecrets:
 sizingPreset: standard
 adminEmail: sre@example.com
 
-# Provide a StorageClass that supports ReadWriteMany, or an existing shared RWX claim.
-pythonObjectStore:
-  persistence:
-    storageClassName: shared-rwx
-    # existingClaim: logfire-python-objects
-
 # Optional: set a StorageClass for chart-managed PVCs used by the selected
 # sizing preset. Per-workload storageClassName values still take precedence.
 # defaultStorageClassName: fast-storage
