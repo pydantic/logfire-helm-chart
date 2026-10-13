@@ -7,6 +7,13 @@ imagePullSecrets:
 
 adminEmail: hello@example.dev
 
+# The development cluster must have one node because these services share an RWO claim.
+pythonObjectStore:
+  persistence:
+    accessModes:
+      - ReadWriteOnce
+    size: 1Gi
+
 ingress:
   enabled: false
   tls: false

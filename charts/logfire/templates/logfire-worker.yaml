@@ -1,5 +1,6 @@
 {{- $serviceName := "logfire-worker" }}
 {{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
+{{- $podSecurityContext := include "logfire.pythonObjectStorePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,7 +36,7 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
     spec:
-      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
+      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName "podSecurityContext" $podSecurityContext) | nindent 6 }}
       terminationGracePeriodSeconds: 60
       containers:
         - name: {{ $serviceName }}
@@ -109,6 +110,7 @@ spec:
               value: http://logfire-otel-collector:4317
             - name: ON_PREM
               value: "true"
+            {{- include "logfire.pythonObjectStoreEnv" . | nindent 12 }}
             - name: EMAILS_ENABLED
               value: {{ include "logfire.emailsEnabled" . | quote }}
             - name: FRONTEND_HOST

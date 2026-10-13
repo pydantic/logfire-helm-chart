@@ -35,6 +35,27 @@ data:
       variablesApiKey: {{ . | toJson }}
       {{- end }}
     }
+    // The pinned frontend reads its feature overrides from local storage.
+    // Disable the live SaaS changelog until the image supports self-hosted release notes.
+    try {
+      for (const key of ['featureFlags', 'disableFeatureFlags']) {
+        const current = localStorage.getItem(key)
+        let flags = []
+        try {
+          const savedFlags = JSON.parse(current ?? '[]')
+          if (Array.isArray(savedFlags)) {
+            flags = savedFlags.filter((flag) => typeof flag === 'string')
+          }
+        } catch {}
+        if (key === 'disableFeatureFlags' && !flags.includes('whats_new')) {
+          flags.push('whats_new')
+        }
+        const updated = JSON.stringify(flags)
+        if ((current !== null || flags.length > 0) && current !== updated) {
+          localStorage.setItem(key, updated)
+        }
+      }
+    } catch {}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -77,6 +98,10 @@ data:
         include /etc/nginx/mime.types;
 
         server_names_hash_bucket_size 128;
+
+        upstream logfire_backend {
+            server logfire-backend.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }}:{{ include "logfire.port" (dict "root" . "port" 8000) }};
+        }
 
 
         {{- if $inClusterTlsEnabled }}
@@ -127,7 +152,7 @@ data:
 
             # Enhanced JSON view render worker. This worker executes saved/transpiled
             # view code, so it gets a tighter policy than the main app chunks.
-            location ~ "^/assets/safeRender-.+\.js$" {
+            location ~ "^/assets/safe-render-.+\.js$" {
                 expires 30d;
                 add_header X-Content-Type-Options "nosniff" always;
                 add_header Cache-Control "public, max-age=2592000";
@@ -154,6 +179,37 @@ data:
                 add_header Cache-Control "no-store";
                 add_header X-Content-Type-Options "nosniff" always;
                 try_files /frontend-assets.txt =404;
+            }
+
+            location = /version.json {
+                root /tmp/nginx;
+                default_type application/json;
+                add_header Cache-Control "no-store" always;
+                add_header X-Content-Type-Options "nosniff" always;
+                try_files /version.json =404;
+            }
+
+            location ~ "^/(?<agent_setup_org>[^/.]+)/(?<agent_setup_project>[^/.]+)/agent-setup\.md\.?$" {
+                access_log off;
+                proxy_pass {{ include "logfire.scheme" . }}://logfire_backend/ui-api/agent-setup/$agent_setup_org/$agent_setup_project.md$is_args$args;
+                {{- if $inClusterTlsEnabled }}
+                proxy_ssl_verify on;
+                proxy_ssl_trusted_certificate /etc/nginx/ca/ca.crt;
+                proxy_ssl_server_name on;
+                proxy_ssl_name logfire-backend.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }};
+                {{- end }}
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto {{ $tls | ternary "https" "http" }};
+            }
+
+            location = /replay-frame.html {
+                add_header Cache-Control "no-store" always;
+                add_header X-Content-Type-Options "nosniff" always;
+                add_header Referrer-Policy "no-referrer" always;
+                add_header Content-Security-Policy "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' https: blob: data:; font-src 'self'; media-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self';" always;
+                try_files /replay-frame.html =404;
             }
 
             location /image-iframe.html {
@@ -185,9 +241,11 @@ data:
                 add_header X-Content-Type-Options "nosniff" always;
                 add_header Cross-Origin-Opener-Policy "same-origin" always;
                 add_header Referrer-Policy "no-referrer" always;
-                # Custom panels may fetch user-selected APIs, so `connect-src *` is intentional.
-                # The response sandbox keeps direct navigations in an opaque origin.
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self'; sandbox allow-scripts;" always;
+                # The frame narrows network access to the organization's allowed hosts.
+                # Trusted Types and the frame policy prevent access through a nested document.
+                add_header X-DNS-Prefetch-Control "off" always;
+                add_header Content-Security-Policy-Report-Only "connect-src 'none'; img-src data: blob:; media-src data: blob:" always;
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; require-trusted-types-for 'script'; trusted-types default; font-src 'self'; object-src 'none'; frame-src 'none'; img-src *; media-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self'; sandbox allow-scripts;" always;
             }
 
             # Serve the generated config file from the ephemeral directory:
@@ -300,7 +358,7 @@ data:
 
             # Enhanced JSON view render worker. This worker executes saved/transpiled
             # view code, so it gets a tighter policy than the main app chunks.
-            location ~ "^/assets/safeRender-.+\.js$" {
+            location ~ "^/assets/safe-render-.+\.js$" {
                 expires 30d;
                 add_header X-Content-Type-Options "nosniff" always;
                 add_header Cache-Control "public, max-age=2592000";
@@ -327,6 +385,37 @@ data:
                 add_header Cache-Control "no-store";
                 add_header X-Content-Type-Options "nosniff" always;
                 try_files /frontend-assets.txt =404;
+            }
+
+            location = /version.json {
+                root /tmp/nginx;
+                default_type application/json;
+                add_header Cache-Control "no-store" always;
+                add_header X-Content-Type-Options "nosniff" always;
+                try_files /version.json =404;
+            }
+
+            location ~ "^/(?<agent_setup_org>[^/.]+)/(?<agent_setup_project>[^/.]+)/agent-setup\.md\.?$" {
+                access_log off;
+                proxy_pass {{ include "logfire.scheme" . }}://logfire_backend/ui-api/agent-setup/$agent_setup_org/$agent_setup_project.md$is_args$args;
+                {{- if $inClusterTlsEnabled }}
+                proxy_ssl_verify on;
+                proxy_ssl_trusted_certificate /etc/nginx/ca/ca.crt;
+                proxy_ssl_server_name on;
+                proxy_ssl_name logfire-backend.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain | default "cluster.local" }};
+                {{- end }}
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto {{ $tls | ternary "https" "http" }};
+            }
+
+            location = /replay-frame.html {
+                add_header Cache-Control "no-store" always;
+                add_header X-Content-Type-Options "nosniff" always;
+                add_header Referrer-Policy "no-referrer" always;
+                add_header Content-Security-Policy "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' https: blob: data:; font-src 'self'; media-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self';" always;
+                try_files /replay-frame.html =404;
             }
 
             location /image-iframe.html {
@@ -358,9 +447,11 @@ data:
                 add_header X-Content-Type-Options "nosniff" always;
                 add_header Cross-Origin-Opener-Policy "same-origin" always;
                 add_header Referrer-Policy "no-referrer" always;
-                # Custom panels may fetch user-selected APIs, so `connect-src *` is intentional.
-                # The response sandbox keeps direct navigations in an opaque origin.
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self'; sandbox allow-scripts;" always;
+                # The frame narrows network access to the organization's allowed hosts.
+                # Trusted Types and the frame policy prevent access through a nested document.
+                add_header X-DNS-Prefetch-Control "off" always;
+                add_header Content-Security-Policy-Report-Only "connect-src 'none'; img-src data: blob:; media-src data: blob:" always;
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; require-trusted-types-for 'script'; trusted-types default; font-src 'self'; object-src 'none'; frame-src 'none'; img-src *; media-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self'; sandbox allow-scripts;" always;
             }
 
             # Serve the generated config file from the ephemeral directory:

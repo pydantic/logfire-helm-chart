@@ -161,6 +161,32 @@ stop_forwards
 upgrade_current false
 restart_forwards
 uv run --directory "$repo_root/tests/integration" python upgrade_probe.py check "$state_file"
+
+echo "Checking that the backend and worker share writable Python feature storage"
+shared_check_path="/var/lib/logfire/.chart-shared-store-${RANDOM}-${RANDOM}"
+kubectl --context "$context" --namespace "$namespace" exec deployment/logfire-backend -- \
+  python -c 'from pathlib import Path; import sys; Path(sys.argv[1]).write_text("backend")' "$shared_check_path"
+kubectl --context "$context" --namespace "$namespace" exec deployment/logfire-worker -- \
+  python -c '
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+if path.read_text() != "backend":
+    raise RuntimeError("The worker cannot read the backend file")
+path.write_text("worker")
+' "$shared_check_path"
+kubectl --context "$context" --namespace "$namespace" exec deployment/logfire-backend -- \
+  python -c '
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+try:
+    if path.read_text() != "worker":
+        raise RuntimeError("The backend cannot read the worker file")
+finally:
+    path.unlink(missing_ok=True)
+' "$shared_check_path"
+
 uv run --directory "$repo_root/tests/integration" pytest -v --tb=short
 
 echo "Testing the optional split query worker"

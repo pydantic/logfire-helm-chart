@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.2-rc.2](https://img.shields.io/badge/Version-0.14.2--rc.2-informational?style=flat-square) ![AppVersion: 92fe3870](https://img.shields.io/badge/AppVersion-92fe3870-informational?style=flat-square)
+![Version: 0.14.2-rc.3](https://img.shields.io/badge/Version-0.14.2--rc.3-informational?style=flat-square) ![AppVersion: 92fe3870](https://img.shields.io/badge/AppVersion-92fe3870-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -167,6 +167,7 @@ Before installing in production, confirm that you have:
 * Public hostname and TLS values set through `ingress.*` or `gateway.*`, even if you expose the Service another way.
 * External PostgreSQL databases for `crud`, `ff`, and `dex`.
 * Object storage using `s3://`, `gs://`, or `az://`.
+* A shared `ReadWriteMany` volume for Python feature files. Configure `pythonObjectStore.persistence.storageClassName` or `pythonObjectStore.persistence.existingClaim`.
 * A managed Redis endpoint configured through `redisDsn`.
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
@@ -307,6 +308,51 @@ so the workloads reach the in-cluster bucket. An `s3://` `objectStore.uri` also 
 bucket RustFS creates.
 
 Do not enable bucket versioning. Logfire manages its own data lifecycle, and bucket versioning can increase cost and interfere with lifecycle behavior.
+
+### Python feature files
+
+Session replays, visual tests, and scheduled-query results use a shared persistent volume at `/var/lib/logfire`.
+The backend and worker mount the same claim because each process must read files that the other process writes.
+This storage is separate from `objectStore.uri`, which stores Fusionfire telemetry.
+The pinned report-results implementation does not support an S3 URI.
+
+The chart creates a `ReadWriteMany` claim named `logfire-python-object-store` by default.
+Set a StorageClass that supports shared access across nodes:
+
+```yaml
+pythonObjectStore:
+  persistence:
+    storageClassName: shared-files
+    size: 10Gi
+```
+
+To use a claim that you manage, set `pythonObjectStore.persistence.existingClaim` instead.
+The claim must permit the backend and worker to mount it concurrently.
+The workloads use group `1000` to write this directory.
+Confirm that the storage provider supports the configured group permissions.
+
+The development and CI overlays use `ReadWriteOnce` for their single-node clusters.
+Use `ReadWriteMany` for a production cluster with multiple nodes.
+Include this volume in your backup and retention procedures.
+Helm retains a chart-managed claim when you uninstall or roll back the release.
+Delete the retained claim separately only when you no longer need its files.
+
+An upgrade from a chart that uses per-pod `emptyDir` storage does not copy its existing feature files into the shared claim.
+Copy any files that you need before the upgrade replaces those pods.
+
+### Product announcements
+
+The chart disables "What's new" by default because its live feed can announce features outside the installed release.
+The pinned frontend stores this disable in the browser's existing feature-flag preferences on each page load.
+This compatibility disable requires browser storage.
+An explicit browser override can enable it again in this image.
+Release-specific announcements require a frontend image with that support.
+
+### Usage Redis
+
+The pinned worker reads usage from `redisDsn` without a namespace prefix.
+Thus `usageRedis.dsn` must be empty or equal to `redisDsn`, and `usageRedis.prefix` must be empty.
+The chart rejects a separate usage Redis destination until the worker supports it.
 
 ### PostgreSQL
 
@@ -778,6 +824,13 @@ Before diving deeper, verify these common configuration issues:
 | postgresql.primary.persistence.size | string | `"10Gi"` |  |
 | postgresql.primary.resourcesPreset | string | `"small"` |  |
 | priorityClassName | string | `""` | Pod priority class See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
+| pythonObjectStore | object | `{"persistence":{"accessModes":["ReadWriteMany"],"annotations":{},"enabled":true,"existingClaim":"","size":"10Gi","storageClassName":""}}` | Shared filesystem for Python recordings, screenshots and report results. This store is separate from the Fusionfire telemetry bucket. |
+| pythonObjectStore.persistence.accessModes | list | `["ReadWriteMany"]` | Access modes for a chart-managed claim. ReadWriteOnce is supported only for single-node development. |
+| pythonObjectStore.persistence.annotations | object | `{}` | Annotations for a chart-managed claim. |
+| pythonObjectStore.persistence.enabled | bool | `true` | Keep enabled. The backend and worker must share persistent storage. |
+| pythonObjectStore.persistence.existingClaim | string | `""` | Existing shared claim. When empty, the chart creates `logfire-python-object-store`. |
+| pythonObjectStore.persistence.size | string | `"10Gi"` | Capacity for recordings, screenshots and report results. |
+| pythonObjectStore.persistence.storageClassName | string | `""` | StorageClass for the shared claim. Production requires ReadWriteMany support. An empty value uses `defaultStorageClassName` or the cluster default. |
 | rateLimits | object | `{}` | Configure Rate Limiting rules for Logfire endpoints |
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN. Change if using an external Redis instance. |
 | releaseVersion | string | `"v2026-10-07.02"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
@@ -816,9 +869,9 @@ Before diving deeper, verify these common configuration issues:
 | tokenRedis.prefix | string | `""` | Key prefix for auth token cache keys. |
 | tolerations | list | `[]` | Tolerations applied to all workloads |
 | topologySpreadConstraints | list | `[]` | topologySpreadConstraints applied to all workloads |
-| usageRedis | object | `{"dsn":"","prefix":""}` | Redis settings for usage, autocomplete, and rate limiting data. Empty DSN falls back to `redisDsn`. Use a prefix only when sharing one Redis instance with other data. |
-| usageRedis.dsn | string | `""` | Redis DSN for usage, autocomplete, and rate limiting data. |
-| usageRedis.prefix | string | `""` | Key prefix for usage keys. |
+| usageRedis | object | `{"dsn":"","prefix":""}` | Redis settings for usage, autocomplete, and rate limiting data. The pinned worker requires the same instance as `redisDsn` and no prefix. |
+| usageRedis.dsn | string | `""` | Leave empty to use `redisDsn`. A separate instance is unsupported by the pinned worker. |
+| usageRedis.prefix | string | `""` | Leave empty. Usage key prefixes are unsupported by the pinned worker. |
 | variablesApiKey | string | `""` | Client-safe API key used by the frontend to evaluate external managed variables through OFREP. The key is written to the public runtime configuration, so it must only have the `project:read_external_variables` scope. |
 | webPush.enabled | bool | `false` | Let users turn on browser push notifications for alerts. Needs the deployment to be served over HTTPS, since browsers register a service worker only on a secure origin. While this is false the settings panel reports push as unavailable. |
 | webPush.privateKey | string | `""` | VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one and keep it across upgrades. Replacing it unregisters every device that had push on, which each browser recovers from by subscribing again on its next visit. |

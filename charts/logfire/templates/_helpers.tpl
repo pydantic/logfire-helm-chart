@@ -1473,11 +1473,29 @@ container mounts in spec order and a later `/tmp` mount shadows the nested path.
   emptyDir: {}
 {{- end -}}
 
-{{/*
-The writable local object store directory for the Python workloads that use it. Self-hosted
-deployments default the session-replay and visual-test stores to `file:///var/lib/logfire`, so
-the backend and the worker need the directory writable under a read-only image root.
-*/}}
+{{/* The backend and the worker share one durable store for recordings, screenshots and report results. */}}
+{{- define "logfire.pythonObjectStoreClaimName" -}}
+{{- .Values.pythonObjectStore.persistence.existingClaim | default "logfire-python-object-store" -}}
+{{- end -}}
+
+{{- define "logfire.pythonObjectStoreEnv" -}}
+- name: SESSION_REPLAY_OBJECT_STORE_URI
+  value: file:///var/lib/logfire/session-replays
+- name: VISUAL_TESTS_OBJECT_STORE_URI
+  value: file:///var/lib/logfire/visual-tests
+- name: SCHEDULED_QUERY_RESULTS_OBJECT_STORE_URI
+  value: file:///var/lib/logfire/scheduled-query-results
+{{- end -}}
+
+{{- define "logfire.pythonObjectStorePodSecurityContext" -}}
+{{- $ctx := .ctx -}}
+{{- $serviceValues := get $ctx.Values .serviceName | default dict -}}
+{{- $context := dict "fsGroup" 1000 "fsGroupChangePolicy" "OnRootMismatch" -}}
+{{- $context = mergeOverwrite $context (deepCopy ($ctx.Values.podSecurityContext | default dict)) -}}
+{{- $context = mergeOverwrite $context (deepCopy (get $serviceValues "podSecurityContext" | default dict)) -}}
+{{- $context | toJson -}}
+{{- end -}}
+
 {{- define "logfire.logfireDataVolumeMounts" -}}
 - name: logfire-data
   mountPath: /var/lib/logfire
@@ -1485,7 +1503,8 @@ the backend and the worker need the directory writable under a read-only image r
 
 {{- define "logfire.logfireDataVolume" -}}
 - name: logfire-data
-  emptyDir: {}
+  persistentVolumeClaim:
+    claimName: {{ include "logfire.pythonObjectStoreClaimName" . }}
 {{- end -}}
 
 {{- define "logfire.standardPodSpecFields" -}}

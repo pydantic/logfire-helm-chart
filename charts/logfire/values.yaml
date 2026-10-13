@@ -1692,13 +1692,29 @@ tokenRedis:
   # -- Key prefix for auth token cache keys.
   prefix: ""
 
-# -- Redis settings for usage, autocomplete, and rate limiting data. Empty DSN falls back to `redisDsn`.
-# Use a prefix only when sharing one Redis instance with other data.
+# -- Redis settings for usage, autocomplete, and rate limiting data. The pinned worker requires the same instance as `redisDsn` and no prefix.
 usageRedis:
-  # -- Redis DSN for usage, autocomplete, and rate limiting data.
+  # -- Leave empty to use `redisDsn`. A separate instance is unsupported by the pinned worker.
   dsn: ""
-  # -- Key prefix for usage keys.
+  # -- Leave empty. Usage key prefixes are unsupported by the pinned worker.
   prefix: ""
+
+# -- Shared filesystem for Python recordings, screenshots and report results. This store is separate from the Fusionfire telemetry bucket.
+pythonObjectStore:
+  persistence:
+    # -- Keep enabled. The backend and worker must share persistent storage.
+    enabled: true
+    # -- Existing shared claim. When empty, the chart creates `logfire-python-object-store`.
+    existingClaim: ""
+    # -- StorageClass for the shared claim. Production requires ReadWriteMany support. An empty value uses `defaultStorageClassName` or the cluster default.
+    storageClassName: ""
+    # -- Access modes for a chart-managed claim. ReadWriteOnce is supported only for single-node development.
+    accessModes:
+      - ReadWriteMany
+    # -- Capacity for recordings, screenshots and report results.
+    size: 10Gi
+    # -- Annotations for a chart-managed claim.
+    annotations: {}
 
 
 # ==============================================================================

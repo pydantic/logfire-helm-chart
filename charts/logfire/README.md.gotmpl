@@ -168,6 +168,7 @@ Before installing in production, confirm that you have:
 * Public hostname and TLS values set through `ingress.*` or `gateway.*`, even if you expose the Service another way.
 * External PostgreSQL databases for `crud`, `ff`, and `dex`.
 * Object storage using `s3://`, `gs://`, or `az://`.
+* A shared `ReadWriteMany` volume for Python feature files. Configure `pythonObjectStore.persistence.storageClassName` or `pythonObjectStore.persistence.existingClaim`.
 * A managed Redis endpoint configured through `redisDsn`.
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
@@ -308,6 +309,51 @@ so the workloads reach the in-cluster bucket. An `s3://` `objectStore.uri` also 
 bucket RustFS creates.
 
 Do not enable bucket versioning. Logfire manages its own data lifecycle, and bucket versioning can increase cost and interfere with lifecycle behavior.
+
+### Python feature files
+
+Session replays, visual tests, and scheduled-query results use a shared persistent volume at `/var/lib/logfire`.
+The backend and worker mount the same claim because each process must read files that the other process writes.
+This storage is separate from `objectStore.uri`, which stores Fusionfire telemetry.
+The pinned report-results implementation does not support an S3 URI.
+
+The chart creates a `ReadWriteMany` claim named `logfire-python-object-store` by default.
+Set a StorageClass that supports shared access across nodes:
+
+```yaml
+pythonObjectStore:
+  persistence:
+    storageClassName: shared-files
+    size: 10Gi
+```
+
+To use a claim that you manage, set `pythonObjectStore.persistence.existingClaim` instead.
+The claim must permit the backend and worker to mount it concurrently.
+The workloads use group `1000` to write this directory.
+Confirm that the storage provider supports the configured group permissions.
+
+The development and CI overlays use `ReadWriteOnce` for their single-node clusters.
+Use `ReadWriteMany` for a production cluster with multiple nodes.
+Include this volume in your backup and retention procedures.
+Helm retains a chart-managed claim when you uninstall or roll back the release.
+Delete the retained claim separately only when you no longer need its files.
+
+An upgrade from a chart that uses per-pod `emptyDir` storage does not copy its existing feature files into the shared claim.
+Copy any files that you need before the upgrade replaces those pods.
+
+### Product announcements
+
+The chart disables "What's new" by default because its live feed can announce features outside the installed release.
+The pinned frontend stores this disable in the browser's existing feature-flag preferences on each page load.
+This compatibility disable requires browser storage.
+An explicit browser override can enable it again in this image.
+Release-specific announcements require a frontend image with that support.
+
+### Usage Redis
+
+The pinned worker reads usage from `redisDsn` without a namespace prefix.
+Thus `usageRedis.dsn` must be empty or equal to `redisDsn`, and `usageRedis.prefix` must be empty.
+The chart rejects a separate usage Redis destination until the worker supports it.
 
 ### PostgreSQL
 
