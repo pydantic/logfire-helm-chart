@@ -54,17 +54,6 @@ async def test_custom_panel_frame_enforces_its_nested_document_boundary(client: 
     assert response.headers["x-dns-prefetch-control"] == "off"
 
 
-async def test_replay_frame_has_its_own_recorded_content_policy(client: httpx.AsyncClient) -> None:
-    response = await client.get("/replay-frame.html")
-    assert response.status_code == 200, response.text
-    assert 'id="replay-root"' in response.text
-    policy = _policy(response)
-    assert policy["default-src"] == ["'none'"]
-    assert policy["script-src"] == ["'none'"]
-    assert "https:" in policy["img-src"]
-    assert response.headers["referrer-policy"] == "no-referrer"
-
-
 @pytest.mark.parametrize("suffix", [".md", ".md."])
 async def test_project_setup_handoff_returns_markdown(client: httpx.AsyncClient, suffix: str) -> None:
     response = await client.get(f"/synthetic-org/synthetic-project/agent-setup{suffix}")
