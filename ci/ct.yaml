@@ -8,6 +8,11 @@ validate-maintainers: false
 debug: false
 check-version-increment: true
 helm-extra-args: "--timeout 600s"
+# Chart-testing upgrades with the previous revision's values file.
+# Apply Kind's single-node storage settings to both install and upgrade.
+helm-extra-set-args: >-
+  --set pythonObjectStore.persistence.accessModes[0]=ReadWriteOnce
+  --set pythonObjectStore.persistence.size=1Gi
 print-logs: false
 chart-repos:
   - bitnami=https://charts.bitnami.com/bitnami

@@ -54,6 +54,7 @@ jobs:
           helm dependency build charts/logfire
           ci/check-version-stable-checksums.sh
           node ci/check-frontend-config.cjs
+          node ci/check-upgrade-storage.cjs
 
       - name: Set up GCP auth
         id: auth
