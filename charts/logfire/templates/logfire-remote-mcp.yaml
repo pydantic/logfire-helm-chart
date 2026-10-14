@@ -80,7 +80,7 @@ spec:
           livenessProbe:
             failureThreshold: 3
             httpGet:
-              path: /health
+              path: /health/live
               port: {{ $servicePort }}
               scheme: HTTP
             periodSeconds: 10
@@ -109,6 +109,8 @@ spec:
             value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName) | quote }}
           - name: COLLECTOR_OTLP_GRPC_HOST
             value: http://logfire-otel-collector:4317
+          - name: ON_PREM
+            value: "true"
           - name: APP_PORT
             value: {{ $servicePort | quote }}
           - name: LOGFIRE_BASE_URL

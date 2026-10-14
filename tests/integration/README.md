@@ -50,6 +50,7 @@ The release checks cover:
 | Query errors | v1/v2 legacy and problem-response negotiation, including the public error URL |
 | Variable SSE | An immediate first frame reaches the client through the service |
 | Metric storage | An ingested counter is queried through its value struct |
+| Frontend contracts | The image serves its build identity, worker and frame policies, and setup Markdown |
 
 Kind uses RustFS for the existing telemetry object store. The suite does not test live
 cloud IAM. Scheduled-query storage remains a follow-up while Reports is experimental.
