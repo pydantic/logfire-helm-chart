@@ -6,34 +6,28 @@ description: Verify Logfire Helm chart installs, stable upgrades, public APIs, a
 # Verify the Logfire chart
 
 Read the [feature map](features/README.md) and select the entries affected by the
-change. Reuse `ci/run-kind-tests.sh` and `tests/integration/`; do not replace
-deployment proof with rendered-template assertions. Documentation changes need
-link and command checks. Run a real instance when a changed recipe needs proof.
+change. Reuse `ci/run-kind-tests.sh` and `tests/integration/`.
 
 ## Select proof
 
-Use focused local checks by default. CI runs the full Kind install/upgrade suite
-in `.github/workflows/pr.yaml`. Its successful run on the exact PR revision can
-prove the contracts described in [Deployment and upgrade](features/deployment.md),
-including the stored-telemetry MCP case. Read the test output and completed steps.
-A green job does not prove a skipped case or a path that the suite does not drive.
-Do not repeat that full suite locally by default.
+Use focused local checks and [canonical CI evidence](features/deployment.md#ci-coverage-and-evidence)
+for the exact PR revision. Do not repeat the full Kind suite locally by default.
+Run it locally when requested, when startup or upgrade behavior remains uncertain,
+or when a changed deployment recipe needs runtime proof.
 
-Select existing unit or rendering checks for changed template contracts. Select
-HTTP cases for changed API paths and browser recipes for changed UI behavior.
-Start the local installation below only when those checks need it. Run the full
-canonical suite locally when requested, when startup or upgrade behavior remains
-uncertain, or when a changed deployment recipe needs runtime proof.
+- For documentation changes, check links and commands without starting a cluster.
+- For template contracts, select existing unit or rendering checks. For API or UI
+  changes, select the affected HTTP cases or browser recipes.
+- For release, image, ingest, query, or MCP changes, require the
+  [stored-telemetry MCP case](features/api-contracts.md#stored-telemetry-through-mcp).
+  Its passing canonical CI result is sufficient. A constant query is insufficient.
+- For authentication, ingress, Gateway, or TLS changes, select the additional
+  [runtime checks](features/api-contracts.md#authentication-and-transport-boundaries)
+  for that boundary. CI does not exercise those complete paths.
 
 The bundled Postgres, Redis, and RustFS are sufficient for ordinary chart checks.
-Use the lighter `charts/logfire/values.local.yaml` when present. A change to
-external dependency connections, credentials, trust, or storage behavior needs a
-focused check of that changed boundary. The bundled services do not prove it.
-
-CI reaches the application through an HTTP service port-forward. It does not
-exercise an ingress controller, public TLS, in-cluster TLS, or a real SSO login.
-Use [Public API contracts](features/api-contracts.md) to select those additional
-checks when the changed path requires them.
+For changed external connections, verify the affected endpoint, credentials,
+TLS or IAM behavior, and storage operations separately.
 
 ## Launch for local runtime checks
 
@@ -118,26 +112,13 @@ The helper creates a unique cluster and a dedicated kubeconfig. It matches CI's
 namespace labels, `enforce=baseline` and `warn=restricted`.
 It applies the optional lighter `values.local.yaml` after `fixtures/values.kind.yaml`.
 It then forces two query API replicas for the disabled-autoscaler integration contract.
-It records overlay hashes without
-copying values into the evidence directory. Never commit the local overlay.
+It records overlay hashes without copying values into evidence. Never commit
+the local overlay.
 
-When a full local run is needed, use [Deployment and upgrade](features/deployment.md).
-It installs chart `0.14.0` before the current chart and leaves the current
-installation ready for inspection. Always use a fresh cluster for that suite.
-An older binary must not reuse an already upgraded database.
-
-For a focused browser or HTTP recipe, install the current chart directly:
-
-```bash
-helm upgrade --install lf charts/logfire \
-  --kube-context "$VERIFY_CONTEXT" --namespace logfire-restricted \
-  -f charts/logfire/ci/ci-values.yaml -f "$VERIFY_RUNTIME/values.yaml" \
-  --wait --wait-for-jobs --timeout 10m \
-  2>&1 | tee "$VERIFY_RUNTIME/evidence/install.log"
-test "${PIPESTATUS[0]}" -eq 0
-```
-
-For browser checks, configure a free loopback port and match the API origin:
+For a full local run, continue with the [local runner](features/deployment.md#local-runner).
+For focused HTTP or browser checks, install the current chart once with the
+loopback API origin. After the canonical runner, this command configures its
+existing installation for the same focused checks:
 
 ```bash
 export VERIFY_PORT=8080
@@ -147,7 +128,7 @@ import socket
 with socket.socket() as listener:
     listener.bind(("127.0.0.1", int(os.environ["VERIFY_PORT"])))
 PY
-helm upgrade lf charts/logfire \
+helm upgrade --install lf charts/logfire \
   --kube-context "$VERIFY_CONTEXT" --namespace logfire-restricted \
   -f charts/logfire/ci/ci-values.yaml -f "$VERIFY_RUNTIME/values.yaml" \
   --set ingress.enabled=false --set gateway.tls=false \
@@ -166,11 +147,9 @@ curl --fail --silent --show-error --retry 30 --retry-delay 2 --retry-connrefused
   > "$VERIFY_RUNTIME/evidence/platform-config.json"
 ```
 
-Keep this shell's port-forward PID for cleanup. The pinned frontend uses
-`appConfig.apiHost` to construct API URLs. A page on a different port does not
-correct a mismatched `gateway.hostnames[0]`.
-The second hostname lets the pinned MCP host check accept loopback requests.
-That check removes the port before it compares the hostname.
+Keep the launch shell running while its background forward is needed.
+The first hostname sets `appConfig.apiHost` and must match the browser origin.
+The second allows the pinned MCP host check, which removes the request port.
 
 ## Doctor
 
@@ -203,21 +182,13 @@ continuing. When an owned public forward is active, require `/version.json` to
 return `200` and `Cache-Control: no-store`. The canonical runner removes its own
 forwards, so complete the browser launch step before the HTTP part of Doctor.
 For browser work, require `selfHosted: true` and the configured local `apiHost` in
-`config.1.js`. Do not archive Secrets or token-bearing responses.
+`config.1.js`.
 
 ## Drive
 
-Follow the selected [feature recipes](features/README.md).
-For release, image, ingest, query, or MCP changes, run the stored-telemetry MCP case
-in [Public API contracts](features/api-contracts.md), or use its passing result
-from CI on the exact PR revision. It ingests a unique span and
-queries the exact stored record through the installed `/mcp` endpoint.
-Record the target, project, bounded SQL window, and matching row. Use a scoped
-`project:read` API key for MCP; an SDK read token serves a different API contract.
-The canonical suite repeats the case across combined and split query modes.
-
-For browser fixtures,
-read the configured disposable meta token into a private file without printing it:
+Run Doctor, then follow the selected feature recipes against this run's installation.
+The checks mutate disposable projects. Do not target a shared or hosted installation.
+For browser fixtures, read the disposable meta token into a private file:
 
 ```bash
 kubectl --context "$VERIFY_CONTEXT" -n logfire-restricted get secret logfire-tokens \
@@ -241,18 +212,21 @@ the token fragment. Use `browser-evidence.json` for shareable fixture identity.
 ## Evidence
 
 Store proof in `$VERIFY_RUNTIME/evidence`. Capture the user action and resulting
-state, including screenshots, accessibility snapshots, relevant network/console
+state, including screenshots, accessibility snapshots, relevant network and console
 events, command exit codes, and the exact ingested record. Inspect screenshots
-before declaring success. Do not use internal setters, fabricated browser storage,
+before declaring success. For mutations, read the persisted state again.
+Do not use internal setters, fabricated browser storage,
 mocked service responses, or a successful HTTP header check as proof of a browser
 flow. A production API may create fixtures; the browser must still exercise the
 feature being verified.
 
-Record the selected feature IDs, chart commit and dirty state, chart/image versions,
-overlay hashes, observed results, artifact paths, and skipped checks with reasons.
+Record selected sub-feature IDs and results, chart commit and dirty state, chart
+version, platform release and image identity, overlay hashes, and artifact paths.
+Report skipped checks and their reasons. CI evidence covers only the cases that ran.
 Distinguish an intended negative security error from an unrelated application error.
 Keep private login and token files outside the evidence directory. Redact any token
-in copied commands, browser URLs, response bodies, or network exports.
+in copied commands, browser URLs, response bodies, or network exports. Do not
+archive Secrets or raw credentials.
 
 ## Cleanup
 
@@ -261,13 +235,15 @@ Close only the browser tabs or isolated browser session this run opened. Stop th
 port-forward PID this shell started; never kill by process name:
 
 ```bash
-if [[ -n "${VERIFY_FORWARD_PID:-}" ]]; then
-  kill "$VERIFY_FORWARD_PID" 2>/dev/null || true
-  wait "$VERIFY_FORWARD_PID" 2>/dev/null || true
-fi
+for forward_pid in "${VERIFY_FORWARD_PID:-}" "${VERIFY_MAILDEV_PID:-}"; do
+  if [[ -n "$forward_pid" ]]; then
+    kill "$forward_pid" 2>/dev/null || true
+    wait "$forward_pid" 2>/dev/null || true
+  fi
+done
 uv run --script "$VERIFY_SKILL/scripts/prepare-kind.py" cleanup --runtime "$VERIFY_RUNTIME"
 rm -f "$VERIFY_RUNTIME/meta-token" "$VERIFY_RUNTIME/browser.json" "$VERIFY_RUNTIME/pull-config.json"
-unset META_FRONTEND_TOKEN KUBECONFIG LOGFIRE_BASE_URL
+unset META_FRONTEND_TOKEN KUBECONFIG LOGFIRE_BASE_URL MAILDEV_BASE_URL
 test -s "$VERIFY_RUNTIME/evidence/source.txt"
 find "$VERIFY_RUNTIME/evidence" -type f
 ```
@@ -279,18 +255,6 @@ receipt and proof artifacts. Confirm the cluster is absent with `kind get cluste
 and that the recorded evidence still exists. Do not remove the whole runtime
 directory or prune shared Docker images, containers, volumes, or caches.
 
-## Helpers
-
-- `uv run --script "$VERIFY_SKILL/scripts/prepare-kind.py" prepare ...` prepares the isolated Kind
-  cluster, CI Secrets, and merged local values as shown above.
-- `uv run --script "$VERIFY_SKILL/scripts/prepare-kind.py" cleanup --runtime ...` tears down that
-  cluster and private configuration.
-- `uv run --script "$VERIFY_SKILL/scripts/seed-browser.py" --base-url ... --browser-origin ... --token-file ... --output ...`
-  prepares the bounded real browser fixture as shown above.
-- `fixtures/` contains source to paste into the real panel and enhanced-view editors.
-  Follow [Renderers](features/renderers.md) for positive and negative checks.
-
-When the chart or platform images change, update the affected feature recipes and
-select the local checks and CI evidence they need. The pstack
-`maintain-verification-skill` skill can audit this map against the source and a
-running installation.
+`fixtures/` contains editor source for [Renderers](features/renderers.md).
+Update affected recipes when the chart or pinned images change. Use pstack's
+`maintain-verification-skill` to audit the map against source and a running installation.

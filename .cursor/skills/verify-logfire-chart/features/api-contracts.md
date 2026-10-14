@@ -18,15 +18,8 @@ through the installed chart's public service.
 
 ## Driving it with pytest and public HTTP
 
-Preconditions:
-
-- The canonical CI runner covers the HTTP suite in combined query mode.
-  Use its passing result for the exact PR revision when it covers the changed path.
-- For focused HTTP checks, the current chart is installed and Doctor passes.
-- Use this run's loopback public service port-forward from Launch.
-
-Select the affected cases rather than the whole suite. Set the matching public
-URL and disposable token for the cases that need them:
+For local checks, complete Launch through the public service forward and run
+Doctor. Run only the selected blocks below. All use this credential setup:
 
 ```bash
 export LOGFIRE_PUBLIC_HOST="localhost:$VERIFY_PORT"
@@ -57,58 +50,43 @@ uv run --directory tests/integration pytest -v --tb=short \
 test "${PIPESTATUS[0]}" -eq 0
 ```
 
-For MCP, ingest, query, image, or release changes, require the stored-telemetry
-case. CI on the exact PR revision supplies this proof. When local MCP proof is
-needed, use this run's public service forward. This command does not need Maildev:
+For ingest and query changes, select `test_ingest.py`, `test_query.py`, or
+`test_sdk_roundtrip.py` as relevant. `test_release_contracts.py` covers SQL formats,
+problem responses, immediate SSE, and metric storage.
+
+### Stored telemetry through MCP
+
+Run the existing case through this installation's `/mcp` endpoint. It needs no Maildev:
 
 ```bash
-export LOGFIRE_PUBLIC_HOST="localhost:$VERIFY_PORT"
-export LOGFIRE_PUBLIC_URL="$LOGFIRE_BASE_URL"
-META_FRONTEND_TOKEN="$(kubectl --context "$VERIFY_CONTEXT" -n logfire-restricted \
-  get secret logfire-tokens -o jsonpath='{.data.logfire-meta-frontend-token}' \
-  | python3 -c 'import base64,sys; print(base64.b64decode(sys.stdin.buffer.read()).decode())')"
-export META_FRONTEND_TOKEN
 uv run --directory tests/integration pytest -v -s --tb=short \
   test_mcp.py::test_mcp_authenticated_query \
   2>&1 | tee "$VERIFY_RUNTIME/evidence/mcp-telemetry.log"
 test "${PIPESTATUS[0]}" -eq 0
-unset META_FRONTEND_TOKEN
 ```
 
-The case creates its own project and a project-scoped API key with `project:read`.
-It sends one unique span through `/v1/traces`, then initializes MCP and discovers
-`query_run` through the same public installation's `/mcp` endpoint.
-The SQL filters on the exact generated trace ID and uses `LIMIT 2`.
-The explicit UTC time window covers five minutes before and after ingestion.
-Require exactly one row with the generated trace ID and span ID, service
-`helm-it-mcp`, and span name `integration-span`. An empty result retries for at
-most 90 seconds. A tool error or an unexpected nonempty result fails immediately.
-The command records the endpoint, project, SQL, time window, exact rows, and case result.
-Keep the Doctor image/source receipt with that log. Never record tokens or auth headers.
-The canonical runner repeats this case in split mode and after it restores combined mode.
-
-Require the expected cases to be collected and pass. `test_mcp.py` proves the
-authenticated MCP lifecycle and stored telemetry. `test_release_contracts.py`
-covers SQL formats, problem responses, immediate SSE, and metric storage.
-Record case names and results; a healthy pod alone does not prove these contracts.
-Unset `META_FRONTEND_TOKEN` after the selected cases.
+The case creates a project, ingests a unique OTLP span, and mints an API key with
+`project:read`. An SDK read token does not authenticate MCP. The client initializes
+MCP, discovers `query_run`, and queries the generated trace ID with `LIMIT 2`.
+Its UTC window covers five minutes before and after ingestion.
+Require exactly one row with the generated trace and span IDs, service `helm-it-mcp`,
+and span name `integration-span`. Empty rows retry for at most 90 seconds.
+Tool errors and unexpected rows fail immediately. The `-s` option preserves the
+endpoint, public host, project, SQL, time window, exact rows, and case result in the log.
 
 ### Authentication and transport boundaries
 
-CI uses the real Dex discovery, JWKS, and token endpoints. It checks discovery
-metadata and rejection of bad credentials. Its device flow approves a backend
-device code with the configured meta session token and uses the resulting SDK
-token. It also exercises project tokens and MCP bearer authentication. Maildev
-checks invitation delivery and enumeration-safe login-code requests. These checks
-do not complete a Dex password login, email-code login, or external SSO connector.
-The browser [login recipe](setup.md) uses the self-hosted token entrypoint.
+CI checks Dex discovery and JWKS, rejection of bad credentials, project tokens, and
+MCP bearer authentication. Its device flow uses a meta session token for approval
+and exercises the resulting SDK token. Maildev checks invitation delivery and
+enumeration-safe login-code requests. These tests do not complete Dex password,
+email-code, or external SSO login. The [browser recipe](setup.md) uses the
+self-hosted token entrypoint.
 
 CI sends HTTP requests through a port-forward to `logfire-service`. It renders
 an Ingress but installs no ingress controller. Its `gateway.tls=true` checks
-generated HTTPS public URLs; `ingress.tls=false` and `inClusterTls.enabled=false`
-mean that this run does not prove a TLS handshake or certificate verification.
-The OAuth client metadata case also expects CI's fixed public hostname. Run that
-case with its matching values, rather than with the browser loopback overrides.
+generated HTTPS public URLs. Because `ingress.tls=false` and `inClusterTls.enabled=false`,
+this run does not prove a TLS handshake or certificate verification.
 
 Choose additional runtime proof only for a changed boundary:
 
@@ -126,15 +104,9 @@ Choose additional runtime proof only for a changed boundary:
   its trusted certificate and rejects an untrusted one. Unit tests for service
   addresses and secret names do not establish this runtime behavior.
 
-The bundled dependencies suffice for ordinary checks. A changed external Postgres,
-Redis, or object-store connection needs focused proof of its endpoint, credentials,
-and applicable TLS/IAM behavior. The CI dependency configuration does not prove
-these customer-specific connections. Record an unavailable path as unverified.
-
 ### Focused mail checks
 
-CI runs the full HTTP suite. For a changed mail path, forward Maildev as well as
-the application and set the disposable token for the selected cases:
+For mail cases, also forward Maildev:
 
 ```bash
 kubectl --context "$VERIFY_CONTEXT" -n logfire-restricted \
@@ -150,25 +122,18 @@ for attempt in {1..30}; do
 done
 test -n "$maildev_port" || exit 1
 export MAILDEV_BASE_URL="http://127.0.0.1:$maildev_port"
-META_FRONTEND_TOKEN="$(kubectl --context "$VERIFY_CONTEXT" -n logfire-restricted \
-  get secret logfire-tokens -o jsonpath='{.data.logfire-meta-frontend-token}' \
-  | python3 -c 'import base64,sys; print(base64.b64decode(sys.stdin.buffer.read()).decode())')"
-export META_FRONTEND_TOKEN
 uv run --directory tests/integration pytest -v --tb=short test_mail.py \
   2>&1 | tee "$VERIFY_RUNTIME/evidence/mail-tests.log"
 test "${PIPESTATUS[0]}" -eq 0
-unset META_FRONTEND_TOKEN
 ```
 
-Stop `VERIFY_MAILDEV_PID` during cleanup, using the same owned-PID rules as Launch.
-Use the [canonical runner](deployment.md) when a full local investigation is needed.
+Run `unset META_FRONTEND_TOKEN` after the selected cases. The skill's
+[cleanup](../SKILL.md#cleanup) stops both owned forwards.
 
 ## Gotchas
 
-- The suite uses real services and mutates its own disposable projects and records.
-  It must not target a shared or hosted installation.
 - Public hostname and URL assertions must match the installed gateway values.
-- A `200` MCP health response does not prove tool authentication or query behavior.
-- Header tests complement browser checks. They do not prove editor or renderer behavior.
+- The OAuth client metadata case expects CI's fixed public hostname. Use its
+  matching values rather than the browser loopback overrides.
 - The current metric fixture uses numeric JSON `asInt`. String-valued OTLP JSON
   int64 points are a known pinned-image compatibility gap; do not claim both forms pass.
