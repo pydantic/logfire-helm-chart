@@ -10,7 +10,32 @@ change. Reuse `ci/run-kind-tests.sh` and `tests/integration/`; do not replace
 deployment proof with rendered-template assertions. Documentation changes need
 link and command checks. Run a real instance when a changed recipe needs proof.
 
-## Launch
+## Select proof
+
+Use focused local checks by default. CI runs the full Kind install/upgrade suite
+in `.github/workflows/pr.yaml`. Its successful run on the exact PR revision can
+prove the contracts described in [Deployment and upgrade](features/deployment.md),
+including the stored-telemetry MCP case. Read the test output and completed steps.
+A green job does not prove a skipped case or a path that the suite does not drive.
+Do not repeat that full suite locally by default.
+
+Select existing unit or rendering checks for changed template contracts. Select
+HTTP cases for changed API paths and browser recipes for changed UI behavior.
+Start the local installation below only when those checks need it. Run the full
+canonical suite locally when requested, when startup or upgrade behavior remains
+uncertain, or when a changed deployment recipe needs runtime proof.
+
+The bundled Postgres, Redis, and RustFS are sufficient for ordinary chart checks.
+Use the lighter `charts/logfire/values.local.yaml` when present. A change to
+external dependency connections, credentials, trust, or storage behavior needs a
+focused check of that changed boundary. The bundled services do not prove it.
+
+CI reaches the application through an HTTP service port-forward. It does not
+exercise an ingress controller, public TLS, in-cluster TLS, or a real SSO login.
+Use [Public API contracts](features/api-contracts.md) to select those additional
+checks when the changed path requires them.
+
+## Launch for local runtime checks
 
 Run commands from the chart repository in Bash. Check dependencies before startup:
 
@@ -96,11 +121,10 @@ It then forces two query API replicas for the disabled-autoscaler integration co
 It records overlay hashes without
 copying values into the evidence directory. Never commit the local overlay.
 
-For install, image, startup, migration, or topology changes, run the canonical suite
-from [Deployment and upgrade](features/deployment.md). It installs chart `0.14.0`
-before the current chart and leaves the current installation ready for inspection.
-Always use a fresh cluster for that suite. An older binary must not reuse an
-already upgraded database.
+When a full local run is needed, use [Deployment and upgrade](features/deployment.md).
+It installs chart `0.14.0` before the current chart and leaves the current
+installation ready for inspection. Always use a fresh cluster for that suite.
+An older binary must not reuse an already upgraded database.
 
 For a focused browser or HTTP recipe, install the current chart directly:
 
@@ -185,7 +209,8 @@ For browser work, require `selfHosted: true` and the configured local `apiHost` 
 
 Follow the selected [feature recipes](features/README.md).
 For release, image, ingest, query, or MCP changes, run the stored-telemetry MCP case
-in [Public API contracts](features/api-contracts.md). It ingests a unique span and
+in [Public API contracts](features/api-contracts.md), or use its passing result
+from CI on the exact PR revision. It ingests a unique span and
 queries the exact stored record through the installed `/mcp` endpoint.
 Record the target, project, bounded SQL window, and matching row. Use a scoped
 `project:read` API key for MCP; an SDK read token serves a different API contract.
@@ -266,5 +291,6 @@ directory or prune shared Docker images, containers, volumes, or caches.
   Follow [Renderers](features/renderers.md) for positive and negative checks.
 
 When the chart or platform images change, update the affected feature recipes and
-re-run them. The pstack `maintain-verification-skill` skill can audit this map
-against the source and a running installation.
+select the local checks and CI evidence they need. The pstack
+`maintain-verification-skill` skill can audit this map against the source and a
+running installation.

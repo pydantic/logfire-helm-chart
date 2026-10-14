@@ -19,6 +19,36 @@ and chooses combined or split query processing.
 
 ## Driving it with Helm and the Kind runner
 
+### Use the CI result by default
+
+`.github/workflows/pr.yaml` runs Helm unit tests, chart lint, configuration rendering,
+and `ct install --upgrade`. It then runs `ci/run-kind-tests.sh` in a fresh Kind
+cluster with bundled Postgres, Redis, RustFS, and Maildev.
+
+The runner installs published chart `0.14.0`, ingests a unique trace, upgrades to
+the current chart, and queries that exact record again. It runs all integration
+cases in combined mode, repeats query, SQL-format, and MCP telemetry cases in
+split mode, then restores combined mode and repeats the record and MCP checks.
+It checks migration/rollout completion and two ready query API replicas.
+
+Use a completed successful run for the exact PR revision. Record the PR revision,
+CI run URL, test names/results, installed chart/image pins, and relevant log lines.
+Require both `Run chart testing` and `Test stable upgrade, release contracts, and
+split query topology` to complete successfully. The final runner line must say
+`Kind upgrade and integration tests passed`. An older run or a local uncommitted
+runtime change cannot supply proof for the current source.
+
+The suite proves these contracts with the bundled dependencies and its selected
+topologies. It does not prove managed dependency credentials, cloud IAM, an
+ingress controller, TLS handshakes, SSO login, browser behavior, or capacity.
+The [API recipe](api-contracts.md) describes the auth and transport boundaries.
+
+### Repeat the canonical suite locally when needed
+
+Use this path when requested, when a startup or upgrade uncertainty needs
+investigation, or when a new deployment recipe needs runtime proof. Focused local
+checks do not require a second full run when CI already proves the same contract.
+
 Preconditions:
 
 - Complete Launch through cluster preparation and dependency installation.
@@ -38,11 +68,8 @@ printf '%s\n' "$runner_status" > "$VERIFY_RUNTIME/evidence/install-upgrade.exit"
 test "$runner_status" -eq 0
 ```
 
-The runner installs published chart `0.14.0`, ingests a unique trace, upgrades to
-the current chart, and queries the exact record again. It runs the full integration
-suite, enables split query mode, repeats query and SQL-format cases, and restores
-combined mode. Require the final `Kind upgrade and integration tests passed` line
-and exit code `0`. Confirm the record checks and selected tests ran in the log.
+Require the same checks and final success line described above, plus exit code
+`0`. Confirm the record checks and selected tests ran in the log.
 
 For a focused fresh-install check, use the current-chart install command in Launch.
 That result proves `install-current`; it does not prove `stable-upgrade` or the

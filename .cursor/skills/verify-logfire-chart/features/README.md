@@ -6,12 +6,14 @@ entry point listed here.
 
 ## Preconditions
 
-- Use the isolated cluster, kubeconfig, and private runtime from [the skill](../SKILL.md).
+- For local runtime checks, use the isolated cluster, kubeconfig, and private
+  runtime from [the skill](../SKILL.md). Documentation checks need no cluster.
 - Run Doctor before driving an installed feature. Use the chart's pinned images.
 - Use the optional lighter local values overlay. Keep two query API replicas for the
   canonical suite's installed-replica check.
-- Run the canonical suite on a fresh database. Run HTTP-only checks against an
-  existing current installation when no upgrade proof is needed.
+- Use CI on the exact PR revision for the canonical suite by default. A full
+  local run needs a fresh database. Focused HTTP checks can use this run's current
+  installation after Doctor passes.
 - Browser checks need the configured loopback API origin and the real seeded fixture.
   Read its private login URL locally. Publish only the sanitized fixture receipt.
 
@@ -25,12 +27,19 @@ entry point listed here.
 | [Renderers](renderers.md) | Frontend CSP, Trusted Types, worker assets, enhanced views, or custom panels |
 | [Frontend version](frontend-version.md) | Build metadata, frontend image releases, or update notification behavior |
 
-For a release or image-pin change, run the canonical suite and all applicable
-browser recipes. A recipe may have multiple sub-features. Record each selected
-sub-feature as passed, failed, or not run with a reason.
+For a release or image-pin change, inspect the canonical CI result and run the
+browser recipes for affected UI behavior. Repeat the full suite locally only
+when requested, when a deployment uncertainty needs investigation, or when a new
+deployment recipe needs proof. Record each selected sub-feature as passed,
+failed, or not run with a reason.
 For ingest, query, or MCP changes, also require the stored-telemetry MCP case in
 [Public API contracts](api-contracts.md). It must query the unique ingested span
-through the deployed MCP tool. A constant query is insufficient proof.
+through the deployed MCP tool. Its passing result from CI on the exact PR
+revision is sufficient. A constant query is insufficient proof.
+
+For authentication, ingress, Gateway, or TLS changes, select the affected path in
+[Public API contracts](api-contracts.md). Its HTTP service checks do not prove
+SSO, an ingress controller, or certificate verification.
 
 ## Proof
 

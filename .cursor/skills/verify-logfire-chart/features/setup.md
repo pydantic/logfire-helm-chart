@@ -66,3 +66,6 @@ Markdown is valid; record the observed outcome and response.
   as unavailable and retain the separate HTTP result. Do not report a rendered document.
 - The public document does not prove that a project exists. Use the authenticated
   record and setup screen for project identity.
+- This recipe proves the self-hosted token entrypoint. It does not complete Dex
+  password login, an external SSO connector, or its callback through ingress.
+  Select those paths separately when authentication or exposure changes.
