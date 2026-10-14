@@ -28,6 +28,9 @@ entry point listed here.
 For a release or image-pin change, run the canonical suite and all applicable
 browser recipes. A recipe may have multiple sub-features. Record each selected
 sub-feature as passed, failed, or not run with a reason.
+For ingest, query, or MCP changes, also require the stored-telemetry MCP case in
+[Public API contracts](api-contracts.md). It must query the unique ingested span
+through the deployed MCP tool. A constant query is insufficient proof.
 
 ## Proof
 

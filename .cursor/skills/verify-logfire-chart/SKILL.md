@@ -128,6 +128,7 @@ helm upgrade lf charts/logfire \
   -f charts/logfire/ci/ci-values.yaml -f "$VERIFY_RUNTIME/values.yaml" \
   --set ingress.enabled=false --set gateway.tls=false \
   --set "gateway.hostnames[0]=localhost:$VERIFY_PORT" \
+  --set "gateway.hostnames[1]=localhost" \
   --wait --wait-for-jobs --timeout 10m \
   2>&1 | tee "$VERIFY_RUNTIME/evidence/browser-upgrade.log"
 test "${PIPESTATUS[0]}" -eq 0
@@ -144,6 +145,8 @@ curl --fail --silent --show-error --retry 30 --retry-delay 2 --retry-connrefused
 Keep this shell's port-forward PID for cleanup. The pinned frontend uses
 `appConfig.apiHost` to construct API URLs. A page on a different port does not
 correct a mismatched `gateway.hostnames[0]`.
+The second hostname lets the pinned MCP host check accept loopback requests.
+That check removes the port before it compares the hostname.
 
 ## Doctor
 
@@ -180,7 +183,15 @@ For browser work, require `selfHosted: true` and the configured local `apiHost` 
 
 ## Drive
 
-Follow the selected [feature recipes](features/README.md). For browser fixtures,
+Follow the selected [feature recipes](features/README.md).
+For release, image, ingest, query, or MCP changes, run the stored-telemetry MCP case
+in [Public API contracts](features/api-contracts.md). It ingests a unique span and
+queries the exact stored record through the installed `/mcp` endpoint.
+Record the target, project, bounded SQL window, and matching row. Use a scoped
+`project:read` API key for MCP; an SDK read token serves a different API contract.
+The canonical suite repeats the case across combined and split query modes.
+
+For browser fixtures,
 read the configured disposable meta token into a private file without printing it:
 
 ```bash
