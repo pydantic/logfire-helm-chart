@@ -30,6 +30,18 @@ async def test_frontend_version_identifies_the_served_bundle(client: httpx.Async
     assert version["builtAt"] > 0
 
 
+@pytest.mark.parametrize(
+    "path", ["/", "/synthetic-org/synthetic-project", "/auth/oauth-consent", "/public-trace/synthetic"]
+)
+async def test_app_documents_allow_the_pinned_editor_policies(client: httpx.AsyncClient, path: str) -> None:
+    response = await client.get(path)
+    assert response.status_code == 200, response.text
+    policy = _policy(response)
+    assert "richScreenReaderContent" in policy["trusted-types"]
+    assert "'allow-duplicates'" in policy["trusted-types"]
+    assert "allow-duplicates" not in policy["trusted-types"]
+
+
 async def test_built_enhanced_view_worker_receives_its_network_restrictions(client: httpx.AsyncClient) -> None:
     manifest = await client.get("/frontend-assets.txt")
     assert manifest.status_code == 200, manifest.text

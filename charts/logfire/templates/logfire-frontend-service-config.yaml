@@ -190,7 +190,7 @@ data:
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
 
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
             }
 
             location /audio-iframe.html {
@@ -200,7 +200,7 @@ data:
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
 
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; media-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; media-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
             }
 
             # custom panels iframe
@@ -250,7 +250,7 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy richScreenReaderContent;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
             # Main location block for the app
@@ -266,7 +266,7 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https: blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy richScreenReaderContent;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https: blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
             # Fallback location for public trace pages: allows iframes from any origin.
@@ -276,7 +276,7 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors *;" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy richScreenReaderContent;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors *;" always;
             }
 
             # Fallback location for SPA routing
@@ -286,7 +286,7 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy richScreenReaderContent;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
             error_page 404 = @notfound;
@@ -388,7 +388,7 @@ data:
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
 
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
             }
 
             location /audio-iframe.html {
@@ -398,7 +398,7 @@ data:
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
 
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; media-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; media-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
             }
 
             # custom panels iframe
@@ -448,7 +448,7 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy richScreenReaderContent;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
             # Main location block for the app
@@ -464,7 +464,7 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https: blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy richScreenReaderContent;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https: blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
             # Fallback location for public trace pages: allows iframes from any origin.
@@ -474,7 +474,7 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors *;" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy richScreenReaderContent;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors *;" always;
             }
 
             # Fallback location for SPA routing
@@ -484,7 +484,7 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy allow-duplicates tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy richScreenReaderContent;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
             error_page 404 = @notfound;
