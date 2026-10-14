@@ -1,0 +1,170 @@
+image:
+  pullPolicy: IfNotPresent
+logfire-backend:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+logfire-backend-auth:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 192Mi
+    limits:
+      memory: 512Mi
+logfire-worker:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 768Mi
+logfire-task-runner:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+logfire-remote-mcp:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 192Mi
+    limits:
+      memory: 512Mi
+logfire-ai-gateway:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+logfire-dex:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+logfire-frontend-service:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+logfire-service:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+logfire-otel-collector:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+logfire-ff-ingest:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  directFileSubmitConcurrency: 4
+  directFileBufferMaxBytes: 1MB
+  datafusionThreads: 1
+  ioThreads: 1
+logfire-ff-ingest-processor:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  datafusionThreads: 1
+  ioThreads: 1
+logfire-ff-query-api:
+  replicas: 2
+  autoscaling:
+    hpa:
+      enabled: false
+    keda:
+      enabled: false
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+  queryParallelism: 1
+  datafusionThreads: 1
+  datafusionTargetPartitions: 1
+  ioThreads: 1
+logfire-ff-query-worker:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+  queryParallelism: 1
+  datafusionThreads: 1
+  datafusionTargetPartitions: 1
+  ioThreads: 1
+logfire-ff-crud-api:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+logfire-ff-maintenance-scheduler:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+logfire-ff-maintenance-worker:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  jobParallelism: 1
+  cpuConcurrency: 1
+  datafusionThreads: 1
+  ioThreads: 1
+logfire-ff-compaction-worker:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  jobParallelism: 1
+  cpuConcurrency: 1
+  datafusionThreads: 1
+  ioThreads: 1
+logfire-ff-bcache:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      memory: 768Mi
+  env:
+  - name: FF_BCACHE_MEMORY_CAPACITY
+    value: 128MB
+  - name: FF_BCACHE_IN_FLIGHT_BUDGET
+    value: 64MB
+postgresql:
+  primary:
+    resourcesPreset: none
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+rustfs:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
