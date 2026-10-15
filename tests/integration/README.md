@@ -1,8 +1,8 @@
 # Chart integration tests
 
-These tests send real requests through the installed chart's public service. CI first
-uses chart-testing for install and upgrade checks, then runs `ci/run-kind-tests.sh` in
-its prepared `logfire-restricted` namespace.
+These tests send real requests through the installed chart's public service. CI runs
+chart-testing and `ci/run-kind-tests.sh` in parallel, each in its own Kind cluster.
+The runner uses its prepared `logfire-restricted` namespace.
 
 The runner installs published chart 0.14.0, ingests a unique trace and confirms its exact
 record, upgrades to the current chart, and queries that same trace again. It then runs
