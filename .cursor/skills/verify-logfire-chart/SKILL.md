@@ -46,8 +46,8 @@ helm version --short
 python3 --version
 ```
 
-Use Helm `4.2.0`, the version in `.github/workflows/pr.yaml`. Version `4.2.1`
-hangs in Kind uninstall waits. Python must be at least `3.12`. The helpers declare
+Use Helm `4.3.1`, the version in `.github/workflows/pr.yaml`.
+Python must be at least `3.12`. The helpers declare
 their dependencies through `uv` script metadata. A browser tool must already be
 available for browser checks; use its accessibility snapshots and console/network
 inspection. Do not install a browser tool to hide an unavailable capability.
