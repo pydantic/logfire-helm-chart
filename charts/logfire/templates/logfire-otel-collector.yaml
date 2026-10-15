@@ -6,7 +6,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ $serviceName }}
-  {{- with .Values.otel_collector.serviceAccount.annotations }}
+  {{- with (.Values.otel_collector.serviceAccount | default dict).annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
