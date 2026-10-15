@@ -10,6 +10,9 @@ change. Reuse `ci/run-kind-tests.sh` and `tests/integration/`.
 
 ## Select proof
 
+For configuration gap reviews, compare against the chart's pinned platform source.
+Defer settings introduced later to the corresponding image upgrade.
+
 Use focused local checks and [canonical CI evidence](features/deployment.md#ci-coverage-and-evidence)
 for the exact PR revision. Do not repeat the full Kind suite locally by default.
 Run it locally when requested, when startup or upgrade behavior remains uncertain,
