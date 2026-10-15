@@ -21,9 +21,12 @@ and chooses combined or split query processing.
 
 ### CI coverage and evidence
 
-`.github/workflows/pr.yaml` runs Helm unit tests, chart lint, configuration rendering,
-and `ct install --upgrade`. It then runs `ci/run-kind-tests.sh` in a fresh Kind
-cluster with bundled Postgres, Redis, RustFS, and Maildev.
+`.github/workflows/pr.yaml` runs `chart-testing` and `stable-upgrade` in parallel.
+Each job creates its own Kind cluster with bundled Postgres, Redis, RustFS, and Maildev.
+The chart-testing job runs Helm unit tests, chart lint, configuration rendering,
+and `ct install --upgrade`. CI recipe changes also run the chart install checks.
+The stable-upgrade job runs `ci/run-kind-tests.sh`. The final `test` gate requires
+both jobs to pass.
 
 The runner installs published chart `0.14.0`, ingests a unique trace, upgrades to
 the current chart, and queries that exact record again. It runs all integration
