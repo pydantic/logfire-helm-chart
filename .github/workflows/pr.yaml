@@ -94,6 +94,14 @@ jobs:
         with:
           config: 'ci/kind.yaml'
 
+      - name: Verify image pull concurrency
+        shell: bash
+        run: |
+          node=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+          kubectl get --raw "/api/v1/nodes/$node/proxy/configz" \
+            | jq -e '.kubeletconfig | {serializeImagePulls, maxParallelImagePulls}
+              | select(.serializeImagePulls == false and .maxParallelImagePulls == 4)'
+
       - name: Create the restricted namespace
         run: |
           kubectl create namespace logfire-restricted
