@@ -23,7 +23,7 @@ ORG = "logfire-meta"
 _EVENT = {"type": 4, "timestamp": 1_700_000_000_000, "data": {"href": "https://app.example/"}}
 
 
-def _gzipped_envelope() -> bytes:
+def _gzipped_envelope(event: dict[str, object] = _EVENT) -> bytes:
     """The envelope the browser SDK sends: one gzipped chunk."""
     envelope = {
         "version": 1,
@@ -36,12 +36,14 @@ def _gzipped_envelope() -> bytes:
             "urls": ["https://app.example/"],
             "distinctId": "helm-it-replay",
         },
-        "events": [_EVENT],
+        "events": [event],
     }
     return gzip.compress(json.dumps(envelope).encode())
 
 
-async def _upload_chunk(client: httpx.AsyncClient, write_token: str, session_id: str) -> httpx.Response:
+async def _upload_chunk(
+    client: httpx.AsyncClient, write_token: str, session_id: str, event: dict[str, object] = _EVENT
+) -> httpx.Response:
     return await client.post(
         f"/v1/replay/{session_id}",
         params={"seq": 0},
@@ -50,7 +52,7 @@ async def _upload_chunk(client: httpx.AsyncClient, write_token: str, session_id:
             "Content-Encoding": "gzip",
             "Authorization": write_token,
         },
-        content=_gzipped_envelope(),
+        content=_gzipped_envelope(event),
     )
 
 
@@ -81,6 +83,28 @@ async def test_replay_chunk_round_trips_through_the_object_store(
     # The playback route answers the stored gzip blob, which httpx decodes transparently.
     body = json.loads(served.content)
     assert body["events"] == [_EVENT], body
+
+
+async def test_a_second_writer_cannot_replace_a_chunk(
+    client: httpx.AsyncClient, meta_frontend_token: str, project: str, write_token: str
+) -> None:
+    """The same sequence uploaded with different events is refused, whatever pod serves it.
+
+    The conditional PUT is what makes that true across replicas: without it the second upload
+    would replace the first writer's recording and the playback would show the loser's events.
+    """
+    session_id = "helm-it-replay-conflict"
+    first = await _upload_chunk(client, write_token, session_id)
+    assert first.is_success, first.text
+
+    conflicting = await _upload_chunk(
+        client, write_token, session_id, event={**_EVENT, "data": {"href": "https://app.example/other"}}
+    )
+    assert conflicting.status_code == 409, conflicting.text
+
+    served = await _read_chunk(client, meta_frontend_token, project, session_id)
+    assert served.is_success, served.text
+    assert json.loads(served.content)["events"] == [_EVENT]
 
 
 async def test_replay_chunk_survives_a_backend_restart(
