@@ -481,6 +481,40 @@ logfire-dex:
     # If specified, the custom value will be honored.
     connectors: []
 
+  # Dex expands `$VAR` references in the storage config and in every connector
+  # config from the container environment, so no credential has to be written
+  # here. Supply the variables through `env`, which accepts `valueFrom`:
+  #
+  # logfire-dex:
+  #   env:
+  #     - name: DEX_DB_PASSWORD
+  #       valueFrom:
+  #         secretKeyRef:
+  #           name: dex-credentials
+  #           key: db-password
+  #     - name: GITHUB_CLIENT_SECRET
+  #       valueFrom:
+  #         secretKeyRef:
+  #           name: dex-credentials
+  #           key: github-client-secret
+  #   config:
+  #     storage:
+  #       config:
+  #         password: $DEX_DB_PASSWORD
+  #     connectors:
+  #       - type: github
+  #         id: github
+  #         name: GitHub
+  #         config:
+  #           clientID: $GITHUB_CLIENT_ID
+  #           clientSecret: $GITHUB_CLIENT_SECRET
+
+  # -- Extra environment variables for the Dex pod. Accepts `valueFrom`, so a
+  # credential can come from a Secret. Dex expands `$VAR` from this environment
+  # in the storage and connector config, so `DEX_EXPAND_ENV=false` keeps a
+  # literal `$` in a password or DN.
+  env: []
+
   # -- Resource requests/limits
   # resources:
   #   requests:
@@ -1693,7 +1727,31 @@ logfire-redis:
   #   maxUnavailable: 0
   pdb: {}
 
-# -- Redis DSN. Change if using an external Redis instance.
+# -- User-provided Secret containing the Redis DSNs, one key per role:
+#
+#  - `sharedDsn`  shared caches, the generic `REDIS_DSN` of every service, and
+#                 the arq queues (`WORKER_REDIS_DSN`, `BACKEND_REDIS_DSN`)
+#  - `tailDsn`    Fusionfire live-tail registration (`FF_REDIS_TAIL_DSN`)
+#  - `tokenDsn`   auth token caches
+#  - `usageDsn`   usage, autocomplete, and rate limiting data
+#
+# The chart reads the DSNs only from a Secret, so a password never reaches a
+# ConfigMap or a plain env value. When `enabled` is false the chart creates its
+# own Secret from `redisDsn`, `tokenRedis.dsn` and `usageRedis.dsn`.
+redisSecret:
+  # -- Set to true to use an existing Secret (recommended for Argo CD users).
+  enabled: false
+  # -- Name of the Kubernetes Secret resource.
+  name: ""
+  # -- Optional workload annotations for external Secret reload controllers.
+  #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
+  #    Per-workload `annotations` override duplicate keys.
+  annotations: {}
+
+# -- NOTE: The DSNs below are ignored if `redisSecret.enabled` is true.
+
+# -- Redis DSN for the shared role, and the live-tail DSN.
+# Change if using an external Redis instance.
 redisDsn: redis://logfire-redis:6379
 
 # -- Redis settings for auth token caches. Empty DSN falls back to `redisDsn`.
