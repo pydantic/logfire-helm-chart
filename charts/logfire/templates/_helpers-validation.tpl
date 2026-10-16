@@ -387,6 +387,25 @@ through maildev instead of smtp.host and get a placeholder sender.
 {{- end -}}
 {{- end -}}
 
+{{/* Replay needs at least one worker, and deadlines must leave no unbounded Job. */}}
+{{- define "logfire.validate.dlqReplay" -}}
+{{- $replay := get .Values "logfire-ff-replay-dlq" | default dict -}}
+{{- if $replay.enabled -}}
+  {{- range $key := list "concurrency" "activeDeadlineSeconds" "startingDeadlineSeconds" -}}
+    {{- $value := get $replay $key -}}
+    {{- if or (not (regexMatch `^[1-9][0-9]*$` (toString $value))) (gt (int $value) 2147483647) -}}
+      {{- fail (printf "logfire-ff-replay-dlq.%s must be a positive integer." $key) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not (regexMatch `^[0-9]+$` (toString $replay.backoffLimit)) -}}
+    {{- fail "logfire-ff-replay-dlq.backoffLimit must be a nonnegative integer." -}}
+  {{- end -}}
+  {{- if not (trim ($replay.schedule | default "")) -}}
+    {{- fail "logfire-ff-replay-dlq.schedule must not be empty." -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
 {{/*
 Master validation template - runs all validations
 Call this from templates that need to ensure configuration is valid.
@@ -394,6 +413,7 @@ Call this from templates that need to ensure configuration is valid.
 {{- define "logfire.validateConfig" -}}
 {{- $root := . -}}
 {{- $validators := list
+  "logfire.validate.dlqReplay"
   "logfire.validate.sizingPreset"
   "logfire.validate.objectStore"
   "logfire.validate.objectStoreVolumes"

@@ -308,6 +308,80 @@ bucket RustFS creates.
 
 Do not enable bucket versioning. Logfire manages its own data lifecycle, and bucket versioning can increase cost and interfere with lifecycle behavior.
 
+### Ingest DLQ recovery
+
+Scheduled recovery requires a compatible Fusionfire image that supports cloud
+URI prefixes in the ingest failover store. The chart's current `92fe3870` image
+pin does not have that support. Deploy the fixed image before enabling this Job.
+The replay and ingest images must use that release together.
+
+If the ingest processor is unavailable, ingest writes accepted telemetry under
+`objectStore.uri/_ingest_failover`. Enable the replay CronJob to recover those
+objects after the processor is healthy. First check for an external replay job.
+Run only one replay process against a failover prefix.
+
+```yaml
+logfire-ff-replay-dlq:
+  enabled: true
+  suspend: true
+```
+
+The Job uses the instance's object storage credentials and Kubernetes service
+account. That identity must list, read, and delete objects under the failover
+prefix. The Job must reach `logfire-ff-ingest-processor` and the telemetry collector.
+Allow those connections in any external network policy or service mesh policy.
+The chart uses the configured in-cluster HTTPS endpoint and CA bundle.
+
+For S3 and Azure instances, older images can write failover objects at the bucket root,
+even when the configured URI has a prefix. After the fixed ingest image is ready
+and every old ingest pod has stopped, drain that legacy backlog separately.
+Run `fusionfire replay-ingest-dlq` with the bucket-root URI and the same processor
+endpoint, storage identity, and concurrency limit. Set
+`--dlq-replay-ending-prefix` to the current UTC date followed by `/`.
+Wait for the first UTC day boundary after the last old ingest pod stops before
+the final legacy drain. An earlier drain leaves that day's objects for a later
+run. Check the completion records for failures and remaining objects.
+Keep the scheduled Job suspended until this drain is complete.
+The scheduled Job only reads the configured failover prefix.
+
+Limit each legacy run and select only failover object names. For example, add:
+
+```text
+--dlq-replay-include-regex '^([0-9]{4}-[0-9]{2}-[0-9]{2}/(traces|logs|metrics|profiles)_|batch/[0-9]{4}-[0-9]{2}-[0-9]{2}/)'
+--dlq-replay-limit 100
+```
+
+The limit applies to each of the payload and batch replay paths. Repeat the
+bounded run until both completion records report no failures or remaining objects.
+Keep the current UTC date cutoff on every run.
+
+After the Helm upgrade, confirm that no replay is active. Run one recovery Job:
+
+```sh
+kubectl -n logfire create job logfire-dlq-recovery --from=cronjob/logfire-ff-replay-dlq
+kubectl -n logfire logs -f job/logfire-dlq-recovery
+```
+
+Check the `DLQ replay completed` records for both payload and batch objects.
+Confirm that `failed_items` is zero and `remaining_items` decreases. A completed
+Job can still report individual object failures. Confirm recovered telemetry in
+Logfire before setting `suspend: false` through Helm.
+
+The default schedule runs at 01:00 UTC. Each run retries the whole backlog older
+than the current UTC day. Today's objects remain untouched because ingest can
+still write them. The Job deletes an object only after the processor accepts it.
+A failed replay leaves the object for the next run. If the processor accepts an
+object but the response or deletion fails, a later run can deliver it again.
+
+The default concurrency is four objects for each of the payload and batch replay
+paths. Adjust `concurrency`, resource limits, and `scratchSizeLimit` for the
+backlog and the processor's capacity. Each Job has a six-hour deadline. Kubernetes
+keeps one successful and one failed Job for up to one day.
+
+To pause scheduled recovery during an incident, set `suspend: true` through Helm.
+Suspension does not stop an active Job. Delete that Job separately if it adds
+load to a degraded processor. Wait for its pods to terminate before a manual run.
+
 ### PostgreSQL
 
 Logfire requires three separate PostgreSQL databases: `crud`, `ff`, and `dex`.
@@ -714,6 +788,21 @@ Before diving deeper, verify these common configuration issues:
 | logfire-ff-ingest.volumeClaimTemplates.storage | string | `"16Gi"` | Storage provisioned for each pod |
 | logfire-ff-maintenance-scheduler | object | `{"env":[]}` | Environment overrides for the maintenance scheduler pod |
 | logfire-ff-query-api | object | `{"env":[]}` | Environment overrides for the query API pod |
+| logfire-ff-replay-dlq | object | `{"activeDeadlineSeconds":21600,"annotations":{},"backoffLimit":0,"concurrency":4,"enabled":false,"env":[],"labels":{},"podAnnotations":{},"podLabels":{},"resources":{"limits":{"cpu":"1","ephemeral-storage":"9Gi","memory":"2Gi"},"requests":{"cpu":"250m","ephemeral-storage":"1Gi","memory":"512Mi"}},"schedule":"0 1 * * *","scratchSizeLimit":"8Gi","startingDeadlineSeconds":3600,"suspend":false}` | Scheduled recovery for telemetry in the ingest failover object store. |
+| logfire-ff-replay-dlq.activeDeadlineSeconds | int | `21600` | Maximum Job runtime in seconds, including pending pods. |
+| logfire-ff-replay-dlq.annotations | object | `{}` | Workload annotations. |
+| logfire-ff-replay-dlq.backoffLimit | int | `0` | Number of failed pod retries. Objects remain available for the next scheduled run. |
+| logfire-ff-replay-dlq.concurrency | int | `4` | Maximum concurrent object replays. Payload and batch replay each use this limit. |
+| logfire-ff-replay-dlq.enabled | bool | `false` | Enable after deploying compatible ingest and replay images with cloud URI prefix support. First check for external replay jobs. |
+| logfire-ff-replay-dlq.env | list | `[]` | Extra environment variables for the replay pod. |
+| logfire-ff-replay-dlq.labels | object | `{}` | Workload labels. |
+| logfire-ff-replay-dlq.podAnnotations | object | `{}` | Pod annotations. |
+| logfire-ff-replay-dlq.podLabels | object | `{}` | Pod labels. |
+| logfire-ff-replay-dlq.resources | object | `{"limits":{"cpu":"1","ephemeral-storage":"9Gi","memory":"2Gi"},"requests":{"cpu":"250m","ephemeral-storage":"1Gi","memory":"512Mi"}}` | Resource requests and limits for replay and scratch storage. |
+| logfire-ff-replay-dlq.schedule | string | `"0 1 * * *"` | Schedule in UTC. Each run excludes objects written on the current UTC day. |
+| logfire-ff-replay-dlq.scratchSizeLimit | string | `"8Gi"` | Fresh scratch space per pod. Batch replay downloads objects here before it sends them. |
+| logfire-ff-replay-dlq.startingDeadlineSeconds | int | `3600` | Skip a scheduled run if the controller is more than this many seconds late. |
+| logfire-ff-replay-dlq.suspend | bool | `false` | Pause scheduled runs. An active Job must be stopped separately. |
 | logfire-otel-collector | object | `{"livenessProbe":{"failureThreshold":3,"httpGet":{"path":"/","port":"health"},"periodSeconds":30,"timeoutSeconds":5},"readinessProbe":{"failureThreshold":3,"httpGet":{"path":"/","port":"health"},"periodSeconds":10,"timeoutSeconds":3},"startupProbe":{"failureThreshold":24,"httpGet":{"path":"/","port":"health"},"periodSeconds":5,"timeoutSeconds":3},"strategy":{"rollingUpdate":{"maxSurge":1,"maxUnavailable":0},"type":"RollingUpdate"},"terminationGracePeriodSeconds":60}` | Collector health checks and rollout settings. Override probes here, or set a probe to null to disable it. GOMEMLIMIT defaults to 60% of the rendered memory limit (409MiB with no limit); an explicit GOMEMLIMIT in env takes precedence. |
 | logfire-redis.affinity | object | `{}` | Affinity for the bundled Redis pod. |
 | logfire-redis.enabled | bool | `true` | Deploy Redis as part of this chart. Disable to use an external Redis instance.  The bundled Redis is a single-node instance intended for development, evaluation, and simple self-contained installs. It is not highly available, and upgrades that change its pod template cause a brief interruption while Redis is replaced. For production, disable this and set redisDsn to a managed Redis endpoint. |

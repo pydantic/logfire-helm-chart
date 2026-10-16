@@ -628,6 +628,45 @@ logfire-ff-ingest:
   #   maxUnavailable: 1
   #   minAvailable: 1
 
+# -- Scheduled recovery for telemetry in the ingest failover object store.
+logfire-ff-replay-dlq:
+  # -- Enable after deploying compatible ingest and replay images with cloud URI prefix support. First check for external replay jobs.
+  enabled: false
+  # -- Schedule in UTC. Each run excludes objects written on the current UTC day.
+  schedule: "0 1 * * *"
+  # -- Pause scheduled runs. An active Job must be stopped separately.
+  suspend: false
+  # -- Maximum concurrent object replays. Payload and batch replay each use this limit.
+  concurrency: 4
+  # -- Maximum Job runtime in seconds, including pending pods.
+  activeDeadlineSeconds: 21600
+  # -- Skip a scheduled run if the controller is more than this many seconds late.
+  startingDeadlineSeconds: 3600
+  # -- Number of failed pod retries. Objects remain available for the next scheduled run.
+  backoffLimit: 0
+  # -- Fresh scratch space per pod. Batch replay downloads objects here before it sends them.
+  scratchSizeLimit: 8Gi
+  # -- Resource requests and limits for replay and scratch storage.
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+      ephemeral-storage: 1Gi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+      ephemeral-storage: 9Gi
+  # -- Workload labels.
+  labels: {}
+  # -- Workload annotations.
+  annotations: {}
+  # -- Pod labels.
+  podLabels: {}
+  # -- Pod annotations.
+  podAnnotations: {}
+  # -- Extra environment variables for the replay pod.
+  env: []
+
 # -- Autoscaling & resources for the `logfire-ff-ingest-processor` pod
 logfire-ff-ingest-processor:
   # -- Workload labels
