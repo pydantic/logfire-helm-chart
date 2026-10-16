@@ -10,7 +10,8 @@
 {{- $promValues := .Values.otel_collector.prometheus | default dict }}
 {{- $selfMetrics := .Values.otel_collector.selfMetrics | default dict }}
 {{- $selfMetricsEnabled := dig "enabled" true $selfMetrics }}
-{{- $selfMetricNames := "otelcol_(exporter_(queue_(size|capacity)|(enqueue_failed|send_failed|sent)_(spans|log_records|metric_points))|receiver_(accepted|refused|failed)_(spans|log_records|metric_points))" }}
+{{- /* receiver_failed_* stays zero with receiverhelper.newReceiverMetrics disabled. Reassess when the image or gate changes. */ -}}
+{{- $selfMetricNames := "otelcol_(exporter_(queue_(size|capacity)|(enqueue_failed|send_failed|sent)_(spans|log_records|metric_points))|receiver_(accepted|refused)_(spans|log_records|metric_points))" }}
 {{- $delta_to_cumulative := true }}
 {{- if hasKey $promValues "delta_to_cumulative" }}
 {{- $delta_to_cumulative = $promValues.delta_to_cumulative }}
@@ -43,6 +44,9 @@ data:
                 - source_labels: [__name__]
                   action: keep
                   regex: {{ $selfMetricNames | squote }}
+                - source_labels: [receiver]
+                  action: drop
+                  regex: prometheus/self
       {{- end }}
 
     exporters:
@@ -97,6 +101,8 @@ data:
         metrics:
           metric:
             - 'not IsMatch(name, "^{{ $selfMetricNames }}$")'
+          datapoint:
+            - 'attributes["receiver"] == "prometheus/self"'
       resourcedetection/self:
         detectors: [env]
         override: false
