@@ -228,6 +228,18 @@ inClusterTls:
   # Use a non-privileged port to avoid securityContext constraints.
   httpsPort: 8443
 
+  # -- Image for the in-cluster TLS wait Job. The Job only runs when certs.mode=certManager and
+  # dev.deployCertManager=true. Point this at a registry mirror for private-registry installs.
+  # The default container securityContext pins the uid/gid of `curlimages/curl`; override
+  # `tls-wait.securityContext` if you substitute an image that runs as a different user.
+  waitImage:
+    # -- Image repository
+    repository: curlimages/curl
+    # -- Image tag
+    tag: "8.12.1"
+    # -- Image pull policy. Defaults to `image.pullPolicy` when unset.
+    pullPolicy: ""
+
   # -- CA bundle used by clients (HAProxy and other workloads) to verify service certificates.
   # Required when:
   # - certs.mode=existingSecrets

@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.2-rc.4](https://img.shields.io/badge/Version-0.14.2--rc.4-informational?style=flat-square) ![AppVersion: 92fe3870](https://img.shields.io/badge/AppVersion-92fe3870-informational?style=flat-square)
+![Version: 0.14.2-rc.5](https://img.shields.io/badge/Version-0.14.2--rc.5-informational?style=flat-square) ![AppVersion: 92fe3870](https://img.shields.io/badge/AppVersion-92fe3870-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -652,7 +652,7 @@ Before diving deeper, verify these common configuration issues:
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks) |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | imagePullSecrets | list | `[]` | Image pull secrets used by all pods |
-| inClusterTls | object | `{"caBundle":{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}},"certs":{"certManager":{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}},"mode":"existingSecrets"},"enabled":false,"httpsPort":8443,"secretNamePrefix":""}` | Enable full in-cluster HTTPS with certificate verification. This is independent from `ingress.tls` / `gateway.tls`.  NOTE: Implementation is incremental; see the README's "In-cluster HTTPS" section for usage notes. |
+| inClusterTls | object | `{"caBundle":{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}},"certs":{"certManager":{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}},"mode":"existingSecrets"},"enabled":false,"httpsPort":8443,"secretNamePrefix":"","waitImage":{"pullPolicy":"","repository":"curlimages/curl","tag":"8.12.1"}}` | Enable full in-cluster HTTPS with certificate verification. This is independent from `ingress.tls` / `gateway.tls`.  NOTE: Implementation is incremental; see the README's "In-cluster HTTPS" section for usage notes. |
 | inClusterTls.caBundle | object | `{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}}` | CA bundle used by clients (HAProxy and other workloads) to verify service certificates. Required when: - certs.mode=existingSecrets - certs.mode=certManager with a non-empty certs.certManager.issuerRef.name (custom issuer) Optional when: - certs.mode=certManager with an empty issuerRef.name (chart-managed namespaced Issuer + CA) Provide exactly one of existingConfigMap or existingSecret. The referenced resource must exist in the same namespace as this Helm release. |
 | inClusterTls.certs | object | `{"certManager":{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}},"mode":"existingSecrets"}` | Certificate provisioning for in-cluster TLS. certs.mode=certManager requires cert-manager CRDs to be installed in the cluster. (Helm will fail fast if cert-manager.io/v1 is not available, unless dev.deployCertManager=true.) |
 | inClusterTls.certs.certManager | object | `{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}}` | Settings only used when certs.mode=certManager |
@@ -660,6 +660,10 @@ Before diving deeper, verify these common configuration issues:
 | inClusterTls.certs.mode | string | `"existingSecrets"` | Use existingSecrets for customer-provided certs, or certManager to have the chart create cert-manager Certificate resources. |
 | inClusterTls.httpsPort | int | `8443` | Port used for in-cluster HTTPS on Services. Use a non-privileged port to avoid securityContext constraints. |
 | inClusterTls.secretNamePrefix | string | `""` | Convention-based certificate secret naming. When enabled, the chart expects a kubernetes.io/tls Secret per service:   <release>-<service>-tls This also controls secret names used by chart-created cert-manager Certificates. If secretNamePrefix is empty, the prefix defaults to the Helm release name. |
+| inClusterTls.waitImage | object | `{"pullPolicy":"","repository":"curlimages/curl","tag":"8.12.1"}` | Image for the in-cluster TLS wait Job. The Job only runs when certs.mode=certManager and dev.deployCertManager=true. Point this at a registry mirror for private-registry installs. The default container securityContext pins the uid/gid of `curlimages/curl`; override `tls-wait.securityContext` if you substitute an image that runs as a different user. |
+| inClusterTls.waitImage.pullPolicy | string | `""` | Image pull policy. Defaults to `image.pullPolicy` when unset. |
+| inClusterTls.waitImage.repository | string | `"curlimages/curl"` | Image repository |
+| inClusterTls.waitImage.tag | string | `"8.12.1"` | Image tag |
 | ingress.annotations | object | `{}` | Ingress annotations. Logfire Live View requires WebSocket support, and some controllers require an explicit annotation. For example, F5 NGINX Ingress Controller uses `nginx.org/websocket-services: logfire-service`. |
 | ingress.enabled | bool | `true` | Enable the Ingress resource. If you are NOT using an ingress resource, you still need to set `tls` and `hostnames` via either `ingress.*` or `gateway.*` so the application can generate correct URLs/CORS. |
 | ingress.hostname | string | `"logfire.example.com"` | DEPRECATED (kept for backward compatibility). Use `hostnames` (list) for all new deployments. |
