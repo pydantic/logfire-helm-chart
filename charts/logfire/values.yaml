@@ -1755,7 +1755,7 @@ otel_collector:
   selfMetricsPort: 8888
   selfMetrics:
     # -- Forward collector queue, delivery, and receiver metrics to the configured OTLP exporter
-    # every 30 seconds. Each pod scrapes only itself. Independent external monitoring is still
+    # every 60 seconds. Each pod scrapes only itself. Independent external monitoring is still
     # needed to detect a collector or destination outage.
     enabled: true
   # -- exporter configuration for the otlp_http exporter

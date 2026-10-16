@@ -439,7 +439,7 @@ Collector self-metrics are available on each pod's `self-metrics` port
 (`otel_collector.selfMetricsPort`, default 8888), separately from application metrics on
 `otel_collector.prometheus.port` (default 9090). Configure your monitoring system to scrape that pod port.
 The collector also forwards a small set of queue, delivery, and receiver metrics through its
-configured OTLP exporter every 30 seconds. Each pod scrapes itself on loopback. These metrics
+configured OTLP exporter every 60 seconds. Each pod scrapes itself on loopback. These metrics
 use `service.name=logfire-otel-collector` and the pod UID as `service.instance.id`.
 The self-metric pipeline reads `otelResourceAttributes` for the deployment environment.
 It does not change the identity of application metrics or add self-metrics to the application
@@ -768,7 +768,7 @@ Before diving deeper, verify these common configuration issues:
 | otel_collector.queueStorage.ephemeralStorageRequest | string | `"512Mi"` | Scheduling reservation for node-local storage, including logs. Explicit logfire-otel-collector.resources ephemeral-storage settings take precedence. |
 | otel_collector.queueStorage.fsync | bool | `false` | Force each database write to stable storage. Off by default, like upstream: process-restart recovery uses the live node filesystem; unclean host failure can lose unsynced writes or corrupt the database. Enabling this adds substantial disk I/O cost. |
 | otel_collector.queueStorage.maxSizeBytes | int | `536870912` | Per-database limit. There are three signal databases. Keep the volume large enough for all three plus their temporary compaction copies (at least 6x this value). Byte queues require at least 4x payload capacity per database for page/index overhead; this headroom minimum is not a guarantee for arbitrary request shapes or disk failure. |
-| otel_collector.selfMetrics.enabled | bool | `true` | Forward collector queue, delivery, and receiver metrics to the configured OTLP exporter every 30 seconds. Each pod scrapes only itself. Independent external monitoring is still needed to detect a collector or destination outage. |
+| otel_collector.selfMetrics.enabled | bool | `true` | Forward collector queue, delivery, and receiver metrics to the configured OTLP exporter every 60 seconds. Each pod scrapes only itself. Independent external monitoring is still needed to detect a collector or destination outage. |
 | otel_collector.selfMetricsPort | int | `8888` | Port for the collector's own Prometheus self-metrics. Must differ from `prometheus.port` (the application exporter), or the collector cannot bind both and fails to start. |
 | otel_collector.sendingQueueBytes | int | `67108864` | Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per profile; this value applies when no sizing preset is used. |
 | otel_collector.serviceAccount.annotations | object | `{}` | Annotations for the collector's ServiceAccount, for example a Workload Identity binding. |

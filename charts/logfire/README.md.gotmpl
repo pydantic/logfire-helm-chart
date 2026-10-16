@@ -440,7 +440,7 @@ Collector self-metrics are available on each pod's `self-metrics` port
 (`otel_collector.selfMetricsPort`, default 8888), separately from application metrics on
 `otel_collector.prometheus.port` (default 9090). Configure your monitoring system to scrape that pod port.
 The collector also forwards a small set of queue, delivery, and receiver metrics through its
-configured OTLP exporter every 30 seconds. Each pod scrapes itself on loopback. These metrics
+configured OTLP exporter every 60 seconds. Each pod scrapes itself on loopback. These metrics
 use `service.name=logfire-otel-collector` and the pod UID as `service.instance.id`.
 The self-metric pipeline reads `otelResourceAttributes` for the deployment environment.
 It does not change the identity of application metrics or add self-metrics to the application
