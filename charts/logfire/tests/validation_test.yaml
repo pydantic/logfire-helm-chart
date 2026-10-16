@@ -1001,3 +1001,35 @@ tests:
       - matchRegex:
           path: data["otel-collector-config.yaml"]
           pattern: 'limit_percentage: 75'
+
+  - it: rejects replay without a worker
+    set:
+      logfire-ff-replay-dlq.enabled: true
+      logfire-ff-replay-dlq.concurrency: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: 'concurrency must be a positive integer'
+
+  - it: rejects an unbounded replay Job
+    set:
+      logfire-ff-replay-dlq.enabled: true
+      logfire-ff-replay-dlq.activeDeadlineSeconds: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: 'activeDeadlineSeconds must be a positive integer'
+
+  - it: rejects a negative replay retry count
+    set:
+      logfire-ff-replay-dlq.enabled: true
+      logfire-ff-replay-dlq.backoffLimit: -1
+    asserts:
+      - failedTemplate:
+          errorPattern: 'backoffLimit must be a nonnegative integer'
+
+  - it: rejects an empty replay schedule
+    set:
+      logfire-ff-replay-dlq.enabled: true
+      logfire-ff-replay-dlq.schedule: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: 'schedule must not be empty'

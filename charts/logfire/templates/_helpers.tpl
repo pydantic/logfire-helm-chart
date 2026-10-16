@@ -1142,6 +1142,7 @@ Custom labels for workloads pods
     "logfire-service"
     "logfire-backend-migrations"
     "logfire-ff-migrations"
+    "logfire-ff-replay-dlq"
     "logfire-redis"
     "logfire-otel-collector"
     -}}
@@ -1338,6 +1339,7 @@ platform contract tests keep the image `USER` and these numbers in step.
   "logfire-ff-compaction-worker"
   "logfire-ff-bcache"
   "logfire-ff-migrations"
+  "logfire-ff-replay-dlq"
 -}}
 {{- if has $serviceName $uidGid1000 -}}
 {{- dict "uid" 1000 "gid" 1000 | toJson -}}

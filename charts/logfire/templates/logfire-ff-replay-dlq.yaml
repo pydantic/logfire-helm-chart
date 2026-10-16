@@ -1,0 +1,95 @@
+{{- $serviceName := "logfire-ff-replay-dlq" -}}
+{{- $serviceValues := get .Values $serviceName | default dict -}}
+{{- if $serviceValues.enabled -}}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson -}}
+{{- $podSecurityContext := include "logfire.fusionfirePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson -}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $serviceName }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  annotations:
+    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
+spec:
+  schedule: {{ $serviceValues.schedule | quote }}
+  timeZone: Etc/UTC
+  suspend: {{ $serviceValues.suspend }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: {{ $serviceValues.startingDeadlineSeconds }}
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: {{ $serviceValues.activeDeadlineSeconds }}
+      backoffLimit: {{ $serviceValues.backoffLimit }}
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            {{- include "logfire.selectorLabels" . | nindent 12 }}
+            {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
+            app.kubernetes.io/component: {{ $serviceName }}
+          annotations:
+            {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
+        spec:
+          {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName "podSecurityContext" $podSecurityContext) | nindent 10 }}
+          restartPolicy: Never
+          containers:
+            - name: {{ $serviceName }}
+              image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
+              imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+              {{- include "logfire.securityContext" $containerSecurityContext | nindent 14 }}
+              {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 14 }}
+              command: [sh, -ec]
+              args:
+                - |
+                  end_prefix="$(date -u +%Y-%m-%d)/"
+                  exec fusionfire replay-ingest-dlq --dlq-replay-ending-prefix "$end_prefix"
+              env:
+                - name: FF_FAILOVER_OBJECT_STORE_URI
+                  valueFrom:
+                    configMapKeyRef:
+                      name: logfire-ff-ingest-config
+                      key: FF_FAILOVER_OBJECT_STORE_URI
+                - name: FF_INGEST_REPLAY_SERVICE_HOST
+                  value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor:{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
+                - name: FF_DLQ_REPLAY_CONCURRENCY_LIMIT
+                  value: {{ $serviceValues.concurrency | quote }}
+                - name: FF_TEMP_DIR
+                  value: /scratch
+                - name: FF_SEND_TO_LOGFIRE
+                  value: "true"
+                - name: FF_FORCE_CONSOLE_LOGGING
+                  value: "true"
+                - name: RUST_LOG
+                  value: info
+                - name: RUST_BACKTRACE
+                  value: full
+                {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 16 }}
+                {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+                - name: FF_TLS_CLIENT_ENABLE
+                  value: "true"
+                - name: FF_TLS_CLIENT_CA_PATH
+                  value: /etc/logfire/incluster-ca/ca.crt
+                {{- end }}
+                {{- include "logfire.objectStoreEnv" . | nindent 16 }}
+                {{- with $serviceValues.env }}
+                  {{- . | toYaml | nindent 16 }}
+                {{- end }}
+              volumeMounts:
+                {{- include "logfire.tmpVolumeMounts" . | nindent 16 }}
+                - name: scratch-data
+                  mountPath: /scratch
+                {{- include "logfire.objectStoreVolumeMounts" . | nindent 16 }}
+                {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 16 }}
+          volumes:
+            {{- include "logfire.tmpVolume" . | nindent 12 }}
+            - name: scratch-data
+              emptyDir:
+                sizeLimit: {{ $serviceValues.scratchSizeLimit }}
+            {{- include "logfire.objectStoreVolumes" . | nindent 12 }}
+            {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 12 }}
+{{- end }}

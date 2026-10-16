@@ -1,0 +1,126 @@
+suite: DLQ replay storage and processor contracts
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore.uri: gs://test-bucket/prefix
+  dev.deployPostgres: true
+  logfire-ff-replay-dlq.enabled: true
+templates:
+  - templates/logfire-ff-replay-dlq.yaml
+  - templates/logfire-ff-config.yaml
+  - templates/logfire-ff-ingest-processor.yaml
+tests:
+  - it: reads the failover URI from the ingest configuration and reaches the processor service
+    asserts:
+      - equal:
+          path: data.FF_FAILOVER_OBJECT_STORE_URI
+          value: gs://test-bucket/prefix/_ingest_failover
+        template: templates/logfire-ff-config.yaml
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: FF_FAILOVER_OBJECT_STORE_URI
+            valueFrom:
+              configMapKeyRef:
+                name: logfire-ff-ingest-config
+                key: FF_FAILOVER_OBJECT_STORE_URI
+        template: templates/logfire-ff-replay-dlq.yaml
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: FF_INGEST_REPLAY_SERVICE_HOST
+            value: http://logfire-ff-ingest-processor:8012
+        template: templates/logfire-ff-replay-dlq.yaml
+      - equal:
+          path: spec.ports[0].port
+          value: 8012
+        template: templates/logfire-ff-ingest-processor.yaml
+        documentSelector:
+          path: kind
+          value: Service
+
+  - it: reaches the TLS processor through the configured HTTPS port and CA
+    set:
+      inClusterTls.enabled: true
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: instance-ca
+    asserts:
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: FF_INGEST_REPLAY_SERVICE_HOST
+            value: https://logfire-ff-ingest-processor:9443
+        template: templates/logfire-ff-replay-dlq.yaml
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_CA_PATH
+            value: /etc/logfire/incluster-ca/ca.crt
+        template: templates/logfire-ff-replay-dlq.yaml
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.volumes
+          content:
+            name: logfire-incluster-ca-bundle
+            configMap:
+              name: instance-ca
+              items:
+                - key: ca.crt
+                  path: ca.crt
+        template: templates/logfire-ff-replay-dlq.yaml
+      - equal:
+          path: spec.ports[1].port
+          value: 9443
+        template: templates/logfire-ff-ingest-processor.yaml
+        documentSelector:
+          path: kind
+          value: Service
+
+  - it: uses the same cloud identity and mounted object storage credentials as ingest
+    set:
+      serviceAccount.name: instance-storage
+      objectStore.env.GOOGLE_APPLICATION_CREDENTIALS: /var/run/storage/key.json
+      objectStore.volumes:
+        - name: storage-credentials
+          secret:
+            secretName: object-storage
+      objectStore.volumeMounts:
+        - name: storage-credentials
+          mountPath: /var/run/storage
+          readOnly: true
+    asserts:
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.serviceAccountName
+          value: instance-storage
+        template: templates/logfire-ff-replay-dlq.yaml
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: instance-storage
+        template: templates/logfire-ff-ingest-processor.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].env
+          content:
+            name: GOOGLE_APPLICATION_CREDENTIALS
+            value: /var/run/storage/key.json
+        template: templates/logfire-ff-replay-dlq.yaml
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.containers[0].volumeMounts
+          content:
+            name: storage-credentials
+            mountPath: /var/run/storage
+            readOnly: true
+        template: templates/logfire-ff-replay-dlq.yaml
+      - contains:
+          path: spec.jobTemplate.spec.template.spec.volumes
+          content:
+            name: storage-credentials
+            secret:
+              secretName: object-storage
+        template: templates/logfire-ff-replay-dlq.yaml
