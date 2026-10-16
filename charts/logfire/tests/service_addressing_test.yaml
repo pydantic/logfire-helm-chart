@@ -78,13 +78,30 @@ tests:
 
   - it: the auth profile shares the token cache and JWT secret with the backend
     templates:
+      - templates/logfire-backend.yaml
       - templates/logfire-backend-auth.yaml
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
           content:
             name: TOKEN_REDIS_DSN
-            value: redis://logfire-redis:6379
+            valueFrom:
+              secretKeyRef:
+                name: lf-logfire-redis-dsns
+                key: tokenDsn
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TOKEN_REDIS_DSN
+            valueFrom:
+              secretKeyRef:
+                name: lf-logfire-redis-dsns
+                key: tokenDsn
+        template: templates/logfire-backend-auth.yaml
         documentSelector:
           path: kind
           value: Deployment
@@ -96,6 +113,7 @@ tests:
               secretKeyRef:
                 name: logfire-jwt-secret
                 key: logfire-jwt-secret
+        template: templates/logfire-backend-auth.yaml
         documentSelector:
           path: kind
           value: Deployment
@@ -104,6 +122,7 @@ tests:
           content:
             name: ON_PREM
             value: "true"
+        template: templates/logfire-backend-auth.yaml
         documentSelector:
           path: kind
           value: Deployment

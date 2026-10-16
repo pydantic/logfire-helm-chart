@@ -719,6 +719,17 @@ tests:
       - failedTemplate:
           errorPattern: 'redisDsn is required'
 
+  - it: requires redisSecret.name when the external Redis Secret is enabled
+    set:
+      redisSecret:
+        enabled: true
+        name: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'redisSecret\.name is required'
+
   # --- gateway api ---
   - it: requires gateway.gatewayClassName when the chart creates the Gateway
     set:
