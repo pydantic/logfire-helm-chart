@@ -421,6 +421,10 @@ Call this from templates that need to ensure configuration is valid.
   "extraProcessors" (list "memory_limiter" "k8s_attributes" "delta_to_cumulative")
   "extraPipelines" (list "traces" "metrics" "logs" "metrics/prometheus")
   -}}
+{{- if dig "enabled" true ($otel.selfMetrics | default dict) -}}
+  {{- $_ := set $reserved "extraProcessors" (concat (get $reserved "extraProcessors") (list "filter/self" "resourcedetection/self" "resource/self")) -}}
+  {{- $_ := set $reserved "extraPipelines" (append (get $reserved "extraPipelines") "metrics/self") -}}
+{{- end -}}
 {{- range $key, $names := $reserved -}}
   {{- $components := get $otel $key | default dict -}}
   {{- if not (kindIs "map" $components) -}}
