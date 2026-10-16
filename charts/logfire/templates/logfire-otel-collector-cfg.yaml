@@ -8,6 +8,9 @@
 {{- include "logfire.validate.otelExtraComponents" . }}
 {{- $prometheusEnabled := include "isPrometheusExporterEnabled" . | trim | eq "true" }}
 {{- $promValues := .Values.otel_collector.prometheus | default dict }}
+{{- $selfMetrics := .Values.otel_collector.selfMetrics | default dict }}
+{{- $selfMetricsEnabled := dig "enabled" true $selfMetrics }}
+{{- $selfMetricNames := "otelcol_(exporter_(queue_(size|capacity)|(enqueue_failed|send_failed|sent)_(spans|log_records|metric_points))|receiver_(accepted|refused|failed)_(spans|log_records|metric_points))" }}
 {{- $delta_to_cumulative := true }}
 {{- if hasKey $promValues "delta_to_cumulative" }}
 {{- $delta_to_cumulative = $promValues.delta_to_cumulative }}
@@ -28,6 +31,19 @@ data:
             endpoint: "0.0.0.0:4317"
           http:
             endpoint: "0.0.0.0:4318"
+      {{- if $selfMetricsEnabled }}
+      prometheus/self:
+        config:
+          scrape_configs:
+            - job_name: otelcol
+              scrape_interval: 30s
+              static_configs:
+                - targets: ["127.0.0.1:{{ .Values.otel_collector.selfMetricsPort | default 8888 }}"]
+              metric_relabel_configs:
+                - source_labels: [__name__]
+                  action: keep
+                  regex: {{ $selfMetricNames | squote }}
+      {{- end }}
 
     exporters:
       {{- if .Values.otel_collector.debug.enabled }}
@@ -75,6 +91,25 @@ data:
 
 
     processors:
+      {{- if $selfMetricsEnabled }}
+      filter/self:
+        error_mode: ignore
+        metrics:
+          metric:
+            - 'not IsMatch(name, "^{{ $selfMetricNames }}$")'
+      resourcedetection/self:
+        detectors: [env]
+        override: false
+      resource/self:
+        attributes:
+          - {key: service.name, value: logfire-otel-collector, action: upsert}
+          - {key: otel.collector.role, value: gateway, action: upsert}
+          - {key: service.namespace, value: {{ .Release.Namespace | quote }}, action: upsert}
+          - {key: service.instance.id, value: "${env:OTELCOL_POD_UID}", action: upsert}
+          - {key: k8s.pod.uid, value: "${env:OTELCOL_POD_UID}", action: upsert}
+          - {key: k8s.pod.name, value: "${env:OTELCOL_POD_NAME}", action: upsert}
+          - {key: k8s.namespace.name, value: "${env:OTELCOL_POD_NAMESPACE}", action: upsert}
+      {{- end }}
       memory_limiter:
         check_interval: 1s
         {{- if $memoryLimitMi }}
@@ -173,8 +208,15 @@ data:
                   prometheus:
                     host: 0.0.0.0
                     port: {{ .Values.otel_collector.selfMetricsPort | default 8888 }}
+                    without_type_suffix: true
       extensions: [health_check{{ if $queueStorage.enabled }}, file_storage/queue{{ end }}]
       pipelines:
+        {{- if $selfMetricsEnabled }}
+        metrics/self:
+          receivers: [prometheus/self]
+          processors: [memory_limiter, filter/self, resourcedetection/self, resource/self]
+          exporters: [otlp_http]
+        {{- end }}
         traces:
           receivers: [otlp]
           processors: [memory_limiter, k8s_attributes]
