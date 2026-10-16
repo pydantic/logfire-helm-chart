@@ -869,12 +869,19 @@ A feature's blob store inside the configured bucket, or "" when no object store 
 
 The Python services keep session replay and visual-test blobs under their own prefixes of the
 bucket, so the two never share one path and the replay objects do not sit among the Fusionfire
-parquet objects. Call with `(dict "root" . "suffix" "session-replays")`.
+parquet objects. `value` names the optional `objectStore` key that overrides the derived URI for a
+deployment that keeps one feature in its own bucket or container. Call with
+`(dict "root" . "value" "sessionReplayUri" "suffix" "session-replays")`.
 */}}
 {{- define "logfire.featureObjectStoreUri" -}}
+{{- $override := get (.root.Values.objectStore | default dict) .value | default "" | toString | trim -}}
+{{- if $override -}}
+{{- tpl $override .root -}}
+{{- else -}}
 {{- $base := include "logfire.objectStoreUri" .root | trim -}}
 {{- if $base -}}
 {{- printf "%s/%s" (trimSuffix "/" $base) .suffix -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
@@ -884,12 +891,13 @@ platform reads plus the provider settings. Emitted only when a store is configur
 platform falls back to its own local directory otherwise.
 */}}
 {{- define "logfire.pythonObjectStoreEnv" -}}
-{{- $base := include "logfire.objectStoreUri" . | trim -}}
-{{- if $base }}
+{{- $replay := include "logfire.featureObjectStoreUri" (dict "root" . "value" "sessionReplayUri" "suffix" "session-replays") -}}
+{{- $visual := include "logfire.featureObjectStoreUri" (dict "root" . "value" "visualTestsUri" "suffix" "visual-tests") -}}
+{{- if or $replay $visual }}
 - name: SESSION_REPLAY_OBJECT_STORE_URI
-  value: {{ include "logfire.featureObjectStoreUri" (dict "root" . "suffix" "session-replays") | quote }}
+  value: {{ $replay | quote }}
 - name: VISUAL_TESTS_OBJECT_STORE_URI
-  value: {{ include "logfire.featureObjectStoreUri" (dict "root" . "suffix" "visual-tests") | quote }}
+  value: {{ $visual | quote }}
 {{- include "logfire.objectStoreProviderEnv" . }}
 {{- end }}
 {{- end -}}

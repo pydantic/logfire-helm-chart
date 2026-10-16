@@ -156,3 +156,27 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: puts one feature in its own bucket and keeps the other derived
+    set:
+      objectStore:
+        sessionReplayUri: 's3://{{ .Release.Name }}-replays'
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SESSION_REPLAY_OBJECT_STORE_URI
+            value: s3://lf-replays
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: VISUAL_TESTS_OBJECT_STORE_URI
+            value: s3://logfire/replays/visual-tests
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
