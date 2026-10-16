@@ -2,6 +2,7 @@
 {{- $certManagerMode := (include "logfire.inClusterTls.certs.isCertManager" . | eq "true") -}}
 {{- $deployCertManager := dig "deployCertManager" false .Values.dev -}}
 {{- if and $inClusterTlsEnabled $certManagerMode $deployCertManager -}}
+{{- $waitImage := dig "waitImage" dict (.Values.inClusterTls | default dict) -}}
 {{- $webhookServiceName := printf "%s-cert-manager-webhook" .Release.Name -}}
 {{- $webhookAddress := printf "https://%s.%s.svc:443" $webhookServiceName .Release.Namespace -}}
 apiVersion: batch/v1
@@ -22,12 +23,18 @@ spec:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ printf "%s-incluster-tls-wait" .Release.Name }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
       restartPolicy: Never
       {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
       containers:
         - name: wait
-          image: curlimages/curl:8.12.1
-          imagePullPolicy: IfNotPresent
+          image: {{ include "logfire.imageRef" (dict "image" $waitImage "defaultRepository" "curlimages/curl" "defaultTag" "8.12.1") }}
+          imagePullPolicy: {{ default .Values.image.pullPolicy (get $waitImage "pullPolicy") | quote }}
           {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" . "identity" "tls-wait" "readOnlyRootFilesystem" true) | fromJson }}
           {{- include "logfire.securityContext" $waitSecurityContext | nindent 10 }}
           command:
