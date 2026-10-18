@@ -117,7 +117,7 @@ tests:
     asserts:
       - lengthEqual:
           path: spec.template.spec.containers[0].env
-          count: 2
+          count: 5
       - contains:
           path: spec.template.spec.containers[0].env
           content:
@@ -168,6 +168,32 @@ tests:
           content:
             containerPort: 9999
             name: self-metrics
+
+  - it: scrapes the same self-metrics port that the collector binds
+    set:
+      otel_collector.selfMetricsPort: 9999
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'targets: \["127.0.0.1:9999"\]'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'port: 9999'
+
+  - it: supplies the pod UID used by the collector self-metric identity
+    template: templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OTELCOL_POD_UID
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.uid
 
   - it: honors a Recreate rollout without retaining RollingUpdate settings
     set:

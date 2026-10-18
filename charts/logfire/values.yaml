@@ -1823,6 +1823,11 @@ otel_collector:
   # -- Port for the collector's own Prometheus self-metrics. Must differ from `prometheus.port`
   # (the application exporter), or the collector cannot bind both and fails to start.
   selfMetricsPort: 8888
+  selfMetrics:
+    # -- Forward collector queue, delivery, and receiver metrics to the configured OTLP exporter
+    # every 60 seconds. Each pod scrapes only itself. Independent external monitoring is still
+    # needed to detect a collector or destination outage.
+    enabled: true
   # -- exporter configuration for the otlp_http exporter
   # Override these to send telemetry data to a different OTLP-compatible destination.
   exporter:
