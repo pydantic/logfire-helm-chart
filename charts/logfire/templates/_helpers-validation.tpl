@@ -324,9 +324,14 @@ Validate Redis configuration
 */}}
 {{- define "logfire.validate.redis" -}}
 {{- $redisEnabled := dig "enabled" true (index .Values "logfire-redis" | default dict) -}}
-{{- if not $redisEnabled -}}
+{{- $redisSecret := .Values.redisSecret | default dict -}}
+{{- if get $redisSecret "enabled" -}}
+  {{- if not (get $redisSecret "name") -}}
+    {{- fail "redisSecret.name is required when redisSecret.enabled is true. Set it to a Secret that holds the sharedDsn, tailDsn, tokenDsn and usageDsn keys." -}}
+  {{- end -}}
+{{- else if not $redisEnabled -}}
   {{- if not .Values.redisDsn -}}
-    {{- fail "redisDsn is required when logfire-redis.enabled is false. Provide a Redis DSN for your external Redis instance." -}}
+    {{- fail "redisDsn is required when logfire-redis.enabled is false and redisSecret is not in use. Provide a Redis DSN for your external Redis instance, or set redisSecret.name to a Secret that holds the Redis DSNs." -}}
   {{- end -}}
 {{- end -}}
 {{- end -}}

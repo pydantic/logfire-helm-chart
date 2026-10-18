@@ -26,7 +26,8 @@ render() {
 }
 
 checksums() {
-  awk '/checksum\/(config|ff-config|service-config):/ { print }' | sort
+  # Every checksum family a value change must move. Keep the list complete.
+  awk '/checksum\/(config|ff-config|service-config|logfire-redis-dsns):/ { print }' | sort
 }
 
 render "$tmp_dir/base" >"$tmp_dir/base.yaml"

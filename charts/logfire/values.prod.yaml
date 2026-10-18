@@ -66,4 +66,7 @@ logfire-redis:
   # Use managed Redis in production; the bundled Redis is single-node.
   enabled: false
 
+# Helm writes this DSN into a managed Secret. Argo CD users should set
+# redisSecret.enabled=true and reference an externally managed Secret with the
+# sharedDsn, tailDsn, tokenDsn and usageDsn keys instead.
 redisDsn: redis://redis.example.com:6379
