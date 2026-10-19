@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import subprocess
 
 import httpx
@@ -120,16 +121,29 @@ async def test_replay_chunk_survives_a_backend_restart(
     uploaded = await _upload_chunk(client, write_token, session_id)
     assert uploaded.is_success, uploaded.text
 
+    context = os.environ.get("LOGFIRE_TEST_KUBE_CONTEXT")
+    namespace = os.environ.get("LOGFIRE_TEST_NAMESPACE")
+    if not context or not namespace:
+        pytest.skip("Replay restart needs the Kind runner's explicit context and namespace")
     restart = subprocess.run(
-        ["kubectl", "rollout", "restart", "deployment/logfire-backend"],
+        ["kubectl", "--context", context, "rollout", "restart", "deployment/logfire-backend", "-n", namespace],
         capture_output=True,
         text=True,
         check=False,
     )
-    if restart.returncode != 0:
-        pytest.skip(f"kubectl cannot restart the backend here: {restart.stderr.strip()}")
+    assert restart.returncode == 0, restart.stderr
     ready = subprocess.run(
-        ["kubectl", "rollout", "status", "deployment/logfire-backend", "--timeout=5m"],
+        [
+            "kubectl",
+            "--context",
+            context,
+            "rollout",
+            "status",
+            "deployment/logfire-backend",
+            "-n",
+            namespace,
+            "--timeout=5m",
+        ],
         capture_output=True,
         text=True,
         check=False,
