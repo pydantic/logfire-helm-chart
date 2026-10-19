@@ -428,10 +428,85 @@ tests:
           path: kind
           value: Deployment
 
+  - it: sends Rust telemetry to the Collector HTTP receiver
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-otel-collector.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OTEL_EXPORTER_OTLP_PROTOCOL
+            value: http/protobuf
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: COLLECTOR_OTLP_GRPC_HOST
+            value: http://logfire-otel-collector:4318
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.ports
+          content:
+            protocol: TCP
+            port: 4318
+            targetPort: 4318
+            name: otlp-http
+        template: templates/logfire-otel-collector.yaml
+        documentSelector:
+          path: kind
+          value: Service
+
+  - it: keeps the pinned byte cache on the Collector gRPC receiver
+    templates:
+      - templates/logfire-ff-bcache.yaml
+      - templates/logfire-otel-collector.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OTEL_EXPORTER_OTLP_PROTOCOL
+            value: grpc
+        template: templates/logfire-ff-bcache.yaml
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: COLLECTOR_OTLP_GRPC_HOST
+            value: http://logfire-otel-collector:4317
+        template: templates/logfire-ff-bcache.yaml
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.ports
+          content:
+            protocol: TCP
+            port: 4317
+            targetPort: 4317
+            name: otlp-grpc
+        template: templates/logfire-otel-collector.yaml
+        documentSelector:
+          path: kind
+          value: Service
+
   - it: exports migration telemetry to the in-cluster collector
     templates:
       - templates/logfire-backend-migrations.yaml
     asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OTEL_EXPORTER_OTLP_PROTOCOL
+            value: grpc
       - contains:
           path: spec.template.spec.containers[0].env
           content:

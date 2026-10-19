@@ -1055,10 +1055,11 @@ overrides are not provided.
 {{- define "logfire.otlpExporterEnv" }}
 {{- $serviceName := .serviceName -}}
 {{- $root := .root -}}
+{{- $protocol := .protocol | default "http/protobuf" -}}
 - name: "OTEL_EXPORTER_OTLP_PROTOCOL"
-  value: "grpc"
+  value: {{ $protocol | quote }}
 - name: "COLLECTOR_OTLP_GRPC_HOST"
-  value: http://logfire-otel-collector:4317
+  value: http://logfire-otel-collector:{{ ternary 4317 4318 (eq $protocol "grpc") }}
 - name: LOGFIRE_SERVICE_NAME
   value: {{ $serviceName }}
 - name: LOGFIRE_SERVICE_VERSION
