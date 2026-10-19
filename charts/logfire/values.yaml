@@ -2143,7 +2143,7 @@ sizingPresets:
     logfire-backend:
       resources:
         requests:
-          cpu: "750m"
+          cpu: "500m"
           memory: "1Gi"
         limits:
           memory: "2Gi"
@@ -2493,7 +2493,7 @@ sizingPresets:
       spreadAcrossZones: true
       resources:
         requests:
-          cpu: "750m"
+          cpu: "500m"
           memory: "1Gi"
         limits:
           memory: "2Gi"
@@ -2638,7 +2638,7 @@ sizingPresets:
       spreadAcrossZones: true
       resources:
         requests:
-          cpu: "500m"
+          cpu: "250m"
           memory: "512Mi"
         limits:
           memory: "512Mi"
@@ -2883,7 +2883,7 @@ sizingPresets:
     logfire-backend:
       resources:
         requests:
-          cpu: "750m"
+          cpu: "500m"
           memory: "1Gi"
         limits:
           memory: "2Gi"
@@ -3100,7 +3100,7 @@ sizingPresets:
     logfire-service:
       resources:
         requests:
-          cpu: "1"
+          cpu: "250m"
           memory: "1Gi"
         limits:
           memory: "1Gi"
@@ -3212,6 +3212,10 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
   large:
+    logfire-backend:
+      resources:
+        requests:
+          cpu: "750m"
     logfire-ff-ingest-processor:
       resources:
         requests:
@@ -3223,6 +3227,9 @@ sizingPresets:
       autoscaling:
         maxReplicas: 16
     logfire-service:
+      resources:
+        requests:
+          cpu: "1"
       autoscaling:
         maxReplicas: 12
     logfire-ff-bcache:
