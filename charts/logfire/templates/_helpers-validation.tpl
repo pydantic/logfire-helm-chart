@@ -19,16 +19,21 @@ Validate that objectStore.uri resolves to a nonblank value (required for product
 
 {{/*
 Validate that objectStore.volumes and objectStore.volumeMounts entries do not collide with the
-volumes and mount paths the chart adds to the same Fusionfire pods. Kubernetes rejects a pod that
-lists the same volume name or mount path twice, so the chart reserves its generated names and
-paths here. The in-cluster TLS volumes are reserved only when that TLS mode is enabled.
+volumes and mount paths the chart adds to the same pods. Kubernetes rejects a pod that lists the
+same volume name or mount path twice, so the chart reserves its generated names and paths here.
+The entries reach FusionFire and the Python services (backend, worker), so a name or path any of
+them mounts is reserved. The TLS and SMTP certificate volumes are reserved only while enabled.
 */}}
 {{- define "logfire.validate.objectStoreVolumes" -}}
-{{- $reservedNames := list "tmp" "scratch-data" "ingest-data" -}}
-{{- $reservedMountPaths := list "/tmp" "/scratch" "/fusionfire/ingest-data" -}}
+{{- $reservedNames := list "tmp" "scratch-data" "ingest-data" "logfire-data" -}}
+{{- $reservedMountPaths := list "/tmp" "/scratch" "/fusionfire/ingest-data" "/var/lib/logfire" -}}
 {{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
 {{- $reservedNames = concat $reservedNames (list "logfire-incluster-tls" "logfire-incluster-ca-bundle") -}}
 {{- $reservedMountPaths = concat $reservedMountPaths (list "/etc/tls" "/etc/logfire/incluster-ca") -}}
+{{- end -}}
+{{- if include "logfire.smtp.caBundle.source" . -}}
+{{- $reservedNames = concat $reservedNames (list "logfire-smtp-ca-bundle") -}}
+{{- $reservedMountPaths = concat $reservedMountPaths (list "/etc/logfire/smtp-ca") -}}
 {{- end -}}
 {{- $objectStore := .Values.objectStore | default dict -}}
 {{- range $index, $volume := (get $objectStore "volumes" | default list) -}}
