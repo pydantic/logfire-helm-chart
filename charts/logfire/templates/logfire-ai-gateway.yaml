@@ -32,7 +32,7 @@ metadata:
     {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   annotations:
-    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres" "existing" "gateway")) | nindent 4 }}
+    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres" "existing" "gateway" "redis")) | nindent 4 }}
 spec:
   {{- include "logfire.replicas" (dict "Values" .Values "serviceName" $serviceName) | nindent 2 }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
@@ -45,6 +45,9 @@ spec:
       annotations:
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
+        {{- end }}
+        {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
+        {{- . | nindent 8 }}
         {{- end }}
         {{- $gwEx := get .Values "existingGatewaySecret" | default dict }}
         {{- if or (not (get $gwEx "enabled")) (empty (get $gwEx "annotations")) }}
@@ -114,9 +117,9 @@ spec:
                 key: internalSecret
                 name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingGatewaySecret "secretName" "gateway-internal-secret") }}
           - name: GATEWAY_REDIS_DSN
-            value: {{ .Values.redisDsn }}
+            {{- include "logfire.redisDsnValueFrom" (dict "root" . "key" "sharedDsn") | nindent 12 }}
           - name: SHARED_REDIS_DSN
-            value: {{ .Values.redisDsn }}
+            {{- include "logfire.redisDsnValueFrom" (dict "root" . "key" "sharedDsn") | nindent 12 }}
           - name: HOST_IP
             valueFrom:
               fieldRef:

@@ -6,7 +6,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ $serviceName }}
-  {{- with .Values.otel_collector.serviceAccount.annotations }}
+  {{- with (.Values.otel_collector.serviceAccount | default dict).annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -190,6 +190,20 @@ spec:
             {{- end }}
           {{- include "logfire.otelCollectorResources" . | nindent 10 }}
           env:
+            {{- if dig "enabled" true (.Values.otel_collector.selfMetrics | default dict) }}
+            - name: OTELCOL_POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: OTELCOL_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OTELCOL_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            {{- end }}
             {{- if not (get $envState "hasGoMemLimit") }}
             # 80% of the memory limiter's 75% hard limit; leaves room for non-Go memory.
             # Without a pod limit, match the fixed 512MiB limiter rather than node memory.

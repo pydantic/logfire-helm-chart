@@ -168,7 +168,7 @@ Before installing in production, confirm that you have:
 * Public hostname and TLS values set through `ingress.*` or `gateway.*`, even if you expose the Service another way.
 * External PostgreSQL databases for `crud`, `ff`, and `dex`.
 * Object storage using `s3://`, `gs://`, or `az://`.
-* A managed Redis endpoint configured through `redisDsn`.
+* A managed Redis endpoint configured through `redisDsn`, or through `redisSecret.name` when the DSNs live in an externally managed Secret.
 * A Dex connector configured for your identity provider.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
 * StorageClass behavior chosen for chart-managed PVCs: use the cluster default, or set `defaultStorageClassName` in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
@@ -439,6 +439,16 @@ replica directly, and account for these semantics when configuring routing/autos
 Collector self-metrics are available on each pod's `self-metrics` port
 (`otel_collector.selfMetricsPort`, default 8888), separately from application metrics on
 `otel_collector.prometheus.port` (default 9090). Configure your monitoring system to scrape that pod port.
+The collector also forwards a small set of queue, delivery, and receiver metrics through its
+configured OTLP exporter every 60 seconds. Each pod scrapes itself on loopback. These metrics
+use `service.name=logfire-otel-collector` and the pod UID as `service.instance.id`.
+The self-metric pipeline reads `otelResourceAttributes` for the deployment environment.
+It does not change the identity of application metrics or add self-metrics to the application
+Prometheus exporter. Set `otel_collector.selfMetrics.enabled=false` to disable forwarding.
+Disable built-in forwarding if `extraProcessors` or `extraPipelines` already define
+`filter/self`, `resource/self`, `resourcedetection/self`, or `metrics/self`. Those names belong to the chart
+while built-in forwarding is enabled.
+Keep independent monitoring because a failed collector or destination cannot report its own outage.
 Monitor queue utilization (`otelcol_exporter_queue_size` / `otelcol_exporter_queue_capacity`),
 `otelcol_exporter_enqueue_failed_*`, `otelcol_receiver_refused_*`, process/container memory,
 and pod OOM/restart events. Higher limits provide headroom; retained cardinality and scrape

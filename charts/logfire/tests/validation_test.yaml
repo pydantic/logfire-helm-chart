@@ -59,6 +59,40 @@ tests:
       - failedTemplate:
           errorPattern: 'extraExporters must be a map'
 
+  - it: reserves the collector self-metric pipeline
+    set:
+      otel_collector.extraPipelines:
+        metrics/self:
+          exporters: [debug]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraPipelines cannot replace chart-owned component "metrics/self"'
+
+  - it: reserves the collector self-metric identity processor
+    set:
+      otel_collector.extraProcessors:
+        resource/self:
+          attributes: []
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraProcessors cannot replace chart-owned component "resource/self"'
+
+  - it: preserves custom self-metric components when built-in forwarding is disabled
+    set:
+      otel_collector.selfMetrics.enabled: false
+      otel_collector.extraProcessors:
+        resource/self:
+          attributes: []
+      otel_collector.extraPipelines:
+        metrics/self:
+          receivers: [otlp]
+          processors: [resource/self]
+          exporters: [otlp_http]
+    templates:
+      - templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - notFailedTemplate: {}
+
   - it: rejects a processor list
     set:
       otel_collector.extraProcessors: [resourcedetection]
@@ -718,6 +752,17 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: 'redisDsn is required'
+
+  - it: requires redisSecret.name when the external Redis Secret is enabled
+    set:
+      redisSecret:
+        enabled: true
+        name: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'redisSecret\.name is required'
 
   # --- gateway api ---
   - it: requires gateway.gatewayClassName when the chart creates the Gateway

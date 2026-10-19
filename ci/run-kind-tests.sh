@@ -50,9 +50,10 @@ stop_forwards() {
 
 upgrade_current() {
   local split=$1
+  local values_mode=${2:---reset-values}
   helm upgrade "$release" "$repo_root/charts/logfire" \
     --kube-context "$context" --namespace "$namespace" \
-    --reset-values "${values[@]}" \
+    "$values_mode" "${values[@]}" \
     --set "logfire-ff-query-worker.enabled=$split" \
     --wait --wait-for-jobs --timeout 10m
 }
@@ -156,9 +157,9 @@ helm upgrade --install "$release" "$baseline_chart" \
 restart_forwards
 uv run --directory "$repo_root/tests/integration" python upgrade_probe.py seed "$state_file"
 
-echo "Upgrading to the current chart in combined query mode"
+echo "Upgrading to the current chart with reused values in combined query mode"
 stop_forwards
-upgrade_current false
+upgrade_current false --reuse-values
 restart_forwards
 uv run --directory "$repo_root/tests/integration" python upgrade_probe.py check "$state_file"
 uv run --directory "$repo_root/tests/integration" pytest -v --tb=short
@@ -170,7 +171,7 @@ upgrade_current true
 restart_forwards
 uv run --directory "$repo_root/tests/integration" python upgrade_probe.py check "$state_file"
 uv run --directory "$repo_root/tests/integration" pytest -v --tb=short \
-  test_query.py test_release_contracts.py test_features.py -k "query or sql_format"
+  test_query.py test_release_contracts.py test_features.py test_mcp.py -k "query or sql_format"
 
 echo "Restoring combined query mode"
 stop_forwards
@@ -178,4 +179,6 @@ upgrade_current false
 restore_combined=false
 restart_forwards
 uv run --directory "$repo_root/tests/integration" python upgrade_probe.py check "$state_file"
+uv run --directory "$repo_root/tests/integration" pytest -v -s --tb=short \
+  test_mcp.py::test_mcp_authenticated_query
 echo "Kind upgrade and integration tests passed"

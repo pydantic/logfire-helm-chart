@@ -7,8 +7,13 @@ on:
       - main
 
 jobs:
-  test:
+  suites:
+    name: ${{ matrix.suite }}
     runs-on: ubuntu-latest-16-cores
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [chart-testing, stable-upgrade]
     permissions:
       id-token: write
       contents: read
@@ -21,6 +26,7 @@ jobs:
           fetch-depth: 0
 
       - name: Check release notes updates
+        if: matrix.suite == 'chart-testing'
         run: node ci/check-release-notes.cjs
 
       - name: Set up Helm
@@ -30,9 +36,11 @@ jobs:
           version: v4.2.0
 
       - name: Install helm-unittest plugin
+        if: matrix.suite == 'chart-testing'
         run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.1.1 --verify=false
 
       - name: Run helm unittest
+        if: matrix.suite == 'chart-testing'
         run: helm unittest charts/logfire
 
       - name: Set up python
@@ -42,17 +50,22 @@ jobs:
           check-latest: true
 
       - name: Set up chart-testing
+        if: matrix.suite == 'chart-testing'
         uses: helm/chart-testing-action@v2.8.0
 
       - name: Chart linting
+        if: matrix.suite == 'chart-testing'
         run: ct lint --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH"
 
-      - name: Check configuration rendering
+      - name: Build chart dependencies
         run: |
           helm repo add bitnami https://charts.bitnami.com/bitnami
           helm repo add jetstack https://charts.jetstack.io
           helm dependency build charts/logfire
-          ci/check-version-stable-checksums.sh
+
+      - name: Check configuration rendering
+        if: matrix.suite == 'chart-testing'
+        run: ci/check-version-stable-checksums.sh
 
       - name: Set up GCP auth
         id: auth
@@ -80,6 +93,14 @@ jobs:
         uses: helm/kind-action@v1
         with:
           config: 'ci/kind.yaml'
+
+      - name: Verify image pull concurrency
+        shell: bash
+        run: |
+          node=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+          kubectl get --raw "/api/v1/nodes/$node/proxy/configz" \
+            | jq -e '.kubeletconfig | {serializeImagePulls, maxParallelImagePulls}
+              | select(.serializeImagePulls == false and .maxParallelImagePulls == 4)'
 
       - name: Create the restricted namespace
         run: |
@@ -117,12 +138,31 @@ jobs:
           done
 
       - name: Run chart testing
-        run: ct install --upgrade --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH"
+        if: matrix.suite == 'chart-testing'
+        run: |
+          chart_args=()
+          if ! git diff --quiet "origin/$CT_TARGET_BRANCH...HEAD" -- .github/workflows/pr.yaml ci/ct.yaml ci/kind.yaml; then
+            chart_args=(--charts charts/logfire)
+          fi
+          ct install --upgrade --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH" "${chart_args[@]}"
 
       - name: Install uv
+        if: matrix.suite == 'stable-upgrade'
         uses: astral-sh/setup-uv@v5
 
       - name: Test stable upgrade, release contracts, and split query topology
+        if: matrix.suite == 'stable-upgrade'
         env:
           LOGFIRE_TEST_NAMESPACE: logfire-restricted
         run: ci/run-kind-tests.sh
+
+  test:
+    needs: suites
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require both suites to pass
+        env:
+          SUITES_RESULT: ${{ needs.suites.result }}
+        run: test "$SUITES_RESULT" = success

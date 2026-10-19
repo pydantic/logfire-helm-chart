@@ -94,6 +94,76 @@ Determine if HPA is enabled maintaining backward compatibility with old values f
 {{- get $redisValues "prefix" | default "" -}}
 {{- end -}}
 
+{{/*
+Name of the Secret that holds the Redis DSNs. It is the user's Secret when
+`redisSecret.enabled` is true, otherwise the Secret the chart creates from
+`redisDsn`, `tokenRedis.dsn` and `usageRedis.dsn`.
+*/}}
+{{- define "logfire.redisSecretName" -}}
+{{- $redisSecret := .Values.redisSecret | default dict -}}
+{{- if get $redisSecret "enabled" -}}
+{{- get $redisSecret "name" -}}
+{{- else -}}
+{{- printf "%s-redis-dsns" (include "logfire.fullname" .) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The DSN behind one Redis Secret key, read from the values. Pass `.root` and
+`.key`, which is one of `sharedDsn`, `tailDsn`, `tokenDsn` or `usageDsn`. The
+live-tail role shares `redisDsn` with the shared role, as it does everywhere
+else in the values.
+*/}}
+{{- define "logfire.redisDsnValue" -}}
+{{- $root := required "logfire.redisDsnValue: need .root" .root -}}
+{{- $key := required "logfire.redisDsnValue: need .key" .key -}}
+{{- if eq $key "tokenDsn" -}}
+{{- include "logfire.redisDsnFor" (dict "root" $root "valuesKey" "tokenRedis") -}}
+{{- else if eq $key "usageDsn" -}}
+{{- include "logfire.redisDsnFor" (dict "root" $root "valuesKey" "usageRedis") -}}
+{{- else -}}
+{{- $root.Values.redisDsn -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Render the `valueFrom` that reads one DSN from the Redis Secret. Pass `.root` and
+the Secret key `.key`. The Redis DSNs never appear in a ConfigMap or a plain env
+value.
+*/}}
+{{- define "logfire.redisDsnValueFrom" -}}
+{{- $root := required "logfire.redisDsnValueFrom: need .root" .root -}}
+{{- $key := required "logfire.redisDsnValueFrom: need .key" .key -}}
+valueFrom:
+  secretKeyRef:
+    name: {{ include "logfire.redisSecretName" $root }}
+    key: {{ $key }}
+{{- end -}}
+
+{{/*
+The `FF_*` Redis DSN env vars of a Fusionfire service, read from the Redis
+Secret. Pass the root context. Callers indent the block.
+*/}}
+{{- define "logfire.ffRedisEnv" -}}
+{{- $root := required "logfire.ffRedisEnv: need ." . -}}
+- name: FF_SHARED_REDIS_DSN
+{{ include "logfire.redisDsnValueFrom" (dict "root" $root "key" "sharedDsn") | indent 2 }}
+- name: FF_TOKEN_REDIS_DSN
+{{ include "logfire.redisDsnValueFrom" (dict "root" $root "key" "tokenDsn") | indent 2 }}
+- name: FF_USAGE_REDIS_DSN
+{{ include "logfire.redisDsnValueFrom" (dict "root" $root "key" "usageDsn") | indent 2 }}
+{{- end -}}
+
+{{/*
+The `FF_REDIS_TAIL_DSN` env var of a Fusionfire service that registers live
+tails. Pass the root context. Callers indent the block.
+*/}}
+{{- define "logfire.ffRedisTailEnv" -}}
+{{- $root := required "logfire.ffRedisTailEnv: need ." . -}}
+- name: FF_REDIS_TAIL_DSN
+{{ include "logfire.redisDsnValueFrom" (dict "root" $root "key" "tailDsn") | indent 2 }}
+{{- end -}}
+
 {{- define "logfire.keda.enabled" -}}
 {{- if hasKey . "keda" -}}
   {{- .keda.enabled  -}}
@@ -1098,6 +1168,11 @@ annotations have final precedence.
     {{- if and (get $adminSecret "enabled") (not (empty (get $adminSecret "annotations"))) -}}
       {{- $merged = mergeOverwrite $merged (get $adminSecret "annotations") -}}
     {{- end -}}
+  {{- else if eq $secretSource "redis" -}}
+    {{- $redisSecret := get $values "redisSecret" | default dict -}}
+    {{- if and (get $redisSecret "enabled") (not (empty (get $redisSecret "annotations"))) -}}
+      {{- $merged = mergeOverwrite $merged (get $redisSecret "annotations") -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 {{- $serviceValues := index $values $serviceName | default dict -}}
@@ -1204,6 +1279,45 @@ default-checksum
 {{- else -}}
 {{- $value := eq $key "postgresFFDsn" | ternary $ctx.Values.postgresFFDsn $ctx.Values.postgresDsn -}}
 {{- printf "%s: %s" $annotationKey ($value | b64enc | sha256sum) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Roll the Redis consumers when a DSN changes. Emits nothing when an external
+Secret has reload annotations, because those roll the workloads instead. The
+roles are read together by the workloads that consume them, and a DSN change is
+deliberate and rare, so one annotation covers the whole Secret instead of one
+per role.
+
+An upgrade from a release whose values predate `redisSecret` leaves the value
+unset, so every read here tolerates a missing key.
+*/}}
+{{- define "logfire.redisSecretChecksumAnnotation" -}}
+{{- $ctx := required "logfire.redisSecretChecksumAnnotation: need .ctx" .ctx -}}
+{{- $redisSecret := $ctx.Values.redisSecret | default dict -}}
+{{- $external := get $redisSecret "enabled" -}}
+{{- if not (and $external (not (empty (get $redisSecret "annotations")))) -}}
+{{- $annotationKey := "checksum/logfire-redis-dsns" -}}
+{{- $keys := list "sharedDsn" "tailDsn" "tokenDsn" "usageDsn" -}}
+{{- if $external -}}
+{{- $name := include "logfire.redisSecretName" $ctx | trim -}}
+{{- /* Without a name there is no Secret to checksum. Stay silent here so the
+       user-facing validation in logfire.validate.redis reports the missing
+       redisSecret.name instead of an internal guard error. */ -}}
+{{- if $name -}}
+{{- $lines := list -}}
+{{- range $key := $keys -}}
+  {{- $lines = append $lines (include "utils.secretChecksum" (dict "ctx" $ctx "name" $name "key" $key) | trim) -}}
+{{- end -}}
+{{- printf "%s: %s" $annotationKey (join "|" $lines | sha256sum) -}}
+{{- end -}}
+{{- else -}}
+{{- $values := list -}}
+{{- range $key := $keys -}}
+  {{- $values = append $values (include "logfire.redisDsnValue" (dict "root" $ctx "key" $key) | trim) -}}
+{{- end -}}
+{{- printf "%s: %s" $annotationKey (join "|" $values | b64enc | sha256sum) -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
