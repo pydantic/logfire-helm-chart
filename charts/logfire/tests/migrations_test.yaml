@@ -1,0 +1,33 @@
+suite: backend migrations
+templates:
+  - templates/logfire-backend-migrations.yaml
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: sets a one-hour default deadline
+    asserts:
+      - equal:
+          path: spec.activeDeadlineSeconds
+          value: 3600
+
+  - it: honors an override
+    set:
+      migrations:
+        activeDeadlineSeconds: 7200
+    asserts:
+      - equal:
+          path: spec.activeDeadlineSeconds
+          value: 7200
+
+  - it: defaults when an older values set has no migrations block
+    set:
+      migrations: null
+    asserts:
+      - equal:
+          path: spec.activeDeadlineSeconds
+          value: 3600

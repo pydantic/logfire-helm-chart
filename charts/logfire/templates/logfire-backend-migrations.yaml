@@ -17,7 +17,7 @@ metadata:
     {{- include "logfire.hooksAnnotations" . | nindent 4 }}
 spec:
   backoffLimit: 5
-  activeDeadlineSeconds: 300
+  activeDeadlineSeconds: {{ dig "activeDeadlineSeconds" 3600 (.Values.migrations | default dict) }}
   template:
     metadata:
       annotations:

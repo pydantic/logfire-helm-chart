@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.3-rc.1](https://img.shields.io/badge/Version-0.14.3--rc.1-informational?style=flat-square) ![AppVersion: f9ebe798](https://img.shields.io/badge/AppVersion-f9ebe798-informational?style=flat-square)
+![Version: 0.14.3-rc.2](https://img.shields.io/badge/Version-0.14.3--rc.2-informational?style=flat-square) ![AppVersion: f9ebe798](https://img.shields.io/badge/AppVersion-f9ebe798-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -750,6 +750,8 @@ Before diving deeper, verify these common configuration issues:
 | maildev | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"maildev/maildev","tag":"3.0.0"},"podSecurityContext":{},"securityContext":{}}` | MailDev configuration (only used when `dev.deployMaildev` is true) |
 | maildev.podSecurityContext | object | `{}` | Pod SecurityContext for the MailDev pod. Defaults to the chart-wide `podSecurityContext` when unset. |
 | maildev.securityContext | object | `{}` | Container SecurityContext for the MailDev container. Merged over the chart-wide `securityContext` and the image defaults: uid and gid 1000, all capabilities dropped, no privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root with a writable `/tmp` emptyDir. Set a field here to override a default. |
+| migrations | object | `{"activeDeadlineSeconds":3600}` | CRUD database migration Job settings. |
+| migrations.activeDeadlineSeconds | int | `3600` | Maximum time the backend migration Job may run, in seconds. The deadline covers all retries. Raise it for large databases where a concurrent index build takes several minutes. |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
 | objectStore | object | `{"env":{},"sessionReplayUri":null,"sseCKeyB64":null,"uri":null,"visualTestsUri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
 | objectStore.env | object | `{}` | Additional environment variables for the object store connection. String values support Helm templating. When the in-cluster RustFS store is enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. The backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint alias the Python S3 client accepts, and Azure clients read `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or `AZURE_STORAGE_CONNECTION_STRING`. |
