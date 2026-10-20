@@ -893,13 +893,23 @@ default. With only `dev.deployRustfs`, `rustfs.auth` is used.
 {{- end -}}
 
 {{- define "logfire.objectStoreEnv" -}}
-{{- $objectStoreEnv := .Values.objectStore.env | default dict -}}
 - name: FF_OBJECT_STORE_URI
   value: {{ include "logfire.objectStoreUri" . | quote }}
 {{- with .Values.objectStore.sseCKeyB64 }}
 - name: FF_S3_SSE_C_KEY_B64
 {{ include "logfire.envValue" (dict "value" . "quote" true) | indent 2 }}
 {{- end }}
+{{- include "logfire.objectStoreProviderEnv" . }}
+{{- end -}}
+
+{{/*
+The provider environment for the configured object store: the endpoint, the credentials and the
+entries the deployment added under `objectStore.env`. FusionFire and the Python services read the
+same variable names, so one map configures both. FusionFire reads `AWS_ENDPOINT`; the Python S3
+client reads it as the alias of `AWS_ENDPOINT_URL` (see `logfire_services/object_store.py`).
+*/}}
+{{- define "logfire.objectStoreProviderEnv" -}}
+{{- $objectStoreEnv := .Values.objectStore.env | default dict -}}
 {{- if eq (include "logfire.inClusterObjectStoreEnabled" .) "true" }}
 {{- $auth := include "logfire.inClusterObjectStoreAuth" . | fromJson }}
 {{- $inClusterDefaults := list
@@ -921,6 +931,44 @@ default. With only `dev.deployRustfs`, `rustfs.auth` is used.
 {{- end }}
 - name: {{ $key }}
 {{ include "logfire.envValue" (dict "value" $value "quote" (not (kindIs "map" $value)) "allowValueKey" true) | indent 2 }}
+{{- end }}
+{{- end -}}
+
+{{/*
+A feature's blob store inside the configured bucket, or "" when no object store is configured.
+
+The Python services keep session replay and visual-test blobs under their own prefixes of the
+bucket, so the two never share one path and the replay objects do not sit among the Fusionfire
+parquet objects. `value` names the optional `objectStore` key that overrides the derived URI for a
+deployment that keeps one feature in its own bucket or container. Call with
+`(dict "root" . "value" "sessionReplayUri" "suffix" "session-replays")`.
+*/}}
+{{- define "logfire.featureObjectStoreUri" -}}
+{{- $override := get (.root.Values.objectStore | default dict) .value | default "" | toString | trim -}}
+{{- if $override -}}
+{{- tpl $override .root -}}
+{{- else -}}
+{{- $base := include "logfire.objectStoreUri" .root | trim -}}
+{{- if $base -}}
+{{- printf "%s/%s" (trimSuffix "/" $base) .suffix -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The object-store environment for the Python services (backend, worker): the two feature URIs the
+platform reads plus the provider settings. Emitted only when a store is configured, because the
+platform falls back to its own local directory otherwise.
+*/}}
+{{- define "logfire.pythonObjectStoreEnv" -}}
+{{- $replay := include "logfire.featureObjectStoreUri" (dict "root" . "value" "sessionReplayUri" "suffix" "session-replays") -}}
+{{- $visual := include "logfire.featureObjectStoreUri" (dict "root" . "value" "visualTestsUri" "suffix" "visual-tests") -}}
+{{- if or $replay $visual }}
+- name: SESSION_REPLAY_OBJECT_STORE_URI
+  value: {{ $replay | quote }}
+- name: VISUAL_TESTS_OBJECT_STORE_URI
+  value: {{ $visual | quote }}
+{{- include "logfire.objectStoreProviderEnv" . }}
 {{- end }}
 {{- end -}}
 

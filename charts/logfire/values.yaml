@@ -40,7 +40,7 @@ adminEmail: hello@example.dev
 variablesApiKey: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: "v2026-10-07.02"
+releaseVersion: "v2026-10-20.01"
 
 # -- Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of
 # the ingress or tunnel in front of the release; if HAProxy closes an idle connection first,
@@ -79,6 +79,10 @@ fusionfireMaterializedViews:
   initialBackfillWindow: 1d
   # -- Minimum source data written over the trailing seven days required to materialize a new view. Set to `0` to disable the source-volume floor.
   minSourceBytes: 5gb
+  # -- Create a 1 hour and a 1 day derived view for each eligible aggregating view. The derived views are refreshed by `derived_mv_refresh` jobs.
+  derivedMembers: false
+  # -- Read whole hours and days from the derived views when the requested bucket width allows. Requires `derivedMembers`.
+  derivedBaseReads: false
 
 # ==============================================================================
 # Ingress
@@ -1471,11 +1475,25 @@ objectStore:
   # e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release.
   # When `dev.deployRustfs` (or the deprecated `dev.deployMinio`) is enabled and
   # this is empty, it defaults to `s3://<rustfs.bucket>`.
+  #
+  # The backend and the worker keep session replay and visual-test blobs under the
+  # `session-replays/` and `visual-tests/` prefixes of the same bucket, and receive the
+  # `env` entries and `volumeMounts` below, so one object store serves FusionFire and
+  # both Python services.
   uri:
+  # -- Optional override for the session-replay blob store, e.g. `s3://logfire-replays`.
+  # Defaults to `<uri>/session-replays`. The bucket or container must exist, and it must
+  # be reachable with the same endpoint and credentials as `uri`: a different account or
+  # provider needs its own `env` and credential volumes, which the per-service `env`
+  # lists under `logfire-backend` and `logfire-worker` can carry.
+  sessionReplayUri:
+  # -- Optional override for the visual-test blob store, e.g. `az://logfirefiles/visual-tests`.
+  # Defaults to `<uri>/visual-tests`, with the same requirements as `sessionReplayUri`.
+  visualTestsUri:
   # -- Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C).
   # Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy
-  # requests. Only used when the object store is S3. Can be a plain string or a
-  # map with valueFrom (e.g., secretKeyRef).
+  # requests. Only used when the object store is S3, and only for FusionFire: the
+  # session-replay and visual-test objects do not use SSE-C.
   #
   # IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on
   # a bucket that already contains FusionFire data will break all reads of the
@@ -1485,15 +1503,23 @@ objectStore:
   # -- Additional environment variables for the object store connection.
   # String values support Helm templating. When the in-cluster RustFS store is
   # enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
-  # and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store.
+  # and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. The
+  # backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint
+  # alias the Python S3 client accepts, and Azure clients read
+  # `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or
+  # `AZURE_STORAGE_CONNECTION_STRING`.
   env: {}
-  # -- Volume mounts for object store credentials. The chart reserves the mount paths `/tmp`,
-  # `/scratch`, and `/fusionfire/ingest-data` for its own Fusionfire volumes, and adds
-  # `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled.
+  # -- Volume mounts for object store credentials, on FusionFire, the backend and the
+  # worker. The chart reserves the mount paths `/tmp`, `/scratch`, `/fusionfire/ingest-data`,
+  # and `/var/lib/logfire` for its own volumes, adds `/etc/tls` and
+  # `/etc/logfire/incluster-ca` when in-cluster TLS is enabled, and `/etc/logfire/smtp-ca`
+  # while the SMTP CA bundle is configured.
   volumeMounts: []
-  # -- Volumes for object store credentials. The chart reserves the volume names `tmp`,
-  # `scratch-data`, and `ingest-data` for its own Fusionfire volumes, and adds
-  # `logfire-incluster-tls` and `logfire-incluster-ca-bundle` when in-cluster TLS is enabled.
+  # -- Volumes for object store credentials, on FusionFire, the backend and the worker.
+  # The chart reserves the volume names `tmp`, `scratch-data`, `ingest-data`, and
+  # `logfire-data` for its own volumes, adds `logfire-incluster-tls` and
+  # `logfire-incluster-ca-bundle` when in-cluster TLS is enabled, and
+  # `logfire-smtp-ca-bundle` while the SMTP CA bundle is configured.
   volumes: []
 
 # Azure example:
