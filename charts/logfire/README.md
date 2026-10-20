@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.3-rc.1](https://img.shields.io/badge/Version-0.14.3--rc.1-informational?style=flat-square) ![AppVersion: 6aa6702d](https://img.shields.io/badge/AppVersion-6aa6702d-informational?style=flat-square)
+![Version: 0.14.3-rc.1](https://img.shields.io/badge/Version-0.14.3--rc.1-informational?style=flat-square) ![AppVersion: f9ebe798](https://img.shields.io/badge/AppVersion-f9ebe798-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -633,7 +633,9 @@ Before diving deeper, verify these common configuration issues:
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | extraObjects | list | `[]` | Additional Kubernetes objects to render with this release. Templating is supported. |
 | fusionfireForceConsoleLogging | bool | `false` | Also write Fusionfire telemetry to the container console in addition to sending it through OTLP. |
-| fusionfireMaterializedViews | object | `{"initialBackfillWindow":"1d","minSourceBytes":"5gb"}` | Materialized-view creation policy shared by all Fusionfire services. |
+| fusionfireMaterializedViews | object | `{"derivedBaseReads":false,"derivedMembers":false,"initialBackfillWindow":"1d","minSourceBytes":"5gb"}` | Materialized-view creation policy shared by all Fusionfire services. |
+| fusionfireMaterializedViews.derivedBaseReads | bool | `false` | Read whole hours and days from the derived views when the requested bucket width allows. Requires `derivedMembers`. |
+| fusionfireMaterializedViews.derivedMembers | bool | `false` | Create a 1 hour and a 1 day derived view for each eligible aggregating view. The derived views are refreshed by `derived_mv_refresh` jobs. |
 | fusionfireMaterializedViews.initialBackfillWindow | string | `"1d"` | Maximum source-history window to materialize when a new view is created. Set to `0s` to opt into a full-history initial backfill. Existing views retain the floor stamped when they were created. |
 | fusionfireMaterializedViews.minSourceBytes | string | `"5gb"` | Minimum source data written over the trailing seven days required to materialize a new view. Set to `0` to disable the source-volume floor. |
 | gateway.addresses | list | `[]` | Gateway addresses (optional, only used when create is true). Used to request specific addresses for the Gateway. |
@@ -802,7 +804,7 @@ Before diving deeper, verify these common configuration issues:
 | redisSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | redisSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
 | redisSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| releaseVersion | string | `"v2026-10-19.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
+| releaseVersion | string | `"v2026-10-20.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
 | rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Ignored while `dev.deployMinio` is set. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |

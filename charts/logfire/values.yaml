@@ -40,7 +40,7 @@ adminEmail: hello@example.dev
 variablesApiKey: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: "v2026-10-19.01"
+releaseVersion: "v2026-10-20.01"
 
 # -- Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of
 # the ingress or tunnel in front of the release; if HAProxy closes an idle connection first,
@@ -79,6 +79,10 @@ fusionfireMaterializedViews:
   initialBackfillWindow: 1d
   # -- Minimum source data written over the trailing seven days required to materialize a new view. Set to `0` to disable the source-volume floor.
   minSourceBytes: 5gb
+  # -- Create a 1 hour and a 1 day derived view for each eligible aggregating view. The derived views are refreshed by `derived_mv_refresh` jobs.
+  derivedMembers: false
+  # -- Read whole hours and days from the derived views when the requested bucket width allows. Requires `derivedMembers`.
+  derivedBaseReads: false
 
 # ==============================================================================
 # Ingress
