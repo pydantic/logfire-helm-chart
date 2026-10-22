@@ -1878,7 +1878,7 @@ otel_collector:
         flush_timeout: 1s
   image:
     repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
-    tag: "0.160.0"
+    tag: "0.163.1@sha256:1175b03003053962012f5a231f5567f66a3e8fdb960c7835c0e48f7aa1555806"
     pullPolicy: IfNotPresent
   prometheus:
     enabled: false
