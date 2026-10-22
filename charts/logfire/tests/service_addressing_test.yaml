@@ -219,6 +219,54 @@ tests:
           path: kind
           value: Deployment
 
+  - it: points the task runner at the gateway service over plaintext HTTP
+    set:
+      logfire-ai-gateway:
+        enabled: true
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GATEWAY_BASE_URL
+            value: http://logfire-ai-gateway:8788
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GATEWAY_INTERNAL_SECRET
+            valueFrom:
+              secretKeyRef:
+                key: internalSecret
+                name: gateway-internal-secret
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: points the task runner at the gateway service over HTTPS when in-cluster TLS is on
+    set:
+      logfire-ai-gateway:
+        enabled: true
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GATEWAY_BASE_URL
+            value: https://logfire-ai-gateway:8443
+        documentSelector:
+          path: kind
+          value: Deployment
+
   - it: points the gateway at the in-cluster ingest service over plaintext HTTP
     set:
       logfire-ai-gateway:
