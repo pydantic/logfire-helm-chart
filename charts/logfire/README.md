@@ -4,13 +4,16 @@
 
 Helm chart for self-hosted Pydantic Logfire
 
-This repository and the chart source it contains are licensed under the MIT License. Deploying the official self-hosted Pydantic Logfire product requires separate commercial access to private container images.
-**Self-hosted Logfire is an Enterprise offering that requires a contract and payment.** Please contact sales@pydantic.dev to discuss setting up a contract and pricing.
+**Self-hosted Logfire is an Enterprise offering that requires a contract and payment.** Contact [sales@pydantic.dev](mailto:sales@pydantic.dev) to discuss a contract and pricing.
+The chart source in this repository uses the MIT License, but the Logfire container images are private and need commercial access.
 
 ## Install paths
 
 Use this README for the chart-level install flow and values reference.
 Use the [Self-Hosted Production Requirements](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/installation/) for background, architecture, and provider-specific procedures.
+
+The chart needs Kubernetes 1.23 or later and Helm 3 or Helm 4. CI tests it with Helm 4.2.0.
+Gateway API routing also needs the Gateway API v1 CRDs in the cluster.
 
 Choose one path:
 
@@ -90,11 +93,8 @@ A minimal production overlay is checked in at [values.prod.yaml](https://github.
 
 The starter uses Gateway API. The chart also supports Ingress.
 
-> **Important**: Choose how users sign in before you install.
-> `values.prod.yaml` sets `logfire-dex.config.enablePasswordDB: false`, so users can sign in only through a Dex connector.
-> If you keep that setting, add a connector under `logfire-dex.config.connectors` as described in [Authentication](#authentication).
-> Without a connector, nobody can sign in after the first access step.
-> To allow email and password login instead, set `enablePasswordDB: true` and configure `smtp.*` for password-reset email.
+> **Important**: `values.prod.yaml` turns off password login, so nobody can sign in after the first access step until you add a Dex connector or turn password login back on.
+> See [Authentication](#authentication) before you install.
 
 Before installing in production, confirm that you have:
 
@@ -138,12 +138,74 @@ If you use a connector, make sure that it works and that its redirect URI matche
 
 ## Configuration notes
 
+### Sizing
+
+Start with a sizing preset instead of hand-sizing every workload:
+
+```yaml
+sizingPreset: standard
+```
+
+Use `standard` for general production deployments, `large` for higher throughput, or `small` for lower traffic.
+Use `tiny` for the smallest production footprint without high availability.
+Presets set resources, autoscaling, PodDisruptionBudgets, and best-effort topology spreading.
+Configure the [production prerequisites](#3b-production-starter) separately.
+
+Each preset gives the query API these resources:
+
+| Preset | CPU request | Memory request | Scratch | Replicas |
+| --- | ---: | ---: | ---: | ---: |
+| `tiny` | 1 | 2 GiB | 1 GiB | 1–6 |
+| `small` | 2 | 4 GiB | 2 GiB | 1–8 |
+| `standard` | 4 | 8 GiB | 6 GiB | 3–8 |
+| `large` | 4 | 8 GiB | 6 GiB | 3–16 |
+
+Without a preset or per-workload resources, the chart sets no Kubernetes CPU or memory requests or limits.
+FusionFire uses the `tiny` resource baseline for internal execution limits.
+These defaults increase some no-preset FusionFire budgets compared with earlier chart versions.
+Select a preset or explicit workload resources for constrained clusters.
+
+Override individual workloads only after selecting a preset:
+
+```yaml
+sizingPreset: standard
+
+logfire-worker:
+  resources:
+    cpu: "500m"
+    memory: "1Gi"
+    ephemeralStorage: "1Gi"
+```
+
+Nested `resources.requests` set requests without mandatory limits.
+The flat resource shorthand sets both requests and limits.
+
+#### Resize bcache storage
+
+bcache uses one PersistentVolumeClaim per pod.
+Changing `logfire-ff-bcache.disk.storage` after installation fails `helm upgrade` because StatefulSet volume claim templates are immutable.
+Expand the existing `bcache-data-*` PVCs if the storage class allows it.
+Alternatively, run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
+
 ### Hostnames and exposure
 
 Set at least one public hostname so the chart can generate correct public URLs and CORS settings.
 The hostname and TLS values are used by the application even when you expose `logfire-service` with infrastructure outside this chart.
 
-For a standard Ingress:
+For Gateway API, which `values.prod.yaml` uses:
+
+```yaml
+gateway:
+  enabled: true
+  gatewayClassName: nginx
+  tls: true
+  hostnames:
+    - logfire.example.com
+```
+
+The chart creates a Gateway by default. To attach the HTTPRoute to an existing Gateway instead, set `gateway.create: false`.
+
+For an Ingress:
 
 ```yaml
 ingress:
@@ -154,22 +216,7 @@ ingress:
   ingressClassName: nginx
 ```
 
-Logfire Live View requires WebSocket support. Ensure every proxy in front of
-`logfire-service` preserves the WebSocket upgrade and `Sec-WebSocket-Protocol`
-headers. Some ingress controllers require an explicit annotation. For the
-[F5 NGINX Ingress Controller](https://docs.nginx.com/nginx-ingress-controller/configuration/ingress-resources/advanced-configuration-with-annotations/):
-
-```yaml
-ingress:
-  annotations:
-    nginx.org/websocket-services: logfire-service
-```
-
-A successful WebSocket handshake normally returns `101 Switching Protocols`.
-The annotation above is specific to the F5 controller; use the configuration
-required by your ingress or gateway implementation.
-
-If you expose `logfire-service` directly instead of rendering an Ingress or Gateway, keep `ingress.enabled: false` and still set the public hostname and TLS behavior:
+If you expose `logfire-service` with infrastructure outside this chart, keep `ingress.enabled: false` and still set the public hostname and TLS behavior:
 
 ```yaml
 ingress:
@@ -179,8 +226,17 @@ ingress:
     - logfire.example.com
 ```
 
-Gateway API is supported through `gateway.enabled`.
-Set `gateway.create: true` to create a Gateway, or `gateway.create: false` to attach the HTTPRoute to an existing Gateway.
+Logfire Live View needs WebSockets.
+Every proxy in front of `logfire-service` must keep the WebSocket upgrade and the `Sec-WebSocket-Protocol` header.
+A successful handshake returns `101 Switching Protocols`.
+Some controllers need extra configuration.
+For example, the [F5 NGINX Ingress Controller](https://docs.nginx.com/nginx-ingress-controller/configuration/ingress-resources/advanced-configuration-with-annotations/) needs this annotation:
+
+```yaml
+ingress:
+  annotations:
+    nginx.org/websocket-services: logfire-service
+```
 
 ### Authentication
 
@@ -250,12 +306,25 @@ The API reports `api_mapping_status: overridden_by_environment` and rejects upda
 ### Object storage
 
 Logfire requires object storage for data. Supported URI schemes are `s3://`, `gs://`, and `az://`.
-Provider credentials can come from `objectStore.env`, mounted secrets, or the Kubernetes service account used by Logfire.
+Provider credentials can come from `objectStore.env`, mounted secrets, or the Kubernetes ServiceAccount that Logfire runs as.
 
-For local evaluation, `dev.deployRustfs` (or the deprecated `dev.deployMinio`) deploys RustFS and
-fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credential environment variables,
-so the workloads reach the in-cluster bucket. An `s3://` `objectStore.uri` also determines the
-bucket RustFS creates.
+To use a cloud identity, let the chart create the ServiceAccount and annotate it for your provider.
+This example uses AWS IAM roles for service accounts:
+
+```yaml
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/logfire
+```
+
+The identity needs read and write access to the bucket.
+On AWS, grant `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket`.
+On GCP, grant the `Storage Object Admin` role on the bucket.
+
+For local evaluation, `dev.deployRustfs` (or the deprecated `dev.deployMinio`) deploys RustFS.
+It fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credential environment variables, so the workloads reach the in-cluster bucket.
+An `s3://` `objectStore.uri` also sets the bucket that RustFS creates.
 
 Do not enable bucket versioning. Logfire manages its own data lifecycle, and bucket versioning can increase cost and interfere with lifecycle behavior.
 
@@ -267,63 +336,19 @@ Each database user needs owner permissions so migrations can run.
 
 ### AI
 
-Pydantic Logfire AI features can be enabled by setting the `ai` configuration in your values file:
+To turn on Logfire AI features, set a model and the provider's API key under `ai`.
+This example reads the OpenAI key from a Kubernetes Secret:
 
 ```yaml
 ai:
   model: provider:model-name
   openAi:
-    apiKey: openai-api-key
+    apiKey:
+      valueFrom:
+        secretKeyRef:
+          name: logfire-ai
+          key: openai-api-key
 ```
-
-## Sizing
-
-Start with a sizing preset instead of hand-sizing every workload:
-
-```yaml
-sizingPreset: standard
-```
-
-Use `standard` for general production deployments, `large` for higher throughput, or `small` for lower traffic.
-Use `tiny` for the smallest production footprint without high availability.
-Presets set resources, autoscaling, PodDisruptionBudgets, and best-effort topology spreading.
-Configure the [production prerequisites](#3b-production-starter) separately.
-
-Each preset gives the query API these resources:
-
-| Preset | CPU request | Memory request | Scratch | Replicas |
-| --- | ---: | ---: | ---: | ---: |
-| `tiny` | 1 | 2 GiB | 1 GiB | 1–6 |
-| `small` | 2 | 4 GiB | 2 GiB | 1–8 |
-| `standard` | 4 | 8 GiB | 6 GiB | 3–8 |
-| `large` | 4 | 8 GiB | 6 GiB | 3–16 |
-
-Without a preset or per-workload resources, the chart sets no Kubernetes CPU or memory requests or limits.
-FusionFire uses the `tiny` resource baseline for internal execution limits.
-These defaults increase some no-preset FusionFire budgets compared with earlier chart versions.
-Select a preset or explicit workload resources for constrained clusters.
-
-Override individual workloads only after selecting a preset:
-
-```yaml
-sizingPreset: standard
-
-logfire-worker:
-  resources:
-    cpu: "500m"
-    memory: "1Gi"
-    ephemeralStorage: "1Gi"
-```
-
-Nested `resources.requests` set requests without mandatory limits.
-The flat resource shorthand sets both requests and limits.
-
-### Resize bcache storage
-
-bcache uses one PersistentVolumeClaim per pod.
-Changing `logfire-ff-bcache.disk.storage` after installation fails `helm upgrade` because StatefulSet volume claim templates are immutable.
-Expand the existing `bcache-data-*` PVCs if the storage class allows it.
-Alternatively, run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
 
 ## Advanced configuration
 
@@ -356,7 +381,7 @@ CA bundle requirements by mode:
 * `inClusterTls.certs.mode=certManager` with custom `issuerRef.name`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
 * `inClusterTls.certs.mode=existingSecrets`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
 
-Fusionfire readers dial the headless `logfire-ff-bcache-internal` service directly and verify
+FusionFire readers dial the headless `logfire-ff-bcache-internal` service directly and verify
 that hostname, so the bcache certificate must include the bare `logfire-ff-bcache-internal`
 DNS name. Include the `logfire-ff-bcache` names and the namespace and cluster-domain variants as
 well.
@@ -383,8 +408,8 @@ Override `securityContext` or `<workload>.securityContext` when your cluster req
 
 The bundled Redis is the exception.
 A `restricted` namespace rejects it unless you set `logfire-redis.securityContext`.
-The chart replaces the Redis pod when you change its security context.
-Fusionfire query services that start while Redis is unavailable exit.
+Setting it replaces the Redis pod.
+FusionFire pods that start before the new Redis pod is ready exit and restart until Redis is back.
 
 ### Istio compatibility
 
@@ -400,7 +425,8 @@ You can still override labels per workload using `<workload>.podLabels`.
 
 ## Configure SDKs
 
-Once your self-hosted instance is running, configure client SDKs to send data to your endpoint:
+Create a write token for your project as described in [Create write tokens](https://pydantic.dev/docs/logfire/manage/create-write-tokens/).
+Then point the SDK at your hostname:
 
 ```python
 import logfire
@@ -412,13 +438,13 @@ logfire.configure(
 logfire.info('Hello, {place}!', place='World')
 ```
 
+For other languages, see the [Logfire documentation](https://pydantic.dev/docs/logfire/get-started/).
+
 ## Troubleshooting and support
 
 ### Quick checks
 
-* Check the storage bucket permissions for the ServiceAccount configured through `serviceAccount.annotations`.
-  On AWS, grant `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket`.
-  On GCP, grant the `Storage Object Admin` role on the bucket.
+* Check that the Logfire identity has the bucket permissions listed in [Object storage](#object-storage).
 * If you set `defaultStorageClassName` or a per-workload `storageClassName`, check that the StorageClass exists:
 
   ```sh
@@ -434,7 +460,10 @@ See the [self-hosted troubleshooting guide](https://pydantic.dev/docs/logfire/de
 For GitHub issues, include the chart version, Kubernetes version, relevant redacted values, and redacted error logs.
 For enterprise support, contact [sales@pydantic.dev](mailto:sales@pydantic.dev).
 
-## Requirements
+## Optional dev dependencies
+
+These subcharts deploy only when you set `dev.deployPostgres` or `dev.deployCertManager`.
+Production installs use external PostgreSQL, and a separately installed cert-manager when in-cluster TLS uses cert-manager.
 
 | Repository | Name | Version |
 |------------|------|---------|
