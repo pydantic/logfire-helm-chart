@@ -1893,10 +1893,12 @@ otel_collector:
     # `UnderscoreEscapingWithSuffixes` when true. The exporter no longer emits `add_metric_suffixes`
     # (deprecated and ignored by recent collectors); this value drives `translation_strategy`.
     translation_strategy: ""
-    # -- Convert delta metrics to cumulative on the Prometheus pipeline with the alpha
-    # `delta_to_cumulative` processor. Only runs when the Prometheus exporter is enabled, and the
-    # otlp_http pipeline keeps its delta semantics to the backend. Set false to pass metrics
-    # through unchanged. The limiter can refuse new data but cannot evict retained streams.
+    # -- Convert delta metrics to cumulative for Prometheus with the alpha `delta_to_cumulative` processor.
+    # Runs only when `otel_collector.prometheus.enabled` is true.
+    # The OTLP pipeline keeps delta metrics unchanged.
+    # Each stream must reach the same collector replica.
+    # Cumulative state resets when that replica is replaced.
+    # Set false to pass metrics through unchanged.
     delta_to_cumulative: true
     # -- Retention of inactive delta-to-cumulative streams. Independent of metric_expiration.
     max_stale: 5m

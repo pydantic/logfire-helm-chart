@@ -55,7 +55,13 @@ jobs:
 
       - name: Chart linting
         if: matrix.suite == 'chart-testing'
-        run: ct lint --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH"
+        run: |
+          "$VIRTUAL_ENV/bin/python" -m unittest discover -s ci -p 'test_chart_docs_only.py'
+          version_args=()
+          if "$VIRTUAL_ENV/bin/python" ci/chart_docs_only.py "origin/$CT_TARGET_BRANCH"; then
+            version_args=(--check-version-increment=false)
+          fi
+          ct lint --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH" "${version_args[@]}"
 
       - name: Build chart dependencies
         run: |
