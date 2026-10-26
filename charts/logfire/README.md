@@ -86,19 +86,19 @@ Use the first-access step below to log in to the meta project.
 
 #### Upgrading a local evaluation install
 
-Chart 0.13.48 replaced MinIO with RustFS for local evaluation. Upgrades from earlier
-versions delete the old MinIO resources, including the PersistentVolumeClaim. Local data
-is not carried over.
+Chart 0.13.48 replaced MinIO with RustFS for local evaluation.
+Upgrades from earlier versions delete the old MinIO resources, including the PersistentVolumeClaim.
+The upgrade does not keep local data.
 
-Legacy `dev.deployMinio: true` values keep the `logfire-minio` Service name and existing
-credentials. `minio.persistence.existingClaim` is not carried over.
+Legacy `dev.deployMinio: true` values deploy RustFS behind the `logfire-minio` Service.
+RustFS uses credentials from `minio.auth`, or from `objectStore.env` if `minio.auth` is unset.
+RustFS does not use `minio.persistence.existingClaim`.
 
 To use the new names, set `dev.deployRustfs: true` and remove `dev.deployMinio`.
 Set `objectStore.env.AWS_ENDPOINT` to `http://logfire-rustfs:9000`.
 Set `rustfs.auth.accessKey` and `rustfs.auth.secretKey` to the same credentials as `objectStore.env`.
 
-When installing from source, run `helm dependency build charts/logfire` after pulling
-to remove the old MinIO dependency.
+When installing from source, run `helm dependency build charts/logfire` after pulling to remove the old MinIO dependency.
 
 ### 3b. Production starter
 
@@ -239,12 +239,13 @@ groupOrganizationMapping:
             role: write
 ```
 
-Logfire applies these mappings when a user signs in. Mappings can change or remove access
-in the listed organizations and projects. Logfire leaves unlisted organizations, unlisted projects,
-and personal organization membership unchanged. When groups grant different roles in the same scope,
-Logfire grants the most permissive role.
+Logfire applies these mappings when a user signs in.
+Mappings can change or remove access in the listed organizations and projects.
+Logfire leaves unlisted organizations, unlisted projects, and personal organization membership unchanged.
+When groups grant different roles in the same scope, Logfire grants the most permissive role.
 
-`groupOrganizationMapping` overrides mappings managed through the public Group Mappings API.
+`groupOrganizationMapping` overrides mappings that you manage with the public Group Mappings API.
+The API reports `api_mapping_status: overridden_by_environment` and rejects update requests with HTTP 409.
 
 ### Object storage
 
@@ -283,12 +284,12 @@ Start with a sizing preset instead of hand-sizing every workload:
 sizingPreset: standard
 ```
 
-Use `standard` for production, `large` for higher throughput, or `small` for lower traffic.
-Use `tiny` for the smallest footprint without high availability.
+Use `standard` for general production deployments, `large` for higher throughput, or `small` for lower traffic.
+Use `tiny` for the smallest production footprint without high availability.
 Presets set resources, autoscaling, PodDisruptionBudgets, and best-effort topology spreading.
-You still need to configure the production prerequisites listed above.
+Configure the [production prerequisites](#3b-production-starter) separately.
 
-The query API settings are:
+Each preset gives the query API these resources:
 
 | Preset | CPU request | Memory request | Scratch | Replicas |
 | --- | ---: | ---: | ---: | ---: |
@@ -299,6 +300,7 @@ The query API settings are:
 
 Without a preset or per-workload resources, the chart sets no Kubernetes CPU or memory requests or limits.
 FusionFire uses the `tiny` resource baseline for internal execution limits.
+These defaults increase some no-preset FusionFire budgets compared with earlier chart versions.
 Select a preset or explicit workload resources for constrained clusters.
 
 Override individual workloads only after selecting a preset:
@@ -318,8 +320,8 @@ The flat resource shorthand sets both requests and limits.
 
 ### Resize bcache storage
 
-bcache uses one PersistentVolumeClaim per pod. Changing `logfire-ff-bcache.disk.storage`
-after installation fails `helm upgrade` because StatefulSet volume claim templates are immutable.
+bcache uses one PersistentVolumeClaim per pod.
+Changing `logfire-ff-bcache.disk.storage` after installation fails `helm upgrade` because StatefulSet volume claim templates are immutable.
 Expand the existing `bcache-data-*` PVCs if the storage class allows it.
 Alternatively, run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
 
@@ -375,12 +377,14 @@ For installations that require readiness waits or automatic rollback, install ce
 
 ### Restricted Pod Security
 
-Containers default to a non-root identity, no privilege escalation, dropped capabilities,
-`RuntimeDefault` seccomp, and a read-only root with writable paths mounted.
+Containers default to a non-root identity, no privilege escalation, dropped capabilities, and `RuntimeDefault` seccomp.
+They use a read-only root with writable paths mounted.
 Override `securityContext` or `<workload>.securityContext` when your cluster requires different settings.
 
-Bundled Redis is the exception. A `restricted` namespace rejects it unless you set
-`logfire-redis.securityContext`.
+The bundled Redis is the exception.
+A `restricted` namespace rejects it unless you set `logfire-redis.securityContext`.
+The chart replaces the Redis pod when you change its security context.
+Fusionfire query services that start while Redis is unavailable exit.
 
 ### Istio compatibility
 
@@ -408,11 +412,13 @@ logfire.configure(
 logfire.info('Hello, {place}!', place='World')
 ```
 
-## Troubleshooting & support
+## Troubleshooting and support
 
 ### Quick checks
 
-* Check that the ServiceAccount configured through `serviceAccount.annotations` can read, write, list, and delete objects in the storage bucket.
+* Check the storage bucket permissions for the ServiceAccount configured through `serviceAccount.annotations`.
+  On AWS, grant `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket`.
+  On GCP, grant the `Storage Object Admin` role on the bucket.
 * If you set `defaultStorageClassName` or a per-workload `storageClassName`, check that the StorageClass exists:
 
   ```sh
@@ -615,7 +621,7 @@ For enterprise support, contact [sales@pydantic.dev](mailto:sales@pydantic.dev).
 | otel_collector.extraExporters | object | `{}` | Additional collector exporters. Chart-owned component names are reserved. |
 | otel_collector.extraPipelines | object | `{}` | Additional collector pipelines. The chart's existing telemetry pipelines stay unchanged. |
 | otel_collector.extraProcessors | object | `{}` | Additional collector processors. These only run in pipelines that reference them. |
-| otel_collector.prometheus.delta_to_cumulative | bool | `true` | Convert delta metrics to cumulative for Prometheus with the alpha `delta_to_cumulative` processor. The OTLP pipeline keeps delta metrics unchanged. Each stream must reach the same collector replica. Cumulative state resets when that replica is replaced. Set false to pass metrics through unchanged. |
+| otel_collector.prometheus.delta_to_cumulative | bool | `true` | Convert delta metrics to cumulative for Prometheus with the alpha `delta_to_cumulative` processor. Runs only when `otel_collector.prometheus.enabled` is true. The OTLP pipeline keeps delta metrics unchanged. Each stream must reach the same collector replica. Cumulative state resets when that replica is replaced. Set false to pass metrics through unchanged. |
 | otel_collector.prometheus.max_stale | string | `"5m"` | Retention of inactive delta-to-cumulative streams. Independent of metric_expiration. |
 | otel_collector.prometheus.max_streams | int | `10000` | Cap on the delta-to-cumulative stream map. The in-pipeline `memory_limiter` bounds ingress but cannot evict this processor's state, so an unbounded cap lets high-cardinality attributes grow until the collector refuses telemetry. Streams past the cap are dropped, so raise this for high-cardinality scrapes. |
 | otel_collector.prometheus.resource_to_telemetry_conversion | object | `{"enabled":true}` | OpenTelemetry resource attributes exposed as Prometheus metric labels. Review this deprecated option when upgrading the collector to use resource_constant_labels instead. |

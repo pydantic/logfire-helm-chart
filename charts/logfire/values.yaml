@@ -1894,8 +1894,11 @@ otel_collector:
     # (deprecated and ignored by recent collectors); this value drives `translation_strategy`.
     translation_strategy: ""
     # -- Convert delta metrics to cumulative for Prometheus with the alpha `delta_to_cumulative` processor.
-    # The OTLP pipeline keeps delta metrics unchanged. Each stream must reach the same collector replica.
-    # Cumulative state resets when that replica is replaced. Set false to pass metrics through unchanged.
+    # Runs only when `otel_collector.prometheus.enabled` is true.
+    # The OTLP pipeline keeps delta metrics unchanged.
+    # Each stream must reach the same collector replica.
+    # Cumulative state resets when that replica is replaced.
+    # Set false to pass metrics through unchanged.
     delta_to_cumulative: true
     # -- Retention of inactive delta-to-cumulative streams. Independent of metric_expiration.
     max_stale: 5m
