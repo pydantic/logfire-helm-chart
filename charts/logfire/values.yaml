@@ -52,7 +52,7 @@ migrations:
 # the client sees a 502/520 when it reuses it.
 keepAliveTimeout: 120s
 
-# -- List of mapping to automatically assign members of OIDC group to logfire roles
+# -- Grant Logfire organization and project roles to members of identity-provider groups when they sign in
 groupOrganizationMapping: []
 #  - group_id: "example-group-id"
 #    organization_roles:

@@ -10,7 +10,7 @@ This repository and the chart source it contains are licensed under the MIT Lice
 ## Install paths
 
 Use this README for the chart-level install flow and values reference.
-Use the [Self-Hosted Production Requirements](https://docs.pydantic.dev/logfire/reference/self-hosted/installation/) for background, architecture, and provider-specific procedures.
+Use the [Self-Hosted Production Requirements](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/installation/) for background, architecture, and provider-specific procedures.
 
 Choose one path:
 
@@ -84,22 +84,6 @@ Open Logfire at `http://localhost:8080` and MailDev at `http://localhost:1080`.
 MailDev is available for testing local email flows.
 Use the first-access step below to log in to the meta project.
 
-#### Upgrading a local evaluation install
-
-Chart 0.13.48 replaced MinIO with RustFS for local evaluation.
-Upgrades from earlier versions delete the old MinIO resources, including the PersistentVolumeClaim.
-The upgrade does not keep local data.
-
-Legacy `dev.deployMinio: true` values deploy RustFS behind the `logfire-minio` Service.
-RustFS uses credentials from `minio.auth`, or from `objectStore.env` if `minio.auth` is unset.
-RustFS does not use `minio.persistence.existingClaim`.
-
-To use the new names, set `dev.deployRustfs: true` and remove `dev.deployMinio`.
-Set `objectStore.env.AWS_ENDPOINT` to `http://logfire-rustfs:9000`.
-Set `rustfs.auth.accessKey` and `rustfs.auth.secretKey` to the same credentials as `objectStore.env`.
-
-When installing from source, run `helm dependency build charts/logfire` after pulling to remove the old MinIO dependency.
-
 ### 3b. Production starter
 
 A minimal production overlay is checked in at [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml). Use it as a starting point for production installs and replace the placeholder hostnames, credentials, and provider-specific settings.
@@ -119,7 +103,7 @@ Before installing in production, confirm that you have:
 * External PostgreSQL databases for `crud`, `ff`, and `dex`.
 * Object storage using `s3://`, `gs://`, or `az://`.
 * A managed Redis endpoint configured through `redisDsn`, or through `redisSecret.name` when the DSNs live in an externally managed Secret.
-* A Dex connector configured for your identity provider.
+* A Dex connector for your identity provider, or password login with `smtp.*` configured.
 * HorizontalPodAutoscaler metrics available in the cluster when using a sizing preset.
 * StorageClass behavior chosen for chart-managed PVCs: use the cluster default, or set `defaultStorageClassName` in [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml).
 
@@ -200,13 +184,19 @@ Set `gateway.create: true` to create a Gateway, or `gateway.create: false` to at
 
 ### Authentication
 
-Logfire signs users in through Dex.
-Dex supports email and password login through `logfire-dex.config.enablePasswordDB`, and SSO through connectors.
-The chart enables password login by default. `values.prod.yaml` disables it, so an install based on that file needs at least one connector.
-When creating an OAuth app in your provider, set the redirect URI to `<logfire_url>/auth-api/callback`, for example `https://logfire.example.com/auth-api/callback`.
-Connector configuration is passed through to Dex; see the Dex [connector overview](https://dexidp.io/docs/connectors/) for supported providers and settings.
+Users sign in through Dex, either with an email and password or with an SSO provider that you configure as a Dex connector.
+Password login is on by default. `values.prod.yaml` turns it off with `logfire-dex.config.enablePasswordDB: false`, so an install based on that file needs at least one connector.
 
-Example GitHub connector using Kubernetes Secret references:
+To add an SSO provider:
+
+1. Create an OAuth app in the provider with the redirect URI `<logfire_url>/auth-api/callback`, for example `https://logfire.example.com/auth-api/callback`.
+2. Add a connector for the provider under `logfire-dex.config.connectors`.
+   The chart sets the connector's `redirectURI` to the same URL unless you set it yourself.
+
+The [SSO provider examples](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/examples/#sso-provider-examples) show connectors for GitHub, Azure AD, and Okta.
+The chart passes connector settings to Dex as written, so any provider in the Dex [connector overview](https://dexidp.io/docs/connectors/) works.
+
+This GitHub connector reads its credentials from a Kubernetes Secret:
 
 ```yaml
 logfire-dex:
@@ -234,7 +224,9 @@ logfire-dex:
 
 #### Organization group mappings
 
-Use `groupOrganizationMapping` to grant Logfire organization and project roles from identity-provider group IDs:
+Use `groupOrganizationMapping` to grant Logfire organization and project roles to members of identity-provider groups.
+Each `group_id` must match a group that your connector returns to Dex.
+Depending on the connector and its settings, that value is a group name or a group ID.
 
 ```yaml
 groupOrganizationMapping:
@@ -438,7 +430,7 @@ logfire.info('Hello, {place}!', place='World')
 
 ### Additional resources
 
-See the [self-hosted troubleshooting guide](https://docs.pydantic.dev/logfire/reference/self-hosted/troubleshooting/) for common issues and internal logs.
+See the [self-hosted troubleshooting guide](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/troubleshooting/) for common issues and internal logs.
 For GitHub issues, include the chart version, Kubernetes version, relevant redacted values, and redacted error logs.
 For enterprise support, contact [sales@pydantic.dev](mailto:sales@pydantic.dev).
 
@@ -517,7 +509,7 @@ For enterprise support, contact [sales@pydantic.dev](mailto:sales@pydantic.dev).
 | gateway.timeouts | object | `{}` | Timeout settings for the HTTPRoute backend. |
 | gateway.tls | string | nil (uses ingress.tls) | Enable TLS/HTTPS for the Gateway listener. If not set, falls back to ingress.tls for backward compatibility. Also overrides the app's public URL scheme/CORS behavior (http vs https URLs) whenever set. |
 | gateway.tlsSecretName | string | nil (uses ingress.secretName) | TLS Secret name for the Gateway listener certificate. If not set, falls back to ingress.secretName for backward compatibility. |
-| groupOrganizationMapping | list | `[]` | List of mapping to automatically assign members of OIDC group to logfire roles |
+| groupOrganizationMapping | list | `[]` | Grant Logfire organization and project roles to members of identity-provider groups when they sign in |
 | haproxy | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.4"},"podSecurityContext":{},"securityContext":{}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
 | haproxy.podSecurityContext | object | `{}` | Pod SecurityContext for the HAProxy pod. Defaults to the chart-wide `podSecurityContext`. |
 | haproxy.securityContext | object | `{}` | Container SecurityContext for the HAProxy proxies. The chart default pins the numeric identity the image already uses, so the kubelet can verify `runAsNonRoot`, applies the portable controls (no privilege escalation, all capabilities dropped, `RuntimeDefault` seccomp), and makes the image root read-only. The chart-wide `securityContext` merges over that default and this value merges over both; set a field to `null` to clear it. HAProxy writes no file outside its mounts, so it needs no scratch volume. |
