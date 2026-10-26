@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.3-rc.4](https://img.shields.io/badge/Version-0.14.3--rc.4-informational?style=flat-square) ![AppVersion: f9ebe798](https://img.shields.io/badge/AppVersion-f9ebe798-informational?style=flat-square)
+![Version: 0.14.4-rc.1](https://img.shields.io/badge/Version-0.14.4--rc.1-informational?style=flat-square) ![AppVersion: f9ebe798](https://img.shields.io/badge/AppVersion-f9ebe798-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
