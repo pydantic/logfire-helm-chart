@@ -107,7 +107,10 @@ A minimal production overlay is checked in at [values.prod.yaml](https://github.
 
 The starter uses Gateway API. The chart also supports Ingress.
 
-Configure an identity provider under `logfire-dex.config.connectors`; see [Authentication](#authentication).
+> **Important**: Configure SSO before you install in production.
+> `values.prod.yaml` sets `logfire-dex.config.enablePasswordDB: false`, so users can sign in only through a Dex connector.
+> Without a connector, nobody can sign in after the first access step.
+> Add a connector under `logfire-dex.config.connectors` as described in [Authentication](#authentication).
 
 Before installing in production, confirm that you have:
 
@@ -146,6 +149,8 @@ https://logfire.example.com/logfire-meta/logfire-meta#token=LOGFIRE_META_FRONTEN
 For local evaluation with the port-forward above, use `http://localhost:8080/logfire-meta/logfire-meta#token=LOGFIRE_META_FRONTEND_TOKEN`.
 
 After you have access, create an invite link from **Settings** > **Invite** and assign the **Admin** organization role.
+In production, the invited administrator signs in through your Dex connector.
+Before you send the invite, make sure that the connector works and that its redirect URI matches your hostname.
 
 ## Configuration notes
 
@@ -195,7 +200,8 @@ Set `gateway.create: true` to create a Gateway, or `gateway.create: false` to at
 
 ### Authentication
 
-Dex is used as the identity service for Logfire.
+Logfire signs users in through Dex, which connects to your SSO identity provider.
+Production installs need at least one Dex connector, because `values.prod.yaml` disables the Dex password database.
 When creating an OAuth app in your provider, set the redirect URI to `<logfire_url>/auth-api/callback`, for example `https://logfire.example.com/auth-api/callback`.
 Connector configuration is passed through to Dex; see the Dex [connector overview](https://dexidp.io/docs/connectors/) for supported providers and settings.
 
