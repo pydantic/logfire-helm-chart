@@ -100,7 +100,8 @@ fi
 start_forward() {
   local service=$1
   local remote_port=$2
-  local log_file="$tmp_dir/$service-port-forward.log"
+  local log_file
+  log_file=$(mktemp "$tmp_dir/$service-port-forward.XXXXXX")
   local pid deadline port
   kubectl --context "$context" --namespace "$namespace" \
     port-forward --address 127.0.0.1 "svc/$service" ":$remote_port" >"$log_file" 2>&1 &
