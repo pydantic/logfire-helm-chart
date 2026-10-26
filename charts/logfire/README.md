@@ -7,7 +7,7 @@ Helm chart for self-hosted Pydantic Logfire
 This repository and the chart source it contains are licensed under the MIT License. Deploying the official self-hosted Pydantic Logfire product requires separate commercial access to private container images.
 **Self-hosted Logfire is an Enterprise offering that requires a contract and payment.** Please contact sales@pydantic.dev to discuss setting up a contract and pricing.
 
-## Install Paths
+## Install paths
 
 Use this README for the chart-level install flow and values reference.
 Use the [Self-Hosted Production Requirements](https://docs.pydantic.dev/logfire/reference/self-hosted/installation/) for background, architecture, and provider-specific procedures.
@@ -19,16 +19,16 @@ Choose one path:
 
 > **Warning**: `values.dev.yaml` is only for local evaluation and testing. Do not use it for production deployments.
 
-## Install the Chart
+## Install the chart
 
-### 1. Add the Helm Repository
+### 1. Add the Helm repository
 
 ```sh
 helm repo add pydantic https://charts.pydantic.dev/
 helm repo update
 ```
 
-### 2. Create the Image Pull Secret
+### 2. Create the image pull secret
 
 Logfire images are private. Contact [sales@pydantic.dev](mailto:sales@pydantic.dev) to get the `key.json` file for your image pull credentials.
 
@@ -53,7 +53,7 @@ imagePullSecrets:
 If you mirror Logfire images into your own registry, keep the chart version and mirrored image tags aligned.
 By default, workload images use the chart `appVersion` tag unless you explicitly override tags in values.
 
-### 3a. Local Evaluation
+### 3a. Local evaluation
 
 From the chart repository package:
 
@@ -84,80 +84,27 @@ Open Logfire at `http://localhost:8080` and MailDev at `http://localhost:1080`.
 MailDev is available for testing local email flows.
 Use the first-access step below to log in to the meta project.
 
-#### Upgrading a Local Evaluation Install
+#### Upgrading a local evaluation install
 
-Chart versions before 0.13.48 deployed MinIO for local evaluation. 0.13.48 and later deploy
-RustFS instead. The upgrade deletes the old `logfire-minio` resources, including its
-PersistentVolumeClaim, so local evaluation data is not carried over.
+Chart 0.13.48 replaced MinIO with RustFS for local evaluation. Upgrades from earlier
+versions delete the old MinIO resources, including the PersistentVolumeClaim. Local data
+is not carried over.
 
-Values files that still set `dev.deployMinio: true` keep working: the chart deploys RustFS
-behind the same `logfire-minio` Service name and uses the credentials from `minio.auth`, or
-from `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` when
-`minio.auth` is not set, so Logfire keeps authenticating. `minio.persistence.existingClaim` is
-not carried over: RustFS always starts from its own claim, or from an emptyDir when persistence
-is disabled.
+Legacy `dev.deployMinio: true` values keep the `logfire-minio` Service name and existing
+credentials. `minio.persistence.existingClaim` is not carried over.
 
-To move to the new names, set `dev.deployRustfs: true`, remove `dev.deployMinio`, point
-`objectStore.env.AWS_ENDPOINT` at `http://logfire-rustfs:9000`, and set
-`rustfs.auth.accessKey` and `rustfs.auth.secretKey` to the same credentials as
-`objectStore.env`.
+To use the new names, set `dev.deployRustfs: true` and remove `dev.deployMinio`.
+Set `objectStore.env.AWS_ENDPOINT` to `http://logfire-rustfs:9000`.
+Set `rustfs.auth.accessKey` and `rustfs.auth.secretKey` to the same credentials as `objectStore.env`.
 
-When installing from this source repository, run `helm dependency build charts/logfire` after
-pulling so the removed MinIO subchart does not linger in `charts/`.
+When installing from source, run `helm dependency build charts/logfire` after pulling
+to remove the old MinIO dependency.
 
-### 3b. Production Starter
+### 3b. Production starter
 
 A minimal production overlay is checked in at [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml). Use it as a starting point for production installs and replace the placeholder hostnames, credentials, and provider-specific settings.
 
-The starter uses Gateway API, but the chart supports both Gateway API and Ingress. Use whichever routing interface your cluster standardizes on. The core shape is:
-
-```yaml
-imagePullSecrets:
-  - logfire-image-key
-
-sizingPreset: standard
-adminEmail: sre@example.com
-
-# Optional: set a StorageClass for chart-managed PVCs:
-# defaultStorageClassName: fast-storage
-
-ingress:
-  enabled: false
-
-gateway:
-  enabled: true
-  gatewayClassName: nginx
-  tls: true
-  hostnames:
-    - logfire.example.com
-
-postgresDsn: postgresql://logfire_crud:PASSWORD@postgres.example.com:5432/crud
-postgresFFDsn: postgresql://logfire_ff:PASSWORD@postgres.example.com:5432/ff
-
-logfire-dex:
-  config:
-    enablePasswordDB: false
-    storage:
-      type: postgres
-      config:
-        host: postgres.example.com
-        port: 5432
-        user: logfire_dex
-        database: dex
-        password: PASSWORD
-        ssl:
-          mode: require
-
-objectStore:
-  uri: s3://logfire-prod
-  env:
-    AWS_DEFAULT_REGION: us-east-1
-
-logfire-redis:
-  enabled: false
-
-redisDsn: redis://redis.example.com:6379
-```
+The starter uses Gateway API. The chart also supports Ingress.
 
 Configure an identity provider under `logfire-dex.config.connectors`; see [Authentication](#authentication).
 
@@ -180,7 +127,7 @@ helm upgrade --install logfire pydantic/logfire \
   --namespace logfire
 ```
 
-### 4. First Access
+### 4. First access
 
 On first install, the chart creates the `logfire-meta` organization and stores a frontend access token in a Kubernetes Secret:
 
@@ -199,9 +146,9 @@ For local evaluation with the port-forward above, use `http://localhost:8080/log
 
 After you have access, create an invite link from **Settings** > **Invite** and assign the **Admin** organization role.
 
-## Configuration Notes
+## Configuration notes
 
-### Hostnames and Exposure
+### Hostnames and exposure
 
 Set at least one public hostname so the chart can generate correct public URLs and CORS settings.
 The hostname and TLS values are used by the application even when you expose `logfire-service` with infrastructure outside this chart.
@@ -277,7 +224,7 @@ logfire-dex:
           getUserInfo: true
 ```
 
-#### Organization Group Mappings
+#### Organization group mappings
 
 Use `groupOrganizationMapping` to grant Logfire organization and project roles from identity-provider group IDs:
 
@@ -292,11 +239,14 @@ groupOrganizationMapping:
             role: write
 ```
 
-The mapping is authoritative for the organizations and projects it lists and is reconciled when a user signs in. Access in those scopes may be changed or removed; unlisted organizations and projects are left unchanged, and personal organization membership is preserved. When multiple matching groups grant roles in the same scope, the most permissive role is applied.
+Logfire applies these mappings when a user signs in. Mappings can change or remove access
+in the listed organizations and projects. Logfire leaves unlisted organizations, unlisted projects,
+and personal organization membership unchanged. When groups grant different roles in the same scope,
+Logfire grants the most permissive role.
 
-Setting `groupOrganizationMapping` overrides mappings managed through the public Group Mappings API. The API reports `api_mapping_status: overridden_by_environment`, and update requests return HTTP 409.
+`groupOrganizationMapping` overrides mappings managed through the public Group Mappings API.
 
-### Object Storage
+### Object storage
 
 Logfire requires object storage for data. Supported URI schemes are `s3://`, `gs://`, and `az://`.
 Provider credentials can come from `objectStore.env`, mounted secrets, or the Kubernetes service account used by Logfire.
@@ -333,29 +283,23 @@ Start with a sizing preset instead of hand-sizing every workload:
 sizingPreset: standard
 ```
 
-Use `large` for higher-throughput deployments, `standard` for general production deployments, `small` for lower-traffic deployments that still need ingest and query headroom, or `tiny` for the smallest production footprint.
-Presets apply workload resources, autoscaling, PDBs, and best-effort topology spreading for HA-sensitive workloads. FusionFire derives its execution settings from the effective resources.
-They do not configure environment-specific prerequisites such as hostnames, TLS, PostgreSQL, object storage, image pull secrets, or StorageClasses.
+Use `standard` for production, `large` for higher throughput, or `small` for lower traffic.
+Use `tiny` for the smallest footprint without high availability.
+Presets set resources, autoscaling, PodDisruptionBudgets, and best-effort topology spreading.
+You still need to configure the production prerequisites listed above.
 
-Query API capacity is resource-oriented:
+The query API settings are:
 
-| Preset | CPU request | Memory request | Query cost capacity per pod | Scratch | Replicas |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `tiny` | 1 | 2 GiB | 1 | 1 GiB | 1–6 |
-| `small` | 2 | 4 GiB | 2 | 2 GiB | 1–8 |
-| `standard` | 4 | 8 GiB | 4 | 6 GiB | 3–8 |
-| `large` | 4 | 8 GiB | 4 | 6 GiB | 3–16 |
+| Preset | CPU request | Memory request | Scratch | Replicas |
+| --- | ---: | ---: | ---: | ---: |
+| `tiny` | 1 | 2 GiB | 1 GiB | 1–6 |
+| `small` | 2 | 4 GiB | 2 GiB | 1–8 |
+| `standard` | 4 | 8 GiB | 6 GiB | 3–8 |
+| `large` | 4 | 8 GiB | 6 GiB | 3–16 |
 
-Query cost capacity defaults to the effective execution-worker CPU rounded up to a whole core. With separate query workers enabled, both the dispatcher and workers derive it from query-worker CPU. Advanced installations can override it with `logfire-ff-query-api.maxQueryCostPerPod`.
-
-The `standard` preset keeps the public request path, query API, and ingest path at a minimum of three replicas.
-The `large` preset inherits `standard` and increases selected FusionFire worker, ingest processor, and bcache capacity.
-The `small` preset keeps ingest and the edge service more available while preserving a smaller footprint.
-The `tiny` preset intentionally favors the smallest resource footprint over high availability.
-
-If you do not set a sizing preset or per-workload resources, the chart does not render Kubernetes CPU/memory requests or limits.
-FusionFire still needs internal execution limits, so those derived settings use the `tiny` preset resource baseline without rendering the preset's Kubernetes resources.
-This increases some no-preset FusionFire budgets compared with earlier chart versions. Operators running constrained clusters should select a sizing preset or configure explicit workload resources.
+Without a preset or per-workload resources, the chart sets no Kubernetes CPU or memory requests or limits.
+FusionFire uses the `tiny` resource baseline for internal execution limits.
+Select a preset or explicit workload resources for constrained clusters.
 
 Override individual workloads only after selecting a preset:
 
@@ -369,96 +313,19 @@ logfire-worker:
     ephemeralStorage: "1Gi"
 ```
 
-Nested `resources.requests` do not add mandatory limits, allowing workloads to use spare node capacity. The legacy flat resource shorthand continues to use the configured values for both requests and limits.
+Nested `resources.requests` set requests without mandatory limits.
+The flat resource shorthand sets both requests and limits.
 
-### Collector capacity and health
+### Resize bcache storage
 
-The `standard` preset (also inherited by `large`) requests 512Mi of memory and allows a
-2Gi limit. The request and HPA targets are unchanged, so raising the limit provides burst
-headroom without delaying autoscaling. Reserve more memory through
-`logfire-otel-collector.resources.requests.memory` when sustained usage warrants it; a
-container limit does not reserve node capacity. Memory HPA targets are percentages of the
-request, so reassess the target when changing the request.
+bcache uses one PersistentVolumeClaim per pod. Changing `logfire-ff-bcache.disk.storage`
+after installation fails `helm upgrade` because StatefulSet volume claim templates are immutable.
+Expand the existing `bcache-data-*` PVCs if the storage class allows it.
+Alternatively, run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
 
-The collector sets `GOMEMLIMIT` to 60% of its rendered memory limit, before the memory
-limiter's 75% hard threshold. An explicit `GOMEMLIMIT` in `logfire-otel-collector.env`
-takes precedence. With no rendered memory limit, fixed collector/GC limits are used rather
-than percentages of node memory.
+## Advanced configuration
 
-Each signal has its own disk-backed exporter queue by default: standard allows 128MiB of
-serialized payload per queue, or 384MiB across traces, logs, and metrics. Processing,
-in-flight batches, and file mappings still consume memory. Exporter-side batching flushes
-after one second, with a 1MiB trigger and 4MiB maximum serialized batch size.
-Queue rejection reaches the OTLP receiver, allowing
-senders to retry; successful enqueue does not guarantee delivery. Full queues, permanent
-backend errors, retry expiry (five minutes by default), and storage loss can still lose data.
-Override queue/batch options under `otel_collector.exporter.sending_queue`.
-Debug request summaries are disabled by
-default; enable `otel_collector.debug.enabled` temporarily for troubleshooting.
-
-The `file_storage/queue` extension uses a disk-backed `emptyDir`, so queued data survives a
-container restart in the same pod. Pod replacement, rollout, eviction, and node loss remove
-the queue. This storage does not persist Prometheus series or delta-to-cumulative state.
-Set `otel_collector.queueStorage.enabled=false` to use memory queues instead. Disk reduces
-queue heap pressure and supports container-restart recovery, but its I/O can reduce throughput
-and storage exhaustion can lose records that were already acknowledged. A storage error does
-not always mean only the new request was rejected. Monitor database allocation and downstream
-delivery as well as logical queue utilization.
-
-Each pod has a 4Gi queue volume and a 512MiB limit per signal database. This provides more
-database headroom than the payload budget because index/page
-overhead and fragmentation depend on request shape. The chart requires at least four times
-the effective byte queue capacity per database, including queue overrides; this minimum does
-not guarantee that arbitrary request shapes will fit. Item/request queue sizing requires
-operator budgeting because its units cannot be compared with database bytes. Compaction
-reclaims
-disk space after queues drain; the volume must allow at least six times the database limit
-for three databases and their temporary compaction copies. Like upstream, `fsync` is off by
-default. Writes remain available on the live node filesystem for process-restart recovery,
-but an unclean host failure can lose unsynced writes or corrupt the database. Set
-`otel_collector.queueStorage.fsync=true` to force each database write to stable storage, at
-substantial I/O cost. An `emptyDir` still provides no durability across pod/node replacement.
-The pod requests 512Mi of
-ephemeral storage and allows 5Gi including container logs; explicit collector resource
-settings take precedence. Adjust `otel_collector.queueStorage` for local storage capacity
-and throughput, and monitor node disk pressure. An `emptyDir` size limit is not a disk
-reservation. Filesystem permissions use `fsGroup` without a root init container and honor
-pod/container security context overrides.
-
-Prometheus export additionally retains application series for `metric_expiration` (180m by
-default) and delta-to-cumulative state for `max_stale` (5m by default). The memory limiter
-can refuse incoming data but cannot evict this state. Inactive pod/label churn can therefore
-keep consuming memory even when queue utilization is low. Tune expiration to the longest
-expected interval between observations; reducing it removes inactive collector cache
-entries, while Prometheus keeps previously scraped history. Stream caps remain unset
-because exceeding a cap drops new streams. Metrics for a given stream must reach the same
-collector replica; cumulative state resets when that collector is replaced. Scrape each
-replica directly, and account for these semantics when configuring routing/autoscaling.
-
-Collector self-metrics are available on each pod's `self-metrics` port
-(`otel_collector.selfMetricsPort`, default 8888), separately from application metrics on
-`otel_collector.prometheus.port` (default 9090). Configure your monitoring system to scrape that pod port.
-The collector also forwards a small set of queue, delivery, and receiver metrics through its
-configured OTLP exporter every 60 seconds. Each pod scrapes itself on loopback. These metrics
-use `service.name=logfire-otel-collector` and the pod UID as `service.instance.id`.
-The self-metric pipeline reads `otelResourceAttributes` for the deployment environment.
-It does not change the identity of application metrics or add self-metrics to the application
-Prometheus exporter. Set `otel_collector.selfMetrics.enabled=false` to disable forwarding.
-Disable built-in forwarding if `extraProcessors` or `extraPipelines` already define
-`filter/self`, `resource/self`, `resourcedetection/self`, or `metrics/self`. Those names belong to the chart
-while built-in forwarding is enabled.
-Keep independent monitoring because a failed collector or destination cannot report its own outage.
-Monitor queue utilization (`otelcol_exporter_queue_size` / `otelcol_exporter_queue_capacity`),
-`otelcol_exporter_enqueue_failed_*`, `otelcol_receiver_refused_*`, process/container memory,
-and pod OOM/restart events. Higher limits provide headroom; retained cardinality and scrape
-cost still require measurement. Startup, readiness, and liveness probes use the process
-health endpoint; exporter failures alone do not trigger liveness restarts. Rollouts retain
-existing replicas while one replacement starts, and allow 60 seconds for shutdown. This
-shutdown budget is finite and does not guarantee that a blocked queue drains.
-
-## Advanced Configuration
-
-### External Secrets and Automatic Reloads
+### External secrets and automatic reloads
 
 For Argo CD deployments, use the chart's existing-Secret options with an external secret controller. Updating a Kubernetes Secret does not restart pods that consume its values through environment variables, so configure a reload controller such as [Reloader](https://github.com/stakater/Reloader) as well.
 
@@ -492,13 +359,9 @@ that hostname, so the bcache certificate must include the bare `logfire-ff-bcach
 DNS name. Include the `logfire-ff-bcache` names and the namespace and cluster-domain variants as
 well.
 
-bcache keeps its disk tier in one PersistentVolumeClaim per pod. A StatefulSet cannot change its volume claim templates, so changing
-`logfire-ff-bcache.disk.storage` after install fails `helm upgrade`. To resize, expand the existing `bcache-data-*` PVCs if the
-storage class allows it, or run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
-
 bcache loads its certificate at startup, so after rotating the Secret restart
 `statefulset/logfire-ff-bcache` so the pods serve the new certificate, or configure a reload
-controller as described in External Secrets and Automatic Reloads.
+controller as described in [External secrets and automatic reloads](#external-secrets-and-automatic-reloads).
 
 For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
 When working from this repository, run `helm dependency build charts/logfire` to fetch the locked dependency charts.
@@ -512,27 +375,14 @@ For installations that require readiness waits or automatic rollback, install ce
 
 ### Restricted Pod Security
 
-Chart-owned containers and HAProxy default to the controls a `restricted` Pod Security Standards
-namespace requires: a non-root identity, no privilege escalation, all capabilities dropped,
-`RuntimeDefault` seccomp, and a read-only root with the writable paths mounted.
+Containers default to a non-root identity, no privilege escalation, dropped capabilities,
+`RuntimeDefault` seccomp, and a read-only root with writable paths mounted.
+Override `securityContext` or `<workload>.securityContext` when your cluster requires different settings.
 
-Volume ownership follows that non-root default. `logfire-ff-ingest` uses
-`fsGroupChangePolicy: Always`, so each pod start repairs a spool that a root-running release
-left root-owned. The other Fusionfire and bcache workloads keep `OnRootMismatch`, because their
-scratch volumes are fresh when the pod starts.
+Bundled Redis is the exception. A `restricted` namespace rejects it unless you set
+`logfire-redis.securityContext`.
 
-The images this chart takes from other projects (Dex, RustFS, MailDev, the OTel collector, and
-the `check-db-ready` and in-cluster TLS wait containers) default to the same controls with their
-own verified identities. Override the chart-wide `securityContext` or a per-workload
-`<workload>.securityContext` when your cluster needs a different identity.
-
-The bundled Redis is the exception for now. It keeps the chart-wide `securityContext`, so a
-`restricted` namespace rejects it unless you set `logfire-redis.securityContext`. Hardening it
-changes its pod template, which replaces the pod, and a Fusionfire workload that starts during
-that window exits because it cannot reach Redis. It takes the same defaults once that startup
-behaviour is fixed.
-
-### Istio Compatibility
+### Istio compatibility
 
 If you run Istio and see protocol or mTLS sidecar issues on HAProxy, migration, or infrastructure workloads, enable:
 
@@ -558,29 +408,25 @@ logfire.configure(
 logfire.info('Hello, {place}!', place='World')
 ```
 
-## Troubleshooting & Support
+## Troubleshooting & support
 
-### Quick Checks
+### Quick checks
 
-Before diving deeper, verify these common configuration issues:
+* Check that the ServiceAccount configured through `serviceAccount.annotations` can read, write, list, and delete objects in the storage bucket.
+* If you set `defaultStorageClassName` or a per-workload `storageClassName`, check that the StorageClass exists:
 
-* **Object Storage Permissions**: Ensure the ServiceAccount (configured via `serviceAccount.annotations`) has read/write access to your object storage bucket. For AWS, this means the IAM role needs `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket` permissions. For GCP, the service account needs the `Storage Object Admin` role on the bucket.
-
-* **StorageClass Exists**: If you set `defaultStorageClassName` or any per-workload `storageClassName`, verify the StorageClass exists in your cluster:
-  ```bash
+  ```sh
   kubectl get storageclass
   ```
-  If omitted, Kubernetes uses the cluster's default StorageClass.
 
-* **Image Pull Secrets**: Ensure the secret exists in the same namespace as the release and is correctly referenced in `imagePullSecrets`.
+  If you omit the StorageClass, Kubernetes uses the cluster's default.
+* Check that the image pull Secret exists in the release namespace and appears in `imagePullSecrets`.
 
-### Additional Resources
+### Additional resources
 
-* **Troubleshooting Guide**: If you encounter issues, your first stop should be the [Troubleshooting Self-Hosted guide](https://docs.pydantic.dev/logfire/reference/self-hosted/troubleshooting/), which includes common issues and steps for accessing internal logs.
-
-* **GitHub Issues**: If your issue persists, please open up an issue with details about your deployment (Chart version, Kubernetes version, values file, any relevant error logs).
-
-* **Enterprise Support**: For commercial support, contact us at [sales@pydantic.dev](mailto:sales@pydantic.dev).
+See the [self-hosted troubleshooting guide](https://docs.pydantic.dev/logfire/reference/self-hosted/troubleshooting/) for common issues and internal logs.
+For GitHub issues, include the chart version, Kubernetes version, relevant redacted values, and redacted error logs.
+For enterprise support, contact [sales@pydantic.dev](mailto:sales@pydantic.dev).
 
 ## Requirements
 
@@ -769,7 +615,7 @@ Before diving deeper, verify these common configuration issues:
 | otel_collector.extraExporters | object | `{}` | Additional collector exporters. Chart-owned component names are reserved. |
 | otel_collector.extraPipelines | object | `{}` | Additional collector pipelines. The chart's existing telemetry pipelines stay unchanged. |
 | otel_collector.extraProcessors | object | `{}` | Additional collector processors. These only run in pipelines that reference them. |
-| otel_collector.prometheus.delta_to_cumulative | bool | `true` | Convert delta metrics to cumulative on the Prometheus pipeline with the alpha `delta_to_cumulative` processor. Only runs when the Prometheus exporter is enabled, and the otlp_http pipeline keeps its delta semantics to the backend. Set false to pass metrics through unchanged. The limiter can refuse new data but cannot evict retained streams. |
+| otel_collector.prometheus.delta_to_cumulative | bool | `true` | Convert delta metrics to cumulative for Prometheus with the alpha `delta_to_cumulative` processor. The OTLP pipeline keeps delta metrics unchanged. Each stream must reach the same collector replica. Cumulative state resets when that replica is replaced. Set false to pass metrics through unchanged. |
 | otel_collector.prometheus.max_stale | string | `"5m"` | Retention of inactive delta-to-cumulative streams. Independent of metric_expiration. |
 | otel_collector.prometheus.max_streams | int | `10000` | Cap on the delta-to-cumulative stream map. The in-pipeline `memory_limiter` bounds ingress but cannot evict this processor's state, so an unbounded cap lets high-cardinality attributes grow until the collector refuses telemetry. Streams past the cap are dropped, so raise this for high-cardinality scrapes. |
 | otel_collector.prometheus.resource_to_telemetry_conversion | object | `{"enabled":true}` | OpenTelemetry resource attributes exposed as Prometheus metric labels. Review this deprecated option when upgrading the collector to use resource_constant_labels instead. |
