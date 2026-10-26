@@ -5,7 +5,7 @@ import sys
 import yaml
 
 
-VALUES = 'charts/logfire/values.yaml'
+VALUES = {'charts/logfire/values.yaml', 'charts/logfire/values.prod.yaml', 'charts/logfire/values.dev.yaml'}
 DOCS = {'charts/logfire/README.md', 'charts/logfire/README.md.gotmpl'}
 
 
@@ -18,16 +18,16 @@ def values_tokens(content):
     ], sort_keys=True)
 
 
-def docs_only(changes, before_values='', after_values=''):
+def docs_only(changes, values=None):
+    values = values or {}
     chart_changes = [(status, path) for status, path in changes if path.startswith('charts/')]
-    if not chart_changes or any(status != 'M' or path not in DOCS | {VALUES}
+    if not chart_changes or any(status != 'M' or path not in DOCS | VALUES
                                 for status, path in chart_changes):
         return False
-    if not any(path == VALUES for _, path in chart_changes):
-        return True
     try:
-        return values_tokens(before_values) == values_tokens(after_values)
-    except (yaml.YAMLError, TypeError, ValueError):
+        return all(values_tokens(values[path][0]) == values_tokens(values[path][1])
+                   for _, path in chart_changes if path in VALUES)
+    except (KeyError, yaml.YAMLError, TypeError, ValueError):
         return False
 
 
@@ -39,10 +39,9 @@ def main():
         base = git('merge-base', sys.argv[1], 'HEAD').strip()
         fields = git('diff', '--name-status', '--no-renames', '-z', base, 'HEAD', '--', 'charts').split('\0')
         changes = list(zip(fields[:-1:2], fields[1:-1:2], strict=True))
-        values_changed = ('M', VALUES) in changes
-        before = git('show', f'{base}:{VALUES}') if values_changed else ''
-        after = git('show', f'HEAD:{VALUES}') if values_changed else ''
-        exempt = docs_only(changes, before, after)
+        values = {path: (git('show', f'{base}:{path}'), git('show', f'HEAD:{path}'))
+                  for status, path in changes if status == 'M' and path in VALUES}
+        exempt = docs_only(changes, values)
     except (IndexError, OSError, subprocess.CalledProcessError, ValueError):
         exempt = False
     print('Documentation-only chart changes.' if exempt else 'Keep the chart version increment check.')
