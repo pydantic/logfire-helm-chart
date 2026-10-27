@@ -399,7 +399,7 @@ The pooler must:
 * Set `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout` for each server connection, for example with PgBouncer's `connect_query` or with `ALTER ROLE ... SET`.
 
 The chart is tested with PgBouncer 1.22 and later. Other poolers are not tested.
-Behind a transaction-mode pool, two concurrent installs of the same integration in one project are not serialized.
+Behind a transaction-mode pool, two concurrent installs or uninstalls of the same integration in one project can overlap and leave it half configured.
 
 #### Connection counts
 
@@ -407,7 +407,7 @@ Each pod opens up to its pool size. The pooler must accept the sum over all pods
 
 | Workload | Database | Variable | Default per pod |
 |----------|----------|----------|-----------------|
-| FusionFire workloads | `ff` | `FF_PG_POOL_MAX_CONNECTIONS` | 32, and 4 on `logfire-ff-query-worker` |
+| FusionFire workloads except `logfire-ff-ingest` | `ff` | `FF_PG_POOL_MAX_CONNECTIONS` | 32, and 4 on `logfire-ff-query-worker` |
 | `logfire-ff-query-api` and `logfire-ff-query-worker` | `crud` | `FF_EXTERNAL_TABLES_PG_MAX_CONNECTIONS` | 32 |
 | Python services | `crud` | `CRUD_PG_POOL_MAX_CONNECTIONS` | 32 |
 | `logfire-ai-gateway` | `crud` | None | 10 |
