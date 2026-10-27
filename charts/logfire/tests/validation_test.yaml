@@ -612,6 +612,14 @@ tests:
       - failedTemplate:
           errorPattern: 'logfire-ff-cache-byte is no longer a values block'
 
+  # --- frontend nginx ---
+  - it: rejects a frontend nginx worker count that is neither auto nor positive
+    set:
+      logfire-frontend-service.nginx.workerProcesses: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: 'workerProcesses must be auto or a positive integer'
+
   # --- autoscaling ---
   - it: rejects enabling both HPA and KEDA
     set:

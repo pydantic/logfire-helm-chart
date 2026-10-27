@@ -967,6 +967,11 @@ logfire-remote-mcp:
 #   service:
 #     # -- Service annotations
 #     annotations: {}
+#   nginx:
+#     # -- Number of nginx worker processes, `auto` or a positive integer. `auto`
+#     # starts one worker per node CPU and ignores the CPU limit. Each worker adds
+#     # memory, so set a number on large nodes to stay under the memory limit.
+#     workerProcesses: auto
 #   replicas: 1
 #   resources:
 #     cpu: "100m"

@@ -224,6 +224,17 @@ name the move instead of letting the install quietly change behaviour.
 
 
 {{/*
+nginx accepts `auto` or a positive worker count. Reject other values at install, because nginx
+rejects them only when the frontend pod starts.
+*/}}
+{{- define "logfire.validate.frontendWorkerProcesses" -}}
+{{- $workers := dig "nginx" "workerProcesses" "auto" (index .Values "logfire-frontend-service" | default dict) | toString -}}
+{{- if not (regexMatch "^(auto|[1-9][0-9]*)$" $workers) -}}
+  {{- fail (printf "logfire-frontend-service.nginx.workerProcesses must be auto or a positive integer, got %q." $workers) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Validate autoscaling configuration - warn if both HPA and KEDA are enabled
 */}}
 {{- define "logfire.validate.sizingPreset" -}}
@@ -425,6 +436,7 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.inClusterTls"
   "logfire.validate.scratchVolumes"
   "logfire.validate.removedByteCacheValues"
+  "logfire.validate.frontendWorkerProcesses"
   -}}
 {{- range $validator := $validators -}}
 {{- include $validator $root -}}
