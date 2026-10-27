@@ -2127,7 +2127,7 @@ queue here makes the dependency explicit rather than leaving it to scheduling or
 {{- $serviceName := .serviceName -}}
 {{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName) | fromJson -}}
 - name: wait-for-absurd-schema
-  image: '{{ $ctx.Values.image.repository | default "" }}{{ $ctx.Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
+  image: '{{ $ctx.Values.image.repository | default "" }}{{ $ctx.Values.image.taskRunnerImage }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
   imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
   command:
     - python
