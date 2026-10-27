@@ -550,6 +550,34 @@ tests:
       - failedTemplate:
           errorPattern: 'postgresFFDsn is required'
 
+  - it: rejects an unknown postgresPooler
+    set:
+      postgresPooler: pgcat
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'postgresPooler must be empty or "pgbouncer"'
+
+  - it: requires the session DSNs when postgresPooler is set
+    set:
+      postgresPooler: pgbouncer
+      postgresDsnSession: postgres://crud-session
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'postgresFFDsnSession is required when postgresPooler is set'
+
+  - it: rejects a session DSN that no pooler would use
+    set:
+      postgresDsnSession: postgres://crud-session
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'postgresDsnSession is set, but postgresPooler is empty'
+
   - it: requires the Dex postgres host when Dex stores state in postgres
     set:
       dev:

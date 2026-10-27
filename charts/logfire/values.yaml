@@ -295,6 +295,7 @@ inClusterTls:
 
 # -- User-provided Secret containing database credentials
 # Must include `postgresDsn` and `postgresFFDsn` keys.
+# With `postgresPooler` set, it must also include `postgresDsnSession` and `postgresFFDsnSession`.
 postgresSecret:
   # -- Set to true to use an existing Secret (recommended for Argo CD users).
   enabled: false
@@ -310,6 +311,12 @@ hooksAnnotations:
   # argocd.argoproj.io/hook: PreSync
   # argocd.argoproj.io/hook-delete-policy: HookSucceeded
 
+# -- Set to `pgbouncer` when `postgresDsn` and `postgresFFDsn` point at a PgBouncer pool in transaction mode.
+# The migration Jobs then connect with the session DSNs, the maintenance scheduler gets `FF_PG_DSN_SESSION`,
+# and the Python workloads get `CRUD_PG_TOPOLOGY=pgbouncer`. Leave it empty for a direct or session-mode connection.
+# See "Connection poolers" in the README.
+postgresPooler: ""
+
 # -- NOTE: The DSNs below are ignored if `postgresSecret.enabled` is true.
 
 # -- Postgres DSN used for the `crud` database
@@ -317,6 +324,12 @@ postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 
 # -- Postgres DSN used for the `ff` database
 postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
+
+# -- Session-mode or direct DSN for the `crud` database. Required when `postgresPooler` is set.
+postgresDsnSession: ""
+
+# -- Session-mode or direct DSN for the `ff` database. Required when `postgresPooler` is set.
+postgresFFDsnSession: ""
 
 
 # ==============================================================================

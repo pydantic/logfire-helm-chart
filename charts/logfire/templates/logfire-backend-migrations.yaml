@@ -58,7 +58,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
-                  key: postgresDsn
+                  key: {{ include "logfire.postgresSessionKey" (dict "ctx" . "key" "postgresDsn") }}
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
       volumes:

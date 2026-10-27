@@ -743,6 +743,34 @@ Create Postgres secret name
 {{- end }}
 {{- end -}}
 
+{{/*
+The Postgres Secret key for a client that needs session semantics: a migration
+Job or the maintenance scheduler. Behind a transaction-mode pooler, a session
+`SET` or a session advisory lock can land on another client's server
+connection. So with `postgresPooler` set, these clients read the session DSN.
+*/}}
+{{- define "logfire.postgresSessionKey" -}}
+{{- $ctx := required "logfire.postgresSessionKey: need .ctx" .ctx -}}
+{{- $key := required "logfire.postgresSessionKey: need .key" .key -}}
+{{- if $ctx.Values.postgresPooler -}}
+{{- printf "%sSession" $key -}}
+{{- else -}}
+{{- $key -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Tell a Python workload that `CRUD_PG_DSN` points at a transaction-mode pooler.
+The pool then checks a connection only after it was idle for a few seconds.
+Renders nothing when `postgresPooler` is empty.
+*/}}
+{{- define "logfire.crudPgTopologyEnv" -}}
+{{- if .Values.postgresPooler -}}
+- name: CRUD_PG_TOPOLOGY
+  value: {{ .Values.postgresPooler | quote }}
+{{- end -}}
+{{- end -}}
+
 {{/* Use an external Secret name when configured, otherwise the managed name. */}}
 {{- define "logfire.externalSecretName" -}}
 {{- $external := .external | default dict -}}
@@ -1325,7 +1353,8 @@ default-checksum
 {{- include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" $annotationKey "name" $name "key" $key) -}}
 {{- end -}}
 {{- else -}}
-{{- $value := eq $key "postgresFFDsn" | ternary $ctx.Values.postgresFFDsn $ctx.Values.postgresDsn -}}
+{{- /* Each Secret key has a value of the same name. */ -}}
+{{- $value := get $ctx.Values $key | default "" -}}
 {{- printf "%s: %s" $annotationKey ($value | b64enc | sha256sum) -}}
 {{- end -}}
 {{- end -}}
