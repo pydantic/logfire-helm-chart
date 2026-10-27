@@ -1632,9 +1632,15 @@ image:
   # @ignored
   repository: us-docker.pkg.dev/pydantic-public-registries/logfire/
   # @ignored
-  workerImage: python-prod
+  workerImage: logfire-worker-prod
   # @ignored
-  backendImage: python-prod
+  backendImage: logfire-backend-prod
+  # @ignored
+  authImage: logfire-auth-prod
+  # @ignored
+  taskRunnerImage: logfire-task-runner-prod
+  # @ignored
+  remoteMcpImage: logfire-remote-mcp-prod
   # @ignored
   frontendImage: frontend
   # @ignored

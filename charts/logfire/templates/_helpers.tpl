@@ -1083,6 +1083,22 @@ Create dex configuration secret, merging backend static clients with user provid
 Render a fully-qualified container image reference using chart defaults when
 overrides are not provided.
 */}}
+{{/*
+Resolve the image name for a Python service.
+
+Falls back to `image.backendImage` when the per-service key is unset. An install created before
+these keys existed upgrades with `--reuse-values`, which carries `image.backendImage` forward and
+knows nothing of the newer keys. Without the fallback such an upgrade would move three workloads
+onto per-service images that the install never asked for, and change what it pulls on an upgrade it
+expected to be a no-op. Setting the per-service key, or taking the chart's own defaults on a fresh
+install, opts in.
+*/}}
+{{- define "logfire.pythonImage" -}}
+{{- $image := .Values.image -}}
+{{- $key := .key -}}
+{{- (index $image $key) | default $image.backendImage -}}
+{{- end }}
+
 {{- define "logfire.imageRef" -}}
 {{- $image := .image | default dict -}}
 {{- $repository := $image.repository | default .defaultRepository -}}
@@ -2127,7 +2143,7 @@ queue here makes the dependency explicit rather than leaving it to scheduling or
 {{- $serviceName := .serviceName -}}
 {{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName) | fromJson -}}
 - name: wait-for-absurd-schema
-  image: '{{ $ctx.Values.image.repository | default "" }}{{ $ctx.Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
+  image: '{{ $ctx.Values.image.repository | default "" }}{{ include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "taskRunnerImage") }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
   imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
   command:
     - python
