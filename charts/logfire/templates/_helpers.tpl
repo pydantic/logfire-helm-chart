@@ -752,12 +752,8 @@ The Secret key that holds the session DSN of a database, given its runtime key:
 {{- end -}}
 
 {{/*
-Renders "true" when the database behind the runtime key `.key` has a session DSN:
-a session-mode pool or a direct connection to PostgreSQL. Migrations and the
-maintenance scheduler need session state: advisory locks, `SET`, and concurrent
-index DDL. Through a transaction-mode pool, that state can reach another
-client's server connection. The chart cannot read an existing
-Secret, so with `postgresSecret` a flag says that the Secret has the key.
+Renders "true" when the database of the runtime key `.key` has a session DSN.
+The chart cannot read an existing Secret, so with `postgresSecret` a flag declares the key.
 */}}
 {{- define "logfire.postgresHasSessionDsn" -}}
 {{- $ctx := required "logfire.postgresHasSessionDsn: need .ctx" .ctx -}}
@@ -782,9 +778,8 @@ one, otherwise the runtime DSN.
 {{- end -}}
 
 {{/*
-With a session DSN for `crud`, `CRUD_PG_DSN` is taken to be a transaction-mode pool.
-The pool then checks a connection only after it was idle for a few seconds.
-The platform names this mode `pgbouncer`. Renders nothing without a session DSN.
+With a session DSN for `crud`, `CRUD_PG_DSN` is a transaction-mode pool.
+The platform names that topology `pgbouncer`, whatever the pooler is.
 */}}
 {{- define "logfire.crudPgTopologyEnv" -}}
 {{- if include "logfire.postgresHasSessionDsn" (dict "ctx" . "key" "postgresDsn") -}}
