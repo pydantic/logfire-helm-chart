@@ -351,8 +351,8 @@ An instance with 2 vCPU and 16 GB of memory is a good starting size. Resize it f
 
 FusionFire migrations set autovacuum settings on the `ff` tables that change most often. Do not override them.
 
-Connect each DSN directly to PostgreSQL, or through PgBouncer in transaction mode as [Connection poolers](#connection-poolers) describes.
-The migration jobs, `logfire-ff-maintenance-scheduler`, and Dex need a session-mode pool or a direct connection.
+Connect each DSN directly to PostgreSQL, or through a connection pooler in transaction mode as [Connection poolers](#connection-poolers) describes.
+The migration jobs, `logfire-ff-maintenance-scheduler`, and Dex then need a session-mode pool or a direct connection.
 
 Each pod opens its own connection pool. [Connection counts](#connection-counts) lists the default size and the variable for each workload.
 Set the variable in the workload's `env`:
