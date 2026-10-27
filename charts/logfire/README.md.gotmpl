@@ -401,6 +401,38 @@ Those workloads need the certificate Secrets to become ready, so a readiness wai
 Check workload readiness after the hooks finish.
 For installations that require readiness waits or automatic rollback, install cert-manager separately and leave `dev.deployCertManager=false`.
 
+### Private CA certificates
+
+Logfire verifies the certificate of each TLS server it connects to, such as a `rediss://` Redis or an SMTP relay.
+By default, it trusts only the system trust store of its images.
+If the server certificate is signed by a private CA, put the CA certificate (PEM) in a ConfigMap or Secret and set `trustedCaBundle`.
+For example, Memorystore for Redis with in-transit encryption signs the server certificate with a CA for each instance.
+Download the server CA certificates of the instance into `redis-ca.pem`, then create the ConfigMap:
+
+```sh
+kubectl create configmap logfire-private-ca --from-file=ca.crt=redis-ca.pem -n logfire
+```
+
+```yaml
+trustedCaBundle:
+  existingConfigMap:
+    name: logfire-private-ca
+    key: ca.crt
+```
+
+An init container in each Logfire workload that connects to Redis or sends email joins the system trust store and your certificates into one file.
+Python and FusionFire workloads read that file through `SSL_CERT_FILE`, and `logfire-ai-gateway` reads it through `NODE_EXTRA_CA_CERTS`.
+Public endpoints, such as object storage and model providers, stay trusted.
+The file can hold more than one CA, so one bundle can serve Redis and SMTP.
+FusionFire and the AI gateway also check the host name, so the server certificate must name the host in the DSN.
+The Python workloads verify certificates strictly, as RFC 5280 requires.
+For example, the CA certificate needs a key usage extension, and the server certificate needs an authority key identifier.
+To check a CA that you made yourself, run `openssl verify -x509_strict -CAfile ca.crt server.crt`.
+The pods read the certificates when they start. After you change them, restart the Logfire workloads.
+
+`smtp.caBundle` still works and adds its CA to the same file in `logfire-task-runner` and `logfire-worker`.
+Use `trustedCaBundle` for new installs.
+
 ### Restricted Pod Security
 
 Containers default to a non-root identity, no privilege escalation, dropped capabilities, and `RuntimeDefault` seccomp.

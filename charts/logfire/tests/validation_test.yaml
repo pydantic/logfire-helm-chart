@@ -295,7 +295,7 @@ tests:
     asserts:
       - notFailedTemplate: {}
 
-  - it: rejects an objectStore.volumeMounts entry that collides with the SMTP CA bundle mount
+  - it: rejects an objectStore.volumeMounts entry that collides with the trusted CA mount
     set:
       smtp:
         caBundle:
@@ -304,19 +304,19 @@ tests:
       objectStore:
         volumeMounts:
           - name: credentials
-            mountPath: /etc/logfire/smtp-ca
+            mountPath: /etc/logfire/trusted-ca
     templates:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.volumeMounts[0].mountPath '/etc/logfire/smtp-ca' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /scratch, /fusionfire/ingest-data, /var/lib/logfire, /etc/logfire/smtp-ca."
+          errorPattern: "objectStore.volumeMounts\\[0\\].mountPath '/etc/logfire/trusted-ca' is reserved by the chart"
 
-  - it: accepts the SMTP CA bundle mount path while no CA bundle is configured
+  - it: accepts the trusted CA mount path while no CA bundle is configured
     set:
       objectStore:
         volumeMounts:
           - name: credentials
-            mountPath: /etc/logfire/smtp-ca
+            mountPath: /etc/logfire/trusted-ca
     templates:
       - templates/logfire-validate-config.yaml
     asserts:
@@ -985,6 +985,19 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "smtp.caBundle is set but smtp.validate_certs is false"
+
+  - it: a trusted CA bundle from both a ConfigMap and a Secret fails
+    set:
+      trustedCaBundle:
+        existingConfigMap:
+          name: private-ca
+        existingSecret:
+          name: private-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "trustedCaBundle: specify only one of existingConfigMap.name or existingSecret.name"
 
   # --- otel collector queue and storage budgets ---
   - it: rejects a self-metrics port equal to the Prometheus exporter port

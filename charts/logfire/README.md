@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.4-rc.2](https://img.shields.io/badge/Version-0.14.4--rc.2-informational?style=flat-square) ![AppVersion: b8d349fa](https://img.shields.io/badge/AppVersion-b8d349fa-informational?style=flat-square)
+![Version: 0.14.4-rc.3](https://img.shields.io/badge/Version-0.14.4--rc.3-informational?style=flat-square) ![AppVersion: b8d349fa](https://img.shields.io/badge/AppVersion-b8d349fa-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -400,6 +400,38 @@ Those workloads need the certificate Secrets to become ready, so a readiness wai
 Check workload readiness after the hooks finish.
 For installations that require readiness waits or automatic rollback, install cert-manager separately and leave `dev.deployCertManager=false`.
 
+### Private CA certificates
+
+Logfire verifies the certificate of each TLS server it connects to, such as a `rediss://` Redis or an SMTP relay.
+By default, it trusts only the system trust store of its images.
+If the server certificate is signed by a private CA, put the CA certificate (PEM) in a ConfigMap or Secret and set `trustedCaBundle`.
+For example, Memorystore for Redis with in-transit encryption signs the server certificate with a CA for each instance.
+Download the server CA certificates of the instance into `redis-ca.pem`, then create the ConfigMap:
+
+```sh
+kubectl create configmap logfire-private-ca --from-file=ca.crt=redis-ca.pem -n logfire
+```
+
+```yaml
+trustedCaBundle:
+  existingConfigMap:
+    name: logfire-private-ca
+    key: ca.crt
+```
+
+An init container in each Logfire workload that connects to Redis or sends email joins the system trust store and your certificates into one file.
+Python and FusionFire workloads read that file through `SSL_CERT_FILE`, and `logfire-ai-gateway` reads it through `NODE_EXTRA_CA_CERTS`.
+Public endpoints, such as object storage and model providers, stay trusted.
+The file can hold more than one CA, so one bundle can serve Redis and SMTP.
+FusionFire and the AI gateway also check the host name, so the server certificate must name the host in the DSN.
+The Python workloads verify certificates strictly, as RFC 5280 requires.
+For example, the CA certificate needs a key usage extension, and the server certificate needs an authority key identifier.
+To check a CA that you made yourself, run `openssl verify -x509_strict -CAfile ca.crt server.crt`.
+The pods read the certificates when they start. After you change them, restart the Logfire workloads.
+
+`smtp.caBundle` still works and adds its CA to the same file in `logfire-task-runner` and `logfire-worker`.
+Use `trustedCaBundle` for new installs.
+
 ### Restricted Pod Security
 
 Containers default to a non-root identity, no privilege escalation, dropped capabilities, and `RuntimeDefault` seccomp.
@@ -709,7 +741,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | serviceAccount.name | string | `""` | Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template. If create is false and this is not set, the default ServiceAccount is used. |
 | serviceAccountName | string | `"default"` | DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility. @deprecated |
 | sizingPreset | string | `""` | Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults. |
-| smtp.caBundle | object | `{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}}` | CA bundle (PEM) that verifies the SMTP server certificate, for a relay signed by an internal CA. Provide exactly one of existingConfigMap or existingSecret, in the release namespace. The bundle becomes the default trust store of `logfire-task-runner` and `logfire-worker`, so include any other CA that those workloads need from the system trust store. In-cluster TLS is not affected. |
+| smtp.caBundle | object | `{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}}` | CA bundle (PEM) that verifies the SMTP server certificate, for a relay signed by an internal CA. Provide exactly one of existingConfigMap or existingSecret, in the release namespace. `logfire-task-runner` and `logfire-worker` trust these certificates in addition to the system trust store. `trustedCaBundle` does the same for these and the other workloads that connect to Redis, so prefer it for new installs. |
 | smtp.fromAddress | string | `nil` | Sender address of every email Logfire sends (`From` and SMTP envelope sender), such as `logfire@example.com`. Required when `smtp.host` is set. Use an address on a domain that your SMTP server may send for. Logfire does not send email as `pydantic.dev` from a self-hosted install. |
 | smtp.fromName | string | `nil` | Sender display name of every email Logfire sends. If it is not set, the name is `Pydantic Logfire`. |
 | smtp.host | string | `nil` | SMTP server hostname |
@@ -723,6 +755,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | tokenRedis.prefix | string | `""` | Key prefix for auth token cache keys. |
 | tolerations | list | `[]` | Tolerations applied to all workloads |
 | topologySpreadConstraints | list | `[]` | topologySpreadConstraints applied to all workloads |
+| trustedCaBundle | object | `{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}}` | CA certificates (PEM) that Logfire workloads trust for outbound TLS, in addition to the system trust store of each image. Use it for a `rediss://` Redis or an SMTP relay whose certificate is signed by a private CA, such as Memorystore with in-transit encryption. Provide exactly one of existingConfigMap or existingSecret, in the release namespace. It applies to every Logfire workload that connects to Redis or sends email. An init container joins the system trust store and these certificates into one file. Python and FusionFire workloads read that file through `SSL_CERT_FILE`, and `logfire-ai-gateway` reads it through `NODE_EXTRA_CA_CERTS`. Public endpoints stay trusted. The pods read the certificates when they start, so restart them after you change the certificates. In-cluster TLS is not affected. |
 | usageRedis | object | `{"dsn":"","prefix":""}` | Redis settings for usage, autocomplete, and rate limiting data. Empty DSN falls back to `redisDsn`. Use a prefix only when sharing one Redis instance with other data. |
 | usageRedis.dsn | string | `""` | Redis DSN for usage, autocomplete, and rate limiting data. |
 | usageRedis.prefix | string | `""` | Key prefix for usage keys. |
