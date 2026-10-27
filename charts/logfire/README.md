@@ -423,6 +423,7 @@ An init container in each Logfire workload that connects to Redis or sends email
 Python and FusionFire workloads read that file through `SSL_CERT_FILE`, and `logfire-ai-gateway` reads it through `NODE_EXTRA_CA_CERTS`.
 Public endpoints, such as object storage and model providers, stay trusted.
 The file can hold more than one CA, so one bundle can serve Redis and SMTP.
+A bundle that cert-manager's trust-manager builds with `useDefaultCAs: true` also works as it is. The duplicate public CAs do no harm.
 FusionFire and the AI gateway also check the host name, so the server certificate must name the host in the DSN.
 The Python workloads verify certificates strictly, as RFC 5280 requires.
 For example, the CA certificate needs a key usage extension, and the server certificate needs an authority key identifier.
