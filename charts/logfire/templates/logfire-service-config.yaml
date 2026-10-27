@@ -135,7 +135,8 @@ stringData:
 
     backend logfire-ff-query-api
       balance roundrobin
-      option httpchk GET /health
+      option httpchk
+      http-check send meth GET uri /health ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-ff-query-api") }}
       http-check expect status 200
       timeout connect 3s
       timeout server 120s
@@ -145,7 +146,8 @@ stringData:
     backend logfire-dex
       balance roundrobin
       # Health checks
-      option httpchk GET /healthz
+      option httpchk
+      http-check send meth GET uri /healthz ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-dex") }}
       option http-server-close
       timeout connect 3s
       timeout server 50s
@@ -158,7 +160,7 @@ stringData:
       balance roundrobin
       # Health checks
       option httpchk
-      http-check send meth GET uri /health hdr Host logfire-ai-gateway
+      http-check send meth GET uri /health ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-ai-gateway") }}
       option http-server-close
       timeout connect 3s
       timeout server {{ $aiGatewayProxyTimeout }}
@@ -172,7 +174,7 @@ stringData:
       balance roundrobin
       # Health checks
       option httpchk
-      http-check send meth GET uri /health hdr Host {{ include "logfire.primary_hostname" . }}
+      http-check send meth GET uri /health ver HTTP/1.1 hdr Host {{ include "logfire.primary_hostname" . }}
       option http-server-close
       timeout connect 3s
       timeout server 120s
@@ -184,7 +186,8 @@ stringData:
     backend logfire-backend
       balance roundrobin
       # Health checks
-      option httpchk GET /health
+      option httpchk
+      http-check send meth GET uri /health ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-backend") }}
       option http-server-close
       timeout connect 3s
       timeout server 120s
@@ -195,7 +198,8 @@ stringData:
     backend logfire-frontend
       balance roundrobin
       # Health checks
-      option httpchk GET /health
+      option httpchk
+      http-check send meth GET uri /health ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-frontend-service") }}
       option http-server-close
       timeout connect 3s
       timeout server 50s
