@@ -1,0 +1,86 @@
+suite: service env values shapes
+# `<service>.env` accepts the legacy EnvVar list and a name-keyed map. Helm
+# replaces lists across values files but merges maps, so only the map lets a
+# second file add a variable without dropping the first file's entries.
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: renders the list form unchanged
+    template: templates/dex/deployment.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    set:
+      logfire-dex.env:
+        - name: PORT
+          value: "8080"
+        - name: DEX_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dex-credentials
+              key: db-password
+    asserts: &envAsserts
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PORT
+            value: "8080"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DEX_DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: dex-credentials
+                key: db-password
+
+  - it: renders the map form as the same entries
+    template: templates/dex/deployment.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    set:
+      logfire-dex.env:
+        PORT: 8080
+        DEX_DB_PASSWORD:
+          valueFrom:
+            secretKeyRef:
+              name: dex-credentials
+              key: db-password
+    asserts: *envAsserts
+
+  - it: merges the map form across values files
+    template: templates/dex/deployment.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    values:
+      - values/env-map-base.yaml
+      - values/env-map-tenant.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DEX_DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: dex-credentials
+                key: db-password
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GITHUB_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: dex-credentials
+                key: github-client-secret
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TENANT_REMOVES
+          any: true

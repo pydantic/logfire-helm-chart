@@ -99,8 +99,8 @@ spec:
             - name: E2E
               value: "true"
             {{ end }}
-            {{- with (index .Values $serviceName | default dict).env }}
-              {{- . | toYaml | nindent 12 }}
+            {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
+              {{- . | nindent 12 }}
             {{- end}}
           livenessProbe:
             httpGet:

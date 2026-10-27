@@ -1,0 +1,8 @@
+logfire-dex:
+  env:
+    DEX_DB_PASSWORD:
+      valueFrom:
+        secretKeyRef:
+          name: dex-credentials
+          key: db-password
+    TENANT_REMOVES: base

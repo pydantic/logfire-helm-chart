@@ -124,6 +124,23 @@ tests:
             name: GOMEMLIMIT
             value: 500MiB
 
+  - it: preserves a user GC setting from the env map form
+    set:
+      logfire-otel-collector.env.GOMEMLIMIT: 500MiB
+    template: templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.containers[0].env
+          count: 5
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GOMEMLIMIT
+            value: 500MiB
+
   - it: preserves explicit disk budgets and security overrides
     set:
       otel_collector.queueStorage.enabled: true

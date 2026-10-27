@@ -258,12 +258,12 @@ This GitHub connector reads its credentials from a Kubernetes Secret:
 ```yaml
 logfire-dex:
   env:
-    - name: GITHUB_CLIENT_ID
+    GITHUB_CLIENT_ID:
       valueFrom:
         secretKeyRef:
           name: my-github-secret
           key: client-id
-    - name: GITHUB_CLIENT_SECRET
+    GITHUB_CLIENT_SECRET:
       valueFrom:
         secretKeyRef:
           name: my-github-secret
@@ -278,6 +278,10 @@ logfire-dex:
           clientSecret: $GITHUB_CLIENT_SECRET
           getUserInfo: true
 ```
+
+Every service's `env` accepts this map or a Kubernetes `EnvVar` list.
+Use the map when you split values across files: Helm merges maps but replaces lists, and `NAME: null` removes an entry that an earlier file set.
+The chart renders map entries in name order, so a `$(NAME)` reference works only to a name that sorts earlier.
 
 #### Organization group mappings
 

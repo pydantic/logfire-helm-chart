@@ -2,9 +2,9 @@
 {{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
 {{- $podSecurityContext := include "logfire.fusionfirePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
-{{- $extraEnv := (index .Values $serviceName | default dict).env | default list -}}
+{{- $extraEnv := include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) -}}
 {{- $hasRustLog := false -}}
-{{- range $extraEnv -}}
+{{- range fromYamlArray $extraEnv -}}
   {{- if eq .name "RUST_LOG" -}}
     {{- $hasRustLog = true -}}
   {{- end -}}
@@ -149,7 +149,7 @@ spec:
               value: /etc/tls/tls.key
             {{- end }}
             {{- with $extraEnv }}
-              {{- . | toYaml | nindent 12 }}
+              {{- . | nindent 12 }}
             {{- end }}
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}

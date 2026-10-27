@@ -166,8 +166,8 @@ spec:
             value: "/etc/tls/tls.key"
           {{- end }}
           {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 10 }}
-          {{- with (index .Values $serviceName | default dict).env }}
-            {{- . | toYaml | nindent 10 }}
+          {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
+            {{- . | nindent 10 }}
           {{- end }}
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}

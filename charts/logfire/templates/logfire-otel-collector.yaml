@@ -146,9 +146,9 @@ spec:
       {{- $otelCollector := default (dict) .Values.otel_collector }}
       {{- $otelImage := get $otelCollector "image" | default dict }}
       {{- $collectorResourceAttributes := (get .Values "otelResourceAttributes") | default dict }}
-      {{- $extraEnv := (index .Values $serviceName | default dict).env | default list }}
+      {{- $extraEnv := include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
       {{- $envState := dict "hasOtelResourceAttributes" false "hasGoMemLimit" false }}
-      {{- range $extraEnv }}
+      {{- range fromYamlArray $extraEnv }}
         {{- if eq .name "GOMEMLIMIT" }}
           {{- $_ := set $envState "hasGoMemLimit" true }}
         {{- end }}
@@ -221,7 +221,7 @@ spec:
               value: {{ include "logfire.renderOtelResourceAttributes" $collectorResourceAttributes | quote }}
             {{- end }}
             {{- with $extraEnv }}
-              {{- . | toYaml | nindent 12 }}
+              {{- . | nindent 12 }}
             {{- end}}
       volumes:
         - name: otel-collector-config

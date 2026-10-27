@@ -658,6 +658,45 @@ Render AI model environment variables shared across workloads.
 {{- end -}}
 
 {{/*
+A service's extra environment as a YAML list, or "" when it has none. `<service>.env` is either a
+list of EnvVar entries or a map from name to a scalar or to an EnvVar body (`value` or
+`valueFrom`). Helm merges maps across values files but replaces lists, so only the map form lets a
+layered file add one variable. Map entries render sorted by name and a null entry is dropped.
+An empty default stays `null` in values.yaml, because Helm warns when a user value's shape differs
+from a non-null default. Call with `(dict "Values" .Values "serviceName" $serviceName)`.
+*/}}
+{{- define "logfire.serviceEnv" -}}
+{{- $env := get (get .Values .serviceName | default dict) "env" -}}
+{{- if kindIs "map" $env -}}
+  {{- $entries := list -}}
+  {{- range $name, $value := $env -}}
+    {{- if kindIs "map" $value -}}
+      {{- $entry := merge (dict "name" $name) (deepCopy $value) -}}
+      {{- if hasKey $entry "value" -}}
+        {{- $_ := set $entry "value" (include "logfire.envString" $entry.value) -}}
+      {{- end -}}
+      {{- $entries = append $entries $entry -}}
+    {{- else if not (kindIs "invalid" $value) -}}
+      {{- $entries = append $entries (dict "name" $name "value" (include "logfire.envString" $value)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $env = $entries -}}
+{{- end -}}
+{{- with $env }}{{ toYaml . }}{{ end -}}
+{{- end -}}
+
+{{/*
+Values files load numbers as float64, so print whole numbers without an exponent.
+*/}}
+{{- define "logfire.envString" -}}
+{{- if and (kindIs "float64" .) (eq . (floor .)) -}}
+{{- printf "%.0f" . -}}
+{{- else -}}
+{{- toString . -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Render shared AI provider environment variables for workloads that construct AI clients.
 */}}
 {{- define "logfire.aiProviderEnv" -}}
