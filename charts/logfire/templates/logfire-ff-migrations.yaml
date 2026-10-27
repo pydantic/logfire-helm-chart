@@ -54,7 +54,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
-                  key: {{ include "logfire.postgresSessionKey" (dict "ctx" . "key" "postgresFFDsn") }}
+                  key: {{ include "logfire.postgresMigrationKey" (dict "ctx" . "key" "postgresFFDsn") }}
             - name: FF_SEND_TO_LOGFIRE
               value: "false"
             - name: FF_FORCE_CONSOLE_LOGGING

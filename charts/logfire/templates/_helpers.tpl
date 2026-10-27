@@ -744,30 +744,51 @@ Create Postgres secret name
 {{- end -}}
 
 {{/*
-The Postgres Secret key for a client that needs session semantics: a migration
-Job or the maintenance scheduler. Behind a transaction-mode pooler, a session
-`SET` or a session advisory lock can land on another client's server
-connection. So with `postgresPooler` set, these clients read the session DSN.
+The Secret key that holds the direct DSN of a database, given its runtime key:
+`postgresDsn` gives `postgresDirectDsn`, and `postgresFFDsn` gives `postgresFFDirectDsn`.
 */}}
-{{- define "logfire.postgresSessionKey" -}}
-{{- $ctx := required "logfire.postgresSessionKey: need .ctx" .ctx -}}
-{{- $key := required "logfire.postgresSessionKey: need .key" .key -}}
-{{- if $ctx.Values.postgresPooler -}}
-{{- printf "%sSession" $key -}}
-{{- else -}}
-{{- $key -}}
+{{- define "logfire.postgresDirectDsnKey" -}}
+{{- printf "%sDirectDsn" (trimSuffix "Dsn" .) -}}
+{{- end -}}
+
+{{/*
+Renders "true" when the database behind the runtime key `.key` has a direct DSN.
+A direct DSN is a direct connection or a session-mode pool. It lets session work
+leave a transaction-mode pool, where a session `SET` or a session advisory lock
+can reach another client's server connection. The chart cannot read an existing
+Secret, so with `postgresSecret` a flag says that the Secret has the key.
+*/}}
+{{- define "logfire.postgresHasDirectDsn" -}}
+{{- $ctx := required "logfire.postgresHasDirectDsn: need .ctx" .ctx -}}
+{{- $key := required "logfire.postgresHasDirectDsn: need .key" .key -}}
+{{- $secret := $ctx.Values.postgresSecret | default dict -}}
+{{- if get $secret "enabled" -}}
+{{- if get $secret (eq $key "postgresFFDsn" | ternary "ffDirectDsn" "directDsn") -}}true{{- end -}}
+{{- else if get $ctx.Values (include "logfire.postgresDirectDsnKey" $key) -}}true
 {{- end -}}
 {{- end -}}
 
 {{/*
-Tell a Python workload that `CRUD_PG_DSN` points at a transaction-mode pooler.
+The Secret key that a migration Job reads: the direct DSN when the database has
+one, otherwise the runtime DSN.
+*/}}
+{{- define "logfire.postgresMigrationKey" -}}
+{{- if include "logfire.postgresHasDirectDsn" . -}}
+{{- include "logfire.postgresDirectDsnKey" .key -}}
+{{- else -}}
+{{- .key -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+With a direct DSN for `crud`, `CRUD_PG_DSN` is taken to be a transaction-mode pool.
 The pool then checks a connection only after it was idle for a few seconds.
-Renders nothing when `postgresPooler` is empty.
+The platform names this mode `pgbouncer`. Renders nothing without a direct DSN.
 */}}
 {{- define "logfire.crudPgTopologyEnv" -}}
-{{- if .Values.postgresPooler -}}
+{{- if include "logfire.postgresHasDirectDsn" (dict "ctx" . "key" "postgresDsn") -}}
 - name: CRUD_PG_TOPOLOGY
-  value: {{ .Values.postgresPooler | quote }}
+  value: "pgbouncer"
 {{- end -}}
 {{- end -}}
 

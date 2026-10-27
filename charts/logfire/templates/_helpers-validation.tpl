@@ -79,25 +79,6 @@ Validate postgres configuration - either external secret or DSN must be provided
     {{- end -}}
   {{- end -}}
 {{- end -}}
-{{- $pooler := .Values.postgresPooler | default "" -}}
-{{- if not (has $pooler (list "" "pgbouncer")) -}}
-  {{- fail (printf "postgresPooler must be empty or \"pgbouncer\", got %q." $pooler) -}}
-{{- end -}}
-{{- if not .Values.postgresSecret.enabled -}}
-  {{- if $pooler -}}
-    {{- range $key := list "postgresDsnSession" "postgresFFDsnSession" -}}
-      {{- if not (get $.Values $key) -}}
-        {{- fail (printf "%s is required when postgresPooler is set. Point it at a session-mode pool or directly at PostgreSQL, because migrations and the maintenance scheduler need session state." $key) -}}
-      {{- end -}}
-    {{- end -}}
-  {{- else -}}
-    {{- range $key := list "postgresDsnSession" "postgresFFDsnSession" -}}
-      {{- if get $.Values $key -}}
-        {{- fail (printf "%s is set, but postgresPooler is empty, so the chart would ignore it. Set postgresPooler to \"pgbouncer\", or remove %s." $key $key) -}}
-      {{- end -}}
-    {{- end -}}
-  {{- end -}}
-{{- end -}}
 {{- end -}}
 
 {{/*

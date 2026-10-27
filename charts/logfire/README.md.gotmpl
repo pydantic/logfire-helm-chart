@@ -371,49 +371,65 @@ The same `annotations` pattern is supported by `existingSecret`, `adminSecret`, 
 
 ### Connection poolers
 
-The Logfire services can connect to PostgreSQL through PgBouncer in transaction mode.
-Some work needs a session, so each database also needs a session-mode pool or a direct connection:
+`postgresDsn` and `postgresFFDsn` can point at a connection pooler in transaction mode.
+But some work needs a session.
+The migrations take session advisory locks, and the maintenance scheduler sets session parameters before it rebuilds an index.
+In transaction mode, that session state stays on a server connection that the pooler then gives to other clients.
+So give each pooled database a direct DSN: a direct connection to PostgreSQL, or a session-mode pool.
 
-| Component | Connection | Pool mode |
-|-----------|------------|-----------|
-| FusionFire, backend, worker, task runner, remote MCP, and AI gateway | `postgresDsn`, `postgresFFDsn` | Transaction |
-| `logfire-backend-migrations` and `logfire-ff-migrations` | `postgresDsnSession`, `postgresFFDsnSession` | Session or direct |
-| `logfire-ff-maintenance-scheduler` index rebuilds | `postgresFFDsnSession` | Session or direct |
-| Dex | `logfire-dex.config.storage` | Session or direct |
-
-Set `postgresPooler: pgbouncer` and the two session DSNs:
+| Component | Connection |
+|-----------|------------|
+| FusionFire, backend, worker, task runner, remote MCP, and AI gateway | `postgresDsn` and `postgresFFDsn`, which can be a transaction-mode pool |
+| `logfire-backend-migrations` | `postgresDirectDsn` when set, otherwise `postgresDsn` |
+| `logfire-ff-migrations` | `postgresFFDirectDsn` when set, otherwise `postgresFFDsn` |
+| `logfire-ff-maintenance-scheduler` index rebuilds | `postgresFFDirectDsn` when set, otherwise `postgresFFDsn` |
+| Dex | `logfire-dex.config.storage`, which must be a direct connection or a session-mode pool |
 
 ```yaml
-postgresPooler: pgbouncer
-postgresDsn: postgresql://USER:PASSWORD@pgbouncer:6432/crud
-postgresFFDsn: postgresql://USER:PASSWORD@pgbouncer:6432/ff
-postgresDsnSession: postgresql://USER:PASSWORD@pgbouncer:6432/crud_session
-postgresFFDsnSession: postgresql://USER:PASSWORD@pgbouncer:6432/ff_session
+postgresDsn: postgresql://USER:PASSWORD@pooler:6432/crud
+postgresFFDsn: postgresql://USER:PASSWORD@pooler:6432/ff
+postgresDirectDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/crud
+postgresFFDirectDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/ff
 ```
 
-With `postgresSecret`, put the DSNs in the Secret under the keys `postgresDsn`, `postgresFFDsn`, `postgresDsnSession`, and `postgresFFDsnSession`.
+Each direct DSN applies to its own database, so you can pool one database and connect the other directly.
+With a direct DSN for `crud`, the Python services treat `postgresDsn` as a pool. They then check a pooled connection only after it was idle for a few seconds.
 
-With `postgresPooler` set, the chart:
+With `postgresSecret`, add the `postgresDirectDsn` and `postgresFFDirectDsn` keys to the Secret.
+The chart cannot read the Secret, so also set a flag for each key that the Secret has:
 
-* runs both migration Jobs with the session DSNs,
-* sets `FF_PG_DSN_SESSION` on `logfire-ff-maintenance-scheduler`,
-* sets `CRUD_PG_TOPOLOGY=pgbouncer` on the Python services.
+```yaml
+postgresSecret:
+  enabled: true
+  name: logfire-postgres
+  directDsn: true
+  ffDirectDsn: true
+```
 
-Do not point the session DSNs at a transaction pool.
-These clients use session `SET`s and session advisory locks.
-In transaction mode, that state stays on a server connection that PgBouncer then gives to other clients.
+Do not point a direct DSN at a transaction-mode pool.
 For example, the maintenance scheduler sets `statement_timeout` to `0` for an index rebuild.
-The next client that gets that server connection then runs with no statement timeout.
+Through a transaction-mode pool, the next client that gets that server connection also runs with no statement timeout.
 
-#### PgBouncer requirements
+Behind a transaction-mode pool, the lock that serializes the install and uninstall of one integration in one project is not exclusive.
+Two concurrent installs or uninstalls of the same integration can then overlap.
 
-* Use PgBouncer 1.22 or later. Logfire is tested with PgBouncer 1.22.1 and 1.25.2.
-* Set `max_prepared_statements` above `0`, for example `1024`. The services use named prepared statements. With `0`, queries fail with `prepared statement "..." does not exist`.
-* Use `pool_mode = transaction` for the `crud` and `ff` runtime pools.
-* Add a session-mode pool for each database, or connect the session DSNs and Dex directly to PostgreSQL.
-* Set the timeout ceilings on the server side. On a direct connection, the services set `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout` on each new connection. Behind a transaction pool, set them with `connect_query` on the transaction-mode pools, or with `ALTER ROLE ... SET` or `ALTER DATABASE ... SET`. On PostgreSQL 17 and later, also set `transaction_timeout`.
+#### Pooler requirements
 
-This `pgbouncer.ini` excerpt shows the pools:
+* The pooler must support protocol-level named prepared statements in transaction mode. FusionFire and the Python services use them. Without this support, queries fail with `prepared statement "..." does not exist`.
+* The pooler must accept the `options` startup parameter. FusionFire sends `-c TimeZone=UTC -c DateStyle=ISO,MDY` in it.
+* Set the timeout ceilings on the server side. On a direct connection, the services set `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout` on each new connection. Behind a transaction-mode pool, those settings reach server connections that other clients use. So set them in the pooler's connect hook, such as the PgBouncer `connect_query`, or with `ALTER ROLE ... SET` or `ALTER DATABASE ... SET`. On PostgreSQL 17 and later, also set `transaction_timeout`.
+
+#### Pooler compatibility
+
+* PgBouncer 1.22 or later with `max_prepared_statements` above `0` is tested with this chart, on PgBouncer 1.22.1 and 1.25.2.
+* We have not tested other poolers:
+  * PgDog documents prepared statement support in transaction mode.
+  * Supavisor and PgCat support for prepared statements depends on the version.
+  * Amazon RDS Proxy pins a client to its database connection when the client uses prepared statements, so it pools these services very little.
+
+#### PgBouncer example
+
+This `pgbouncer.ini` excerpt has a transaction-mode pool for each database, and a session-mode pool for the direct DSNs and Dex:
 
 ```ini
 [databases]
@@ -428,9 +444,14 @@ max_prepared_statements = 1024
 max_client_conn = 2000
 ```
 
-Point Dex at the session pool:
+Point the DSNs at these pools:
 
 ```yaml
+postgresDsn: postgresql://USER:PASSWORD@pgbouncer:6432/crud
+postgresFFDsn: postgresql://USER:PASSWORD@pgbouncer:6432/ff
+postgresDirectDsn: postgresql://USER:PASSWORD@pgbouncer:6432/crud_session
+postgresFFDirectDsn: postgresql://USER:PASSWORD@pgbouncer:6432/ff_session
+
 logfire-dex:
   config:
     storage:
@@ -443,14 +464,11 @@ logfire-dex:
         password: PASSWORD
 ```
 
-Behind a transaction pool, the lock that serializes the install and uninstall of one integration in one project is not exclusive.
-Two concurrent installs or uninstalls of the same integration can then overlap.
-
 #### Connection counts
 
-Each pod opens up to its pool size to PgBouncer.
-`max_client_conn` must be larger than the sum over all pods.
-PgBouncer opens at most `pool_size` server connections for each pool, so PostgreSQL `max_connections` must cover the sum of the `pool_size` values.
+Each pod opens up to its pool size to the pooler.
+The pooler must accept more client connections than the sum over all pods.
+PostgreSQL `max_connections` must cover the server connections that the pooler opens, plus every direct connection.
 
 | Workload | Database | Variable | Default per pod |
 |----------|----------|----------|-----------------|

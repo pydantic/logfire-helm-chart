@@ -295,7 +295,6 @@ inClusterTls:
 
 # -- User-provided Secret containing database credentials
 # Must include `postgresDsn` and `postgresFFDsn` keys.
-# With `postgresPooler` set, it must also include `postgresDsnSession` and `postgresFFDsnSession`.
 postgresSecret:
   # -- Set to true to use an existing Secret (recommended for Argo CD users).
   enabled: false
@@ -305,17 +304,15 @@ postgresSecret:
   #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
   #    Per-workload `annotations` override duplicate keys.
   annotations: {}
+  # -- Set to true when the Secret also has a `postgresDirectDsn` key. See `postgresDirectDsn`.
+  directDsn: false
+  # -- Set to true when the Secret also has a `postgresFFDirectDsn` key. See `postgresFFDirectDsn`.
+  ffDirectDsn: false
 
 # -- Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks)
 hooksAnnotations:
   # argocd.argoproj.io/hook: PreSync
   # argocd.argoproj.io/hook-delete-policy: HookSucceeded
-
-# -- Set to `pgbouncer` when `postgresDsn` and `postgresFFDsn` point at a PgBouncer pool in transaction mode.
-# The migration Jobs then connect with the session DSNs, the maintenance scheduler gets `FF_PG_DSN_SESSION`,
-# and the Python workloads get `CRUD_PG_TOPOLOGY=pgbouncer`. Leave it empty for a direct or session-mode connection.
-# See "Connection poolers" in the README.
-postgresPooler: ""
 
 # -- NOTE: The DSNs below are ignored if `postgresSecret.enabled` is true.
 
@@ -325,11 +322,15 @@ postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 # -- Postgres DSN used for the `ff` database
 postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
 
-# -- Session-mode or direct DSN for the `crud` database. Required when `postgresPooler` is set.
-postgresDsnSession: ""
+# -- Optional direct DSN for the `crud` database: a direct connection or a session-mode pool.
+# Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it.
+# See "Connection poolers" in the README.
+postgresDirectDsn: ""
 
-# -- Session-mode or direct DSN for the `ff` database. Required when `postgresPooler` is set.
-postgresFFDsnSession: ""
+# -- Optional direct DSN for the `ff` database: a direct connection or a session-mode pool.
+# Set it when `postgresFFDsn` points at a transaction-mode pool. `logfire-ff-migrations` and the
+# index rebuilds of `logfire-ff-maintenance-scheduler` then use it. See "Connection poolers" in the README.
+postgresFFDirectDsn: ""
 
 
 # ==============================================================================
