@@ -371,7 +371,7 @@ The bundled Redis is for evaluation. For production, set `logfire-redis.enabled:
 * Use one Redis endpoint: a standalone instance, or a primary with replicas behind one write endpoint. Redis Cluster mode is not supported.
 * Logfire is tested with Redis 7.2.
 * `redis://` and `rediss://` DSNs are supported. Put the password, or the ACL user and password, in the DSN, for example `rediss://USER:PASSWORD@redis.example.com:6379`.
-* With `rediss://`, the Redis server certificate must chain to a CA in the system trust store of the Logfire images. A private CA, such as the one that Memorystore uses for in-transit encryption, is not supported yet.
+* With `rediss://`, Logfire verifies the Redis server certificate. If a private CA signs it, such as the CA that Memorystore creates for each instance with in-transit encryption, set `trustedCaBundle`. See [Private CA certificates](#private-ca-certificates).
 
 To keep the DSNs out of your values file, create a Secret with the `sharedDsn`, `tailDsn`, `tokenDsn`, and `usageDsn` keys, and reference it.
 All four keys can hold the same DSN:
