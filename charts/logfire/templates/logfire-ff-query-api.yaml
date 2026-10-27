@@ -25,6 +25,27 @@ spec:
   {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
   type: ClusterIP
 ---
+# Query API pods send remote queries to each other by pod IP. This headless Service lets a
+# service mesh recognize those IPs, and the TCP protocol keeps the mesh from routing by Host.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $serviceName }}-peers
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  ports:
+  - name: tcp-peer
+    appProtocol: tcp
+    port: {{ include "logfire.port" (dict "port" 8011 "root" .) }}
+    targetPort: {{ include "logfire.port" (dict "port" 8011 "root" .) }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
