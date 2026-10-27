@@ -304,10 +304,10 @@ postgresSecret:
   #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
   #    Per-workload `annotations` override duplicate keys.
   annotations: {}
-  # -- Set to true when the Secret also has a `postgresDirectDsn` key. See `postgresDirectDsn`.
-  directDsn: false
-  # -- Set to true when the Secret also has a `postgresFFDirectDsn` key. See `postgresFFDirectDsn`.
-  ffDirectDsn: false
+  # -- Set to true when the Secret also has a `postgresSessionDsn` key. See `postgresSessionDsn`.
+  sessionDsn: false
+  # -- Set to true when the Secret also has a `postgresFFSessionDsn` key. See `postgresFFSessionDsn`.
+  ffSessionDsn: false
 
 # -- Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks)
 hooksAnnotations:
@@ -322,15 +322,17 @@ postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 # -- Postgres DSN used for the `ff` database
 postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
 
-# -- Optional direct DSN for the `crud` database: a direct connection or a session-mode pool.
-# Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it.
+# -- Optional session DSN for the `crud` database: a session-mode pool or a direct connection to PostgreSQL.
+# Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it,
+# because migrations need session state: advisory locks, `SET`, and concurrent index DDL.
 # See "Connection poolers" in the README.
-postgresDirectDsn: ""
+postgresSessionDsn: ""
 
-# -- Optional direct DSN for the `ff` database: a direct connection or a session-mode pool.
+# -- Optional session DSN for the `ff` database: a session-mode pool or a direct connection to PostgreSQL.
 # Set it when `postgresFFDsn` points at a transaction-mode pool. `logfire-ff-migrations` and the
-# index rebuilds of `logfire-ff-maintenance-scheduler` then use it. See "Connection poolers" in the README.
-postgresFFDirectDsn: ""
+# index rebuilds of `logfire-ff-maintenance-scheduler` then use it, because they need session state:
+# advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README.
+postgresFFSessionDsn: ""
 
 
 # ==============================================================================

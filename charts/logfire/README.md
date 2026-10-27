@@ -371,41 +371,40 @@ The same `annotations` pattern is supported by `existingSecret`, `adminSecret`, 
 ### Connection poolers
 
 `postgresDsn` and `postgresFFDsn` can point at a connection pooler in transaction mode.
-But some work needs a session.
-The migrations take session advisory locks, and the maintenance scheduler sets session parameters before it rebuilds an index.
+But the migrations and the maintenance scheduler need session state: advisory locks, `SET`, and concurrent index DDL.
 In transaction mode, that session state stays on a server connection that the pooler then gives to other clients.
-So give each pooled database a direct DSN: a direct connection to PostgreSQL, or a session-mode pool.
+So give each pooled database a session DSN: a session-mode pool or a direct connection to PostgreSQL.
 
 | Component | Connection |
 |-----------|------------|
 | FusionFire, backend, worker, task runner, remote MCP, and AI gateway | `postgresDsn` and `postgresFFDsn`, which can be a transaction-mode pool |
-| `logfire-backend-migrations` | `postgresDirectDsn` when set, otherwise `postgresDsn` |
-| `logfire-ff-migrations` | `postgresFFDirectDsn` when set, otherwise `postgresFFDsn` |
-| `logfire-ff-maintenance-scheduler` index rebuilds | `postgresFFDirectDsn` when set, otherwise `postgresFFDsn` |
-| Dex | `logfire-dex.config.storage`, which must be a direct connection or a session-mode pool |
+| `logfire-backend-migrations` | `postgresSessionDsn` when set, otherwise `postgresDsn` |
+| `logfire-ff-migrations` | `postgresFFSessionDsn` when set, otherwise `postgresFFDsn` |
+| `logfire-ff-maintenance-scheduler` index rebuilds | `postgresFFSessionDsn` when set, otherwise `postgresFFDsn` |
+| Dex | `logfire-dex.config.storage`, which must be a session-mode pool or a direct connection to PostgreSQL |
 
 ```yaml
 postgresDsn: postgresql://USER:PASSWORD@pooler:6432/crud
 postgresFFDsn: postgresql://USER:PASSWORD@pooler:6432/ff
-postgresDirectDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/crud
-postgresFFDirectDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/ff
+postgresSessionDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/crud
+postgresFFSessionDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/ff
 ```
 
-Each direct DSN applies to its own database, so you can pool one database and connect the other directly.
-With a direct DSN for `crud`, the Python services treat `postgresDsn` as a pool. They then check a pooled connection only after it was idle for a few seconds.
+Each session DSN applies to its own database, so you can pool one database and connect the other directly.
+With a session DSN for `crud`, the Python services treat `postgresDsn` as a pool. They then check a pooled connection only after it was idle for a few seconds.
 
-With `postgresSecret`, add the `postgresDirectDsn` and `postgresFFDirectDsn` keys to the Secret.
+With `postgresSecret`, add the `postgresSessionDsn` and `postgresFFSessionDsn` keys to the Secret.
 The chart cannot read the Secret, so also set a flag for each key that the Secret has:
 
 ```yaml
 postgresSecret:
   enabled: true
   name: logfire-postgres
-  directDsn: true
-  ffDirectDsn: true
+  sessionDsn: true
+  ffSessionDsn: true
 ```
 
-Do not point a direct DSN at a transaction-mode pool.
+Do not point a session DSN at a transaction-mode pool.
 For example, the maintenance scheduler sets `statement_timeout` to `0` for an index rebuild.
 Through a transaction-mode pool, the next client that gets that server connection also runs with no statement timeout.
 
@@ -428,7 +427,7 @@ Two concurrent installs or uninstalls of the same integration can then overlap.
 
 #### PgBouncer example
 
-This `pgbouncer.ini` excerpt has a transaction-mode pool for each database, and a session-mode pool for the direct DSNs and Dex:
+This `pgbouncer.ini` excerpt has a transaction-mode pool for each database, and a session-mode pool for the session DSNs and Dex:
 
 ```ini
 [databases]
@@ -448,8 +447,8 @@ Point the DSNs at these pools:
 ```yaml
 postgresDsn: postgresql://USER:PASSWORD@pgbouncer:6432/crud
 postgresFFDsn: postgresql://USER:PASSWORD@pgbouncer:6432/ff
-postgresDirectDsn: postgresql://USER:PASSWORD@pgbouncer:6432/crud_session
-postgresFFDirectDsn: postgresql://USER:PASSWORD@pgbouncer:6432/ff_session
+postgresSessionDsn: postgresql://USER:PASSWORD@pgbouncer:6432/crud_session
+postgresFFSessionDsn: postgresql://USER:PASSWORD@pgbouncer:6432/ff_session
 
 logfire-dex:
   config:
@@ -783,16 +782,16 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | otel_collector.sendingQueueBytes | int | `67108864` | Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per profile; this value applies when no sizing preset is used. |
 | otel_collector.serviceAccount.annotations | object | `{}` | Annotations for the collector's ServiceAccount, for example a Workload Identity binding. |
 | podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed scratch volumes. `logfire-ff-ingest` defaults to `fsGroupChangePolicy: Always` instead, because its spool is a retained volume that `OnRootMismatch` can leave unrepaired. A per-service `podSecurityContext` wins over both. |
-| postgresDirectDsn | string | `""` | Optional direct DSN for the `crud` database: a direct connection or a session-mode pool. Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it. See "Connection poolers" in the README. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
-| postgresFFDirectDsn | string | `""` | Optional direct DSN for the `ff` database: a direct connection or a session-mode pool. Set it when `postgresFFDsn` points at a transaction-mode pool. `logfire-ff-migrations` and the index rebuilds of `logfire-ff-maintenance-scheduler` then use it. See "Connection poolers" in the README. |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
-| postgresSecret | object | `{"annotations":{},"directDsn":false,"enabled":false,"ffDirectDsn":false,"name":""}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
+| postgresFFSessionDsn | string | `""` | Optional session DSN for the `ff` database: a session-mode pool or a direct connection to PostgreSQL. Set it when `postgresFFDsn` points at a transaction-mode pool. `logfire-ff-migrations` and the index rebuilds of `logfire-ff-maintenance-scheduler` then use it, because they need session state: advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README. |
+| postgresSecret | object | `{"annotations":{},"enabled":false,"ffSessionDsn":false,"name":"","sessionDsn":false}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
 | postgresSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
-| postgresSecret.directDsn | bool | `false` | Set to true when the Secret also has a `postgresDirectDsn` key. See `postgresDirectDsn`. |
 | postgresSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
-| postgresSecret.ffDirectDsn | bool | `false` | Set to true when the Secret also has a `postgresFFDirectDsn` key. See `postgresFFDirectDsn`. |
+| postgresSecret.ffSessionDsn | bool | `false` | Set to true when the Secret also has a `postgresFFSessionDsn` key. See `postgresFFSessionDsn`. |
 | postgresSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
+| postgresSecret.sessionDsn | bool | `false` | Set to true when the Secret also has a `postgresSessionDsn` key. See `postgresSessionDsn`. |
+| postgresSessionDsn | string | `""` | Optional session DSN for the `crud` database: a session-mode pool or a direct connection to PostgreSQL. Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it, because migrations need session state: advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README. |
 | postgresql.auth.postgresPassword | string | `"postgres"` |  |
 | postgresql.fullnameOverride | string | `"logfire-postgres"` |  |
 | postgresql.image.registry | string | `"docker.io"` |  |

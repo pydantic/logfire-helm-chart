@@ -372,41 +372,40 @@ The same `annotations` pattern is supported by `existingSecret`, `adminSecret`, 
 ### Connection poolers
 
 `postgresDsn` and `postgresFFDsn` can point at a connection pooler in transaction mode.
-But some work needs a session.
-The migrations take session advisory locks, and the maintenance scheduler sets session parameters before it rebuilds an index.
+But the migrations and the maintenance scheduler need session state: advisory locks, `SET`, and concurrent index DDL.
 In transaction mode, that session state stays on a server connection that the pooler then gives to other clients.
-So give each pooled database a direct DSN: a direct connection to PostgreSQL, or a session-mode pool.
+So give each pooled database a session DSN: a session-mode pool or a direct connection to PostgreSQL.
 
 | Component | Connection |
 |-----------|------------|
 | FusionFire, backend, worker, task runner, remote MCP, and AI gateway | `postgresDsn` and `postgresFFDsn`, which can be a transaction-mode pool |
-| `logfire-backend-migrations` | `postgresDirectDsn` when set, otherwise `postgresDsn` |
-| `logfire-ff-migrations` | `postgresFFDirectDsn` when set, otherwise `postgresFFDsn` |
-| `logfire-ff-maintenance-scheduler` index rebuilds | `postgresFFDirectDsn` when set, otherwise `postgresFFDsn` |
-| Dex | `logfire-dex.config.storage`, which must be a direct connection or a session-mode pool |
+| `logfire-backend-migrations` | `postgresSessionDsn` when set, otherwise `postgresDsn` |
+| `logfire-ff-migrations` | `postgresFFSessionDsn` when set, otherwise `postgresFFDsn` |
+| `logfire-ff-maintenance-scheduler` index rebuilds | `postgresFFSessionDsn` when set, otherwise `postgresFFDsn` |
+| Dex | `logfire-dex.config.storage`, which must be a session-mode pool or a direct connection to PostgreSQL |
 
 ```yaml
 postgresDsn: postgresql://USER:PASSWORD@pooler:6432/crud
 postgresFFDsn: postgresql://USER:PASSWORD@pooler:6432/ff
-postgresDirectDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/crud
-postgresFFDirectDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/ff
+postgresSessionDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/crud
+postgresFFSessionDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/ff
 ```
 
-Each direct DSN applies to its own database, so you can pool one database and connect the other directly.
-With a direct DSN for `crud`, the Python services treat `postgresDsn` as a pool. They then check a pooled connection only after it was idle for a few seconds.
+Each session DSN applies to its own database, so you can pool one database and connect the other directly.
+With a session DSN for `crud`, the Python services treat `postgresDsn` as a pool. They then check a pooled connection only after it was idle for a few seconds.
 
-With `postgresSecret`, add the `postgresDirectDsn` and `postgresFFDirectDsn` keys to the Secret.
+With `postgresSecret`, add the `postgresSessionDsn` and `postgresFFSessionDsn` keys to the Secret.
 The chart cannot read the Secret, so also set a flag for each key that the Secret has:
 
 ```yaml
 postgresSecret:
   enabled: true
   name: logfire-postgres
-  directDsn: true
-  ffDirectDsn: true
+  sessionDsn: true
+  ffSessionDsn: true
 ```
 
-Do not point a direct DSN at a transaction-mode pool.
+Do not point a session DSN at a transaction-mode pool.
 For example, the maintenance scheduler sets `statement_timeout` to `0` for an index rebuild.
 Through a transaction-mode pool, the next client that gets that server connection also runs with no statement timeout.
 
@@ -429,7 +428,7 @@ Two concurrent installs or uninstalls of the same integration can then overlap.
 
 #### PgBouncer example
 
-This `pgbouncer.ini` excerpt has a transaction-mode pool for each database, and a session-mode pool for the direct DSNs and Dex:
+This `pgbouncer.ini` excerpt has a transaction-mode pool for each database, and a session-mode pool for the session DSNs and Dex:
 
 ```ini
 [databases]
@@ -449,8 +448,8 @@ Point the DSNs at these pools:
 ```yaml
 postgresDsn: postgresql://USER:PASSWORD@pgbouncer:6432/crud
 postgresFFDsn: postgresql://USER:PASSWORD@pgbouncer:6432/ff
-postgresDirectDsn: postgresql://USER:PASSWORD@pgbouncer:6432/crud_session
-postgresFFDirectDsn: postgresql://USER:PASSWORD@pgbouncer:6432/ff_session
+postgresSessionDsn: postgresql://USER:PASSWORD@pgbouncer:6432/crud_session
+postgresFFSessionDsn: postgresql://USER:PASSWORD@pgbouncer:6432/ff_session
 
 logfire-dex:
   config:

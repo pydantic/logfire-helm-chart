@@ -744,49 +744,50 @@ Create Postgres secret name
 {{- end -}}
 
 {{/*
-The Secret key that holds the direct DSN of a database, given its runtime key:
-`postgresDsn` gives `postgresDirectDsn`, and `postgresFFDsn` gives `postgresFFDirectDsn`.
+The Secret key that holds the session DSN of a database, given its runtime key:
+`postgresDsn` gives `postgresSessionDsn`, and `postgresFFDsn` gives `postgresFFSessionDsn`.
 */}}
-{{- define "logfire.postgresDirectDsnKey" -}}
-{{- printf "%sDirectDsn" (trimSuffix "Dsn" .) -}}
+{{- define "logfire.postgresSessionDsnKey" -}}
+{{- printf "%sSessionDsn" (trimSuffix "Dsn" .) -}}
 {{- end -}}
 
 {{/*
-Renders "true" when the database behind the runtime key `.key` has a direct DSN.
-A direct DSN is a direct connection or a session-mode pool. It lets session work
-leave a transaction-mode pool, where a session `SET` or a session advisory lock
-can reach another client's server connection. The chart cannot read an existing
+Renders "true" when the database behind the runtime key `.key` has a session DSN:
+a session-mode pool or a direct connection to PostgreSQL. Migrations and the
+maintenance scheduler need session state: advisory locks, `SET`, and concurrent
+index DDL. Through a transaction-mode pool, that state can reach another
+client's server connection. The chart cannot read an existing
 Secret, so with `postgresSecret` a flag says that the Secret has the key.
 */}}
-{{- define "logfire.postgresHasDirectDsn" -}}
-{{- $ctx := required "logfire.postgresHasDirectDsn: need .ctx" .ctx -}}
-{{- $key := required "logfire.postgresHasDirectDsn: need .key" .key -}}
+{{- define "logfire.postgresHasSessionDsn" -}}
+{{- $ctx := required "logfire.postgresHasSessionDsn: need .ctx" .ctx -}}
+{{- $key := required "logfire.postgresHasSessionDsn: need .key" .key -}}
 {{- $secret := $ctx.Values.postgresSecret | default dict -}}
 {{- if get $secret "enabled" -}}
-{{- if get $secret (eq $key "postgresFFDsn" | ternary "ffDirectDsn" "directDsn") -}}true{{- end -}}
-{{- else if get $ctx.Values (include "logfire.postgresDirectDsnKey" $key) -}}true
+{{- if get $secret (eq $key "postgresFFDsn" | ternary "ffSessionDsn" "sessionDsn") -}}true{{- end -}}
+{{- else if get $ctx.Values (include "logfire.postgresSessionDsnKey" $key) -}}true
 {{- end -}}
 {{- end -}}
 
 {{/*
-The Secret key that a migration Job reads: the direct DSN when the database has
+The Secret key that a migration Job reads: the session DSN when the database has
 one, otherwise the runtime DSN.
 */}}
 {{- define "logfire.postgresMigrationKey" -}}
-{{- if include "logfire.postgresHasDirectDsn" . -}}
-{{- include "logfire.postgresDirectDsnKey" .key -}}
+{{- if include "logfire.postgresHasSessionDsn" . -}}
+{{- include "logfire.postgresSessionDsnKey" .key -}}
 {{- else -}}
 {{- .key -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-With a direct DSN for `crud`, `CRUD_PG_DSN` is taken to be a transaction-mode pool.
+With a session DSN for `crud`, `CRUD_PG_DSN` is taken to be a transaction-mode pool.
 The pool then checks a connection only after it was idle for a few seconds.
-The platform names this mode `pgbouncer`. Renders nothing without a direct DSN.
+The platform names this mode `pgbouncer`. Renders nothing without a session DSN.
 */}}
 {{- define "logfire.crudPgTopologyEnv" -}}
-{{- if include "logfire.postgresHasDirectDsn" (dict "ctx" . "key" "postgresDsn") -}}
+{{- if include "logfire.postgresHasSessionDsn" (dict "ctx" . "key" "postgresDsn") -}}
 - name: CRUD_PG_TOPOLOGY
   value: "pgbouncer"
 {{- end -}}

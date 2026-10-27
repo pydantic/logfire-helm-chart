@@ -31,8 +31,8 @@ spec:
         checksum/ff-config: {{ include "logfire.configChecksum" (include (print $.Template.BasePath "/logfire-ff-config.yaml") .) }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresFFDsn") | nindent 8 }}
-        {{- if include "logfire.postgresHasDirectDsn" (dict "ctx" . "key" "postgresFFDsn") }}
-        {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresFFDirectDsn" "annotationKey" "checksum/logfire-postgres-ff-direct-dsn") | nindent 8 }}
+        {{- if include "logfire.postgresHasSessionDsn" (dict "ctx" . "key" "postgresFFDsn") }}
+        {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresFFSessionDsn" "annotationKey" "checksum/logfire-postgres-ff-session-dsn") | nindent 8 }}
         {{- end }}
         {{- end }}
         {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
@@ -89,12 +89,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
-            {{- if include "logfire.postgresHasDirectDsn" (dict "ctx" . "key" "postgresFFDsn") }}
+            {{- if include "logfire.postgresHasSessionDsn" (dict "ctx" . "key" "postgresFFDsn") }}
             - name: FF_PG_DSN_SESSION
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
-                  key: postgresFFDirectDsn
+                  key: postgresFFSessionDsn
             {{- end }}
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- with (index .Values $serviceName | default dict).env }}
