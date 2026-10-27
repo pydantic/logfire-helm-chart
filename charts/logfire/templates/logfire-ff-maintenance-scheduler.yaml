@@ -64,6 +64,10 @@ spec:
           env:
             {{- include "logfire.ffRedisEnv" . | nindent 12 }}
             {{- include "logfire.ffResourceEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
+            # The scheduler reads no object through bcache. Fusionfire defaults to read path v2, which
+            # refuses to start without `FF_BCACHE_URI`, so the scheduler reads the object store directly.
+            - name: FF_READ_PATH
+              value: v1
             - name: FF_IO_THREADS
               value: {{ $ioThreads | quote }}
             - name: FF_DATAFUSION_THREADS
