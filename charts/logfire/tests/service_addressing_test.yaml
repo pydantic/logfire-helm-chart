@@ -356,7 +356,28 @@ tests:
           content:
             name: FF_TLS_CLIENT_PORT
             value: "9443"
-  - it: exposes the query-api peer port on the headless peers Service when in-cluster TLS is on
+  - it: points the logfire-ff-query-worker Service at the pods that execute queries
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-query-worker.yaml
+    set:
+      logfire-ff-query-worker.enabled: true
+    asserts:
+      - equal:
+          path: spec.selector["app.kubernetes.io/component"]
+          value: logfire-ff-query-worker
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-worker
+      - equal:
+          path: spec.template.metadata.labels["app.kubernetes.io/component"]
+          value: logfire-ff-query-worker
+        template: templates/logfire-ff-query-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+  - it: exposes the query execution port on the logfire-ff-query-worker Service when in-cluster TLS is on
     templates:
       - templates/logfire-ff-query-api.yaml
     set:
@@ -382,7 +403,7 @@ tests:
               targetPort: 9443
         documentSelector:
           path: metadata.name
-          value: logfire-ff-query-api-peers
+          value: logfire-ff-query-worker
   - it: addresses logfire-ff-query-api with remote worker true and TLS false
     templates:
       - templates/logfire-ff-query-api.yaml
