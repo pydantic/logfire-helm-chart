@@ -113,6 +113,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresDsn
+            {{- with (include "logfire.crudPgTopologyEnv" $ | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:

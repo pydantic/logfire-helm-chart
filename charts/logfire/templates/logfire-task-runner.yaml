@@ -81,6 +81,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresDsn
+            {{- with (include "logfire.crudPgTopologyEnv" $ | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | quote }}
             - name: COLLECTOR_OTLP_GRPC_HOST

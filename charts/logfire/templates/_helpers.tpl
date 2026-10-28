@@ -743,6 +743,51 @@ Create Postgres secret name
 {{- end }}
 {{- end -}}
 
+{{/*
+The Secret key that holds the session DSN of a database, given its runtime key:
+`postgresDsn` gives `postgresSessionDsn`, and `postgresFFDsn` gives `postgresFFSessionDsn`.
+*/}}
+{{- define "logfire.postgresSessionDsnKey" -}}
+{{- printf "%sSessionDsn" (trimSuffix "Dsn" .) -}}
+{{- end -}}
+
+{{/*
+Renders "true" when the database of the runtime key `.key` has a session DSN.
+The chart cannot read an existing Secret, so with `postgresSecret` a flag declares the key.
+*/}}
+{{- define "logfire.postgresHasSessionDsn" -}}
+{{- $ctx := required "logfire.postgresHasSessionDsn: need .ctx" .ctx -}}
+{{- $key := required "logfire.postgresHasSessionDsn: need .key" .key -}}
+{{- $secret := $ctx.Values.postgresSecret | default dict -}}
+{{- if get $secret "enabled" -}}
+{{- if get $secret (eq $key "postgresFFDsn" | ternary "ffSessionDsn" "sessionDsn") -}}true{{- end -}}
+{{- else if get $ctx.Values (include "logfire.postgresSessionDsnKey" $key) -}}true
+{{- end -}}
+{{- end -}}
+
+{{/*
+The Secret key that a migration Job reads: the session DSN when the database has
+one, otherwise the runtime DSN.
+*/}}
+{{- define "logfire.postgresMigrationKey" -}}
+{{- if include "logfire.postgresHasSessionDsn" . -}}
+{{- include "logfire.postgresSessionDsnKey" .key -}}
+{{- else -}}
+{{- .key -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+With a session DSN for `crud`, `CRUD_PG_DSN` is a transaction-mode pool.
+The platform names that topology `pgbouncer`, whatever the pooler is.
+*/}}
+{{- define "logfire.crudPgTopologyEnv" -}}
+{{- if include "logfire.postgresHasSessionDsn" (dict "ctx" . "key" "postgresDsn") -}}
+- name: CRUD_PG_TOPOLOGY
+  value: "pgbouncer"
+{{- end -}}
+{{- end -}}
+
 {{/* Use an external Secret name when configured, otherwise the managed name. */}}
 {{- define "logfire.externalSecretName" -}}
 {{- $external := .external | default dict -}}
@@ -1325,7 +1370,8 @@ default-checksum
 {{- include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" $annotationKey "name" $name "key" $key) -}}
 {{- end -}}
 {{- else -}}
-{{- $value := eq $key "postgresFFDsn" | ternary $ctx.Values.postgresFFDsn $ctx.Values.postgresDsn -}}
+{{- /* Each Secret key has a value of the same name. */ -}}
+{{- $value := get $ctx.Values $key | default "" -}}
 {{- printf "%s: %s" $annotationKey ($value | b64enc | sha256sum) -}}
 {{- end -}}
 {{- end -}}
