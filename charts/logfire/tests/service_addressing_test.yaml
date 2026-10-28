@@ -476,6 +476,31 @@ tests:
           path: kind
           value: Deployment
 
+  - it: lets remote MCP accept the Host that HAProxy sends it
+    set:
+      gateway:
+        hostnames:
+          - logfire.example.com
+      logfire-remote-mcp:
+        enabled: true
+    templates:
+      - templates/logfire-service-config.yaml
+      - templates/logfire-remote-mcp.yaml
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "backend logfire-remote-mcp\\n(?:.*\\n)*? +http-request set-header Host logfire-remote-mcp\\.default\\.svc\\.cluster\\.local\\n"
+        template: templates/logfire-service-config.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ALLOWED_HOSTS
+            value: '["logfire.example.com","logfire-remote-mcp.default.svc.cluster.local"]'
+        template: templates/logfire-remote-mcp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
   - it: exports migration telemetry to the in-cluster collector
     templates:
       - templates/logfire-backend-migrations.yaml

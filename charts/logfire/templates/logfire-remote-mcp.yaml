@@ -152,7 +152,7 @@ spec:
           - name: LOGFIRE_REGION
             value: {{ .Values.logfireRegion | default "local" }}
           - name: ALLOWED_HOSTS
-            value: {{ (include "logfire.effective_hostnames" . | fromJson).hosts | toJson | quote }}
+            value: {{ append (include "logfire.effective_hostnames" . | fromJson).hosts (include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-remote-mcp")) | toJson | quote }}
           - name: MCP_SERVER_URL
             value: {{ printf "%s/mcp" (include "logfire.url" .) | quote }}
           {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
