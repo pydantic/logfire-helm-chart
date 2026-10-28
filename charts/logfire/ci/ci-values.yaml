@@ -105,6 +105,10 @@ postgresql:
     persistence:
       size: 1Gi
 
+# Keep object storage across pod restarts, so an upgrade that rolls RustFS keeps the data
+# that tests wrote before it.
 rustfs:
   persistence:
-    enabled: false
+    enabled: true
+    storageClassName: standard
+    size: 2Gi
