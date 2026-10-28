@@ -1,0 +1,8 @@
+logfire-dex:
+  env:
+    GITHUB_CLIENT_SECRET:
+      valueFrom:
+        secretKeyRef:
+          name: dex-credentials
+          key: github-client-secret
+    TENANT_REMOVES: null

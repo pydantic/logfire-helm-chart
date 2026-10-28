@@ -508,16 +508,19 @@ logfire-dex:
 
   # Dex expands `$VAR` references in the storage config and in every connector
   # config from the container environment, so no credential has to be written
-  # here. Supply the variables through `env`, which accepts `valueFrom`:
+  # here. Supply the variables through `env`, which accepts `valueFrom`. The map
+  # form merges across values files, so a second file can add a connector secret
+  # without repeating the database password:
   #
   # logfire-dex:
   #   env:
-  #     - name: DEX_DB_PASSWORD
+  #     DEX_DB_PASSWORD:
   #       valueFrom:
   #         secretKeyRef:
   #           name: dex-credentials
   #           key: db-password
-  #     - name: GITHUB_CLIENT_SECRET
+  #     GITHUB_CLIENT_ID: my-github-client-id
+  #     GITHUB_CLIENT_SECRET:
   #       valueFrom:
   #         secretKeyRef:
   #           name: dex-credentials
@@ -534,11 +537,11 @@ logfire-dex:
   #           clientID: $GITHUB_CLIENT_ID
   #           clientSecret: $GITHUB_CLIENT_SECRET
 
-  # -- Extra environment variables for the Dex pod. Accepts `valueFrom`, so a
+  # -- (list or map) Extra environment variables for the Dex pod. Accepts `valueFrom`, so a
   # credential can come from a Secret. Dex expands `$VAR` from this environment
   # in the storage and connector config, so `DEX_EXPAND_ENV=false` keeps a
   # literal `$` in a password or DN.
-  env: []
+  env: ~
 
   # -- Resource requests/limits
   # resources:
@@ -705,11 +708,11 @@ logfire-ff-ingest-processor:
 
 # -- Environment overrides for the query API pod
 logfire-ff-query-api:
-  env: []
+  env: ~
 
 # -- Environment overrides for the maintenance scheduler pod
 logfire-ff-maintenance-scheduler:
-  env: []
+  env: ~
 
 # -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
