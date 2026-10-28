@@ -33,7 +33,7 @@ carries no `podSecurityContext` key. Returns JSON so callers can parse it with
 {{- $fsGroupChangePolicy = "Always" -}}
 {{- end -}}
 {{- $podSecurityContext := dict "fsGroup" 1000 "fsGroupChangePolicy" $fsGroupChangePolicy -}}
-{{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy ($ctx.Values.podSecurityContext | default dict)) -}}
+{{- $podSecurityContext = mergeOverwrite $podSecurityContext (include "logfire.podSecurityContext" $ctx | fromJson) -}}
 {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy (get $serviceValues "podSecurityContext" | default dict)) -}}
 {{- $podSecurityContext | toJson -}}
 {{- end -}}

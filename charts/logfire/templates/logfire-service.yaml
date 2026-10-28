@@ -56,7 +56,7 @@ spec:
       {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       {{- $haproxy := default (dict) .Values.haproxy }}
       {{- $haproxyImage := get $haproxy "image" | default dict }}
-      {{- $haproxyPodSecurityContext := get $haproxy "podSecurityContext" | default .Values.podSecurityContext }}
+      {{- $haproxyPodSecurityContext := get $haproxy "podSecurityContext" | default (include "logfire.podSecurityContext" . | fromJson) }}
       {{- include "logfire.securityContext" $haproxyPodSecurityContext | nindent 6 }}
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       {{- $haproxyDefaults := dict

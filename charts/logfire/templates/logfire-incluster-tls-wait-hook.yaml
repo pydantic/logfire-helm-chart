@@ -30,7 +30,7 @@ spec:
         {{- end }}
       {{- end }}
       restartPolicy: Never
-      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
+      {{- include "logfire.securityContext" (include "logfire.podSecurityContext" . | fromJson) | nindent 6 }}
       containers:
         - name: wait
           image: {{ include "logfire.imageRef" (dict "image" $waitImage "defaultRepository" "curlimages/curl" "defaultTag" "8.12.1") }}

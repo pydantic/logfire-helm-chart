@@ -1623,7 +1623,9 @@ revisionHistoryLimit: 2
 # `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed
 # scratch volumes. `logfire-ff-ingest` defaults to `fsGroupChangePolicy: Always` instead,
 # because its spool is a retained volume that `OnRootMismatch` can leave unrepaired. A
-# per-service `podSecurityContext` wins over both.
+# per-service `podSecurityContext` wins over both. Every chart-owned pod except the bundled Redis
+# also defaults to the `RuntimeDefault` seccomp profile at pod level, which covers containers the
+# chart does not render, such as injected service mesh sidecars.
 podSecurityContext: {}
   # fsGroup: 2000
 

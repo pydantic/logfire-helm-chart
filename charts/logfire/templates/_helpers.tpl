@@ -1738,7 +1738,7 @@ the backend and the worker need the directory writable under a read-only image r
 {{- define "logfire.standardPodSpecFields" -}}
 {{- $ctx := required "logfire.standardPodSpecFields: need .ctx" .ctx -}}
 {{- $serviceName := required "logfire.standardPodSpecFields: need .serviceName" .serviceName -}}
-{{- $podSecurityContext := .podSecurityContext | default $ctx.Values.podSecurityContext -}}
+{{- $podSecurityContext := .podSecurityContext | default (include "logfire.podSecurityContext" $ctx | fromJson) -}}
 {{- $lines := list -}}
 {{- with ($ctx.Values.priorityClassName | default "") -}}
   {{- $lines = append $lines (printf "priorityClassName: %s" .) -}}
@@ -2352,6 +2352,15 @@ queue here makes the dependency explicit rather than leaving it to scheduling or
   {{- include "logfire.securityContext" $containerSecurityContext | nindent 2 }}
   volumeMounts:
     {{- include "logfire.tmpVolumeMounts" $ctx | nindent 4 }}
+{{- end -}}
+
+{{/*
+The chart-wide pod security context over a pod-level `RuntimeDefault` seccomp profile, so containers
+the chart does not render, such as injected mesh sidecars, pass the `restricted` Pod Security level.
+The bundled Redis reads `podSecurityContext` directly, so its pod template stays unchanged.
+*/}}
+{{- define "logfire.podSecurityContext" -}}
+{{- mergeOverwrite (dict "seccompProfile" (dict "type" "RuntimeDefault")) (deepCopy (.Values.podSecurityContext | default dict)) | toJson -}}
 {{- end -}}
 
 {{- define "logfire.initContainers" -}}
