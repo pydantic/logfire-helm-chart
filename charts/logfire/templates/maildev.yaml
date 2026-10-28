@@ -65,10 +65,10 @@ metadata:
   name: logfire-maildev
 spec:
   ports:
-    - name: "1080"
+    - name: http-web
       port: 1080
       targetPort: 1080
-    - name: "1025"
+    - name: tcp-smtp
       port: 1025
       targetPort: 1025
   selector:
