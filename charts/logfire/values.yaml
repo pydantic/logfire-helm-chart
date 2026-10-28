@@ -2061,9 +2061,6 @@ postgresql:
   postgresqlDataDir: /var/lib/postgresql/data/pgdata
   primary:
     resourcesPreset: small
-    podSecurityContext:
-      seccompProfile:
-        type: RuntimeDefault
     initdb:
       scripts:
         create_databases.sql: |

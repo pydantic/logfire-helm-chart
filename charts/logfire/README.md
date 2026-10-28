@@ -815,7 +815,6 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | postgresql.primary.initdb.scripts."create_databases.sql" | string | `"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"` |  |
 | postgresql.primary.persistence.mountPath | string | `"/var/lib/postgresql"` |  |
 | postgresql.primary.persistence.size | string | `"10Gi"` |  |
-| postgresql.primary.podSecurityContext.seccompProfile.type | string | `"RuntimeDefault"` |  |
 | postgresql.primary.resourcesPreset | string | `"small"` |  |
 | priorityClassName | string | `""` | Pod priority class See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | rateLimits | object | `{}` | Configure Rate Limiting rules for Logfire endpoints |
