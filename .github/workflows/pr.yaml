@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [chart-testing, stable-upgrade]
+        suite: [chart-testing, stable-upgrade, istio]
     permissions:
       id-token: write
       contents: read
@@ -116,6 +116,31 @@ jobs:
           # `pod-security.kubernetes.io/enforce=restricted` once the Redis hardening lands.
           kubectl label namespace logfire-restricted pod-security.kubernetes.io/enforce=baseline pod-security.kubernetes.io/warn=restricted
 
+      # The CNI plugin replaces the istio-init container, which needs NET_ADMIN and so fails
+      # the namespace's baseline Pod Security level.
+      - name: Install Istio with STRICT mTLS
+        if: matrix.suite == 'istio'
+        env:
+          ISTIO_VERSION: 1.31.3
+          ISTIOCTL_SHA256: 382c3004ce2e9c5ed3064b092ae0da7f6bbe30c766a1be282f45725add004860
+        run: |
+          archive="istioctl-$ISTIO_VERSION-linux-amd64.tar.gz"
+          curl -fsSLo "$RUNNER_TEMP/$archive" "https://github.com/istio/istio/releases/download/$ISTIO_VERSION/$archive"
+          echo "$ISTIOCTL_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/istioctl" install -y --set profile=minimal --set components.cni.enabled=true
+          kubectl -n istio-system rollout status daemonset/istio-cni-node --timeout=5m
+          kubectl label namespace logfire-restricted istio-injection=enabled
+          kubectl apply -n logfire-restricted -f - <<'EOF'
+          apiVersion: security.istio.io/v1
+          kind: PeerAuthentication
+          metadata:
+            name: default
+          spec:
+            mtls:
+              mode: STRICT
+          EOF
+
       - name: Create k8s secrets
         run: |
           for ns in default logfire-restricted; do
@@ -153,13 +178,20 @@ jobs:
           ct install --upgrade --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH" "${chart_args[@]}"
 
       - name: Install uv
-        if: matrix.suite == 'stable-upgrade'
+        if: matrix.suite != 'chart-testing'
         uses: astral-sh/setup-uv@v5
 
       - name: Test stable upgrade, release contracts, and split query topology
         if: matrix.suite == 'stable-upgrade'
         env:
           LOGFIRE_TEST_NAMESPACE: logfire-restricted
+        run: ci/run-kind-tests.sh
+
+      - name: Test the chart inside an Istio mesh
+        if: matrix.suite == 'istio'
+        env:
+          LOGFIRE_TEST_NAMESPACE: logfire-restricted
+          LOGFIRE_TEST_FRESH_INSTALL: "true"
         run: ci/run-kind-tests.sh
 
   test:
