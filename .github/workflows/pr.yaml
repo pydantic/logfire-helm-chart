@@ -194,6 +194,15 @@ jobs:
           LOGFIRE_TEST_FRESH_INSTALL: "true"
         run: ci/run-kind-tests.sh
 
+      - name: Show unready pods
+        if: failure() && matrix.suite != 'chart-testing'
+        run: |
+          kubectl -n logfire-restricted get pods -o wide
+          kubectl describe nodes | sed -n '/Allocated resources/,/Events/p'
+          for pod in $(kubectl -n logfire-restricted get pods --no-headers | awk '$3 != "Completed" { split($2, r, "/"); if (r[1] != r[2]) print $1 }'); do
+            kubectl -n logfire-restricted describe pod "$pod" | sed -n '/^Events:/,$p'
+          done
+
   test:
     needs: suites
     if: always()
