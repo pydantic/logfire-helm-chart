@@ -122,10 +122,9 @@ stringData:
       hash-type consistent
       # Use a hash balance factor to control the distribution of requests and avoid overloading a single pod if a hot hash keeps hitting the same pod
       hash-balance-factor 150
-      # Enable both TCP and HTTP checks
-      option httpchk GET /health
+      option httpchk
+      http-check send meth GET uri /health ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-ff-ingest") }}
       http-check expect status 200
-      option tcp-check
       timeout connect 3s
       timeout server 50s
       # Retry a total of 4 times, move to a different server every 2 retries
