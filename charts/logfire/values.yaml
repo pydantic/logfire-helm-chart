@@ -304,6 +304,10 @@ postgresSecret:
   #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
   #    Per-workload `annotations` override duplicate keys.
   annotations: {}
+  # -- Set to true when the Secret also has a `postgresSessionDsn` key. See `postgresSessionDsn`.
+  sessionDsn: false
+  # -- Set to true when the Secret also has a `postgresFFSessionDsn` key. See `postgresFFSessionDsn`.
+  ffSessionDsn: false
 
 # -- Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks)
 hooksAnnotations:
@@ -317,6 +321,18 @@ postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 
 # -- Postgres DSN used for the `ff` database
 postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
+
+# -- Optional session DSN for the `crud` database: a session-mode pool or a direct connection to PostgreSQL.
+# Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it,
+# because migrations need session state: advisory locks, `SET`, and concurrent index DDL.
+# See "Connection poolers" in the README.
+postgresSessionDsn: ""
+
+# -- Optional session DSN for the `ff` database: a session-mode pool or a direct connection to PostgreSQL.
+# Set it when `postgresFFDsn` points at a transaction-mode pool. `logfire-ff-migrations` and the
+# index rebuilds of `logfire-ff-maintenance-scheduler` then use it, because they need session state:
+# advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README.
+postgresFFSessionDsn: ""
 
 
 # ==============================================================================
@@ -336,7 +352,7 @@ smtp:
   use_tls: false
   # -- (bool) Verify the SMTP server certificate. If it is not set, Logfire verifies it. Setting it to false sends email, including password reset links, over a connection open to interception. Prefer `smtp.caBundle` for a relay signed by an internal CA.
   validate_certs:
-  # -- CA bundle (PEM) that verifies the SMTP server certificate, for a relay signed by an internal CA. Provide exactly one of existingConfigMap or existingSecret, in the release namespace. The bundle becomes the default trust store of `logfire-task-runner` and `logfire-worker`, so include any other CA that those workloads need from the system trust store. In-cluster TLS is not affected.
+  # -- CA bundle (PEM) that verifies the SMTP server certificate, for a relay signed by an internal CA. Provide exactly one of existingConfigMap or existingSecret, in the release namespace. `logfire-task-runner` and `logfire-worker` trust these certificates in addition to the system trust store. `trustedCaBundle` does the same for these and the other workloads that connect to Redis, so prefer it for new installs.
   caBundle:
     existingConfigMap:
       name: ""
@@ -1800,6 +1816,28 @@ usageRedis:
   dsn: ""
   # -- Key prefix for usage keys.
   prefix: ""
+
+# ==============================================================================
+# Trusted CA certificates
+# ==============================================================================
+
+# -- CA certificates (PEM) that Logfire workloads trust for outbound TLS, in addition to the
+# system trust store of each image. Use it for a `rediss://` Redis or an SMTP relay whose
+# certificate is signed by a private CA, such as Memorystore with in-transit encryption.
+# Provide exactly one of existingConfigMap or existingSecret, in the release namespace.
+# It applies to every Logfire workload that connects to Redis or sends email.
+# An init container joins the system trust store and these certificates into one file.
+# Python and FusionFire workloads read that file through `SSL_CERT_FILE`, and
+# `logfire-ai-gateway` reads it through `NODE_EXTRA_CA_CERTS`. Public endpoints stay trusted.
+# The pods read the certificates when they start, so restart them after you change the
+# certificates. In-cluster TLS is not affected.
+trustedCaBundle:
+  existingConfigMap:
+    name: ""
+    key: "ca.crt"
+  existingSecret:
+    name: ""
+    key: "ca.crt"
 
 
 # ==============================================================================

@@ -125,6 +125,9 @@ spec:
               secretKeyRef:
                 name: {{ include "logfire.postgresSecretName" . }}
                 key: postgresDsn
+          {{- with (include "logfire.crudPgTopologyEnv" $ | trim) }}
+          {{- . | nindent 10 }}
+          {{- end }}
           - name: JWT_SECRET
             valueFrom:
               secretKeyRef:
@@ -162,16 +165,19 @@ spec:
           - name: TLS_KEY_PATH
             value: "/etc/tls/tls.key"
           {{- end }}
+          {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 10 }}
           {{- with (index .Values $serviceName | default dict).env }}
             {{- . | toYaml | nindent 10 }}
           {{- end }}
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.trustedCa.volumeMount" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
       volumes:
         {{- include "logfire.tmpVolume" . | nindent 8 }}
         {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
+        {{- include "logfire.trustedCa.volumes" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
       terminationGracePeriodSeconds: 30
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}

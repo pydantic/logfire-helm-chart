@@ -1,0 +1,141 @@
+suite: trusted CA bundle
+release:
+  name: lf
+  namespace: default
+set:
+  objectStore:
+    uri: s3://test-bucket
+  logfire-ff-query-worker:
+    enabled: true
+  logfire-ai-gateway:
+    enabled: true
+  trustedCaBundle:
+    existingConfigMap:
+      name: private-ca
+      key: ca.pem
+tests:
+  # Cross-template coupling: every Redis consumer must trust the private CA, or a `rediss://`
+  # Redis signed by it fails only at runtime. A new Redis consumer belongs in this list.
+  - it: every Python and FusionFire Redis consumer reads the joined file through SSL_CERT_FILE
+    templates:
+      - templates/logfire-backend.yaml
+      - templates/logfire-backend-auth.yaml
+      - templates/logfire-worker.yaml
+      - templates/logfire-task-runner.yaml
+      - templates/logfire-remote-mcp.yaml
+      - templates/logfire-ff-ingest-processor.yaml
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-query-worker.yaml
+      - templates/logfire-ff-crud-api.yaml
+      - templates/logfire-ff-maintenance-scheduler.yaml
+      - templates/logfire-ff-maintenance-worker.yaml
+      - templates/logfire-ff-compaction-worker.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+      matchMany: true
+    asserts: &consumerAsserts
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SSL_CERT_FILE
+            value: /etc/logfire/trusted-ca/ca-bundle.crt
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: logfire-trusted-ca
+            mountPath: /etc/logfire/trusted-ca
+            readOnly: true
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: trusted-ca-bundle
+      # The system bundle comes first, so public endpoints stay trusted under SSL_CERT_FILE.
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].command[2]
+          pattern: 'for f in /etc/ssl/certs/ca-certificates\.crt /etc/logfire/trusted-ca-sources/\*\.crt; do[\s\S]*done > /etc/logfire/trusted-ca/ca-bundle\.crt'
+      - contains:
+          path: spec.template.spec.initContainers[0].volumeMounts
+          content:
+            name: logfire-trusted-ca
+            mountPath: /etc/logfire/trusted-ca
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: logfire-trusted-ca-sources
+            projected:
+              sources:
+                - configMap:
+                    name: private-ca
+                    items:
+                      - key: ca.pem
+                        path: trusted-ca.crt
+
+  - it: the FusionFire ingest StatefulSet reads the joined file through SSL_CERT_FILE
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    documentSelector:
+      path: kind
+      value: StatefulSet
+    asserts: *consumerAsserts
+
+  # Contract with the images: the init container reads the system bundle of the image that the
+  # main container runs, so it must run that same image.
+  - it: the init container runs the image of its workload
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-worker.yaml
+      - templates/logfire-backend.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+      matchMany: true
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].image
+          pattern: '/(fusionfire|python-prod):'
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: '/(fusionfire|python-prod):'
+
+  # Node ignores SSL_CERT_FILE, and NODE_EXTRA_CA_CERTS takes one file. So the gateway file holds
+  # the in-cluster CA too, and only one NODE_EXTRA_CA_CERTS entry may exist.
+  - it: the AI gateway adds the private and in-cluster CAs through one NODE_EXTRA_CA_CERTS file
+    set:
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: incluster-ca
+    templates:
+      - templates/logfire-ai-gateway.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: NODE_EXTRA_CA_CERTS
+            value: /etc/logfire/trusted-ca/ca-bundle.crt
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: NODE_EXTRA_CA_CERTS
+            value: /etc/logfire/incluster-ca/ca.crt
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          any: true
+          content:
+            name: SSL_CERT_FILE
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].command[2]
+          pattern: 'for f in /etc/logfire/incluster-ca/ca\.crt /etc/logfire/trusted-ca-sources/\*\.crt; do'
+      - contains:
+          path: spec.template.spec.initContainers[0].volumeMounts
+          content:
+            name: logfire-incluster-ca-bundle
+            mountPath: /etc/logfire/incluster-ca
+            readOnly: true
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].image
+          pattern: '/paig/gateway:'

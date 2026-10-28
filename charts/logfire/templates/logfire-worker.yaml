@@ -76,6 +76,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresDsn
+            {{- with (include "logfire.crudPgTopologyEnv" $ | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: SHARED_REDIS_DSN
               {{- include "logfire.redisDsnValueFrom" (dict "root" . "key" "sharedDsn") | nindent 14 }}
             - name: TOKEN_REDIS_DSN
@@ -165,6 +168,7 @@ spec:
             {{- include "logfire.emailSenderEnv" . | nindent 12 }}
             {{- include "logfire.smtp.tlsEnv" . | nindent 12 }}
             {{- include "logfire.pythonObjectStoreEnv" . | nindent 12 }}
+            {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end}}
@@ -173,12 +177,12 @@ spec:
             {{- include "logfire.logfireDataVolumeMounts" . | nindent 12 }}
             {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
-            {{- include "logfire.smtp.caBundle.volumeMount" . | nindent 12 }}
+            {{- include "logfire.trustedCa.volumeMount" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
       volumes:
         {{- include "logfire.tmpVolume" . | nindent 8 }}
         {{- include "logfire.logfireDataVolume" . | nindent 8 }}
         {{- include "logfire.objectStoreVolumes" . | nindent 8 }}
         {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
-        {{- include "logfire.smtp.caBundle.volume" . | nindent 8 }}
+        {{- include "logfire.trustedCa.volumes" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
