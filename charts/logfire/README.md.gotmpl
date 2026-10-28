@@ -569,6 +569,11 @@ Each workload's `podAnnotations` reaches its own pods.
 
 In a namespace that enforces the `baseline` or `restricted` Pod Security level, install Istio with its CNI plugin.
 The default `istio-init` container needs the `NET_ADMIN` capability, which those levels reject.
+From chart 0.14.5, every chart pod sets a pod-level `RuntimeDefault` seccomp profile, which the injected sidecar needs to pass the `restricted` level.
+The bundled Redis is the exception, so set `logfire-redis.podSecurityContext.seccompProfile.type: RuntimeDefault` alongside its other `restricted` overrides.
+
+Each sidecar adds its own resource requests to every pod.
+Istio requests 100m CPU and 128Mi memory per sidecar by default, so plan node capacity for about 30 sidecars, or lower `values.global.proxy.resources.requests` in your Istio installation.
 
 HAProxy sends each backend its in-cluster service name as the `Host` header and passes the public host in `X-Forwarded-Host`.
 Write mesh routes and authorization policies for traffic behind HAProxy against the service names.
