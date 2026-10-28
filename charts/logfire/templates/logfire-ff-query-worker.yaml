@@ -81,12 +81,14 @@ spec:
                   key: postgresDsn
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- include "logfire.ffBcacheReaderEnv" (dict "root" . "noWarm" false) | nindent 12 }}
+            {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             {{- with (index .Values $serviceName | default dict).env }}
               {{- . | toYaml | nindent 12 }}
             {{- end }}
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.trustedCa.volumeMount" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             - name: {{ include "logfire.scratchVolumeName" . }}
               mountPath: /scratch
             {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
@@ -106,6 +108,7 @@ spec:
       volumes:
       {{- include "logfire.tmpVolume" . | nindent 6 }}
       {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 6 }}
+      {{- include "logfire.trustedCa.volumes" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       {{- include "logfire.scratchVolume" (dict "root" . "scratchVolume" (get $effectiveServiceValues "scratchVolume" | default dict)) | nindent 6 }}
       {{- include "logfire.objectStoreVolumes" . | nindent 6 }}

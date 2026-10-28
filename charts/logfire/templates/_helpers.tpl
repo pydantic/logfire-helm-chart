@@ -1883,8 +1883,8 @@ maildev accepts any sender, so it gets a placeholder on the reserved `.localhost
 
 {{/*
 The CA bundle that verifies the SMTP server certificate, for relays signed by an internal CA.
-It is its own volume, separate from the in-cluster TLS CA bundle, so the two never share a
-volume name or mount path. Not used with the bundled maildev, which replaces smtp.host.
+It is one source of the trusted CA bundle of the two services that send email. Not used with
+the bundled maildev, which replaces smtp.host.
 */}}
 {{- define "logfire.smtp.caBundle.source" -}}
 {{- $caBundle := (.Values.smtp | default dict).caBundle | default dict -}}
@@ -1896,9 +1896,8 @@ true
 {{- end -}}
 
 {{/*
-TLS settings of the SMTP client, beside the SMTP_* variables. `SSL_CERT_FILE` makes the mounted
-bundle the default trust store of the pod, which is where the SMTP client looks. In-cluster TLS
-is unaffected: those clients trust `LOGFIRE_CA_PATH` explicitly, not the default trust store.
+TLS settings of the SMTP client, beside the SMTP_* variables. The SMTP CA bundle reaches the
+client through `logfire.trustedCa.env`.
 */}}
 {{- define "logfire.smtp.tlsEnv" -}}
 {{- if not (.Values.dev).deployMaildev -}}
@@ -1907,38 +1906,148 @@ is unaffected: those clients trust `LOGFIRE_CA_PATH` explicitly, not the default
 - name: SMTP_VALIDATE_CERTS
   value: {{ $validateCerts | toString | quote }}
 {{- end }}
-{{- if include "logfire.smtp.caBundle.source" . }}
-- name: SSL_CERT_FILE
-  value: /etc/logfire/smtp-ca/ca.crt
-{{- end }}
 {{- end -}}
 {{- end -}}
 
-{{- define "logfire.smtp.caBundle.volumeMount" -}}
-{{- if include "logfire.smtp.caBundle.source" . -}}
-- name: logfire-smtp-ca-bundle
-  mountPath: /etc/logfire/smtp-ca
+{{/*
+Trusted CA bundle: extra CA certificates for outbound TLS, such as a `rediss://` Redis or an
+SMTP relay signed by a private CA. `trustedCaBundle` reaches every service in the list below.
+`smtp.caBundle` reaches only the two services that send email.
+
+The `trusted-ca-bundle` init container joins the certificates into one file in an emptyDir.
+Python (OpenSSL, httpx) and Rust (`rustls-native-certs`) read it through `SSL_CERT_FILE`, which
+replaces their default trust store. So the file starts with the system bundle of the image, and
+public endpoints such as object storage and model providers stay trusted.
+
+The AI gateway runs on Node, which ignores `SSL_CERT_FILE`. It reads the file through
+`NODE_EXTRA_CA_CERTS`, which adds to the built-in roots of Node. That variable takes one file, so
+the file also holds the in-cluster CA when in-cluster TLS is enabled.
+
+The other in-cluster TLS clients are unaffected. They trust `LOGFIRE_CA_PATH` explicitly.
+*/}}
+{{- define "logfire.trustedCa.sources" -}}
+{{- $ctx := required "logfire.trustedCa.sources: need .ctx" .ctx -}}
+{{- $serviceName := required "logfire.trustedCa.sources: need .serviceName" .serviceName -}}
+{{- $services := list
+  "logfire-backend"
+  "logfire-backend-auth"
+  "logfire-worker"
+  "logfire-task-runner"
+  "logfire-remote-mcp"
+  "logfire-ai-gateway"
+  "logfire-ff-ingest"
+  "logfire-ff-ingest-processor"
+  "logfire-ff-query-api"
+  "logfire-ff-query-worker"
+  "logfire-ff-crud-api"
+  "logfire-ff-maintenance-scheduler"
+  "logfire-ff-maintenance-worker"
+  "logfire-ff-compaction-worker"
+-}}
+{{- $sources := list -}}
+{{- $trusted := $ctx.Values.trustedCaBundle | default dict -}}
+{{- if and (has $serviceName $services) (or (dig "existingConfigMap" "name" "" $trusted) (dig "existingSecret" "name" "" $trusted)) -}}
+  {{- $sources = append $sources (dict "bundle" $trusted "path" "trusted-ca.crt") -}}
+{{- end -}}
+{{- if and (has $serviceName (list "logfire-task-runner" "logfire-worker")) (include "logfire.smtp.caBundle.source" $ctx) -}}
+  {{- $sources = append $sources (dict "bundle" $ctx.Values.smtp.caBundle "path" "smtp-ca.crt") -}}
+{{- end -}}
+{{- dict "sources" $sources | toJson -}}
+{{- end -}}
+
+{{/* "true" when the service trusts extra CA certificates. Pass (dict "ctx" . "serviceName" $serviceName). */}}
+{{- define "logfire.trustedCa.enabled" -}}
+{{- if (include "logfire.trustedCa.sources" . | fromJson).sources -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.trustedCa.initContainer" -}}
+{{- $ctx := .ctx -}}
+{{- $serviceName := .serviceName -}}
+{{- if include "logfire.trustedCa.enabled" . -}}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName) | fromJson -}}
+{{- $gateway := eq $serviceName "logfire-ai-gateway" -}}
+{{- $inClusterCa := and $gateway (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+{{- $repository := $ctx.Values.image.repository | default "" -}}
+{{- $image := $ctx.Values.image.backendImage -}}
+{{- $baseFile := "/etc/ssl/certs/ca-certificates.crt" -}}
+{{- if $gateway -}}
+  {{- $repository = $ctx.Values.image.gatewayRepository | default "" -}}
+  {{- $image = $ctx.Values.image.gatewayImage -}}
+  {{- $baseFile = ternary "/etc/logfire/incluster-ca/ca.crt" "" $inClusterCa -}}
+{{- else if hasPrefix "logfire-ff-" $serviceName -}}
+  {{- $image = $ctx.Values.image.fusionfireImage -}}
+{{- else if eq $serviceName "logfire-worker" -}}
+  {{- $image = $ctx.Values.image.workerImage -}}
+{{- end -}}
+- name: trusted-ca-bundle
+  image: '{{ $repository }}{{ $image }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
+  imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
+  command:
+    - sh
+    - -c
+    - |
+      set -eu
+      for f in {{ with $baseFile }}{{ . }} {{ end }}/etc/logfire/trusted-ca-sources/*.crt; do
+        cat "$f"
+        echo
+      done > /etc/logfire/trusted-ca/ca-bundle.crt
+  {{- include "logfire.resources" (dict "Values" $ctx.Values "serviceName" $serviceName) | nindent 2 }}
+  {{- include "logfire.securityContext" $containerSecurityContext | nindent 2 }}
+  volumeMounts:
+    - name: logfire-trusted-ca-sources
+      mountPath: /etc/logfire/trusted-ca-sources
+      readOnly: true
+    - name: logfire-trusted-ca
+      mountPath: /etc/logfire/trusted-ca
+    {{- if $inClusterCa }}
+    {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" $ctx "mountPath" "/etc/logfire/incluster-ca") | nindent 4 }}
+    {{- end }}
+{{- end -}}
+{{- end -}}
+
+{{/* The env var that points the TLS clients of the service at the trusted CA file. */}}
+{{- define "logfire.trustedCa.env" -}}
+{{- if include "logfire.trustedCa.enabled" . -}}
+- name: {{ ternary "NODE_EXTRA_CA_CERTS" "SSL_CERT_FILE" (eq .serviceName "logfire-ai-gateway") }}
+  value: /etc/logfire/trusted-ca/ca-bundle.crt
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.trustedCa.volumeMount" -}}
+{{- if include "logfire.trustedCa.enabled" . -}}
+- name: logfire-trusted-ca
+  mountPath: /etc/logfire/trusted-ca
   readOnly: true
 {{- end -}}
 {{- end -}}
 
-{{- define "logfire.smtp.caBundle.volume" -}}
-{{- if include "logfire.smtp.caBundle.source" . -}}
-{{- $caBundle := .Values.smtp.caBundle -}}
-- name: logfire-smtp-ca-bundle
-  {{- if dig "existingConfigMap" "name" "" $caBundle }}
-  configMap:
-    name: {{ $caBundle.existingConfigMap.name }}
-    items:
-      - key: {{ dig "existingConfigMap" "key" "ca.crt" $caBundle }}
-        path: ca.crt
-  {{- else }}
-  secret:
-    secretName: {{ $caBundle.existingSecret.name }}
-    items:
-      - key: {{ dig "existingSecret" "key" "ca.crt" $caBundle }}
-        path: ca.crt
-  {{- end }}
+{{- define "logfire.trustedCa.volumes" -}}
+{{- $sources := (include "logfire.trustedCa.sources" . | fromJson).sources -}}
+{{- if $sources -}}
+- name: logfire-trusted-ca-sources
+  projected:
+    sources:
+      {{- range $sources }}
+      {{- $bundle := .bundle }}
+      {{- if dig "existingConfigMap" "name" "" $bundle }}
+      - configMap:
+          name: {{ $bundle.existingConfigMap.name }}
+          items:
+            - key: {{ dig "existingConfigMap" "key" "ca.crt" $bundle }}
+              path: {{ .path }}
+      {{- else }}
+      - secret:
+          name: {{ $bundle.existingSecret.name }}
+          items:
+            - key: {{ dig "existingSecret" "key" "ca.crt" $bundle }}
+              path: {{ .path }}
+      {{- end }}
+      {{- end }}
+- name: logfire-trusted-ca
+  emptyDir:
+    sizeLimit: 16Mi
 {{- end -}}
 {{- end -}}
 
@@ -2225,9 +2334,13 @@ queue here makes the dependency explicit rather than leaving it to scheduling or
 {{- if $userHasAbsurdWait.value -}}
   {{- $absurdInit = "" -}}
 {{- end -}}
+{{- $trustedCaInit := include "logfire.trustedCa.initContainer" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
 {{- $includeDevInit := and $devInit (not $userHasCheckDbReady.value) -}}
-{{- if or $includeDevInit $userInit $absurdInit -}}
+{{- if or $trustedCaInit $includeDevInit $userInit $absurdInit -}}
 initContainers:
+{{- if $trustedCaInit }}
+{{ $trustedCaInit | nindent 2 }}
+{{- end }}
 {{- if $includeDevInit }}
 {{ $devInit | nindent 2 }}
 {{- end }}

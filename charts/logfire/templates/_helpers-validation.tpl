@@ -22,7 +22,7 @@ Validate that objectStore.volumes and objectStore.volumeMounts entries do not co
 volumes and mount paths the chart adds to the same pods. Kubernetes rejects a pod that lists the
 same volume name or mount path twice, so the chart reserves its generated names and paths here.
 The entries reach FusionFire and the Python services (backend, worker), so a name or path any of
-them mounts is reserved. The TLS and SMTP certificate volumes are reserved only while enabled.
+them mounts is reserved. The in-cluster TLS and trusted CA volumes are reserved only while enabled.
 */}}
 {{- define "logfire.validate.objectStoreVolumes" -}}
 {{- $reservedNames := list "tmp" "scratch-data" "ingest-data" "logfire-data" -}}
@@ -31,9 +31,9 @@ them mounts is reserved. The TLS and SMTP certificate volumes are reserved only 
 {{- $reservedNames = concat $reservedNames (list "logfire-incluster-tls" "logfire-incluster-ca-bundle") -}}
 {{- $reservedMountPaths = concat $reservedMountPaths (list "/etc/tls" "/etc/logfire/incluster-ca") -}}
 {{- end -}}
-{{- if include "logfire.smtp.caBundle.source" . -}}
-{{- $reservedNames = concat $reservedNames (list "logfire-smtp-ca-bundle") -}}
-{{- $reservedMountPaths = concat $reservedMountPaths (list "/etc/logfire/smtp-ca") -}}
+{{- if include "logfire.trustedCa.enabled" (dict "ctx" . "serviceName" "logfire-worker") -}}
+{{- $reservedNames = concat $reservedNames (list "logfire-trusted-ca-sources" "logfire-trusted-ca") -}}
+{{- $reservedMountPaths = concat $reservedMountPaths (list "/etc/logfire/trusted-ca-sources" "/etc/logfire/trusted-ca") -}}
 {{- end -}}
 {{- $objectStore := .Values.objectStore | default dict -}}
 {{- range $index, $volume := (get $objectStore "volumes" | default list) -}}
@@ -392,6 +392,13 @@ through maildev instead of smtp.host and get a placeholder sender.
 {{- end -}}
 {{- end -}}
 
+{{- define "logfire.validate.trustedCaBundle" -}}
+{{- $bundle := .Values.trustedCaBundle | default dict -}}
+{{- if and (dig "existingConfigMap" "name" "" $bundle) (dig "existingSecret" "name" "" $bundle) -}}
+  {{- fail "trustedCaBundle: specify only one of existingConfigMap.name or existingSecret.name" -}}
+{{- end -}}
+{{- end -}}
+
 {{/*
 Master validation template - runs all validations
 Call this from templates that need to ensure configuration is valid.
@@ -414,6 +421,7 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.admin"
   "logfire.validate.redis"
   "logfire.validate.smtp"
+  "logfire.validate.trustedCaBundle"
   "logfire.validate.inClusterTls"
   "logfire.validate.scratchVolumes"
   "logfire.validate.removedByteCacheValues"
