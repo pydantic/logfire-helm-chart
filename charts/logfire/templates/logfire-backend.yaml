@@ -146,6 +146,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresDsn
+            {{- with (include "logfire.crudPgTopologyEnv" $ | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: SHARED_REDIS_DSN
               {{- include "logfire.redisDsnValueFrom" (dict "root" . "key" "sharedDsn") | nindent 14 }}
             - name: TOKEN_REDIS_DSN

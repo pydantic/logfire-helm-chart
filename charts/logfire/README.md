@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.4-rc.2](https://img.shields.io/badge/Version-0.14.4--rc.2-informational?style=flat-square) ![AppVersion: b8d349fa](https://img.shields.io/badge/AppVersion-b8d349fa-informational?style=flat-square)
+![Version: 0.14.4-rc.3](https://img.shields.io/badge/Version-0.14.4--rc.3-informational?style=flat-square) ![AppVersion: b8d349fa](https://img.shields.io/badge/AppVersion-b8d349fa-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -368,6 +368,58 @@ postgresSecret:
 
 The same `annotations` pattern is supported by `existingSecret`, `adminSecret`, and `existingGatewaySecret`. The chart does not install a reload controller.
 
+### Connection poolers
+
+`postgresDsn` and `postgresFFDsn` can point at a connection pooler in transaction mode.
+Migrations and the FusionFire maintenance scheduler need session state, such as advisory locks and `SET`.
+So for each pooled database, set a session DSN that points at a session-mode pool or directly at PostgreSQL:
+
+```yaml
+postgresDsn: postgresql://USER:PASSWORD@pooler:6432/crud
+postgresFFDsn: postgresql://USER:PASSWORD@pooler:6432/ff
+postgresSessionDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/crud
+postgresFFSessionDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/ff
+```
+
+`logfire-backend-migrations` uses `postgresSessionDsn`.
+`logfire-ff-migrations` and the maintenance scheduler use `postgresFFSessionDsn`.
+Each one is optional and applies only to its own database.
+With `postgresSecret`, add the same keys to the Secret, and set `postgresSecret.sessionDsn: true` and `postgresSecret.ffSessionDsn: true` for the keys that it has.
+Dex also needs a session-mode pool or a direct connection.
+
+Do not point a session DSN at a transaction-mode pool.
+The session state then stays on server connections that other clients get.
+For example, the scheduler sets `statement_timeout` to `0` for an index rebuild.
+
+The pooler must:
+
+* Support protocol-level named prepared statements in transaction mode. For PgBouncer, set `max_prepared_statements` above `0`.
+* Accept the `options` startup parameter.
+* Set `statement_timeout`, `lock_timeout`, and `idle_in_transaction_session_timeout` for each server connection, for example with PgBouncer's `connect_query` or with `ALTER ROLE ... SET`.
+
+The chart is tested with PgBouncer 1.22 and later. Other poolers are not tested.
+Behind a transaction-mode pool, two concurrent installs or uninstalls of the same integration in one project can overlap and leave it half configured.
+
+#### Connection counts
+
+Each pod opens up to its pool size. The pooler must accept the sum over all pods.
+
+| Workload | Database | Variable | Default per pod |
+|----------|----------|----------|-----------------|
+| FusionFire workloads except `logfire-ff-ingest` | `ff` | `FF_PG_POOL_MAX_CONNECTIONS` | 32, and 4 on `logfire-ff-query-worker` |
+| `logfire-ff-query-api` and `logfire-ff-query-worker` | `crud` | `FF_EXTERNAL_TABLES_PG_MAX_CONNECTIONS` | 32 |
+| Python services | `crud` | `CRUD_PG_POOL_MAX_CONNECTIONS` | 32 |
+| `logfire-ai-gateway` | `crud` | None | 10 |
+
+Set the variable in the workload's `env`:
+
+```yaml
+logfire-ff-ingest-processor:
+  env:
+    - name: FF_PG_POOL_MAX_CONNECTIONS
+      value: "16"
+```
+
 ### In-cluster HTTPS
 
 `inClusterTls.enabled` switches supported in-cluster service-to-service traffic to HTTPS with certificate verification.
@@ -667,10 +719,14 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed scratch volumes. `logfire-ff-ingest` defaults to `fsGroupChangePolicy: Always` instead, because its spool is a retained volume that `OnRootMismatch` can leave unrepaired. A per-service `podSecurityContext` wins over both. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
-| postgresSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
+| postgresFFSessionDsn | string | `""` | Optional session DSN for the `ff` database: a session-mode pool or a direct connection to PostgreSQL. Set it when `postgresFFDsn` points at a transaction-mode pool. `logfire-ff-migrations` and the index rebuilds of `logfire-ff-maintenance-scheduler` then use it, because they need session state: advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README. |
+| postgresSecret | object | `{"annotations":{},"enabled":false,"ffSessionDsn":false,"name":"","sessionDsn":false}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
 | postgresSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | postgresSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
+| postgresSecret.ffSessionDsn | bool | `false` | Set to true when the Secret also has a `postgresFFSessionDsn` key. See `postgresFFSessionDsn`. |
 | postgresSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
+| postgresSecret.sessionDsn | bool | `false` | Set to true when the Secret also has a `postgresSessionDsn` key. See `postgresSessionDsn`. |
+| postgresSessionDsn | string | `""` | Optional session DSN for the `crud` database: a session-mode pool or a direct connection to PostgreSQL. Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it, because migrations need session state: advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README. |
 | postgresql.auth.postgresPassword | string | `"postgres"` |  |
 | postgresql.fullnameOverride | string | `"logfire-postgres"` |  |
 | postgresql.image.registry | string | `"docker.io"` |  |
