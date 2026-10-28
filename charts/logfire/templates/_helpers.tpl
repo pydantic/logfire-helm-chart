@@ -2055,6 +2055,10 @@ true
 {{- .Values.inClusterTls.enabled | default false -}}
 {{- end -}}
 
+{{- define "logfire.serviceHost" -}}
+{{- printf "%s.%s.svc.%s" .serviceName .ctx.Release.Namespace (.ctx.Values.clusterDomain | default "cluster.local") -}}
+{{- end -}}
+
 {{/*
 Render an HAProxy server line, including in-cluster TLS when enabled.
 */}}
@@ -2064,9 +2068,8 @@ Render an HAProxy server line, including in-cluster TLS when enabled.
 {{- $serviceName := required "logfire.inClusterTls.haproxyUpstream: need .serviceName" .serviceName -}}
 {{- $cleartextPort := required "logfire.inClusterTls.haproxyUpstream: need .cleartextPort" .cleartextPort -}}
 {{- $certificateServiceName := .certificateServiceName | default $serviceName -}}
-{{- $clusterDomain := $ctx.Values.clusterDomain | default "cluster.local" -}}
-{{- $host := printf "%s.%s.svc.%s" $serviceName $ctx.Release.Namespace $clusterDomain -}}
-{{- $certificateHost := printf "%s.%s.svc.%s" $certificateServiceName $ctx.Release.Namespace $clusterDomain -}}
+{{- $host := include "logfire.serviceHost" (dict "ctx" $ctx "serviceName" $serviceName) -}}
+{{- $certificateHost := include "logfire.serviceHost" (dict "ctx" $ctx "serviceName" $certificateServiceName) -}}
 {{- $checkSsl := true -}}
 {{- if hasKey . "checkSsl" -}}{{- $checkSsl = .checkSsl -}}{{- end -}}
 {{- if .replicas -}}server-template {{ $name }} 1-{{ .replicas }}{{- else -}}server {{ $name }}{{- end }} {{ $host }}.:{{ ternary $ctx.Values.inClusterTls.httpsPort $cleartextPort (include "logfire.inClusterTls.enabled" $ctx | eq "true") }}{{ with .options }} {{ . }}{{ end }}{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") }} ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $certificateHost }}) verifyhost {{ $certificateHost }}{{ if $checkSsl }} check-ssl{{ end }}{{- end -}}
