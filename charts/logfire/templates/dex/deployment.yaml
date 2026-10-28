@@ -104,6 +104,12 @@ spec:
             {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
               {{- . | nindent 12 }}
             {{- end}}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "sleep"
+                  - "5"
           ports:
             - name: http
               containerPort: 5556
