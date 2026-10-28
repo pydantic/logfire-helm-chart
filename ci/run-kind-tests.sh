@@ -80,7 +80,10 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 baseline_chart=${LOGFIRE_TEST_BASELINE_CHART:-}
-if [[ -n "$baseline_chart" ]]; then
+if [[ "${LOGFIRE_TEST_FRESH_INSTALL:-}" == true ]]; then
+  # The 0.14.0 baseline predates the service mesh fixes, so a meshed run starts from the current chart.
+  baseline_chart="$repo_root/charts/logfire"
+elif [[ -n "$baseline_chart" ]]; then
   if [[ ! -f "$baseline_chart" || "$baseline_chart" != *.tgz ]]; then
     echo "LOGFIRE_TEST_BASELINE_CHART must name a local chart archive" >&2
     exit 1
@@ -92,7 +95,7 @@ else
   baseline_chart="$tmp_dir/logfire-0.14.0.tgz"
 fi
 baseline_version=$(helm show chart "$baseline_chart" | awk '/^version:/ { gsub(/"/, "", $2); print $2; exit }')
-if [[ "$baseline_version" != 0.14.0 ]]; then
+if [[ "$baseline_version" != 0.14.0 && "${LOGFIRE_TEST_FRESH_INSTALL:-}" != true ]]; then
   echo "The baseline archive must contain chart version 0.14.0" >&2
   exit 1
 fi
@@ -150,7 +153,7 @@ if [[ -z "$META_FRONTEND_TOKEN" ]]; then
 fi
 export META_FRONTEND_TOKEN
 
-echo "Installing the 0.14.0 baseline in $context/$namespace"
+echo "Installing the $baseline_version baseline in $context/$namespace"
 helm upgrade --install "$release" "$baseline_chart" \
   --kube-context "$context" --namespace "$namespace" \
   --reset-values "${values[@]}" --set logfire-ff-query-worker.enabled=false \

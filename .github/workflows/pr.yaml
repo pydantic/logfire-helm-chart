@@ -7,13 +7,40 @@ on:
       - main
 
 jobs:
+  # The Istio suite costs a 16-core runner, so pull requests run it only when they change what
+  # the cluster runs. Pushes to main always run it.
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      suites: ${{ steps.suites.outputs.suites }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Select suites
+        id: suites
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          suites='["chart-testing", "stable-upgrade"]'
+          if [[ -z "$BASE_REF" ]] || git diff --name-only "origin/$BASE_REF...HEAD" \
+            | grep -qE '^(charts/logfire/(templates/|values[^/]*\.yaml$|Chart\.(yaml|lock)$|ci/)|tests/integration/|ci/|\.github/workflows/pr\.yaml$)'; then
+            suites='["chart-testing", "stable-upgrade", "istio"]'
+          fi
+          echo "suites=$suites" >> "$GITHUB_OUTPUT"
+
   suites:
     name: ${{ matrix.suite }}
+    needs: plan
     runs-on: ubuntu-latest-16-cores
     strategy:
       fail-fast: false
       matrix:
-        suite: [chart-testing, stable-upgrade]
+        suite: ${{ fromJSON(needs.plan.outputs.suites) }}
     permissions:
       id-token: write
       contents: read
@@ -116,6 +143,34 @@ jobs:
           # `pod-security.kubernetes.io/enforce=restricted` once the Redis hardening lands.
           kubectl label namespace logfire-restricted pod-security.kubernetes.io/enforce=baseline pod-security.kubernetes.io/warn=restricted
 
+      # The CNI plugin replaces the istio-init container, which needs NET_ADMIN and so fails
+      # the namespace's baseline Pod Security level.
+      - name: Install Istio with STRICT mTLS
+        if: matrix.suite == 'istio'
+        env:
+          ISTIO_VERSION: 1.31.3
+          ISTIOCTL_SHA256: 382c3004ce2e9c5ed3064b092ae0da7f6bbe30c766a1be282f45725add004860
+        run: |
+          archive="istioctl-$ISTIO_VERSION-linux-amd64.tar.gz"
+          curl -fsSLo "$RUNNER_TEMP/$archive" "https://github.com/istio/istio/releases/download/$ISTIO_VERSION/$archive"
+          echo "$ISTIOCTL_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          # The Kind node has 16 CPUs. Default sidecar requests (100m each) leave no room for the last pods.
+          "$RUNNER_TEMP/istioctl" install -y --set profile=minimal --set components.cni.enabled=true \
+            --set values.global.proxy.resources.requests.cpu=10m \
+            --set values.global.proxy.resources.requests.memory=64Mi
+          kubectl -n istio-system rollout status daemonset/istio-cni-node --timeout=5m
+          kubectl label namespace logfire-restricted istio-injection=enabled
+          kubectl apply -n logfire-restricted -f - <<'EOF'
+          apiVersion: security.istio.io/v1
+          kind: PeerAuthentication
+          metadata:
+            name: default
+          spec:
+            mtls:
+              mode: STRICT
+          EOF
+
       - name: Create k8s secrets
         run: |
           for ns in default logfire-restricted; do
@@ -153,7 +208,7 @@ jobs:
           ct install --upgrade --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH" "${chart_args[@]}"
 
       - name: Install uv
-        if: matrix.suite == 'stable-upgrade'
+        if: matrix.suite != 'chart-testing'
         uses: astral-sh/setup-uv@v5
 
       - name: Test stable upgrade, release contracts, and split query topology
@@ -161,6 +216,22 @@ jobs:
         env:
           LOGFIRE_TEST_NAMESPACE: logfire-restricted
         run: ci/run-kind-tests.sh
+
+      - name: Test the chart inside an Istio mesh
+        if: matrix.suite == 'istio'
+        env:
+          LOGFIRE_TEST_NAMESPACE: logfire-restricted
+          LOGFIRE_TEST_FRESH_INSTALL: "true"
+        run: ci/run-kind-tests.sh
+
+      - name: Show unready pods
+        if: failure() && matrix.suite != 'chart-testing'
+        run: |
+          kubectl -n logfire-restricted get pods -o wide
+          kubectl describe nodes | sed -n '/Allocated resources/,/Events/p'
+          for pod in $(kubectl -n logfire-restricted get pods --no-headers | awk '$3 != "Completed" { split($2, r, "/"); if (r[1] != r[2]) print $1 }'); do
+            kubectl -n logfire-restricted describe pod "$pod" | sed -n '/^Events:/,$p'
+          done
 
   test:
     needs: suites
