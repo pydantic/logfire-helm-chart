@@ -32,7 +32,7 @@ spec:
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" "maildev") | nindent 6 }}
       {{- $maildev := default (dict) .Values.maildev }}
       {{- $maildevImage := get $maildev "image" | default dict }}
-      {{- $maildevPodSecurityContext := get $maildev "podSecurityContext" | default .Values.podSecurityContext }}
+      {{- $maildevPodSecurityContext := get $maildev "podSecurityContext" | default (include "logfire.podSecurityContext" . | fromJson) }}
       {{- include "logfire.securityContext" $maildevPodSecurityContext | nindent 6 }}
       containers:
         - name: logfire-maildev

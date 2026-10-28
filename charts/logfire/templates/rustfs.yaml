@@ -135,7 +135,7 @@ spec:
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" "rustfs") | nindent 6 }}
       {{- /* The RustFS image runs as uid and gid 10001, so it needs `fsGroup: 10001` to write a fresh volume. The chart-wide and `rustfs` pod security contexts override this default. */}}
       {{- $podSecurityContext := dict "fsGroup" 10001 "fsGroupChangePolicy" "OnRootMismatch" }}
-      {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy (.Values.podSecurityContext | default dict)) }}
+      {{- $podSecurityContext = mergeOverwrite $podSecurityContext (include "logfire.podSecurityContext" . | fromJson) }}
       {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy (get $rustfs "podSecurityContext" | default dict)) }}
       {{- include "logfire.securityContext" $podSecurityContext | nindent 6 }}
       {{- $rustfsImage := get $rustfs "image" | default dict }}

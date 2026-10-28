@@ -21,6 +21,8 @@ tests:
           value:
             fsGroup: 1000
             fsGroupChangePolicy: Always
+            seccompProfile:
+              type: RuntimeDefault
         documentSelector:
           path: kind
           value: StatefulSet
@@ -34,6 +36,8 @@ tests:
           value:
             fsGroup: 1000
             fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
         documentSelector:
           path: kind
           value: Deployment
@@ -50,6 +54,8 @@ tests:
           value:
             fsGroup: 2000
             fsGroupChangePolicy: Always
+            seccompProfile:
+              type: RuntimeDefault
         documentSelector:
           path: kind
           value: StatefulSet
@@ -67,6 +73,39 @@ tests:
           value:
             fsGroup: 1000
             fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
         documentSelector:
           path: kind
           value: StatefulSet
+
+  - it: gives every chart-owned pod a RuntimeDefault seccomp profile for injected sidecars
+    templates:
+      - templates/logfire-backend.yaml
+      - templates/logfire-service.yaml
+      - templates/logfire-backend-migrations.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.seccompProfile
+          value:
+            type: RuntimeDefault
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.securityContext.seccompProfile
+          value:
+            type: RuntimeDefault
+        template: templates/logfire-service.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.securityContext.seccompProfile
+          value:
+            type: RuntimeDefault
+        template: templates/logfire-backend-migrations.yaml
+        documentSelector:
+          path: kind
+          value: Job
