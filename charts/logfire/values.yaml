@@ -22,10 +22,10 @@ topologySpreadConstraints: []
 
 # -- Istio compatibility options
 istio:
-  # -- When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:
-  #    logfire-service, logfire-backend-migrations,
-  #    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.
-  #    You can still override per workload via `<workload>.podLabels`.
+  # -- Deprecated. Leave unset: every Logfire pod works with a sidecar since chart 0.14.4.
+  #    When enabled, sets `sidecar.istio.io/inject: "false"` on logfire-service,
+  #    logfire-backend-migrations, logfire-ff-migrations, logfire-redis, and logfire-otel-collector.
+  #    Under STRICT mTLS those pods cannot reach meshed services, so the install stops at the migrations.
   disableSidecarOnKnownWorkloads: false
 
 # -- Kubernetes cluster domain for service discovery.

@@ -543,17 +543,62 @@ A `restricted` namespace rejects it unless you set `logfire-redis.securityContex
 Setting it replaces the Redis pod.
 FusionFire pods that start before the new Redis pod is ready exit and restart until Redis is back.
 
-### Istio compatibility
+### Istio service mesh
 
-If you run Istio and see protocol or mTLS sidecar issues on HAProxy, migration, or infrastructure workloads, enable:
+From chart 0.14.4, every Logfire pod can run with an Istio sidecar, under STRICT or PERMISSIVE mTLS.
+Split query mode (`logfire-ff-query-worker.enabled: true`) needs chart 0.14.5 or later in a mesh.
+CI installs the chart into Istio with STRICT mTLS and runs the integration suite.
+
+Istio must inject native sidecars.
+Istio 1.27 and later do this by default on Kubernetes 1.29 and later.
+With classic sidecars, migration Jobs never complete, and init containers that reach PostgreSQL start before the sidecar.
+If your mesh still uses classic sidecars, request native sidecars on Logfire pods:
 
 ```yaml
-istio:
-  disableSidecarOnKnownWorkloads: true
+hooksAnnotations:
+  sidecar.istio.io/nativeSidecar: "true"
+logfire-backend:
+  podAnnotations:
+    sidecar.istio.io/nativeSidecar: "true"
+# Repeat podAnnotations for every other Logfire workload.
 ```
 
-This sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads.
-You can still override labels per workload using `<workload>.podLabels`.
+`hooksAnnotations` reaches the migration Job pods.
+Each workload's `podAnnotations` reaches its own pods.
+
+In a namespace that enforces the `baseline` or `restricted` Pod Security level, install Istio with its CNI plugin.
+The default `istio-init` container needs the `NET_ADMIN` capability, which those levels reject.
+From chart 0.14.5, every chart pod sets a pod-level `RuntimeDefault` seccomp profile, which the injected sidecar needs to pass the `restricted` level.
+The bundled Redis and PostgreSQL keep their pod templates unchanged across upgrades, so set the profile for them yourself:
+
+```yaml
+logfire-redis:
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+postgresql:
+  primary:
+    podSecurityContext:
+      seccompProfile:
+        type: RuntimeDefault
+```
+
+The bundled Redis also needs its other `restricted` overrides, described in Restricted Pod Security.
+
+Each sidecar adds its own resource requests to every pod.
+Istio requests 100m CPU and 128Mi memory per sidecar by default, so plan node capacity for about 30 sidecars, or lower `values.global.proxy.resources.requests` in your Istio installation.
+
+HAProxy sends each backend its in-cluster service name as the `Host` header and passes the public host in `X-Forwarded-Host`.
+Write mesh routes and authorization policies for traffic behind HAProxy against the service names.
+
+With `outboundTrafficPolicy.mode: REGISTRY_ONLY`, add a `ServiceEntry` for each external dependency: PostgreSQL, Redis, object storage, SMTP, and any OTLP export target.
+
+Inside the mesh, use Istio mTLS instead of `inClusterTls`.
+
+`istio.disableSidecarOnKnownWorkloads` is deprecated.
+It removes the sidecar from HAProxy, the migration Jobs, Redis, and the collector.
+Under STRICT mTLS, those pods cannot reach meshed services, so the install stops at the migrations.
+Leave it unset.
 
 ## Configure SDKs
 
@@ -699,7 +744,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | intakeOauth | object | `{"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When `resourceUrl` is empty, the chart derives the self-hosted resource URL from the primary Logfire URL:   resourceUrl = <logfire.url>/v1 |
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
 | istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
-| istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
+| istio.disableSidecarOnKnownWorkloads | bool | `false` | Deprecated. Leave unset: every Logfire pod works with a sidecar since chart 0.14.4.    When enabled, sets `sidecar.istio.io/inject: "false"` on logfire-service,    logfire-backend-migrations, logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    Under STRICT mTLS those pods cannot reach meshed services, so the install stops at the migrations. |
 | keepAliveTimeout | string | `"120s"` | Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of the ingress or tunnel in front of the release; if HAProxy closes an idle connection first, the client sees a 502/520 when it reuses it. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
