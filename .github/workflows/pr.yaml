@@ -7,13 +7,40 @@ on:
       - main
 
 jobs:
+  # The Istio suite costs a 16-core runner, so pull requests run it only when they change what
+  # the cluster runs. Pushes to main always run it.
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      suites: ${{ steps.suites.outputs.suites }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Select suites
+        id: suites
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          suites='["chart-testing", "stable-upgrade"]'
+          if [[ -z "$BASE_REF" ]] || git diff --name-only "origin/$BASE_REF...HEAD" \
+            | grep -qE '^(charts/logfire/(templates/|values[^/]*\.yaml$|Chart\.(yaml|lock)$|ci/)|tests/integration/|ci/|\.github/workflows/pr\.yaml$)'; then
+            suites='["chart-testing", "stable-upgrade", "istio"]'
+          fi
+          echo "suites=$suites" >> "$GITHUB_OUTPUT"
+
   suites:
     name: ${{ matrix.suite }}
+    needs: plan
     runs-on: ubuntu-latest-16-cores
     strategy:
       fail-fast: false
       matrix:
-        suite: [chart-testing, stable-upgrade, istio]
+        suite: ${{ fromJSON(needs.plan.outputs.suites) }}
     permissions:
       id-token: write
       contents: read
