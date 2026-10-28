@@ -327,13 +327,56 @@ For local evaluation, `dev.deployRustfs` (or the deprecated `dev.deployMinio`) d
 It fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credential environment variables, so the workloads reach the in-cluster bucket.
 An `s3://` `objectStore.uri` also sets the bucket that RustFS creates.
 
-Do not enable bucket versioning. Logfire manages its own data lifecycle, and bucket versioning can increase cost and interfere with lifecycle behavior.
+#### Bucket settings
+
+Logfire deletes the objects it no longer needs.
+Compaction replaces small files with larger ones and deletes the old files a few minutes later.
+Retention deletes data older than each project's retention period.
+Configure the bucket so that it does not keep or move these objects:
+
+* Turn off object versioning.
+* Turn off soft delete. Google Cloud Storage turns on a 7-day soft delete for new buckets, and Azure Storage can keep deleted blobs for a period. Compaction deletes objects all the time, so soft-deleted objects can become a large part of the storage bill.
+* On Amazon S3 and Google Cloud Storage, add a lifecycle rule that aborts incomplete multipart uploads after 1 day. A worker that stops during an upload leaves parts behind. These parts are billed, but they do not appear in object listings.
+* Do not add lifecycle rules that delete objects or change their storage class by age. An age-based delete removes files that the `ff` database still references, and queries over those files then fail.
+
+On Google Cloud Storage, you can turn on Autoclass to lower the cost of data that is read less often.
 
 ### PostgreSQL
 
 Logfire requires three separate PostgreSQL databases: `crud`, `ff`, and `dex`.
 They may run on the same PostgreSQL instance, but they must be separate databases to avoid schema collisions.
 Each database user needs owner permissions so migrations can run.
+
+PostgreSQL stores metadata only. Telemetry data is in object storage.
+An instance with 2 vCPU and 16 GB of memory is a good starting size. Resize it from the CPU and connection use that you see.
+
+FusionFire migrations set autovacuum settings on the `ff` tables that change most often. Do not override them.
+
+Connect each DSN directly to PostgreSQL, or through a connection pooler in transaction mode as [Connection poolers](#connection-poolers) describes.
+The migration jobs, `logfire-ff-maintenance-scheduler`, and Dex then need a session-mode pool or a direct connection.
+
+Each pod opens its own connection pool. [Connection counts](#connection-counts) lists the default size and the variable for each workload.
+
+### Redis
+
+The bundled Redis is for evaluation. For production, set `logfire-redis.enabled: false` and connect a managed Redis:
+
+* Use one Redis endpoint: a standalone instance, or a primary with replicas behind one write endpoint. Logfire does not support Redis Cluster mode.
+* Redis 7.2 is the tested version.
+* Logfire accepts `redis://` and `rediss://` DSNs. Put the password, or the ACL user and password, in the DSN, for example `rediss://USER:PASSWORD@redis.example.com:6379`.
+* With `rediss://`, Logfire verifies the Redis server certificate. If a private CA signs it, such as the CA that Memorystore creates for each instance with in-transit encryption, set `trustedCaBundle`. See [Private CA certificates](#private-ca-certificates).
+
+To keep the DSNs out of your values file, create a Secret with the `sharedDsn`, `tailDsn`, `tokenDsn`, and `usageDsn` keys, and reference it.
+All four keys can hold the same DSN:
+
+```yaml
+logfire-redis:
+  enabled: false
+
+redisSecret:
+  enabled: true
+  name: logfire-redis-dsn
+```
 
 ### AI
 
