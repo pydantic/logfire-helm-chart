@@ -356,6 +356,33 @@ tests:
           content:
             name: FF_TLS_CLIENT_PORT
             value: "9443"
+  - it: exposes the query-api peer port on the headless peers Service when in-cluster TLS is on
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    set:
+      logfire-ff-query-worker.enabled: false
+      inClusterTls.enabled: true
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "9443"
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.ports
+          value:
+            - name: tcp-peer
+              appProtocol: tcp
+              port: 9443
+              targetPort: 9443
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-api-peers
   - it: addresses logfire-ff-query-api with remote worker true and TLS false
     templates:
       - templates/logfire-ff-query-api.yaml
