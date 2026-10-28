@@ -128,7 +128,10 @@ jobs:
           curl -fsSLo "$RUNNER_TEMP/$archive" "https://github.com/istio/istio/releases/download/$ISTIO_VERSION/$archive"
           echo "$ISTIOCTL_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
-          "$RUNNER_TEMP/istioctl" install -y --set profile=minimal --set components.cni.enabled=true
+          # The Kind node has 16 CPUs. Default sidecar requests (100m each) leave no room for the last pods.
+          "$RUNNER_TEMP/istioctl" install -y --set profile=minimal --set components.cni.enabled=true \
+            --set values.global.proxy.resources.requests.cpu=10m \
+            --set values.global.proxy.resources.requests.memory=64Mi
           kubectl -n istio-system rollout status daemonset/istio-cni-node --timeout=5m
           kubectl label namespace logfire-restricted istio-injection=enabled
           kubectl apply -n logfire-restricted -f - <<'EOF'
