@@ -401,6 +401,18 @@ webPush:
   # each browser recovers from by subscribing again on its next visit.
   privateKey: ""
 
+# ==============================================================================
+# PagerDuty
+# ==============================================================================
+
+pagerduty:
+  # -- ID of a PagerDuty App with Events Integration enabled. Setting it turns on
+  # **Settings > Connections > Connect PagerDuty**. Create the app as Private in your own
+  # PagerDuty account: a private app installs only into that account, and needs no review by
+  # PagerDuty. Logfire sends the install callback URL with each request, so the app does not
+  # list it.
+  appId: ""
+
 
 # ==============================================================================
 # AI configuration
