@@ -24,6 +24,7 @@ grace period cuts the tier drain short and leaves the disk tier unclean, so deri
 timeouts below instead of holding a second copy of the numbers.
 */}}
 {{- $grace := add (add (add $readinessDelaySeconds $shutdownTimeoutSeconds) $tierDrainTimeoutSeconds) 5 -}}
+{{- $defaultUpdateStrategy := dict "type" "RollingUpdate" "rollingUpdate" (dict "maxUnavailable" "25%") -}}
 {{- $selector := dict "matchLabels" (dict "app.kubernetes.io/component" $serviceName) -}}
 {{- $defaultTopologySpreadConstraints := list
   (dict "maxSkew" 1 "topologyKey" "topology.kubernetes.io/zone" "whenUnsatisfiable" "ScheduleAnyway" "labelSelector" $selector)
@@ -65,9 +66,7 @@ spec:
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   podManagementPolicy: Parallel
   updateStrategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 25%
+    {{- toYaml (get $effectiveServiceValues "updateStrategy" | default $defaultUpdateStrategy) | nindent 4 }}
   persistentVolumeClaimRetentionPolicy:
     # The cache is regenerable, and a claim kept across a replacement would hold its old storage
     # class and size because `volumeClaimTemplates` is immutable. Releasing both keeps the cache on

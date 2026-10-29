@@ -1144,6 +1144,9 @@ logfire-ff-bcache:
   disk: {}
   #  storage: 32Gi
   #  storageClassName: my-storage-class
+  # -- StatefulSet update strategy, used as given. Empty means `RollingUpdate` with `maxUnavailable: 25%`,
+  # which needs the `MaxUnavailableStatefulSet` feature gate; set `type: RollingUpdate` alone to leave it out.
+  updateStrategy: {}
   # -- Topology routing for the readers that use this cache. Zone routing is off by default.
   topology:
     # -- Route reads to cache pods in this pod's topology zone. The reader resolves the zone from

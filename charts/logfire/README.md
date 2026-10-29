@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.5-rc.5](https://img.shields.io/badge/Version-0.14.5--rc.5-informational?style=flat-square) ![AppVersion: b8d349fa](https://img.shields.io/badge/AppVersion-b8d349fa-informational?style=flat-square)
+![Version: 0.14.5-rc.6](https://img.shields.io/badge/Version-0.14.5--rc.6-informational?style=flat-square) ![AppVersion: b8d349fa](https://img.shields.io/badge/AppVersion-b8d349fa-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -760,12 +760,13 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-bcache | object | `{"disk":{},"pdb":{},"replicas":3,"topology":{"zone":"","zoneAware":false}}` | Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use |
+| logfire-ff-bcache | object | `{"disk":{},"pdb":{},"replicas":3,"topology":{"zone":"","zoneAware":false},"updateStrategy":{}}` | Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use |
 | logfire-ff-bcache.disk | object | `{}` | Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it. A StatefulSet cannot change its volumeClaimTemplates, so a later change to storage fails `helm upgrade`. To resize, expand the existing `bcache-data-*` PVCs if the storage class allows it, or delete the StatefulSet with `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade. Unset `disk.storage` takes the sizing preset's size, or 32Gi without a preset. |
 | logfire-ff-bcache.replicas | int | `3` | Number of bcache replicas when autoscaling is not configured. |
 | logfire-ff-bcache.topology | object | `{"zone":"","zoneAware":false}` | Topology routing for the readers that use this cache. Zone routing is off by default. |
 | logfire-ff-bcache.topology.zone | string | `""` | Static topology zone, for tests and for single-zone clusters whose nodes carry no zone label. Every pod gets this zone, so it must match the zone the pods run in. It does not serve a multi-zone cluster that refuses node-read RBAC: leave `zoneAware` off there and take global routing instead. Takes precedence over `zoneAware`, and then no cluster role is created. |
 | logfire-ff-bcache.topology.zoneAware | bool | `false` | Route reads to cache pods in this pod's topology zone. The reader resolves the zone from its own node label at startup, so this needs a cluster-wide `nodes` `get` role, and every zone must run a cache pod or reads in the other zones get no caching at all. |
+| logfire-ff-bcache.updateStrategy | object | `{}` | StatefulSet update strategy, used as given. Empty means `RollingUpdate` with `maxUnavailable: 25%`, which needs the `MaxUnavailableStatefulSet` feature gate; set `type: RollingUpdate` alone to leave it out. |
 | logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn,otel::tracing=info"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
