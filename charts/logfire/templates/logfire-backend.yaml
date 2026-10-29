@@ -287,6 +287,10 @@ spec:
             {{- with (include "logfire.webPushEnv" . | trim) }}
             {{- . | nindent 12 }}
             {{- end }}
+            {{- with .Values.pagerduty.appId }}
+            - name: INTEGRATION_PAGERDUTY_APP_ID
+              value: {{ . | quote }}
+            {{- end }}
             - name: ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
