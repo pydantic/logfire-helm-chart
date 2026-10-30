@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.4](https://img.shields.io/badge/Version-0.14.4-informational?style=flat-square) ![AppVersion: b8d349fa](https://img.shields.io/badge/AppVersion-b8d349fa-informational?style=flat-square)
+![Version: 0.14.5](https://img.shields.io/badge/Version-0.14.5-informational?style=flat-square) ![AppVersion: b8d349fa](https://img.shields.io/badge/AppVersion-b8d349fa-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -543,17 +543,62 @@ A `restricted` namespace rejects it unless you set `logfire-redis.securityContex
 Setting it replaces the Redis pod.
 FusionFire pods that start before the new Redis pod is ready exit and restart until Redis is back.
 
-### Istio compatibility
+### Istio service mesh
 
-If you run Istio and see protocol or mTLS sidecar issues on HAProxy, migration, or infrastructure workloads, enable:
+From chart 0.14.4, every Logfire pod can run with an Istio sidecar, under STRICT or PERMISSIVE mTLS.
+Split query mode (`logfire-ff-query-worker.enabled: true`) needs chart 0.14.5 or later in a mesh.
+CI installs the chart into Istio with STRICT mTLS and runs the integration suite.
+
+Istio must inject native sidecars.
+Istio 1.27 and later do this by default on Kubernetes 1.29 and later.
+With classic sidecars, migration Jobs never complete, and init containers that reach PostgreSQL start before the sidecar.
+If your mesh still uses classic sidecars, request native sidecars on Logfire pods:
 
 ```yaml
-istio:
-  disableSidecarOnKnownWorkloads: true
+hooksAnnotations:
+  sidecar.istio.io/nativeSidecar: "true"
+logfire-backend:
+  podAnnotations:
+    sidecar.istio.io/nativeSidecar: "true"
+# Repeat podAnnotations for every other Logfire workload.
 ```
 
-This sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads.
-You can still override labels per workload using `<workload>.podLabels`.
+`hooksAnnotations` reaches the migration Job pods.
+Each workload's `podAnnotations` reaches its own pods.
+
+In a namespace that enforces the `baseline` or `restricted` Pod Security level, install Istio with its CNI plugin.
+The default `istio-init` container needs the `NET_ADMIN` capability, which those levels reject.
+From chart 0.14.5, every chart pod sets a pod-level `RuntimeDefault` seccomp profile, which the injected sidecar needs to pass the `restricted` level.
+The bundled Redis and PostgreSQL keep their pod templates unchanged across upgrades, so set the profile for them yourself:
+
+```yaml
+logfire-redis:
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+postgresql:
+  primary:
+    podSecurityContext:
+      seccompProfile:
+        type: RuntimeDefault
+```
+
+The bundled Redis also needs its other `restricted` overrides, described in Restricted Pod Security.
+
+Each sidecar adds its own resource requests to every pod.
+Istio requests 100m CPU and 128Mi memory per sidecar by default, so plan node capacity for about 30 sidecars, or lower `values.global.proxy.resources.requests` in your Istio installation.
+
+HAProxy sends each backend its in-cluster service name as the `Host` header and passes the public host in `X-Forwarded-Host`.
+Write mesh routes and authorization policies for traffic behind HAProxy against the service names.
+
+With `outboundTrafficPolicy.mode: REGISTRY_ONLY`, add a `ServiceEntry` for each external dependency: PostgreSQL, Redis, object storage, SMTP, and any OTLP export target.
+
+Inside the mesh, use Istio mTLS instead of `inClusterTls`.
+
+`istio.disableSidecarOnKnownWorkloads` is deprecated.
+It removes the sidecar from HAProxy, the migration Jobs, Redis, and the collector.
+Under STRICT mTLS, those pods cannot reach meshed services, so the install stops at the migrations.
+Leave it unset.
 
 ## Configure SDKs
 
@@ -699,7 +744,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | intakeOauth | object | `{"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When `resourceUrl` is empty, the chart derives the self-hosted resource URL from the primary Logfire URL:   resourceUrl = <logfire.url>/v1 |
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
 | istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
-| istio.disableSidecarOnKnownWorkloads | bool | `false` | When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:    logfire-service, logfire-backend-migrations,    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    You can still override per workload via `<workload>.podLabels`. |
+| istio.disableSidecarOnKnownWorkloads | bool | `false` | Deprecated. Leave unset: every Logfire pod works with a sidecar since chart 0.14.4.    When enabled, sets `sidecar.istio.io/inject: "false"` on logfire-service,    logfire-backend-migrations, logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    Under STRICT mTLS those pods cannot reach meshed services, so the install stops at the migrations. |
 | keepAliveTimeout | string | `"120s"` | Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of the ingress or tunnel in front of the release; if HAProxy closes an idle connection first, the client sees a 502/520 when it reuses it. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
@@ -715,12 +760,13 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | logfire-dex.podAnnotations | object | `{}` | Pod annotations |
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
-| logfire-ff-bcache | object | `{"disk":{},"pdb":{},"replicas":3,"topology":{"zone":"","zoneAware":false}}` | Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use |
+| logfire-ff-bcache | object | `{"disk":{},"pdb":{},"replicas":3,"topology":{"zone":"","zoneAware":false},"updateStrategy":{}}` | Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use |
 | logfire-ff-bcache.disk | object | `{}` | Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it. A StatefulSet cannot change its volumeClaimTemplates, so a later change to storage fails `helm upgrade`. To resize, expand the existing `bcache-data-*` PVCs if the storage class allows it, or delete the StatefulSet with `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade. Unset `disk.storage` takes the sizing preset's size, or 32Gi without a preset. |
 | logfire-ff-bcache.replicas | int | `3` | Number of bcache replicas when autoscaling is not configured. |
 | logfire-ff-bcache.topology | object | `{"zone":"","zoneAware":false}` | Topology routing for the readers that use this cache. Zone routing is off by default. |
 | logfire-ff-bcache.topology.zone | string | `""` | Static topology zone, for tests and for single-zone clusters whose nodes carry no zone label. Every pod gets this zone, so it must match the zone the pods run in. It does not serve a multi-zone cluster that refuses node-read RBAC: leave `zoneAware` off there and take global routing instead. Takes precedence over `zoneAware`, and then no cluster role is created. |
 | logfire-ff-bcache.topology.zoneAware | bool | `false` | Route reads to cache pods in this pod's topology zone. The reader resolves the zone from its own node label at startup, so this needs a cluster-wide `nodes` `get` role, and every zone must run a cache pod or reads in the other zones get no caching at all. |
+| logfire-ff-bcache.updateStrategy | object | `{}` | StatefulSet update strategy, used as given. Empty means `RollingUpdate` with `maxUnavailable: 25%`, which needs the `MaxUnavailableStatefulSet` feature gate; set `type: RollingUpdate` alone to leave it out. |
 | logfire-ff-ingest | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn,otel::tracing=info"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}},"volumeClaimTemplates":{"storage":"16Gi"}}` | Autoscaling & resources for the `logfire-ff-ingest` pod |
 | logfire-ff-ingest-processor | object | `{"annotations":{},"env":[{"name":"RUST_LOG","value":"warn"}],"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Autoscaling & resources for the `logfire-ff-ingest-processor` pod |
 | logfire-ff-ingest-processor.annotations | object | `{}` | Workload annotations |
@@ -796,7 +842,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | otel_collector.selfMetricsPort | int | `8888` | Port for the collector's own Prometheus self-metrics. Must differ from `prometheus.port` (the application exporter), or the collector cannot bind both and fails to start. |
 | otel_collector.sendingQueueBytes | int | `67108864` | Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per profile; this value applies when no sizing preset is used. |
 | otel_collector.serviceAccount.annotations | object | `{}` | Annotations for the collector's ServiceAccount, for example a Workload Identity binding. |
-| podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed scratch volumes. `logfire-ff-ingest` defaults to `fsGroupChangePolicy: Always` instead, because its spool is a retained volume that `OnRootMismatch` can leave unrepaired. A per-service `podSecurityContext` wins over both. |
+| podSecurityContext | object | `{}` | Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod) See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed scratch volumes. `logfire-ff-ingest` defaults to `fsGroupChangePolicy: Always` instead, because its spool is a retained volume that `OnRootMismatch` can leave unrepaired. A per-service `podSecurityContext` wins over both. Every chart-owned pod except the bundled Redis also defaults to the `RuntimeDefault` seccomp profile at pod level, which covers containers the chart does not render, such as injected service mesh sidecars. |
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
 | postgresFFSessionDsn | string | `""` | Optional session DSN for the `ff` database: a session-mode pool or a direct connection to PostgreSQL. Set it when `postgresFFDsn` points at a transaction-mode pool. `logfire-ff-migrations` and the index rebuilds of `logfire-ff-maintenance-scheduler` then use it, because they need session state: advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README. |
