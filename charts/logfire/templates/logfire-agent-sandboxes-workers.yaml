@@ -1,0 +1,188 @@
+{{- if .Values.agentSandboxes.enabled }}
+{{- $namespace := include "logfire.agentSandboxes.namespace" . }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: monty-controller
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: monty-controller
+  namespace: {{ $namespace }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [metrics.k8s.io]
+    resources: [pods]
+    verbs: [get, list]
+  - apiGroups: [agents.x-k8s.io]
+    resources: [sandboxes]
+    verbs: [get, list]
+  - apiGroups: [extensions.agents.x-k8s.io]
+    resources: [sandboxwarmpools]
+    verbs: [get]
+  - apiGroups: [extensions.agents.x-k8s.io]
+    resources: [sandboxclaims]
+    verbs: [get, list, create, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: monty-controller
+  namespace: {{ $namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: monty-controller
+subjects:
+  - kind: ServiceAccount
+    name: monty-controller
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: monty-workers
+  namespace: {{ $namespace }}
+spec:
+  hard:
+    pods: {{ .Values.agentSandboxes.workers.ceiling | quote }}
+    requests.cpu: {{ divf (mulf .Values.agentSandboxes.workers.ceiling .Values.agentSandboxes.workers.cpuRequestMillicores) 1000 | quote }}
+    requests.memory: {{ printf "%dMi" (mul .Values.agentSandboxes.workers.ceiling .Values.agentSandboxes.workers.memoryMiB) | quote }}
+    limits.cpu: {{ divf (mulf .Values.agentSandboxes.workers.ceiling .Values.agentSandboxes.workers.cpuLimitMillicores) 1000 | quote }}
+    limits.memory: {{ printf "%dMi" (mul .Values.agentSandboxes.workers.ceiling .Values.agentSandboxes.workers.memoryMiB) | quote }}
+    count/sandboxclaims.extensions.agents.x-k8s.io: {{ .Values.agentSandboxes.workers.ceiling | quote }}
+    count/sandboxes.agents.x-k8s.io: {{ .Values.agentSandboxes.workers.ceiling | quote }}
+---
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxTemplate
+metadata:
+  name: monty-worker
+  namespace: {{ $namespace }}
+spec:
+  service: true
+  networkPolicyManagement: Managed
+  networkPolicy:
+    ingress:
+      - from:
+          - namespaceSelector:
+              matchLabels: {kubernetes.io/metadata.name: {{ .Release.Namespace }}}
+            podSelector:
+              matchLabels: {app: monty-relay}
+        ports: [{protocol: TCP, port: 8000}]
+    egress:
+      - to:
+          - namespaceSelector:
+              matchLabels: {kubernetes.io/metadata.name: {{ .Release.Namespace }}}
+            podSelector:
+              matchLabels: {app: monty-controller}
+        ports: [{protocol: TCP, port: 8080}]
+      - to:
+          - namespaceSelector:
+              matchLabels: {kubernetes.io/metadata.name: kube-system}
+            podSelector:
+              matchLabels: {k8s-app: kube-dns}
+        ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+  podTemplate:
+    metadata:
+      annotations:
+        checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.checksum" . }}
+      labels:
+        app: monty-worker
+    spec:
+      runtimeClassName: {{ .Values.agentSandboxes.workers.runtimeClassName | quote }}
+      {{- with .Values.agentSandboxes.workers.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agentSandboxes.workers.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      restartPolicy: OnFailure
+      terminationGracePeriodSeconds: 45
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532}
+      containers:
+        - name: worker
+          image: {{ printf "%s%s:%s" .Values.image.repository .Values.agentSandboxes.images.worker .Values.agentSandboxes.imageTag | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          env:
+            - name: MONTY_WORKER_DRAIN_GRACE
+              value: "30"
+            - name: MONTY_WORKER_MAX_SESSIONS
+              value: "32"
+            - name: MONTY_WORKER_MAX_MEMORY_MIB
+              value: "20"
+            - name: MONTY_WORKER_MAX_FEED_DURATION
+              value: "0.05"
+            - name: MONTY_WORKER_HOSTED_FEED_CEILING_MS
+              value: "60000"
+            - name: MONTY_WORKER_SHADOW_METERING
+              value: {{ .Values.agentSandboxes.meteringEnabled | quote }}
+            - name: MONTY_WORKER_UID
+              valueFrom:
+                fieldRef: {fieldPath: metadata.uid}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: k8s.pod.uid=$(MONTY_WORKER_UID),service.instance.id=$(MONTY_WORKER_UID)
+            - name: LOGFIRE_BASE_URL
+              value: {{ include "logfire.agentSandboxes.url" (dict "root" . "scheme" "http" "service" "monty-controller" "port" 8080 "path" "/otel") | quote }}
+            - name: LOGFIRE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-telemetry" (include "logfire.agentSandboxes.secret" .) }}
+                  key: token
+          ports: [{containerPort: 8000}]
+          resources:
+            requests:
+              cpu: {{ printf "%vm" .Values.agentSandboxes.workers.cpuRequestMillicores }}
+              memory: {{ printf "%vMi" .Values.agentSandboxes.workers.memoryMiB }}
+              ephemeral-storage: 100Mi
+            limits:
+              cpu: {{ printf "%vm" .Values.agentSandboxes.workers.cpuLimitMillicores }}
+              memory: {{ printf "%vMi" .Values.agentSandboxes.workers.memoryMiB }}
+              ephemeral-storage: 1Gi
+          startupProbe:
+            httpGet: {path: /health, port: 8000}
+            periodSeconds: 2
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: {path: /health, port: 8000}
+            periodSeconds: 2
+---
+apiVersion: extensions.agents.x-k8s.io/v1beta1
+kind: SandboxWarmPool
+metadata:
+  name: monty-workers
+  namespace: {{ $namespace }}
+spec:
+  replicas: {{ .Values.agentSandboxes.workers.warmReplicas }}
+  updateStrategy:
+    type: {{ .Values.agentSandboxes.workers.updateStrategy }}
+  sandboxTemplateRef: {name: monty-worker}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monty-worker-default-deny
+  namespace: {{ $namespace }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+{{- end }}

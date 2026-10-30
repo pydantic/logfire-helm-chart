@@ -102,6 +102,7 @@ spec:
             failureThreshold: 3
             successThreshold: 2
           env:
+            {{- include "logfire.agentSandboxes.env" (dict "root" . "service" $serviceName) | nindent 12 }}
             - name: APP_PORT
               value: {{ $servicePort | quote }}
             - name: LOGFIRE_SERVICE_NAME

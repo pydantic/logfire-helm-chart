@@ -1,0 +1,133 @@
+suite: Agent Sandbox authority and isolation contracts
+release:
+  name: lf
+  namespace: customer
+set:
+  objectStore.uri: s3://customer-data
+  adminEmail: admin@example.test
+  smtp.host: mail.example.test
+  smtp.fromAddress: logfire@example.test
+  agentSandboxes.imageTag: compatible-test-revision
+  inClusterTls.enabled: true
+  inClusterTls.caBundle.existingConfigMap.name: customer-ca
+  agentSandboxes.enabled: true
+  agentSandboxes.allowedOrganizations:
+    - 00000000-0000-0000-0000-000000000001
+  agentSandboxes.workers.runtimeClassName: gvisor
+tests:
+  - it: refuses the old implicit Platform image
+    set:
+      agentSandboxes.imageTag: null
+    asserts:
+      - failedTemplate:
+          errorPattern: requires an explicit compatible agentSandboxes.imageTag
+  - it: requires TLS for authority credentials
+    set:
+      inClusterTls.enabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: requires inClusterTls.enabled
+  - it: requires an explicit organization allowlist
+    set:
+      agentSandboxes.allowedOrganizations: []
+    asserts:
+      - failedTemplate:
+          errorPattern: must contain at least one organization UUID
+  - it: rejects organization names in place of UUIDs
+    set:
+      agentSandboxes.allowedOrganizations: [customer]
+    asserts:
+      - failedTemplate:
+          errorPattern: must contain organization UUIDs
+  - it: does not put untrusted workers beside the control plane
+    set:
+      agentSandboxes.workerNamespace: customer
+    asserts:
+      - failedTemplate:
+          errorPattern: must be a separate valid namespace
+  - it: requires an installed worker isolation runtime
+    set:
+      agentSandboxes.workers.runtimeClassName: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: must name an installed isolated runtime
+  - it: reserves room to allocate beyond the warm pool
+    set:
+      agentSandboxes.workers.warmReplicas: 8
+    asserts:
+      - failedTemplate:
+          errorPattern: warmReplicas < ceiling
+  - it: rejects an unsupported snapshot retention policy
+    set:
+      agentSandboxes.snapshotQuota.retentionSeconds: 604801
+    asserts:
+      - failedTemplate:
+          errorPattern: retentionSeconds between 1 and 604800
+  - it: requires profiles before enabling file volumes
+    set:
+      agentSandboxes.volumesEnabled: true
+      agentSandboxes.profilesEnabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: volumesEnabled requires profilesEnabled
+  - it: rejects a stale auth image override
+    set:
+      logfire-backend-auth.image.tag: incompatible
+    asserts:
+      - failedTemplate:
+          errorPattern: requires matching Python and frontend image tags
+  - it: gives the backend only the management credential
+    templates: [templates/logfire-backend.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MONTY_CONTROL_TOKEN
+            valueFrom:
+              secretKeyRef: {name: lf-agent-sandboxes, key: management}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MONTY_CONTROL_URL
+            value: https://monty-admission.customer.svc.cluster.local:8443
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_WORKBENCH_RELAY_URL, value: "ws://monty-relay.customer.svc.cluster.local:8000/"}
+  - it: enables execution-key and profile resolution in auth
+    templates: [templates/logfire-backend-auth.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_MANAGED_ENABLED, value: "true"}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PROFILES_ENABLED, value: "true"}
+  - it: propagates custom DNS to controller and relay
+    set:
+      clusterDomain: corp.internal
+      agentSandboxes.workerNamespace: customer-execution
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.metadata.labels.app
+      value: monty-controller
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_KUBERNETES_CLUSTER_DOMAIN, value: corp.internal}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_NAMESPACE, value: customer-execution}
+  - it: resolves the SDK relay in the configured namespace and cluster domain
+    set:
+      clusterDomain: corp.internal
+    templates: [templates/logfire-service-config.yaml]
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: server relay monty-relay.customer.svc.corp.internal:8000
