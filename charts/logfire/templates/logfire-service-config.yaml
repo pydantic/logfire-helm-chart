@@ -97,6 +97,10 @@ stringData:
       {{- end }}
 
 
+      {{- if .Values.agentSandboxes.enabled }}
+      acl path_monty path_beg /monty-ws/
+      use_backend monty-relay if path_monty
+      {{- end }}
       use_backend logfire-ingest if path_ingest
       use_backend logfire-ff-query-api if path_query_v2
       use_backend logfire-dex if path_dex
@@ -109,6 +113,14 @@ stringData:
       use_backend logfire-backend if path_backend
 
       default_backend logfire-frontend
+
+    {{- if .Values.agentSandboxes.enabled }}
+    backend monty-relay
+      balance leastconn
+      timeout tunnel 1h
+      http-request replace-path ^/monty-ws/(.*) /\1
+      server relay monty-relay.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:8000 check resolvers kubernetes
+    {{- end }}
 
     backend logfire-ingest
       # Create hash from authorization header, path, and query params

@@ -1,0 +1,104 @@
+{{- if .Values.agentSandboxes.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monty-relay-private
+spec:
+  podSelector:
+    matchLabels: {app: monty-relay}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: logfire-service}
+      ports: [{protocol: TCP, port: 8000}]
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: logfire-backend}
+      ports: [{protocol: TCP, port: 8000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monty-broker-private
+spec:
+  podSelector:
+    matchLabels: {app: monty-broker}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: monty-relay}
+      ports: [{protocol: TCP, port: 8081}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monty-admission-private
+spec:
+  podSelector:
+    matchLabels: {app: monty-admission}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: monty-relay}
+      ports: [{protocol: TCP, port: 8080}]
+    - from:
+        - podSelector:
+            matchLabels: {app: monty-broker}
+      ports: [{protocol: TCP, port: 8080}]
+    - from:
+        - podSelector:
+            matchLabels: {app: monty-controller}
+      ports: [{protocol: TCP, port: {{ .Values.inClusterTls.httpsPort }}}]
+    - from:
+        - podSelector:
+            matchLabels: {app: monty-reconciler}
+      ports: [{protocol: TCP, port: {{ .Values.inClusterTls.httpsPort }}}]
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: logfire-backend}
+      ports: [{protocol: TCP, port: {{ .Values.inClusterTls.httpsPort }}}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monty-controller-private
+spec:
+  podSelector:
+    matchLabels: {app: monty-controller}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: monty-relay}
+      ports: [{protocol: TCP, port: 8080}]
+    - from:
+        - podSelector:
+            matchLabels: {app: monty-broker}
+      ports: [{protocol: TCP, port: 8080}]
+    - from:
+        - podSelector:
+            matchLabels: {app: monty-admission}
+      ports: [{protocol: TCP, port: {{ .Values.inClusterTls.httpsPort }}}]
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ include "logfire.agentSandboxes.namespace" . }}
+          podSelector:
+            matchLabels: {app: monty-worker}
+      ports: [{protocol: TCP, port: 8080}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monty-reconciler-private
+spec:
+  podSelector:
+    matchLabels: {app: monty-reconciler}
+  policyTypes: [Ingress]
+  ingress:
+    []
+{{- end }}

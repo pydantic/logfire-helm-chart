@@ -1,0 +1,155 @@
+{{- if .Values.agentSandboxes.enabled }}
+{{- $root := . }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: monty-broker
+  {{- with .Values.agentSandboxes.broker.serviceAccountAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- range $name := list "monty-relay" "monty-broker" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" $root | nindent 4 }}
+spec:
+  selector: {app: {{ $name }}}
+  ports:
+    - name: http
+      port: {{ if eq $name "monty-relay" }}8000{{ else }}8081{{ end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" $root | nindent 4 }}
+spec:
+  replicas: {{ if eq $name "monty-relay" }}{{ $root.Values.agentSandboxes.relay.replicas }}{{ else }}1{{ end }}
+  selector:
+    matchLabels: {app: {{ $name }}}
+  template:
+    metadata:
+      annotations:
+        checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.checksum" $root }}
+      labels:
+        app: {{ $name }}
+        {{- include "logfire.selectorLabels" $root | nindent 8 }}
+    spec:
+      {{- if eq $name "monty-broker" }}
+      serviceAccountName: monty-broker
+      {{- end }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ if eq $name "monty-relay" }}90{{ else }}150{{ end }}
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000}
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ printf "%s%s:%s" $root.Values.image.repository $root.Values.agentSandboxes.images.relay $root.Values.agentSandboxes.imageTag | quote }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          {{- if eq $name "monty-broker" }}
+          command: [/usr/local/bin/monty-store-broker]
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          resources:
+            {{- if eq $name "monty-relay" }}
+            {{- toYaml $root.Values.agentSandboxes.relay.resources | nindent 12 }}
+            {{- else }}
+            {{- toYaml $root.Values.agentSandboxes.broker.resources | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ if eq $name "monty-relay" }}8000{{ else }}8081{{ end }}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            timeoutSeconds: 3
+          startupProbe:
+            httpGet: {path: /health, port: http}
+            failureThreshold: 60
+            periodSeconds: 5
+          env:
+            - name: MONTY_NAMESPACE
+              value: {{ include "logfire.agentSandboxes.namespace" $root | quote }}
+            - name: MONTY_KUBERNETES_CLUSTER_DOMAIN
+              value: {{ $root.Values.clusterDomain | quote }}
+            {{- if eq $name "monty-relay" }}
+            - name: MONTY_SERVER_HOST
+              value: 0.0.0.0
+            - name: MONTY_SERVER_HOSTED_RESOLVER_URL
+              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-controller" "port" 8080 "path" "/resolve") | quote }}
+            - name: MONTY_SERVER_HOSTED_ASSIGNMENT_URL
+              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-admission" "port" 8080 "path" "/assign") | quote }}
+            - name: MONTY_SERVER_HOSTED_PROFILE_URL
+              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "logfire-backend-auth" "port" 8000 "path" "/internal/monty/profiles/") | quote }}
+            - name: MONTY_SERVER_HOSTED_BROKER_URL
+              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-broker" "port" 8081 "path" "/") | quote }}
+            {{- include "logfire.agentSandboxes.tokenEnv" (dict "root" $root "name" "MONTY_SERVER_HOSTED_SERVICE_TOKEN" "key" "relay") | nindent 12 }}
+            {{- if $root.Values.agentSandboxes.meteringEnabled }}
+            - name: MONTY_SERVER_HOSTED_METERING_URL
+              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-admission" "port" 8080 "path" "/metering/receipts") | quote }}
+            {{- end }}
+            - name: MONTY_SERVER_HOSTED_VOLUMES_ENABLED
+              value: {{ $root.Values.agentSandboxes.volumesEnabled | quote }}
+            {{- if $root.Values.agentSandboxes.volumesEnabled }}
+            - name: MONTY_SERVER_VOLUME_MAX_FILE_MIB
+              value: "4"
+            {{- end }}
+            - name: MONTY_SERVER_MAX_SESSIONS
+              value: {{ $root.Values.agentSandboxes.relay.maxSessions | quote }}
+            - name: MONTY_SERVER_DRAIN_GRACE
+              value: "60"
+            {{- else }}
+            - name: MONTY_BROKER_BIND
+              value: 0.0.0.0:8081
+            - name: MONTY_BROKER_SHUTDOWN_SECONDS
+              value: "125"
+            - name: MONTY_BROKER_DRAIN_SECONDS
+              value: "90"
+            - name: MONTY_BROKER_RESOLVER_URL
+              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-controller" "port" 8080 "path" "/resolve") | quote }}
+            - name: MONTY_BROKER_OBJECT_STORE_URI
+              value: {{ include "logfire.agentSandboxes.snapshotUri" $root | quote }}
+            - name: MONTY_BROKER_SNAPSHOT_QUOTAS
+              value: "true"
+            - name: MONTY_BROKER_CATALOG_URL
+              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-admission" "port" 8080 "path" "/v1/snapshot-catalog") | quote }}
+            {{- range $item := list (dict "name" "MONTY_BROKER_SERVICE_TOKEN" "key" "relay") (dict "name" "MONTY_BROKER_CATALOG_TOKEN" "key" "snapshot") }}
+            {{- include "logfire.agentSandboxes.tokenEnv" (dict "root" $root "name" $item.name "key" $item.key) | nindent 12 }}
+            {{- end }}
+            {{- if $root.Values.agentSandboxes.volumesEnabled }}
+            - name: MONTY_BROKER_VOLUMES_ENABLED
+              value: "true"
+            - name: MONTY_BROKER_VOLUME_CATALOG_URL
+              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-admission" "port" 8080 "path" "/v1/volume-catalog") | quote }}
+            {{- range $item := list (dict "name" "MONTY_BROKER_VOLUME_CATALOG_TOKEN" "key" "volume") (dict "name" "MONTY_BROKER_VOLUME_ADMIN_TOKEN" "key" "volume-admin") }}
+            {{- include "logfire.agentSandboxes.tokenEnv" (dict "root" $root "name" $item.name "key" $item.key) | nindent 12 }}
+            {{- end }}
+            {{- end }}
+            {{- include "logfire.objectStoreProviderEnv" $root | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            {{- if eq $name "monty-broker" }}
+            {{- include "logfire.objectStoreVolumeMounts" $root | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 1Gi}
+        {{- if eq $name "monty-broker" }}
+        {{- include "logfire.objectStoreVolumes" $root | nindent 8 }}
+        {{- end }}
+{{- end }}
+{{- end }}

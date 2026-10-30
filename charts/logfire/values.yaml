@@ -3341,3 +3341,63 @@ sizingPresets:
           cpuAverage: 80
       scratchVolume:
         storage: "128Gi"
+
+# -- Optional project-scoped Agent Sandboxes. Requires the upstream Agent Sandbox
+# operator with v1beta1 core and extension CRDs, plus an isolated worker runtime.
+agentSandboxes:
+  enabled: false
+  # -- Compatible Platform revision for Python, frontend and Monty images. Required
+  # when enabled. FusionFire retains its chart-selected revision.
+  imageTag: ""
+  # -- Explicit organization UUIDs permitted to use sandboxes.
+  allowedOrganizations: []
+  # -- Existing Secret with management, controller, state, relay, snapshot,
+  # snapshot-admin, volume, volume-admin and telemetry keys. Empty creates a Secret.
+  existingSecret: ""
+  # -- Worker namespace. Empty derives <release namespace>-sandboxes.
+  workerNamespace: ""
+  # -- Repository names under image.repository. All use agentSandboxes.imageTag.
+  images:
+    control: logfire-monty-control-prod
+    relay: logfire-monty-relay
+    worker: monty-worker
+  # -- Workbench and saved execution profiles.
+  profilesEnabled: true
+  # -- Collect execution and storage receipts in the existing Postgres database.
+  meteringEnabled: true
+  # -- Opt-in file volumes. Requires profiles.
+  volumesEnabled: false
+  # -- Snapshot prefix. Empty uses <objectStore.uri>/monty-snapshots.
+  snapshotUri: ""
+  snapshotQuota:
+    bytes: 1073741824
+    objects: 1000
+    retentionSeconds: 604800
+  relay:
+    replicas: 2
+    maxSessions: 256
+    resources:
+      requests: {cpu: 250m, memory: 256Mi}
+      limits: {memory: 1Gi}
+  control:
+    resources:
+      requests: {cpu: 250m, memory: 512Mi}
+      limits: {memory: 1Gi}
+  broker:
+    # -- Optional cloud identity annotations. Only the broker receives storage credentials.
+    serviceAccountAnnotations: {}
+    resources:
+      requests: {cpu: 250m, memory: 512Mi}
+      limits: {memory: 1Gi}
+  workers:
+    # -- Installed RuntimeClass for untrusted code, such as gvisor or kata.
+    runtimeClassName: ""
+    nodeSelector: {}
+    tolerations: []
+    warmReplicas: 1
+    ceiling: 8
+    # -- Recreate replaces unclaimed spares only. Claimed workers need an explicit drain.
+    updateStrategy: Recreate
+    memoryMiB: 1024
+    cpuRequestMillicores: 500
+    cpuLimitMillicores: 1000

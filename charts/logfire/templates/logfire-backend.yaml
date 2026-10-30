@@ -66,6 +66,9 @@ spec:
   template:
     metadata:
       annotations:
+        {{- if .Values.agentSandboxes.enabled }}
+        checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.checksum" . }}
+        {{- end }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
         {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list
           "logfire-dex-client-secret"
@@ -143,6 +146,7 @@ spec:
             failureThreshold: 3
             successThreshold: 2
           env:
+            {{- include "logfire.agentSandboxes.env" (dict "root" . "service" $serviceName) | nindent 12 }}
             - name: MATERIALIZE_DASHBOARDS
               value: "false"
             - name: APP_PORT

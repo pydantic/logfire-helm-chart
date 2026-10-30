@@ -1,0 +1,142 @@
+{{- if .Values.agentSandboxes.enabled }}
+{{- $root := . }}
+{{- range $name := list "monty-controller" "monty-reconciler" "monty-admission" }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" $root | nindent 4 }}
+spec:
+  selector:
+    app: {{ $name }}
+  ports:
+    - name: http
+      port: 8080
+    - name: https
+      port: {{ $root.Values.inClusterTls.httpsPort }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" $root | nindent 4 }}
+spec:
+  replicas: {{ if eq $name "monty-reconciler" }}1{{ else }}2{{ end }}
+  {{- if eq $name "monty-reconciler" }}
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ $name }}
+  template:
+    metadata:
+      annotations:
+        checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.checksum" $root }}
+      labels:
+        app: {{ $name }}
+        {{- include "logfire.selectorLabels" $root | nindent 8 }}
+    spec:
+      serviceAccountName: {{ if eq $name "monty-admission" }}{{ include "logfire.serviceAccountName" $root }}{{ else }}monty-controller{{ end }}
+      automountServiceAccountToken: {{ ne $name "monty-admission" }}
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      {{- with $root.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ printf "%s%s:%s" $root.Values.image.repository $root.Values.agentSandboxes.images.control $root.Values.agentSandboxes.imageTag | quote }}
+          imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+          command: [python, -m, {{ if eq $name "monty-admission" }}logfire_monty_control.admission{{ else }}logfire_monty_control.controller{{ end }}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          resources:
+            {{- toYaml $root.Values.agentSandboxes.control.resources | nindent 12 }}
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: https, containerPort: {{ $root.Values.inClusterTls.httpsPort }}}
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            timeoutSeconds: 3
+          env:
+            - name: MONTY_SHUTDOWN_GRACE_SECONDS
+              value: "100"
+            {{- include "logfire.agentSandboxes.pythonEnv" (dict "root" $root "service" $name) | nindent 12 }}
+            {{- if ne $name "monty-admission" }}
+            {{- include "logfire.agentSandboxes.controllerEnv" $root | nindent 12 }}
+            {{- if eq $name "monty-reconciler" }}
+            - name: MONTY_CONTROLLER_RECONCILE_ENABLED
+              value: "true"
+            {{- end }}
+            {{- else }}
+            - name: MONTY_ADMISSION_CONTROLLER_URL
+              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "https" "service" "monty-controller" "port" $root.Values.inClusterTls.httpsPort) | quote }}
+            {{- range $item := list (dict "name" "MONTY_ADMISSION_TOKEN" "key" "relay") (dict "name" "MONTY_ADMISSION_STATE_TOKEN" "key" "state") (dict "name" "MONTY_ADMISSION_MANAGEMENT_TOKEN" "key" "management") (dict "name" "MONTY_ADMISSION_CONTROLLER_TOKEN" "key" "controller") (dict "name" "MONTY_SNAPSHOT_CATALOG_TOKEN" "key" "snapshot") (dict "name" "MONTY_SNAPSHOT_CATALOG_ADMIN_TOKEN" "key" "snapshot-admin") }}
+            {{- include "logfire.agentSandboxes.tokenEnv" (dict "root" $root "name" $item.name "key" $item.key) | nindent 12 }}
+            {{- end }}
+            - name: CRUD_PG_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" $root }}
+                  key: postgresDsn
+            - name: CRUD_PG_POOL_MAX_CONNECTIONS
+              value: "8"
+            - name: CRUD_PG_POOL_MIN_CONNECTIONS
+              value: "2"
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.externalSecretName" (dict "external" $root.Values.existingSecret "secretName" "logfire-encryption-key") }}
+                  key: logfire-encryption-key
+            - name: MONTY_ADMISSION_REDIS_DSN
+              {{- include "logfire.redisDsnValueFrom" (dict "root" $root "key" "sharedDsn") | nindent 14 }}
+            - name: MONTY_METERING_ENABLED
+              value: {{ $root.Values.agentSandboxes.meteringEnabled | quote }}
+            - name: MONTY_SNAPSHOT_CATALOG_ENABLED
+              value: "true"
+            - name: MONTY_SNAPSHOT_BYTE_LIMIT
+              value: {{ int64 $root.Values.agentSandboxes.snapshotQuota.bytes | quote }}
+            - name: MONTY_SNAPSHOT_OBJECT_LIMIT
+              value: {{ int64 $root.Values.agentSandboxes.snapshotQuota.objects | quote }}
+            - name: MONTY_SNAPSHOT_RETENTION_SECONDS
+              value: {{ $root.Values.agentSandboxes.snapshotQuota.retentionSeconds | quote }}
+            {{- if $root.Values.agentSandboxes.volumesEnabled }}
+            - name: MONTY_VOLUME_CATALOG_ENABLED
+              value: "true"
+            {{- range $item := list (dict "name" "MONTY_VOLUME_CATALOG_TOKEN" "key" "volume") (dict "name" "MONTY_VOLUME_CATALOG_ADMIN_TOKEN" "key" "volume-admin") }}
+            {{- include "logfire.agentSandboxes.tokenEnv" (dict "root" $root "name" $item.name "key" $item.key) | nindent 12 }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" $root "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" $root) | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 1Gi}
+        {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" $root) | nindent 8 }}
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" $root "serviceName" $name) | nindent 8 }}
+{{- end }}
+{{- end }}

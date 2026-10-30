@@ -555,6 +555,10 @@ Usage: {{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" "log
 {{- $serviceValues := index .Values .serviceName | default dict -}}
 {{- $serviceImage := $serviceValues.image | default dict -}}
 {{- $serviceTag := $serviceImage.tag -}}
+{{- $sandboxImage := and .Values.agentSandboxes.enabled (has .serviceName (list "logfire-backend" "logfire-backend-auth" "logfire-backend-migrations" "logfire-worker" "logfire-task-runner" "logfire-frontend-service")) -}}
+{{- if and $sandboxImage (not $serviceTag) -}}
+{{- $serviceTag = .Values.agentSandboxes.imageTag -}}
+{{- end -}}
 {{- if $serviceTag -}}
 {{- $serviceTag -}}
 {{- else -}}

@@ -30,6 +30,10 @@
 {{- $certServices = append $certServices (dict "serviceName" "logfire-ai-gateway") }}
 {{- end -}}
 
+{{- if .Values.agentSandboxes.enabled }}
+{{- $certServices = concat $certServices (list (dict "serviceName" "monty-controller") (dict "serviceName" "monty-reconciler") (dict "serviceName" "monty-admission")) }}
+{{- end }}
+
 {{- if $autoIssuer }}
 apiVersion: cert-manager.io/v1
 kind: Issuer
