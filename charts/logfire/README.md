@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.5](https://img.shields.io/badge/Version-0.14.5-informational?style=flat-square) ![AppVersion: b8d349fa](https://img.shields.io/badge/AppVersion-b8d349fa-informational?style=flat-square)
+![Version: 0.14.6](https://img.shields.io/badge/Version-0.14.6-informational?style=flat-square) ![AppVersion: b8d349fa](https://img.shields.io/badge/AppVersion-b8d349fa-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -348,7 +348,7 @@ On Google Cloud Storage, you can turn on Autoclass to lower the cost of data tha
 
 Logfire requires three separate PostgreSQL databases: `crud`, `ff`, and `dex`.
 They may run on the same PostgreSQL instance, but they must be separate databases to avoid schema collisions.
-Each database user needs owner permissions so migrations can run.
+The migration user for each database needs owner permissions.
 
 PostgreSQL stores metadata only. Telemetry data is in object storage.
 An instance with 2 vCPU and 16 GB of memory is a good starting size. Resize it from the CPU and connection use that you see.
@@ -422,16 +422,23 @@ Migrations and the FusionFire maintenance scheduler need session state, such as 
 So for each pooled database, set a session DSN that points at a session-mode pool or directly at PostgreSQL:
 
 ```yaml
-postgresDsn: postgresql://USER:PASSWORD@pooler:6432/crud
+postgresDsn: postgresql://APP_USER:APP_PASSWORD@pooler:6432/crud
 postgresFFDsn: postgresql://USER:PASSWORD@pooler:6432/ff
-postgresSessionDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/crud
+postgresSessionDsn: postgresql://MIGRATION_USER:MIGRATION_PASSWORD@postgres.example.com:5432/crud
+postgresRuntimeSessionDsn: postgresql://APP_USER:APP_PASSWORD@postgres.example.com:5432/crud
 postgresFFSessionDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/ff
 ```
 
 `logfire-backend-migrations` uses `postgresSessionDsn`.
+The backend, worker, and remote MCP use `postgresRuntimeSessionDsn` for integration lifecycle locks.
+Set both CRUD session DSNs when `postgresDsn` uses transaction pooling.
+Use the runtime role from `postgresDsn` in `postgresRuntimeSessionDsn`.
+Keep migration credentials in `postgresSessionDsn`.
 `logfire-ff-migrations` and the maintenance scheduler use `postgresFFSessionDsn`.
-Each one is optional and applies only to its own database.
-With `postgresSecret`, add the same keys to the Secret, and set `postgresSecret.sessionDsn: true` and `postgresSecret.ffSessionDsn: true` for the keys that it has.
+The FusionFire session DSN is optional and applies only to the `ff` database.
+With `postgresSecret`, add the same keys to the Secret.
+Set `postgresSecret.sessionDsn: true` and `postgresSecret.runtimeSessionDsn: true` for the two CRUD session keys.
+Set `postgresSecret.ffSessionDsn: true` when the FusionFire session key is present.
 Dex also needs a session-mode pool or a direct connection.
 
 Do not point a session DSN at a transaction-mode pool.
@@ -846,13 +853,15 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | postgresDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/crud"` | Postgres DSN used for the `crud` database |
 | postgresFFDsn | string | `"postgresql://postgres:postgres@logfire-postgres:5432/ff"` | Postgres DSN used for the `ff` database |
 | postgresFFSessionDsn | string | `""` | Optional session DSN for the `ff` database: a session-mode pool or a direct connection to PostgreSQL. Set it when `postgresFFDsn` points at a transaction-mode pool. `logfire-ff-migrations` and the index rebuilds of `logfire-ff-maintenance-scheduler` then use it, because they need session state: advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README. |
-| postgresSecret | object | `{"annotations":{},"enabled":false,"ffSessionDsn":false,"name":"","sessionDsn":false}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
+| postgresRuntimeSessionDsn | string | `""` | Session DSN for integration lifecycle operations in the `crud` database. Set it alongside `postgresSessionDsn`. Use the runtime role from `postgresDsn`, with a session-mode pool or a direct connection. Migration credentials from `postgresSessionDsn` are not passed to runtime services. |
+| postgresSecret | object | `{"annotations":{},"enabled":false,"ffSessionDsn":false,"name":"","runtimeSessionDsn":false,"sessionDsn":false}` | User-provided Secret containing database credentials Must include `postgresDsn` and `postgresFFDsn` keys. |
 | postgresSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | postgresSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
 | postgresSecret.ffSessionDsn | bool | `false` | Set to true when the Secret also has a `postgresFFSessionDsn` key. See `postgresFFSessionDsn`. |
 | postgresSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
+| postgresSecret.runtimeSessionDsn | bool | `false` | Set to true when the Secret also has a `postgresRuntimeSessionDsn` key. See `postgresRuntimeSessionDsn`. |
 | postgresSecret.sessionDsn | bool | `false` | Set to true when the Secret also has a `postgresSessionDsn` key. See `postgresSessionDsn`. |
-| postgresSessionDsn | string | `""` | Optional session DSN for the `crud` database: a session-mode pool or a direct connection to PostgreSQL. Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it, because migrations need session state: advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README. |
+| postgresSessionDsn | string | `""` | Optional session DSN for the `crud` database: a session-mode pool or a direct connection to PostgreSQL. Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it, because migrations need session state: advisory locks, `SET`, and concurrent index DDL. Set `postgresRuntimeSessionDsn` alongside it for integration lifecycle operations. See "Connection poolers" in the README. |
 | postgresql.auth.postgresPassword | string | `"postgres"` |  |
 | postgresql.fullnameOverride | string | `"logfire-postgres"` |  |
 | postgresql.image.registry | string | `"docker.io"` |  |

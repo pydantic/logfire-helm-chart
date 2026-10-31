@@ -306,6 +306,8 @@ postgresSecret:
   annotations: {}
   # -- Set to true when the Secret also has a `postgresSessionDsn` key. See `postgresSessionDsn`.
   sessionDsn: false
+  # -- Set to true when the Secret also has a `postgresRuntimeSessionDsn` key. See `postgresRuntimeSessionDsn`.
+  runtimeSessionDsn: false
   # -- Set to true when the Secret also has a `postgresFFSessionDsn` key. See `postgresFFSessionDsn`.
   ffSessionDsn: false
 
@@ -325,8 +327,14 @@ postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
 # -- Optional session DSN for the `crud` database: a session-mode pool or a direct connection to PostgreSQL.
 # Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it,
 # because migrations need session state: advisory locks, `SET`, and concurrent index DDL.
+# Set `postgresRuntimeSessionDsn` alongside it for integration lifecycle operations.
 # See "Connection poolers" in the README.
 postgresSessionDsn: ""
+
+# -- Session DSN for integration lifecycle operations in the `crud` database.
+# Set it alongside `postgresSessionDsn`. Use the runtime role from `postgresDsn`, with a session-mode pool or a direct connection.
+# Migration credentials from `postgresSessionDsn` are not passed to runtime services.
+postgresRuntimeSessionDsn: ""
 
 # -- Optional session DSN for the `ff` database: a session-mode pool or a direct connection to PostgreSQL.
 # Set it when `postgresFFDsn` points at a transaction-mode pool. `logfire-ff-migrations` and the

@@ -65,6 +65,14 @@ Validate public hostnames configuration
 Validate postgres configuration - either external secret or DSN must be provided
 */}}
 {{- define "logfire.validate.postgres" -}}
+{{- $migrationSession := include "logfire.postgresHasSessionDsn" (dict "ctx" . "key" "postgresDsn") -}}
+{{- $runtimeSession := include "logfire.postgresHasRuntimeSessionDsn" . -}}
+{{- if and $migrationSession (not $runtimeSession) -}}
+  {{- fail "Set postgresRuntimeSessionDsn alongside postgresSessionDsn, using the runtime database role. For an existing Secret, add postgresRuntimeSessionDsn and set postgresSecret.runtimeSessionDsn=true. Runtime services must not use migration credentials." -}}
+{{- end -}}
+{{- if and $runtimeSession (not $migrationSession) -}}
+  {{- fail "Set postgresSessionDsn alongside postgresRuntimeSessionDsn so migrations use a session endpoint. For an existing Secret, add postgresSessionDsn and set postgresSecret.sessionDsn=true." -}}
+{{- end -}}
 {{- if not .Values.dev.deployPostgres -}}
   {{- if .Values.postgresSecret.enabled -}}
     {{- if not .Values.postgresSecret.name -}}

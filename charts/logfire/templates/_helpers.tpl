@@ -827,20 +827,27 @@ The platform names that topology `pgbouncer`, whatever the pooler is.
 {{- end -}}
 {{- end -}}
 
-{{/* Session state for integration install, uninstall, and reconciliation. */}}
+{{/* The runtime identity uses its own session endpoint for integration lifecycle operations. */}}
+{{- define "logfire.postgresHasRuntimeSessionDsn" -}}
+{{- if .Values.postgresSecret.enabled -}}
+{{- if .Values.postgresSecret.runtimeSessionDsn -}}true{{- end -}}
+{{- else if .Values.postgresRuntimeSessionDsn -}}true
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.crudPgSessionEnv" -}}
-{{- if include "logfire.postgresHasSessionDsn" (dict "ctx" . "key" "postgresDsn") -}}
+{{- if include "logfire.postgresHasRuntimeSessionDsn" . -}}
 - name: CRUD_PG_SESSION_DSN
   valueFrom:
     secretKeyRef:
       name: {{ include "logfire.postgresSecretName" . }}
-      key: postgresSessionDsn
+      key: postgresRuntimeSessionDsn
 {{- end -}}
 {{- end -}}
 
 {{- define "logfire.crudPgSessionChecksumAnnotation" -}}
-{{- if and (include "logfire.postgresHasSessionDsn" (dict "ctx" . "key" "postgresDsn")) (or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations)) -}}
-{{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresSessionDsn" "annotationKey" "checksum/logfire-postgres-session-dsn") -}}
+{{- if and (include "logfire.postgresHasRuntimeSessionDsn" .) (or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations)) -}}
+{{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresRuntimeSessionDsn" "annotationKey" "checksum/logfire-postgres-runtime-session-dsn") -}}
 {{- end -}}
 {{- end -}}
 
