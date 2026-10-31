@@ -827,6 +827,23 @@ The platform names that topology `pgbouncer`, whatever the pooler is.
 {{- end -}}
 {{- end -}}
 
+{{/* Session state for integration install, uninstall, and reconciliation. */}}
+{{- define "logfire.crudPgSessionEnv" -}}
+{{- if include "logfire.postgresHasSessionDsn" (dict "ctx" . "key" "postgresDsn") -}}
+- name: CRUD_PG_SESSION_DSN
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "logfire.postgresSecretName" . }}
+      key: postgresSessionDsn
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.crudPgSessionChecksumAnnotation" -}}
+{{- if and (include "logfire.postgresHasSessionDsn" (dict "ctx" . "key" "postgresDsn")) (or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations)) -}}
+{{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresSessionDsn" "annotationKey" "checksum/logfire-postgres-session-dsn") -}}
+{{- end -}}
+{{- end -}}
+
 {{/* Use an external Secret name when configured, otherwise the managed name. */}}
 {{- define "logfire.externalSecretName" -}}
 {{- $external := .external | default dict -}}
