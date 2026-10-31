@@ -45,6 +45,7 @@ spec:
       annotations:
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
+        {{- include "logfire.crudPgSessionChecksumAnnotation" . | nindent 8 }}
         {{- end }}
         {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
         {{- . | nindent 8 }}
@@ -126,6 +127,9 @@ spec:
                 name: {{ include "logfire.postgresSecretName" . }}
                 key: postgresDsn
           {{- with (include "logfire.crudPgTopologyEnv" $ | trim) }}
+          {{- . | nindent 10 }}
+          {{- end }}
+          {{- with (include "logfire.crudPgSessionEnv" $ | trim) }}
           {{- . | nindent 10 }}
           {{- end }}
           - name: JWT_SECRET

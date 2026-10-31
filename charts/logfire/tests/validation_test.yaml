@@ -1096,3 +1096,39 @@ tests:
       - matchRegex:
           path: data["otel-collector-config.yaml"]
           pattern: 'limit_percentage: 75'
+
+  - it: rejects migration credentials without a runtime session DSN
+    set:
+      postgresSessionDsn: postgres://migration-session
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Set postgresRuntimeSessionDsn alongside postgresSessionDsn'
+
+  - it: rejects a runtime session DSN without a migration session endpoint
+    set:
+      postgresRuntimeSessionDsn: postgres://runtime-session
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Set postgresSessionDsn alongside postgresRuntimeSessionDsn'
+
+  - it: rejects an external migration session key without the runtime key flag
+    set:
+      postgresSecret:
+        enabled: true
+        name: pg-dsns
+        sessionDsn: true
+      postgresRuntimeSessionDsn: postgres://ignored
+    asserts:
+      - failedTemplate:
+          errorPattern: 'postgresSecret.runtimeSessionDsn=true'
+
+  - it: rejects an external runtime session key without the migration key flag
+    set:
+      postgresSecret:
+        enabled: true
+        name: pg-dsns
+        runtimeSessionDsn: true
+      postgresSessionDsn: postgres://ignored
+    asserts:
+      - failedTemplate:
+          errorPattern: 'postgresSecret.sessionDsn=true'

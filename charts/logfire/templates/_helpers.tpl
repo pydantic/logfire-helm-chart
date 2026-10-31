@@ -827,6 +827,30 @@ The platform names that topology `pgbouncer`, whatever the pooler is.
 {{- end -}}
 {{- end -}}
 
+{{/* The runtime identity uses its own session endpoint for integration lifecycle operations. */}}
+{{- define "logfire.postgresHasRuntimeSessionDsn" -}}
+{{- if .Values.postgresSecret.enabled -}}
+{{- if .Values.postgresSecret.runtimeSessionDsn -}}true{{- end -}}
+{{- else if .Values.postgresRuntimeSessionDsn -}}true
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.crudPgSessionEnv" -}}
+{{- if include "logfire.postgresHasRuntimeSessionDsn" . -}}
+- name: CRUD_PG_SESSION_DSN
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "logfire.postgresSecretName" . }}
+      key: postgresRuntimeSessionDsn
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.crudPgSessionChecksumAnnotation" -}}
+{{- if and (include "logfire.postgresHasRuntimeSessionDsn" .) (or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations)) -}}
+{{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresRuntimeSessionDsn" "annotationKey" "checksum/logfire-postgres-runtime-session-dsn") -}}
+{{- end -}}
+{{- end -}}
+
 {{/* Use an external Secret name when configured, otherwise the managed name. */}}
 {{- define "logfire.externalSecretName" -}}
 {{- $external := .external | default dict -}}
