@@ -18,7 +18,7 @@
 {{- default (printf "%s/monty-snapshots" (include "logfire.objectStoreUri" . | trimSuffix "/")) .Values.agentSandboxes.snapshotUri -}}
 {{- end -}}
 {{- define "logfire.agentSandboxes.env" -}}
-{{- if .root.Values.agentSandboxes.enabled }}
+{{- if (.root.Values.agentSandboxes | default dict).enabled }}
 {{- $root := .root -}}
 - name: MONTY_MANAGED_ENABLED
   value: "true"
@@ -41,7 +41,7 @@
 {{- end -}}
 
 {{- define "logfire.agentSandboxes.validate" -}}
-{{- $a := .Values.agentSandboxes -}}
+{{- $a := .Values.agentSandboxes | default dict -}}
 {{- if $a.enabled -}}
 {{- if not (include "logfire.inClusterTls.enabled" . | eq "true") -}}
 {{- fail "agentSandboxes requires inClusterTls.enabled for authenticated private authority calls" -}}

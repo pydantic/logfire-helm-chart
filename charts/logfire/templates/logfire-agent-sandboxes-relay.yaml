@@ -1,4 +1,4 @@
-{{- if .Values.agentSandboxes.enabled }}
+{{- if (.Values.agentSandboxes | default dict).enabled }}
 {{- $root := . }}
 apiVersion: v1
 kind: ServiceAccount

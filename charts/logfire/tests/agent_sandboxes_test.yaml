@@ -131,3 +131,14 @@ tests:
       - matchRegex:
           path: stringData["haproxy.cfg"]
           pattern: server relay monty-relay.customer.svc.corp.internal:8000
+
+  - it: accepts reused values from before Agent Sandboxes existed
+    set:
+      agentSandboxes: null
+    templates: [templates/logfire-backend.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - isKind:
+          of: Deployment

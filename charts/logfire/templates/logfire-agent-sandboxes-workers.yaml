@@ -1,4 +1,4 @@
-{{- if .Values.agentSandboxes.enabled }}
+{{- if (.Values.agentSandboxes | default dict).enabled }}
 {{- $namespace := include "logfire.agentSandboxes.namespace" . }}
 apiVersion: v1
 kind: ServiceAccount

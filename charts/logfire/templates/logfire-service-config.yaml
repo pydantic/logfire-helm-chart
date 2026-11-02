@@ -97,7 +97,7 @@ stringData:
       {{- end }}
 
 
-      {{- if .Values.agentSandboxes.enabled }}
+      {{- if (.Values.agentSandboxes | default dict).enabled }}
       acl path_monty path_beg /monty-ws/
       use_backend monty-relay if path_monty
       {{- end }}
@@ -114,7 +114,7 @@ stringData:
 
       default_backend logfire-frontend
 
-    {{- if .Values.agentSandboxes.enabled }}
+    {{- if (.Values.agentSandboxes | default dict).enabled }}
     backend monty-relay
       balance leastconn
       timeout tunnel 1h

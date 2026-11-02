@@ -1,4 +1,4 @@
-{{- if .Values.agentSandboxes.enabled }}
+{{- if (.Values.agentSandboxes | default dict).enabled }}
 {{- $root := . }}
 {{- range $name := list "monty-controller" "monty-reconciler" "monty-admission" }}
 ---
