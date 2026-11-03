@@ -73,6 +73,10 @@ spec:
               matchLabels: {kubernetes.io/metadata.name: {{ .Release.Namespace }}}
             podSelector:
               matchLabels: {app: monty-relay}
+          - namespaceSelector:
+              matchLabels: {kubernetes.io/metadata.name: {{ .Release.Namespace }}}
+            podSelector:
+              matchLabels: {app: monty-admission}
         ports: [{protocol: TCP, port: 8000}]
     egress:
       - to:
@@ -124,6 +128,8 @@ spec:
             capabilities: {drop: [ALL]}
             seccompProfile: {type: RuntimeDefault}
           env:
+            - name: MONTY_WORKER_EXECUTION_CLOCK
+              value: "cpu"
             - name: MONTY_WORKER_DRAIN_GRACE
               value: "30"
             - name: MONTY_WORKER_MAX_SESSIONS
@@ -139,6 +145,11 @@ spec:
             - name: MONTY_WORKER_UID
               valueFrom:
                 fieldRef: {fieldPath: metadata.uid}
+            - name: MONTY_WORKER_EXECUTION_POD_UID
+              valueFrom:
+                fieldRef: {fieldPath: metadata.uid}
+            - name: MONTY_WORKER_REQUIRE_EXECUTION_BINDING
+              value: "true"
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: k8s.pod.uid=$(MONTY_WORKER_UID),service.instance.id=$(MONTY_WORKER_UID)
             - name: LOGFIRE_BASE_URL

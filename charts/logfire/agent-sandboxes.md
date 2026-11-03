@@ -12,14 +12,16 @@ not a substitute for this integration.
 - Install an isolated runtime, such as gVisor or Kata, and its `RuntimeClass`.
   Configure node selectors and tolerations for that runtime. The chart does not
   install a runtime or require GKE.
-- Use a CNI that enforces Kubernetes NetworkPolicy. Workers can receive relay
-  connections and export telemetry to the controller. They cannot reach the
-  database, Redis or snapshot storage.
+- Use a CNI that enforces Kubernetes NetworkPolicy. Workers receive relay
+  connections and admission identity and termination checks.
+  They export telemetry to the controller.
+  They cannot reach the database, Redis or snapshot storage.
 - Enable the chart's in-cluster TLS configuration. Supply certificates through
   cert-manager or existing Secrets. Existing certificate sets must also cover
   `monty-controller`, `monty-reconciler` and `monty-admission`.
 - Select a compatible image revision that contains the dedicated Monty control
-  image and database-backed receipt collection. Make the Python, frontend,
+  image. The revision must support CPU-clock execution, immutable worker execution
+  identities and database-backed receipts. Make the Python, frontend,
   relay and worker images available in `image.repository`. The chart's implicit
   older image revision is insufficient. The sandbox image selection leaves
   FusionFire and its migrations on their chart-selected revision.
@@ -34,6 +36,7 @@ not a substitute for this integration.
 agentSandboxes:
   enabled: true
   imageTag: "<compatible-platform-revision>"
+  capacityOwnerId: "<installation-uuid>"
   allowedOrganizations:
     - "<organization-uuid>"
   workers:
@@ -46,6 +49,16 @@ Use organization UUIDs, not organization names. Create the organization first.
 Project administrators then enable Agent Sandboxes and create execution keys
 through the normal product UI. The configured allowlist does not bypass project
 permissions, quotas or execution stops.
+
+Generate one installation UUID before the first enabled install, for example with `uuidgen`.
+Save it as `capacityOwnerId` in your values file.
+Every admission replica shares this capacity owner.
+Keep it unchanged across restarts, upgrades and rollbacks.
+Use a different UUID for another installation that shares the database.
+Stop new execution and drain active workers before changing this identity.
+
+The chart enables CPU-clock execution and binds each worker to its immutable Pod UID.
+A worker without that execution identity fails at startup.
 
 The default worker namespace is `<release namespace>-sandboxes`. The operator
 must watch that namespace. A custom cluster suffix uses `clusterDomain` on the

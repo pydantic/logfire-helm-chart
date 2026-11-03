@@ -8,6 +8,7 @@ set:
   smtp.host: mail.example.test
   smtp.fromAddress: logfire@example.test
   agentSandboxes.imageTag: compatible-test-revision
+  agentSandboxes.capacityOwnerId: 00000000-0000-0000-0000-000000000002
   inClusterTls.enabled: true
   inClusterTls.caBundle.existingConfigMap.name: customer-ca
   agentSandboxes.enabled: true
@@ -15,6 +16,70 @@ set:
     - 00000000-0000-0000-0000-000000000001
   agentSandboxes.workers.runtimeClassName: gvisor
 tests:
+  - it: requires a stable capacity owner before admission starts
+    set:
+      agentSandboxes.capacityOwnerId: null
+    asserts:
+      - failedTemplate:
+          errorPattern: capacityOwnerId must be a stable installation UUID
+  - it: rejects a capacity owner that is not a UUID
+    set:
+      agentSandboxes.capacityOwnerId: temporary-owner
+    asserts:
+      - failedTemplate:
+          errorPattern: capacityOwnerId must be a stable installation UUID
+  - it: supplies the shared capacity owner required by admission
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.metadata.labels.app
+      value: monty-admission
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MONTY_CAPACITY_OWNER_ID
+            value: 00000000-0000-0000-0000-000000000002
+  - it: requires CPU-clock execution bound to the immutable worker Pod identity
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - contains:
+          path: spec.podTemplate.spec.containers[0].env
+          content:
+            name: MONTY_WORKER_EXECUTION_CLOCK
+            value: cpu
+      - contains:
+          path: spec.podTemplate.spec.containers[0].env
+          content:
+            name: MONTY_WORKER_EXECUTION_POD_UID
+            valueFrom:
+              fieldRef: {fieldPath: metadata.uid}
+      - contains:
+          path: spec.podTemplate.spec.containers[0].env
+          content:
+            name: MONTY_WORKER_REQUIRE_EXECUTION_BINDING
+            value: "true"
+  - it: permits only the relay and admission to contact worker execution endpoints
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - equal:
+          path: spec.networkPolicy.ingress
+          value:
+            - from:
+                - namespaceSelector:
+                    matchLabels: {kubernetes.io/metadata.name: customer}
+                  podSelector:
+                    matchLabels: {app: monty-relay}
+                - namespaceSelector:
+                    matchLabels: {kubernetes.io/metadata.name: customer}
+                  podSelector:
+                    matchLabels: {app: monty-admission}
+              ports: [{protocol: TCP, port: 8000}]
   - it: refuses the old implicit Platform image
     set:
       agentSandboxes.imageTag: null

@@ -49,6 +49,9 @@
 {{- if not .Values.agentSandboxes.imageTag -}}
 {{- fail "agentSandboxes requires an explicit compatible agentSandboxes.imageTag for the Platform and Monty images" -}}
 {{- end -}}
+{{- if not (regexMatch "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" ($a.capacityOwnerId | default "" | toString)) -}}
+{{- fail "agentSandboxes.capacityOwnerId must be a stable installation UUID shared by admission replicas" -}}
+{{- end -}}
 {{- if not (regexMatch "^(s3|gs|az)://[^/]+/.+" (include "logfire.agentSandboxes.snapshotUri" .)) -}}
 {{- fail "agentSandboxes.snapshotUri must name an S3, GCS or Azure object-store prefix" -}}
 {{- end -}}

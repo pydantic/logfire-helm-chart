@@ -3349,6 +3349,9 @@ agentSandboxes:
   # -- Compatible Platform revision for Python, frontend and Monty images. Required
   # when enabled. FusionFire retains its chart-selected revision.
   imageTag: ""
+  # -- Stable installation UUID shared by admission replicas. Required when enabled.
+  # Keep this value across restarts, upgrades and rollbacks.
+  capacityOwnerId: ""
   # -- Explicit organization UUIDs permitted to use sandboxes.
   allowedOrganizations: []
   # -- Existing Secret with management, controller, state, relay, snapshot,

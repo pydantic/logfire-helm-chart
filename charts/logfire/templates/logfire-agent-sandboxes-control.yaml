@@ -90,6 +90,8 @@ spec:
               value: "true"
             {{- end }}
             {{- else }}
+            - name: MONTY_CAPACITY_OWNER_ID
+              value: {{ $root.Values.agentSandboxes.capacityOwnerId | quote }}
             - name: MONTY_ADMISSION_CONTROLLER_URL
               value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "https" "service" "monty-controller" "port" $root.Values.inClusterTls.httpsPort) | quote }}
             {{- range $item := list (dict "name" "MONTY_ADMISSION_TOKEN" "key" "relay") (dict "name" "MONTY_ADMISSION_STATE_TOKEN" "key" "state") (dict "name" "MONTY_ADMISSION_MANAGEMENT_TOKEN" "key" "management") (dict "name" "MONTY_ADMISSION_CONTROLLER_TOKEN" "key" "controller") (dict "name" "MONTY_SNAPSHOT_CATALOG_TOKEN" "key" "snapshot") (dict "name" "MONTY_SNAPSHOT_CATALOG_ADMIN_TOKEN" "key" "snapshot-admin") }}
