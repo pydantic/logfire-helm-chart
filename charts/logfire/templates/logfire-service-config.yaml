@@ -55,6 +55,7 @@ stringData:
       timeout http-keep-alive {{ .Values.keepAliveTimeout }}
       timeout client {{ ternary $aiGatewayProxyTimeout "120s" (get $aiGatewayValues "enabled") }}
       http-request set-header Host %[req.hdr(Host)]
+      http-request set-header X-Forwarded-Host %[req.hdr(Host)] unless { req.hdr(X-Forwarded-Host) -m found }
       http-request set-header X-Real-IP %[src]
 
       # Handle WebSocket upgrade headers
@@ -121,36 +122,40 @@ stringData:
       hash-type consistent
       # Use a hash balance factor to control the distribution of requests and avoid overloading a single pod if a hot hash keeps hitting the same pod
       hash-balance-factor 150
-      # Enable both TCP and HTTP checks
-      option httpchk GET /health
+      option httpchk
+      http-check send meth GET uri /health ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-ff-ingest") }}
       http-check expect status 200
-      option tcp-check
       timeout connect 3s
       timeout server 50s
       # Retry a total of 4 times, move to a different server every 2 retries
       retries 4
       option redispatch 2
       
+      http-request set-header Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-ff-ingest") }}
       {{- include "logfire.inClusterTls.haproxyUpstream" (dict "ctx" . "name" "logfire-ff-ingest" "serviceName" "logfire-ff-ingest" "cleartextPort" 8012 "replicas" $ingestMaxCount "options" "check resolvers kubernetes inter 250ms hash-key addr") | nindent 6 }}
 
     backend logfire-ff-query-api
       balance roundrobin
-      option httpchk GET /health
+      option httpchk
+      http-check send meth GET uri /health ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-ff-query-api") }}
       http-check expect status 200
       timeout connect 3s
       timeout server 120s
 
+      http-request set-header Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-ff-query-api") }}
       {{- include "logfire.inClusterTls.haproxyUpstream" (dict "ctx" . "name" "logfire-ff-query-api" "serviceName" "logfire-ff-query-api" "cleartextPort" 8011 "replicas" $queryApiMaxCount "options" "check resolvers kubernetes inter 250ms") | nindent 6 }}
 
     backend logfire-dex
       balance roundrobin
       # Health checks
-      option httpchk GET /healthz
+      option httpchk
+      http-check send meth GET uri /healthz ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-dex") }}
       option http-server-close
       timeout connect 3s
       timeout server 50s
       http-check expect status 200
 
+      http-request set-header Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-dex") }}
       {{- include "logfire.inClusterTls.haproxyUpstream" (dict "ctx" . "name" "logfire-dex" "serviceName" "logfire-dex" "cleartextPort" 5556 "options" "check port 5558 resolvers kubernetes" "checkSsl" false) | nindent 6 }}
 
     {{- if (get $aiGatewayValues "enabled") }}
@@ -158,12 +163,13 @@ stringData:
       balance roundrobin
       # Health checks
       option httpchk
-      http-check send meth GET uri /health hdr Host logfire-ai-gateway
+      http-check send meth GET uri /health ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-ai-gateway") }}
       option http-server-close
       timeout connect 3s
       timeout server {{ $aiGatewayProxyTimeout }}
       http-check expect status 200
 
+      http-request set-header Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-ai-gateway") }}
       {{- include "logfire.inClusterTls.haproxyUpstream" (dict "ctx" . "name" "logfire-ai-gateway" "serviceName" "logfire-ai-gateway" "cleartextPort" 8788 "options" "check resolvers kubernetes") | nindent 6 }}
     {{- end }}
 
@@ -172,32 +178,37 @@ stringData:
       balance roundrobin
       # Health checks
       option httpchk
-      http-check send meth GET uri /health hdr Host {{ include "logfire.primary_hostname" . }}
+      http-check send meth GET uri /health ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-remote-mcp") }}
       option http-server-close
       timeout connect 3s
       timeout server 120s
       http-check expect status 200
 
+      http-request set-header Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-remote-mcp") }}
       {{- include "logfire.inClusterTls.haproxyUpstream" (dict "ctx" . "name" "logfire-remote-mcp" "serviceName" "logfire-remote-mcp" "cleartextPort" 8005 "options" "check resolvers kubernetes") | nindent 6 }}
     {{- end }}
 
     backend logfire-backend
       balance roundrobin
       # Health checks
-      option httpchk GET /health
+      option httpchk
+      http-check send meth GET uri /health ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-backend") }}
       option http-server-close
       timeout connect 3s
       timeout server 120s
       http-check expect status 200
 
+      http-request set-header Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-backend") }}
       {{- include "logfire.inClusterTls.haproxyUpstream" (dict "ctx" . "name" "logfire-backend" "serviceName" "logfire-backend" "cleartextPort" 8000 "options" "check resolvers kubernetes") | nindent 6 }}
 
     backend logfire-frontend
       balance roundrobin
       # Health checks
-      option httpchk GET /health
+      option httpchk
+      http-check send meth GET uri /health ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-frontend-service") }}
       option http-server-close
       timeout connect 3s
       timeout server 50s
       http-check expect status 200
+      http-request set-header Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-frontend-service") }}
       {{- include "logfire.inClusterTls.haproxyUpstream" (dict "ctx" . "name" "logfire-frontend" "serviceName" "logfire-frontend-service" "cleartextPort" 8080 "options" "check resolvers kubernetes") | nindent 6 }}

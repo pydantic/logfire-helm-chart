@@ -84,6 +84,13 @@ logfire-ff-ingest:
   volumeClaimTemplates:
     storageClassName: standard
     storage: "1Gi"
+  # Turn on the opt-in ingest endpoints so the integration suite can prove the
+  # chart routes them. A list replaces the default env, so keep its RUST_LOG.
+  env:
+    - name: RUST_LOG
+      value: warn,otel::tracing=info
+    - name: FF_ENABLE_FIREHOSE_INGEST
+      value: "true"
 
 logfire-ff-bcache:
   replicas: 1
@@ -100,11 +107,14 @@ logfire-ff-compaction-worker:
 logfire-ai-gateway:
   enabled: true
 
-postgresql:
-  primary:
-    persistence:
-      size: 1Gi
+devPostgres:
+  persistence:
+    size: 1Gi
 
+# Keep object storage across pod restarts, so an upgrade that rolls RustFS keeps the data
+# that tests wrote before it.
 rustfs:
   persistence:
-    enabled: false
+    enabled: true
+    storageClassName: standard
+    size: 2Gi

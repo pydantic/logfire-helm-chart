@@ -59,6 +59,40 @@ tests:
       - failedTemplate:
           errorPattern: 'extraExporters must be a map'
 
+  - it: reserves the collector self-metric pipeline
+    set:
+      otel_collector.extraPipelines:
+        metrics/self:
+          exporters: [debug]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraPipelines cannot replace chart-owned component "metrics/self"'
+
+  - it: reserves the collector self-metric identity processor
+    set:
+      otel_collector.extraProcessors:
+        resource/self:
+          attributes: []
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraProcessors cannot replace chart-owned component "resource/self"'
+
+  - it: preserves custom self-metric components when built-in forwarding is disabled
+    set:
+      otel_collector.selfMetrics.enabled: false
+      otel_collector.extraProcessors:
+        resource/self:
+          attributes: []
+      otel_collector.extraPipelines:
+        metrics/self:
+          receivers: [otlp]
+          processors: [resource/self]
+          exporters: [otlp_http]
+    templates:
+      - templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - notFailedTemplate: {}
+
   - it: rejects a processor list
     set:
       otel_collector.extraProcessors: [resourcedetection]
@@ -160,9 +194,9 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.volumes[0].name 'tmp' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, scratch-data, ingest-data."
+          errorMessage: "objectStore.volumes[0].name 'tmp' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, scratch-data, ingest-data, logfire-data."
 
-  - it: accepts an objectStore.volumes entry named logfire-data
+  - it: rejects an objectStore.volumes entry named logfire-data
     set:
       objectStore:
         volumes:
@@ -171,7 +205,8 @@ tests:
     templates:
       - templates/logfire-validate-config.yaml
     asserts:
-      - notFailedTemplate: {}
+      - failedTemplate:
+          errorMessage: "objectStore.volumes[0].name 'logfire-data' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, scratch-data, ingest-data, logfire-data."
 
   - it: rejects an objectStore.volumeMounts entry at /tmp
     set:
@@ -183,9 +218,9 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.volumeMounts[0].mountPath '/tmp' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /scratch, /fusionfire/ingest-data."
+          errorMessage: "objectStore.volumeMounts[0].mountPath '/tmp' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /scratch, /fusionfire/ingest-data, /var/lib/logfire."
 
-  - it: accepts an objectStore.volumeMounts entry at /var/lib/logfire
+  - it: rejects an objectStore.volumeMounts entry at /var/lib/logfire
     set:
       objectStore:
         volumeMounts:
@@ -194,7 +229,8 @@ tests:
     templates:
       - templates/logfire-validate-config.yaml
     asserts:
-      - notFailedTemplate: {}
+      - failedTemplate:
+          errorMessage: "objectStore.volumeMounts[0].mountPath '/var/lib/logfire' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /scratch, /fusionfire/ingest-data, /var/lib/logfire."
 
   - it: accepts objectStore volumes and mounts outside the reserved names and paths
     set:
@@ -226,7 +262,7 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.volumes[0].name 'logfire-incluster-tls' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, scratch-data, ingest-data, logfire-incluster-tls, logfire-incluster-ca-bundle."
+          errorMessage: "objectStore.volumes[0].name 'logfire-incluster-tls' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, scratch-data, ingest-data, logfire-data, logfire-incluster-tls, logfire-incluster-ca-bundle."
 
   - it: rejects an objectStore.volumeMounts entry that collides with an in-cluster TLS mount
     set:
@@ -243,7 +279,7 @@ tests:
       - templates/logfire-validate-config.yaml
     asserts:
       - failedTemplate:
-          errorMessage: "objectStore.volumeMounts[0].mountPath '/etc/logfire/incluster-ca' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /scratch, /fusionfire/ingest-data, /etc/tls, /etc/logfire/incluster-ca."
+          errorMessage: "objectStore.volumeMounts[0].mountPath '/etc/logfire/incluster-ca' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /scratch, /fusionfire/ingest-data, /var/lib/logfire, /etc/tls, /etc/logfire/incluster-ca."
 
   - it: accepts in-cluster TLS volume names when in-cluster TLS is disabled
     set:
@@ -254,6 +290,33 @@ tests:
         volumeMounts:
           - name: logfire-incluster-tls
             mountPath: /etc/tls
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an objectStore.volumeMounts entry that collides with the trusted CA mount
+    set:
+      smtp:
+        caBundle:
+          existingConfigMap:
+            name: logfire-smtp-ca
+      objectStore:
+        volumeMounts:
+          - name: credentials
+            mountPath: /etc/logfire/trusted-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "objectStore.volumeMounts\\[0\\].mountPath '/etc/logfire/trusted-ca' is reserved by the chart"
+
+  - it: accepts the trusted CA mount path while no CA bundle is configured
+    set:
+      objectStore:
+        volumeMounts:
+          - name: credentials
+            mountPath: /etc/logfire/trusted-ca
     templates:
       - templates/logfire-validate-config.yaml
     asserts:
@@ -442,7 +505,6 @@ tests:
     set:
       ingress:
         hostnames: []
-        hostname: ""
       gateway:
         hostnames: []
     asserts:
@@ -539,6 +601,14 @@ tests:
           errorPattern: 'scratchVolume\.storage is required'
 
   # --- removed values blocks ---
+  - it: names the upgrade flag when a --reuse-values upgrade lacks the devPostgres block
+    set:
+      dev.deployPostgres: true
+      devPostgres: null
+    asserts:
+      - failedTemplate:
+          errorPattern: 'dev\.deployPostgres needs devPostgres\.fullnameOverride, a chart 0\.15\.0 default'
+
   - it: names the move when the v1 byte cache values block is still set
     set:
       logfire-ff-cache-byte:
@@ -548,6 +618,46 @@ tests:
       # The key is ignored otherwise, so zone routing would silently turn off.
       - failedTemplate:
           errorPattern: 'logfire-ff-cache-byte is no longer a values block'
+
+  - it: names the move when the removed dev.deployMinio alias is still set
+    set:
+      dev.deployMinio: true
+    asserts:
+      - failedTemplate:
+          errorPattern: 'dev\.deployMinio was removed in chart 0\.15\.0\. Set dev\.deployRustfs=true'
+
+  - it: names the move when the removed serviceAccountName is set to a custom account
+    set:
+      serviceAccountName: workload-identity
+    asserts:
+      - failedTemplate:
+          errorPattern: 'serviceAccountName was removed in chart 0\.15\.0\. Set serviceAccount\.name'
+
+  - it: accepts the serviceAccountName default that a 0.14 --reuse-values upgrade carries
+    set:
+      serviceAccountName: default
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: names the move when an HPA metric is still at the top level of autoscaling
+    set:
+      logfire-backend.autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        cpuAverage: 60
+    asserts:
+      - failedTemplate:
+          errorPattern: 'logfire-backend\.autoscaling\.cpuAverage was removed in chart 0\.15\.0\. Move it to logfire-backend\.autoscaling\.hpa\.cpuAverage'
+
+  # --- frontend nginx ---
+  - it: rejects a frontend nginx worker count that is neither auto nor positive
+    set:
+      logfire-frontend-service.nginx.workerProcesses: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: 'workerProcesses must be auto or a positive integer'
 
   # --- autoscaling ---
   - it: rejects enabling both HPA and KEDA
@@ -718,6 +828,17 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: 'redisDsn is required'
+
+  - it: requires redisSecret.name when the external Redis Secret is enabled
+    set:
+      redisSecret:
+        enabled: true
+        name: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'redisSecret\.name is required'
 
   # --- gateway api ---
   - it: requires gateway.gatewayClassName when the chart creates the Gateway
@@ -911,6 +1032,19 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "smtp.caBundle is set but smtp.validate_certs is false"
+
+  - it: a trusted CA bundle from both a ConfigMap and a Secret fails
+    set:
+      trustedCaBundle:
+        existingConfigMap:
+          name: private-ca
+        existingSecret:
+          name: private-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "trustedCaBundle: specify only one of existingConfigMap.name or existingSecret.name"
 
   # --- otel collector queue and storage budgets ---
   - it: rejects a self-metrics port equal to the Prometheus exporter port

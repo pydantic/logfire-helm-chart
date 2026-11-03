@@ -2,6 +2,13 @@
 {{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
 {{- $podSecurityContext := include "logfire.fusionfirePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $extraEnv := include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) -}}
+{{- $hasRustLog := false -}}
+{{- range fromYamlArray $extraEnv -}}
+  {{- if eq .name "RUST_LOG" -}}
+    {{- $hasRustLog = true -}}
+  {{- end -}}
+{{- end -}}
 {{- $tls := include "logfire.inClusterTls.enabled" . | eq "true" -}}
 {{- $portName := ternary "https" "http" $tls -}}
 {{- $scheme := ternary "HTTPS" "HTTP" $tls -}}
@@ -17,6 +24,7 @@ grace period cuts the tier drain short and leaves the disk tier unclean, so deri
 timeouts below instead of holding a second copy of the numbers.
 */}}
 {{- $grace := add (add (add $readinessDelaySeconds $shutdownTimeoutSeconds) $tierDrainTimeoutSeconds) 5 -}}
+{{- $defaultUpdateStrategy := dict "type" "RollingUpdate" "rollingUpdate" (dict "maxUnavailable" "25%") -}}
 {{- $selector := dict "matchLabels" (dict "app.kubernetes.io/component" $serviceName) -}}
 {{- $defaultTopologySpreadConstraints := list
   (dict "maxSkew" 1 "topologyKey" "topology.kubernetes.io/zone" "whenUnsatisfiable" "ScheduleAnyway" "labelSelector" $selector)
@@ -58,9 +66,7 @@ spec:
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   podManagementPolicy: Parallel
   updateStrategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 25%
+    {{- toYaml (get $effectiveServiceValues "updateStrategy" | default $defaultUpdateStrategy) | nindent 4 }}
   persistentVolumeClaimRetentionPolicy:
     # The cache is regenerable, and a claim kept across a replacement would hold its old storage
     # class and size because `volumeClaimTemplates` is immutable. Releasing both keeps the cache on
@@ -104,6 +110,13 @@ spec:
           {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           env:
+            {{- if not $hasRustLog }}
+            - name: RUST_LOG
+              valueFrom:
+                configMapKeyRef:
+                  name: logfire-ff-base-config
+                  key: RUST_LOG
+            {{- end }}
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             {{- include "logfire.objectStoreEnv" . | nindent 12 }}
             {{- include "logfire.ffResourceEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
@@ -134,8 +147,8 @@ spec:
             - name: FF_TLS_KEY_PATH
               value: /etc/tls/tls.key
             {{- end }}
-            {{- with (index .Values $serviceName | default dict).env }}
-              {{- . | toYaml | nindent 12 }}
+            {{- with $extraEnv }}
+              {{- . | nindent 12 }}
             {{- end }}
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}

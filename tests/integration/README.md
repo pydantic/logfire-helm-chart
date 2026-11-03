@@ -1,14 +1,15 @@
 # Chart integration tests
 
-These tests send real requests through the installed chart's public service. CI first
-uses chart-testing for install and upgrade checks, then runs `ci/run-kind-tests.sh` in
-its prepared `logfire-restricted` namespace.
+These tests send real requests through the installed chart's public service. CI runs
+chart-testing and `ci/run-kind-tests.sh` in parallel, each in its own Kind cluster.
+The runner uses its prepared `logfire-restricted` namespace.
 
 The runner installs published chart 0.14.0, ingests a unique trace and confirms its exact
 record, upgrades to the current chart, and queries that same trace again. It then runs
 the full suite in the default combined query topology, enables the optional query
-worker, repeats query and SQL-format checks, and restores combined mode. It leaves the
-current chart installed and removes its port-forwards and temporary token state.
+worker, repeats query, SQL-format, and MCP telemetry checks, and restores combined mode.
+It repeats the MCP telemetry check after the restore. It leaves the current chart
+installed and removes its port-forwards and temporary token state.
 
 Use a fresh prepared local Kind namespace with the CI development services and Secrets.
 Each stable-upgrade run starts from 0.14.0 database state; reuse a namespace only for
@@ -45,11 +46,12 @@ The release checks cover:
 | Stable upgrade | An exact trace remains queryable after migrations and rollouts |
 | Replica ownership | Both requested query API replicas become ready with HPA and KEDA disabled |
 | SQL format | Dialect-specific output and invalid syntax on combined and split query modes |
-| Remote MCP | Authentication, initialization, tool discovery, and a literal query result |
+| Remote MCP | Authentication, initialization, tool discovery, and the exact OTLP span through `query_run` in combined and split query modes |
 | OTLP errors | Invalid-token errors decode as JSON and protobuf for all three signals |
 | Query errors | v1/v2 legacy and problem-response negotiation, including the public error URL |
 | Variable SSE | An immediate first frame reaches the client through the service |
 | Metric storage | An ingested counter is queried through its value struct |
+| Frontend contracts | The image serves its build identity, worker and frame policies, and setup Markdown |
 
 Kind uses RustFS for the existing telemetry object store. The suite does not test live
 cloud IAM. Scheduled-query storage remains a follow-up while Reports is experimental.

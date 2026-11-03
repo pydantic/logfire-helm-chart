@@ -17,7 +17,7 @@ metadata:
     {{- include "logfire.hooksAnnotations" . | nindent 4 }}
 spec:
   backoffLimit: 5
-  activeDeadlineSeconds: 300
+  activeDeadlineSeconds: {{ dig "activeDeadlineSeconds" 3600 (.Values.migrations | default dict) }}
   template:
     metadata:
       annotations:
@@ -37,7 +37,7 @@ spec:
       restartPolicy: OnFailure
       {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
-      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
+      {{- include "logfire.securityContext" (include "logfire.podSecurityContext" . | fromJson) | nindent 6 }}
       containers:
         - name: logfire-backend-migrations
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
@@ -45,7 +45,8 @@ spec:
           {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
           command:
             - "python"
-            - "src/packages/logfire-db/logfire_db/migrations/main.py"
+            - "-m"
+            - "logfire_db.migrations.main"
           env:
             - name: LOGFIRE_SEND_TO_LOGFIRE
               value: "false"
@@ -58,7 +59,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
-                  key: postgresDsn
+                  key: {{ include "logfire.postgresMigrationKey" (dict "ctx" . "key" "postgresDsn") }}
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
       volumes:

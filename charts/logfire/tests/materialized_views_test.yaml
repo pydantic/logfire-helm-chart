@@ -1,0 +1,44 @@
+suite: materialized view policy
+templates:
+  - templates/logfire-ff-config.yaml
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: keeps derived members and base reads off by default
+    asserts:
+      - equal:
+          path: data.FF_DERIVED_MV_MEMBERS
+          value: "false"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+      - equal:
+          path: data.FF_DERIVED_MV_BASE_READS
+          value: "false"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+
+  - it: renders the opt-in derived member values
+    set:
+      fusionfireMaterializedViews:
+        derivedMembers: true
+        derivedBaseReads: true
+    asserts:
+      - equal:
+          path: data.FF_DERIVED_MV_MEMBERS
+          value: "true"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+      - equal:
+          path: data.FF_DERIVED_MV_BASE_READS
+          value: "true"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config

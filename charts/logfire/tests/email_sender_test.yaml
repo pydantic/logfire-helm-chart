@@ -123,8 +123,8 @@ tests:
           content:
             name: SSL_CERT_FILE
 
-  # Cross-template coupling: SSL_CERT_FILE must name the file the SMTP CA volume mounts, and the
-  # in-cluster CA must keep its own volume, mount and LOGFIRE_CA_PATH beside it.
+  # Cross-template coupling: the SMTP CA joins the trusted CA file that SSL_CERT_FILE names, and
+  # the in-cluster CA keeps its own volume, mount and LOGFIRE_CA_PATH beside it.
   - it: the SMTP CA bundle is trusted without displacing the in-cluster CA
     set:
       inClusterTls:
@@ -147,22 +147,18 @@ tests:
           path: spec.template.spec.containers[0].env
           content:
             name: SSL_CERT_FILE
-            value: /etc/logfire/smtp-ca/ca.crt
-      - contains:
-          path: spec.template.spec.containers[0].volumeMounts
-          content:
-            name: logfire-smtp-ca-bundle
-            mountPath: /etc/logfire/smtp-ca
-            readOnly: true
+            value: /etc/logfire/trusted-ca/ca-bundle.crt
       - contains:
           path: spec.template.spec.volumes
           content:
-            name: logfire-smtp-ca-bundle
-            secret:
-              secretName: smtp-ca
-              items:
-                - key: bundle.pem
-                  path: ca.crt
+            name: logfire-trusted-ca-sources
+            projected:
+              sources:
+                - secret:
+                    name: smtp-ca
+                    items:
+                      - key: bundle.pem
+                        path: smtp-ca.crt
       - contains:
           path: spec.template.spec.containers[0].env
           content:
@@ -203,4 +199,4 @@ tests:
           path: spec.template.spec.volumes
           any: true
           content:
-            name: logfire-smtp-ca-bundle
+            name: logfire-trusted-ca-sources

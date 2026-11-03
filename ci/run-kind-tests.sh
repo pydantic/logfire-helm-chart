@@ -7,6 +7,11 @@ repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 namespace=${LOGFIRE_TEST_NAMESPACE:-logfire-restricted}
 release=lf
 
+dev_postgres_args=()
+if [[ "${LOGFIRE_TEST_FRESH_INSTALL:-}" != true ]]; then
+  dev_postgres_args=(--set dev.deployPostgres=false)
+fi
+
 for command in kubectl helm curl uv python3; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "Required command is missing: $command" >&2
@@ -50,9 +55,11 @@ stop_forwards() {
 
 upgrade_current() {
   local split=$1
+  local values_mode=${2:---reset-values}
   helm upgrade "$release" "$repo_root/charts/logfire" \
     --kube-context "$context" --namespace "$namespace" \
-    --reset-values "${values[@]}" \
+    "$values_mode" "${values[@]}" \
+    "${dev_postgres_args[@]+"${dev_postgres_args[@]}"}" \
     --set "logfire-ff-query-worker.enabled=$split" \
     --wait --wait-for-jobs --timeout 10m
 }
@@ -79,7 +86,10 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 baseline_chart=${LOGFIRE_TEST_BASELINE_CHART:-}
-if [[ -n "$baseline_chart" ]]; then
+if [[ "${LOGFIRE_TEST_FRESH_INSTALL:-}" == true ]]; then
+  # The 0.14.0 baseline predates the service mesh fixes, so a meshed run starts from the current chart.
+  baseline_chart="$repo_root/charts/logfire"
+elif [[ -n "$baseline_chart" ]]; then
   if [[ ! -f "$baseline_chart" || "$baseline_chart" != *.tgz ]]; then
     echo "LOGFIRE_TEST_BASELINE_CHART must name a local chart archive" >&2
     exit 1
@@ -91,7 +101,7 @@ else
   baseline_chart="$tmp_dir/logfire-0.14.0.tgz"
 fi
 baseline_version=$(helm show chart "$baseline_chart" | awk '/^version:/ { gsub(/"/, "", $2); print $2; exit }')
-if [[ "$baseline_version" != 0.14.0 ]]; then
+if [[ "$baseline_version" != 0.14.0 && "${LOGFIRE_TEST_FRESH_INSTALL:-}" != true ]]; then
   echo "The baseline archive must contain chart version 0.14.0" >&2
   exit 1
 fi
@@ -99,7 +109,8 @@ fi
 start_forward() {
   local service=$1
   local remote_port=$2
-  local log_file="$tmp_dir/$service-port-forward.log"
+  local log_file
+  log_file=$(mktemp "$tmp_dir/$service-port-forward.XXXXXX")
   local pid deadline port
   kubectl --context "$context" --namespace "$namespace" \
     port-forward --address 127.0.0.1 "svc/$service" ":$remote_port" >"$log_file" 2>&1 &
@@ -148,17 +159,29 @@ if [[ -z "$META_FRONTEND_TOKEN" ]]; then
 fi
 export META_FRONTEND_TOKEN
 
-echo "Installing the 0.14.0 baseline in $context/$namespace"
+if [[ "${LOGFIRE_TEST_FRESH_INSTALL:-}" != true ]]; then
+  # The 0.14.0 baseline runs the Bitnami subchart, which the current chart replaces with an
+  # empty dev database. Apply the current dev Postgres outside the release so the probe
+  # checks application data across the upgrade.
+  echo "Starting the standalone Postgres for the upgrade probe"
+  helm template "$release" "$repo_root/charts/logfire" --namespace "$namespace" \
+    "${values[@]}" --show-only templates/dev-postgres.yaml \
+    | kubectl --context "$context" --namespace "$namespace" apply -f -
+  kubectl --context "$context" --namespace "$namespace" rollout status deployment/logfire-postgres --timeout=5m
+fi
+
+echo "Installing the $baseline_version baseline in $context/$namespace"
 helm upgrade --install "$release" "$baseline_chart" \
   --kube-context "$context" --namespace "$namespace" \
   --reset-values "${values[@]}" --set logfire-ff-query-worker.enabled=false \
+  "${dev_postgres_args[@]+"${dev_postgres_args[@]}"}" \
   --wait --wait-for-jobs --timeout 10m
 restart_forwards
 uv run --directory "$repo_root/tests/integration" python upgrade_probe.py seed "$state_file"
 
-echo "Upgrading to the current chart in combined query mode"
+echo "Upgrading to the current chart with reused values in combined query mode"
 stop_forwards
-upgrade_current false
+upgrade_current false --reuse-values
 restart_forwards
 uv run --directory "$repo_root/tests/integration" python upgrade_probe.py check "$state_file"
 uv run --directory "$repo_root/tests/integration" pytest -v --tb=short
@@ -170,7 +193,7 @@ upgrade_current true
 restart_forwards
 uv run --directory "$repo_root/tests/integration" python upgrade_probe.py check "$state_file"
 uv run --directory "$repo_root/tests/integration" pytest -v --tb=short \
-  test_query.py test_release_contracts.py test_features.py -k "query or sql_format"
+  test_query.py test_release_contracts.py test_features.py test_mcp.py -k "query or sql_format"
 
 echo "Restoring combined query mode"
 stop_forwards
@@ -178,4 +201,6 @@ upgrade_current false
 restore_combined=false
 restart_forwards
 uv run --directory "$repo_root/tests/integration" python upgrade_probe.py check "$state_file"
+uv run --directory "$repo_root/tests/integration" pytest -v -s --tb=short \
+  test_mcp.py::test_mcp_authenticated_query
 echo "Kind upgrade and integration tests passed"

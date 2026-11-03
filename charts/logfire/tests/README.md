@@ -20,8 +20,7 @@ A test belongs here only if it is one of:
    only deploys one variant.
 3. **Security gating** (`gateway_oauth_client_test.yaml`): credentials and OAuth
    clients must not be exposed in configurations where they are unsafe.
-4. **Contracts with things outside the chart** (`rate_limits_test.yaml`,
-   `resource_shape_test.yaml`, `rustfs_test.yaml`, and the two
+4. **Contracts with things outside the chart** (`resource_shape_test.yaml` and the two
    `*_security_context_test.yaml` suites): env keys the SDK-facing services read,
    legacy values paths that must keep working across upgrades, and
    `securityContext` merge precedence. A rename or a silently ignored value

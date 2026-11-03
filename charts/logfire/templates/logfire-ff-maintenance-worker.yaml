@@ -11,7 +11,7 @@ metadata:
     {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   annotations:
-    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres")) | nindent 4 }}
+    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres" "redis")) | nindent 4 }}
 spec:
   {{- include "logfire.replicas" (dict "Values" .Values "serviceName" $serviceName) | nindent 2 }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
@@ -29,6 +29,9 @@ spec:
         checksum/ff-config: {{ include "logfire.configChecksum" (include (print $.Template.BasePath "/logfire-ff-config.yaml") .) }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresFFDsn") | nindent 8 }}
+        {{- end }}
+        {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
+        {{- . | nindent 8 }}
         {{- end }}
         {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
@@ -58,6 +61,7 @@ spec:
             - configMapRef:
                 name: logfire-ff-maintenance-config
           env:
+            {{- include "logfire.ffRedisEnv" . | nindent 12 }}
             {{- include "logfire.ffBackgroundWorkerExecutionEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
             - name: FF_DELETION_LOOP_DELAY
               value: "10s"
@@ -69,8 +73,9 @@ spec:
                   key: postgresFFDsn
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- include "logfire.ffBcacheReaderEnv" (dict "root" . "noWarm" true) | nindent 12 }}
-            {{- with (index .Values $serviceName | default dict).env }}
-              {{- . | toYaml | nindent 12 }}
+            {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
+            {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
+              {{- . | nindent 12 }}
             {{- end }}
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
@@ -78,6 +83,7 @@ spec:
               mountPath: /scratch
             {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.trustedCa.volumeMount" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
           livenessProbe:
             httpGet:
@@ -94,6 +100,7 @@ spec:
       volumes:
       {{- include "logfire.tmpVolume" . | nindent 6 }}
       {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 6 }}
+      {{- include "logfire.trustedCa.volumes" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       {{- include "logfire.scratchVolume" (dict "root" . "scratchVolume" (get $effectiveServiceValues "scratchVolume" | default dict)) | nindent 6 }}
       {{- include "logfire.objectStoreVolumes" . | nindent 6 }}

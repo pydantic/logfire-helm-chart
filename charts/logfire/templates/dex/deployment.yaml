@@ -70,7 +70,7 @@ spec:
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
       {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
-      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
+      {{- include "logfire.securityContext" (include "logfire.podSecurityContext" . | fromJson) | nindent 6 }}
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
       containers:
         - name: {{ $serviceName }}
@@ -101,9 +101,15 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-dex-client-secret") }}
                   key: logfire-dex-client-secret
-            {{- with (index .Values $serviceName | default dict).env }}
-              {{- . | toYaml | nindent 12 }}
+            {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
+              {{- . | nindent 12 }}
             {{- end}}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "sleep"
+                  - "5"
           ports:
             - name: http
               containerPort: 5556

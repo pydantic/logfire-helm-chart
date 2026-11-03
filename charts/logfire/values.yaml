@@ -20,14 +20,6 @@ tolerations: []
 # -- topologySpreadConstraints applied to all workloads
 topologySpreadConstraints: []
 
-# -- Istio compatibility options
-istio:
-  # -- When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:
-  #    logfire-service, logfire-backend-migrations,
-  #    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.
-  #    You can still override per workload via `<workload>.podLabels`.
-  disableSidecarOnKnownWorkloads: false
-
 # -- Kubernetes cluster domain for service discovery.
 clusterDomain: cluster.local
 
@@ -39,15 +31,26 @@ adminEmail: hello@example.dev
 # `project:read_external_variables` scope.
 variablesApiKey: ""
 
+# -- Public write token (`pylf_v1_<region>_pub<random>`) for the chart's own browser telemetry.
+# The chart serves this token in the frontend runtime configuration, so it must carry the
+# public `pub` body marker and only the `project:write_otlp` scope. Leave empty to derive a
+# stable token from the release. Set it to pin or rotate the value. Do not use a private token.
+frontendApplicationToken: ""
+
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: "v2026-10-07.02"
+releaseVersion: "v2026-11-02.01"
+
+# -- CRUD database migration Job settings.
+migrations:
+  # -- Maximum time the backend migration Job may run, in seconds. The deadline covers all retries. Raise it for large databases where a concurrent index build takes several minutes.
+  activeDeadlineSeconds: 3600
 
 # -- Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of
 # the ingress or tunnel in front of the release; if HAProxy closes an idle connection first,
 # the client sees a 502/520 when it reuses it.
 keepAliveTimeout: 120s
 
-# -- List of mapping to automatically assign members of OIDC group to logfire roles
+# -- Grant Logfire organization and project roles to members of identity-provider groups when they sign in
 groupOrganizationMapping: []
 #  - group_id: "example-group-id"
 #    organization_roles:
@@ -61,12 +64,6 @@ groupOrganizationMapping: []
 #          - project_name: "admin-project"
 #            role: "admin"
 
-# -- Configure Rate Limiting rules for Logfire endpoints
-rateLimits: {}
-#  queries:
-#    perHour: 60
-#    perMinute: 10
-
 # -- Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults.
 sizingPreset: ""
 
@@ -79,6 +76,10 @@ fusionfireMaterializedViews:
   initialBackfillWindow: 1d
   # -- Minimum source data written over the trailing seven days required to materialize a new view. Set to `0` to disable the source-volume floor.
   minSourceBytes: 5gb
+  # -- Create a 1 hour and a 1 day derived view for each eligible aggregating view. The derived views are refreshed by `derived_mv_refresh` jobs.
+  derivedMembers: false
+  # -- Read whole hours and days from the derived views when the requested bucket width allows. Requires `derivedMembers`.
+  derivedBaseReads: false
 
 # ==============================================================================
 # Ingress
@@ -97,10 +98,6 @@ ingress:
   # Preferred method. Supports one or more hostnames; put the primary domain first.
   hostnames:
     - logfire.example.com
-
-  # -- DEPRECATED (kept for backward compatibility).
-  # Use `hostnames` (list) for all new deployments.
-  hostname: "logfire.example.com"
 
   # -- IngressClass to use (e.g., nginx)
   ingressClassName: nginx
@@ -228,6 +225,18 @@ inClusterTls:
   # Use a non-privileged port to avoid securityContext constraints.
   httpsPort: 8443
 
+  # -- Image for the in-cluster TLS wait Job. The Job only runs when certs.mode=certManager and
+  # dev.deployCertManager=true. Point this at a registry mirror for private-registry installs.
+  # The default container securityContext pins the uid/gid of `curlimages/curl`; override
+  # `tls-wait.securityContext` if you substitute an image that runs as a different user.
+  waitImage:
+    # -- Image repository
+    repository: curlimages/curl
+    # -- Image tag
+    tag: "8.12.1"
+    # -- Image pull policy. Defaults to `image.pullPolicy` when unset.
+    pullPolicy: ""
+
   # -- CA bundle used by clients (HAProxy and other workloads) to verify service certificates.
   # Required when:
   # - certs.mode=existingSecrets
@@ -283,6 +292,10 @@ postgresSecret:
   #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
   #    Per-workload `annotations` override duplicate keys.
   annotations: {}
+  # -- Set to true when the Secret also has a `postgresSessionDsn` key. See `postgresSessionDsn`.
+  sessionDsn: false
+  # -- Set to true when the Secret also has a `postgresFFSessionDsn` key. See `postgresFFSessionDsn`.
+  ffSessionDsn: false
 
 # -- Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks)
 hooksAnnotations:
@@ -296,6 +309,18 @@ postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 
 # -- Postgres DSN used for the `ff` database
 postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
+
+# -- Optional session DSN for the `crud` database: a session-mode pool or a direct connection to PostgreSQL.
+# Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it,
+# because migrations need session state: advisory locks, `SET`, and concurrent index DDL.
+# See "Connection poolers" in the README.
+postgresSessionDsn: ""
+
+# -- Optional session DSN for the `ff` database: a session-mode pool or a direct connection to PostgreSQL.
+# Set it when `postgresFFDsn` points at a transaction-mode pool. `logfire-ff-migrations` and the
+# index rebuilds of `logfire-ff-maintenance-scheduler` then use it, because they need session state:
+# advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README.
+postgresFFSessionDsn: ""
 
 
 # ==============================================================================
@@ -315,7 +340,7 @@ smtp:
   use_tls: false
   # -- (bool) Verify the SMTP server certificate. If it is not set, Logfire verifies it. Setting it to false sends email, including password reset links, over a connection open to interception. Prefer `smtp.caBundle` for a relay signed by an internal CA.
   validate_certs:
-  # -- CA bundle (PEM) that verifies the SMTP server certificate, for a relay signed by an internal CA. Provide exactly one of existingConfigMap or existingSecret, in the release namespace. The bundle becomes the default trust store of `logfire-task-runner` and `logfire-worker`, so include any other CA that those workloads need from the system trust store. In-cluster TLS is not affected.
+  # -- CA bundle (PEM) that verifies the SMTP server certificate, for a relay signed by an internal CA. Provide exactly one of existingConfigMap or existingSecret, in the release namespace. `logfire-task-runner` and `logfire-worker` trust these certificates in addition to the system trust store. `trustedCaBundle` does the same for these and the other workloads that connect to Redis, so prefer it for new installs.
   caBundle:
     existingConfigMap:
       name: ""
@@ -468,6 +493,43 @@ logfire-dex:
     # The redirectURI can be omitted—it will be generated automatically.
     # If specified, the custom value will be honored.
     connectors: []
+
+  # Dex expands `$VAR` references in the storage config and in every connector
+  # config from the container environment, so no credential has to be written
+  # here. Supply the variables through `env`, which accepts `valueFrom`. The map
+  # form merges across values files, so a second file can add a connector secret
+  # without repeating the database password:
+  #
+  # logfire-dex:
+  #   env:
+  #     DEX_DB_PASSWORD:
+  #       valueFrom:
+  #         secretKeyRef:
+  #           name: dex-credentials
+  #           key: db-password
+  #     GITHUB_CLIENT_ID: my-github-client-id
+  #     GITHUB_CLIENT_SECRET:
+  #       valueFrom:
+  #         secretKeyRef:
+  #           name: dex-credentials
+  #           key: github-client-secret
+  #   config:
+  #     storage:
+  #       config:
+  #         password: $DEX_DB_PASSWORD
+  #     connectors:
+  #       - type: github
+  #         id: github
+  #         name: GitHub
+  #         config:
+  #           clientID: $GITHUB_CLIENT_ID
+  #           clientSecret: $GITHUB_CLIENT_SECRET
+
+  # -- (list or map) Extra environment variables for the Dex pod. Accepts `valueFrom`, so a
+  # credential can come from a Secret. Dex expands `$VAR` from this environment
+  # in the storage and connector config, so `DEX_EXPAND_ENV=false` keeps a
+  # literal `$` in a password or DN.
+  env: ~
 
   # -- Resource requests/limits
   # resources:
@@ -634,11 +696,11 @@ logfire-ff-ingest-processor:
 
 # -- Environment overrides for the query API pod
 logfire-ff-query-api:
-  env: []
+  env: ~
 
 # -- Environment overrides for the maintenance scheduler pod
 logfire-ff-maintenance-scheduler:
-  env: []
+  env: ~
 
 # -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
@@ -896,6 +958,11 @@ logfire-remote-mcp:
 #   service:
 #     # -- Service annotations
 #     annotations: {}
+#   nginx:
+#     # -- Number of nginx worker processes, `auto` or a positive integer. `auto`
+#     # starts one worker per node CPU and ignores the CPU limit. Each worker adds
+#     # memory, so set a number on large nodes to stay under the memory limit.
+#     workerProcesses: auto
 #   replicas: 1
 #   resources:
 #     cpu: "100m"
@@ -1065,6 +1132,9 @@ logfire-ff-bcache:
   disk: {}
   #  storage: 32Gi
   #  storageClassName: my-storage-class
+  # -- StatefulSet update strategy, used as given. Empty means `RollingUpdate` with `maxUnavailable: 25%`,
+  # which needs the `MaxUnavailableStatefulSet` feature gate; set `type: RollingUpdate` alone to leave it out.
+  updateStrategy: {}
   # -- Topology routing for the readers that use this cache. Zone routing is off by default.
   topology:
     # -- Route reads to cache pods in this pod's topology zone. The reader resolves the zone from
@@ -1423,13 +1493,27 @@ logfire-otel-collector:
 objectStore:
   # -- URI for object storage (e.g., `s3://bucket`). Supports Helm templating,
   # e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release.
-  # When `dev.deployRustfs` (or the deprecated `dev.deployMinio`) is enabled and
+  # When `dev.deployRustfs` is enabled and
   # this is empty, it defaults to `s3://<rustfs.bucket>`.
+  #
+  # The backend and the worker keep session replay and visual-test blobs under the
+  # `session-replays/` and `visual-tests/` prefixes of the same bucket, and receive the
+  # `env` entries and `volumeMounts` below, so one object store serves FusionFire and
+  # both Python services.
   uri:
+  # -- Optional override for the session-replay blob store, e.g. `s3://logfire-replays`.
+  # Defaults to `<uri>/session-replays`. The bucket or container must exist, and it must
+  # be reachable with the same endpoint and credentials as `uri`: a different account or
+  # provider needs its own `env` and credential volumes, which the per-service `env`
+  # lists under `logfire-backend` and `logfire-worker` can carry.
+  sessionReplayUri:
+  # -- Optional override for the visual-test blob store, e.g. `az://logfirefiles/visual-tests`.
+  # Defaults to `<uri>/visual-tests`, with the same requirements as `sessionReplayUri`.
+  visualTestsUri:
   # -- Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C).
   # Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy
-  # requests. Only used when the object store is S3. Can be a plain string or a
-  # map with valueFrom (e.g., secretKeyRef).
+  # requests. Only used when the object store is S3, and only for FusionFire: the
+  # session-replay and visual-test objects do not use SSE-C.
   #
   # IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on
   # a bucket that already contains FusionFire data will break all reads of the
@@ -1439,15 +1523,23 @@ objectStore:
   # -- Additional environment variables for the object store connection.
   # String values support Helm templating. When the in-cluster RustFS store is
   # enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
-  # and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store.
+  # and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. The
+  # backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint
+  # alias the Python S3 client accepts, and Azure clients read
+  # `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or
+  # `AZURE_STORAGE_CONNECTION_STRING`.
   env: {}
-  # -- Volume mounts for object store credentials. The chart reserves the mount paths `/tmp`,
-  # `/scratch`, and `/fusionfire/ingest-data` for its own Fusionfire volumes, and adds
-  # `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled.
+  # -- Volume mounts for object store credentials, on FusionFire, the backend and the
+  # worker. The chart reserves the mount paths `/tmp`, `/scratch`, `/fusionfire/ingest-data`,
+  # and `/var/lib/logfire` for its own volumes, adds `/etc/tls` and
+  # `/etc/logfire/incluster-ca` when in-cluster TLS is enabled, and `/etc/logfire/smtp-ca`
+  # while the SMTP CA bundle is configured.
   volumeMounts: []
-  # -- Volumes for object store credentials. The chart reserves the volume names `tmp`,
-  # `scratch-data`, and `ingest-data` for its own Fusionfire volumes, and adds
-  # `logfire-incluster-tls` and `logfire-incluster-ca-bundle` when in-cluster TLS is enabled.
+  # -- Volumes for object store credentials, on FusionFire, the backend and the worker.
+  # The chart reserves the volume names `tmp`, `scratch-data`, `ingest-data`, and
+  # `logfire-data` for its own volumes, adds `logfire-incluster-tls` and
+  # `logfire-incluster-ca-bundle` when in-cluster TLS is enabled, and
+  # `logfire-smtp-ca-bundle` while the SMTP CA bundle is configured.
   volumes: []
 
 # Azure example:
@@ -1503,10 +1595,6 @@ serviceAccount:
   # If create is false and this is not set, the default ServiceAccount is used.
   name: ""
 
-# -- DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility.
-# @deprecated
-serviceAccountName: default
-
 # -- Pod priority class
 # See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority).
 priorityClassName: ""
@@ -1522,7 +1610,9 @@ revisionHistoryLimit: 2
 # `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed
 # scratch volumes. `logfire-ff-ingest` defaults to `fsGroupChangePolicy: Always` instead,
 # because its spool is a retained volume that `OnRootMismatch` can leave unrepaired. A
-# per-service `podSecurityContext` wins over both.
+# per-service `podSecurityContext` wins over both. Every chart-owned pod except the bundled Redis
+# also defaults to the `RuntimeDefault` seccomp profile at pod level, which covers containers the
+# chart does not render, such as injected service mesh sidecars.
 podSecurityContext: {}
   # fsGroup: 2000
 
@@ -1555,9 +1645,15 @@ image:
   # @ignored
   repository: us-docker.pkg.dev/pydantic-public-registries/logfire/
   # @ignored
-  workerImage: python-prod
+  workerImage: logfire-worker-prod
   # @ignored
-  backendImage: python-prod
+  backendImage: logfire-backend-prod
+  # @ignored
+  authImage: logfire-auth-prod
+  # @ignored
+  taskRunnerImage: logfire-task-runner-prod
+  # @ignored
+  remoteMcpImage: logfire-remote-mcp-prod
   # @ignored
   frontendImage: frontend
   # @ignored
@@ -1681,7 +1777,31 @@ logfire-redis:
   #   maxUnavailable: 0
   pdb: {}
 
-# -- Redis DSN. Change if using an external Redis instance.
+# -- User-provided Secret containing the Redis DSNs, one key per role:
+#
+#  - `sharedDsn`  shared caches, the generic `REDIS_DSN` of every service, and
+#                 the arq queues (`WORKER_REDIS_DSN`, `BACKEND_REDIS_DSN`)
+#  - `tailDsn`    Fusionfire live-tail registration (`FF_REDIS_TAIL_DSN`)
+#  - `tokenDsn`   auth token caches
+#  - `usageDsn`   usage, autocomplete, and rate limiting data
+#
+# The chart reads the DSNs only from a Secret, so a password never reaches a
+# ConfigMap or a plain env value. When `enabled` is false the chart creates its
+# own Secret from `redisDsn`, `tokenRedis.dsn` and `usageRedis.dsn`.
+redisSecret:
+  # -- Set to true to use an existing Secret (recommended for Argo CD users).
+  enabled: false
+  # -- Name of the Kubernetes Secret resource.
+  name: ""
+  # -- Optional workload annotations for external Secret reload controllers.
+  #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
+  #    Per-workload `annotations` override duplicate keys.
+  annotations: {}
+
+# -- NOTE: The DSNs below are ignored if `redisSecret.enabled` is true.
+
+# -- Redis DSN for the shared role, and the live-tail DSN.
+# Change if using an external Redis instance.
 redisDsn: redis://logfire-redis:6379
 
 # -- Redis settings for auth token caches. Empty DSN falls back to `redisDsn`.
@@ -1699,6 +1819,28 @@ usageRedis:
   dsn: ""
   # -- Key prefix for usage keys.
   prefix: ""
+
+# ==============================================================================
+# Trusted CA certificates
+# ==============================================================================
+
+# -- CA certificates (PEM) that Logfire workloads trust for outbound TLS, in addition to the
+# system trust store of each image. Use it for a `rediss://` Redis or an SMTP relay whose
+# certificate is signed by a private CA, such as Memorystore with in-transit encryption.
+# Provide exactly one of existingConfigMap or existingSecret, in the release namespace.
+# It applies to every Logfire workload that connects to Redis or sends email.
+# An init container joins the system trust store and these certificates into one file.
+# Python and FusionFire workloads read that file through `SSL_CERT_FILE`, and
+# `logfire-ai-gateway` reads it through `NODE_EXTRA_CA_CERTS`. Public endpoints stay trusted.
+# The pods read the certificates when they start, so restart them after you change the
+# certificates. In-cluster TLS is not affected.
+trustedCaBundle:
+  existingConfigMap:
+    name: ""
+    key: "ca.crt"
+  existingSecret:
+    name: ""
+    key: "ca.crt"
 
 
 # ==============================================================================
@@ -1753,6 +1895,11 @@ otel_collector:
   # -- Port for the collector's own Prometheus self-metrics. Must differ from `prometheus.port`
   # (the application exporter), or the collector cannot bind both and fails to start.
   selfMetricsPort: 8888
+  selfMetrics:
+    # -- Forward collector queue, delivery, and receiver metrics to the configured OTLP exporter
+    # every 60 seconds. Each pod scrapes only itself. Independent external monitoring is still
+    # needed to detect a collector or destination outage.
+    enabled: true
   # -- exporter configuration for the otlp_http exporter
   # Override these to send telemetry data to a different OTLP-compatible destination.
   exporter:
@@ -1772,7 +1919,7 @@ otel_collector:
         flush_timeout: 1s
   image:
     repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
-    tag: "0.160.0"
+    tag: "0.163.1@sha256:1175b03003053962012f5a231f5567f66a3e8fdb960c7835c0e48f7aa1555806"
     pullPolicy: IfNotPresent
   prometheus:
     enabled: false
@@ -1787,10 +1934,12 @@ otel_collector:
     # `UnderscoreEscapingWithSuffixes` when true. The exporter no longer emits `add_metric_suffixes`
     # (deprecated and ignored by recent collectors); this value drives `translation_strategy`.
     translation_strategy: ""
-    # -- Convert delta metrics to cumulative on the Prometheus pipeline with the alpha
-    # `delta_to_cumulative` processor. Only runs when the Prometheus exporter is enabled, and the
-    # otlp_http pipeline keeps its delta semantics to the backend. Set false to pass metrics
-    # through unchanged. The limiter can refuse new data but cannot evict retained streams.
+    # -- Convert delta metrics to cumulative for Prometheus with the alpha `delta_to_cumulative` processor.
+    # Runs only when `otel_collector.prometheus.enabled` is true.
+    # The OTLP pipeline keeps delta metrics unchanged.
+    # Each stream must reach the same collector replica.
+    # Cumulative state resets when that replica is replaced.
+    # Set false to pass metrics through unchanged.
     delta_to_cumulative: true
     # -- Retention of inactive delta-to-cumulative streams. Independent of metric_expiration.
     max_stale: 5m
@@ -1867,14 +2016,14 @@ dev:
   deployPostgres: false
   # -- Deploy a local RustFS instance as S3-compatible object storage (NOT for production)
   deployRustfs: false
-  # -- Deprecated alias for `dev.deployRustfs` that existing MinIO values keep working. While set, the chart keeps the `logfire-minio` Service name and uses the credentials from `minio.auth` (including `minio.auth.existingSecret`) or `objectStore.env` and the persistence from `minio.persistence`, so `objectStore.env` keeps matching the deployed object store. Remove it after moving to `dev.deployRustfs` and the `rustfs.*` values.
-  deployMinio: false
   # -- Deploy cert-manager (NOT for production; includes cluster-scoped resources).
   deployCertManager: false
 
 # -- cert-manager chart values (only used when `dev.deployCertManager` is true)
 cert-manager:
-  installCRDs: true
+  crds:
+    enabled: true
+    keep: true
 
 # -- MailDev configuration (only used when `dev.deployMaildev` is true)
 maildev:
@@ -1895,25 +2044,48 @@ maildev:
 # Embedded Postgres & RustFS defaults (dev/test)
 # ==============================================================================
 
-postgresql:
-  image:
-    registry: docker.io
-    repository: bitnamilegacy/postgresql
+# -- Dev Postgres configuration (only used when `dev.deployPostgres` is true)
+devPostgres:
+  # -- Name of the dev Postgres Service and Deployment.
   fullnameOverride: "logfire-postgres"
+  # -- Dev Postgres image configuration. The default uses the official PostgreSQL image.
+  image:
+    repository: postgres
+    tag: "17"
+    pullPolicy: IfNotPresent
   auth:
+    # -- Password for the `postgres` superuser. Update `postgresDsn` and `postgresFFDsn` when you change it.
+    # An existing volume keeps the old database password.
     postgresPassword: "postgres"
-  postgresqlDataDir: /var/lib/postgresql/data/pgdata
-  primary:
-    resourcesPreset: small
-    initdb:
-      scripts:
-        create_databases.sql: |
-          CREATE DATABASE crud;
-          CREATE DATABASE dex;
-          CREATE DATABASE ff;
-    persistence:
-      size: 10Gi
-      mountPath: /var/lib/postgresql
+  initdb:
+    # -- SQL scripts run by the official Postgres entrypoint on first initialization.
+    scripts:
+      create_databases.sql: |
+        CREATE DATABASE crud;
+        CREATE DATABASE dex;
+        CREATE DATABASE ff;
+  persistence:
+    # -- Store data on a PersistentVolumeClaim. Set false to use an emptyDir.
+    enabled: true
+    # -- Size of the chart-managed claim.
+    size: 10Gi
+    # -- Mount path for the data volume.
+    mountPath: /var/lib/postgresql/data
+    # -- Storage class for the chart-managed claim. Defaults to `defaultStorageClassName`.
+    storageClassName: ""
+  # -- Pod SecurityContext for the dev Postgres pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 999`.
+  podSecurityContext: {}
+  # -- Container SecurityContext for the dev Postgres container. Merged over the chart-wide
+  # `securityContext` and the image defaults: uid and gid 999, all capabilities dropped, no
+  # privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root.
+  securityContext: {}
+  # -- Resources for the dev Postgres container.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
 
 # -- RustFS configuration (only used when `dev.deployRustfs` is true)
 rustfs:
@@ -1924,14 +2096,14 @@ rustfs:
     tag: "1.0.0"
     # -- RustFS image pull policy. Defaults to `image.pullPolicy` when unset.
     pullPolicy: ""
-  # -- Root credentials. Ignored while `dev.deployMinio` is set. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values.
+  # -- Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values.
   auth:
     accessKey: logfire-rustfs
     secretKey: logfire-rustfs
   # -- Bucket that RustFS creates at startup when `objectStore.uri` is not an `s3://` URI. With an `s3://` `objectStore.uri`, the bucket in the URI is used.
   bucket: logfire
   persistence:
-    # -- Store data on a PersistentVolumeClaim. Set false to use an emptyDir. Ignored while `dev.deployMinio` is set and `minio.persistence` is present.
+    # -- Store data on a PersistentVolumeClaim. Set false to use an emptyDir.
     enabled: true
     # -- Existing PersistentVolumeClaim to use in place of a chart-managed claim
     existingClaim: ""
@@ -2068,7 +2240,7 @@ sizingPresets:
     logfire-backend:
       resources:
         requests:
-          cpu: "750m"
+          cpu: "500m"
           memory: "1Gi"
         limits:
           memory: "2Gi"
@@ -2418,7 +2590,7 @@ sizingPresets:
       spreadAcrossZones: true
       resources:
         requests:
-          cpu: "750m"
+          cpu: "500m"
           memory: "1Gi"
         limits:
           memory: "2Gi"
@@ -2563,7 +2735,7 @@ sizingPresets:
       spreadAcrossZones: true
       resources:
         requests:
-          cpu: "500m"
+          cpu: "250m"
           memory: "512Mi"
         limits:
           memory: "512Mi"
@@ -2808,7 +2980,7 @@ sizingPresets:
     logfire-backend:
       resources:
         requests:
-          cpu: "750m"
+          cpu: "500m"
           memory: "1Gi"
         limits:
           memory: "2Gi"
@@ -3025,7 +3197,7 @@ sizingPresets:
     logfire-service:
       resources:
         requests:
-          cpu: "1"
+          cpu: "250m"
           memory: "1Gi"
         limits:
           memory: "1Gi"
@@ -3137,6 +3309,10 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
   large:
+    logfire-backend:
+      resources:
+        requests:
+          cpu: "750m"
     logfire-ff-ingest-processor:
       resources:
         requests:
@@ -3148,6 +3324,9 @@ sizingPresets:
       autoscaling:
         maxReplicas: 16
     logfire-service:
+      resources:
+        requests:
+          cpu: "1"
       autoscaling:
         maxReplicas: 12
     logfire-ff-bcache:

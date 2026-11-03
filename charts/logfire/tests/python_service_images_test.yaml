@@ -1,0 +1,59 @@
+suite: per-service Python images
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: pulls the auth service from its own image by default
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: 'logfire/logfire-auth-prod:'
+        template: templates/logfire-backend-auth.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: falls back to the backend image when the per-service key is unset
+    # An install created before these keys existed upgrades with `--reuse-values`, which carries
+    # `image.backendImage` forward and knows nothing of the newer keys. The upgrade must keep
+    # pulling what the install already pulled, rather than moving workloads onto images it never
+    # asked for.
+    set:
+      image:
+        backendImage: python-prod
+        authImage: null
+        remoteMcpImage: null
+        taskRunnerImage: null
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: 'logfire/python-prod:'
+        template: templates/logfire-backend-auth.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: 'logfire/python-prod:'
+        template: templates/logfire-remote-mcp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: prefers an explicit per-service key over the backend image
+    set:
+      image:
+        backendImage: python-prod
+        authImage: pinned-auth
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: 'logfire/pinned-auth:'
+        template: templates/logfire-backend-auth.yaml
+        documentSelector:
+          path: kind
+          value: Deployment

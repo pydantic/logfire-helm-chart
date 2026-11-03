@@ -1,16 +1,12 @@
 apiVersion: v2
-version: 0.14.2-rc.2
+version: 0.15.0-rc.3
 name: logfire
 description: Helm chart for self-hosted Pydantic Logfire
 
-appVersion: "92fe3870"
+appVersion: "54a9b858"
 
 dependencies:
-  - name: postgresql
-    version: "16.7.27"
-    repository: "https://charts.bitnami.com/bitnami"
-    condition: dev.deployPostgres
   - name: cert-manager
     version: "v1.19.2"
-    repository: "https://charts.jetstack.io"
+    repository: "oci://quay.io/jetstack/charts"
     condition: dev.deployCertManager

@@ -12,7 +12,7 @@ metadata:
     {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   annotations:
-    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres")) | nindent 4 }}
+    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres" "redis")) | nindent 4 }}
 spec:
   {{- include "logfire.replicas" (dict "Values" .Values "serviceName" $serviceName) | nindent 2 }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
@@ -31,6 +31,9 @@ spec:
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresFFDsn") | nindent 8 }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresDsn") | nindent 8 }}
+        {{- end }}
+        {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
+        {{- . | nindent 8 }}
         {{- end }}
         {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
@@ -58,14 +61,14 @@ spec:
             - configMapRef:
                 name: logfire-ff-query-config
           env:
+            {{- include "logfire.ffRedisEnv" . | nindent 12 }}
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             {{- include "logfire.ffQueryExecutionEnv" (dict "Values" .Values "serviceName" $serviceName "role" "worker") | nindent 12 }}
             - name: FF_TLS_CLIENT_SNI_HOSTNAME
               value: "logfire-ff-query-worker"
             - name: FF_TLS_CLIENT_PORT
               value: {{ include "logfire.port" (dict "port" 8011 "root" .) | quote }}
-            - name: FF_REDIS_TAIL_DSN
-              value: {{ .Values.redisDsn }}
+            {{- include "logfire.ffRedisTailEnv" . | nindent 12 }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
@@ -78,12 +81,14 @@ spec:
                   key: postgresDsn
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
             {{- include "logfire.ffBcacheReaderEnv" (dict "root" . "noWarm" false) | nindent 12 }}
-            {{- with (index .Values $serviceName | default dict).env }}
-              {{- . | toYaml | nindent 12 }}
+            {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
+            {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
+              {{- . | nindent 12 }}
             {{- end }}
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.trustedCa.volumeMount" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             - name: {{ include "logfire.scratchVolumeName" . }}
               mountPath: /scratch
             {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
@@ -103,6 +108,7 @@ spec:
       volumes:
       {{- include "logfire.tmpVolume" . | nindent 6 }}
       {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 6 }}
+      {{- include "logfire.trustedCa.volumes" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       {{- include "logfire.scratchVolume" (dict "root" . "scratchVolume" (get $effectiveServiceValues "scratchVolume" | default dict)) | nindent 6 }}
       {{- include "logfire.objectStoreVolumes" . | nindent 6 }}

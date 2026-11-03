@@ -6,7 +6,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ $serviceName }}
-  {{- with .Values.otel_collector.serviceAccount.annotations }}
+  {{- with (.Values.otel_collector.serviceAccount | default dict).annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -140,15 +140,15 @@ spec:
       {{- if $queueStorage.enabled }}
       {{- $podContext = dict "fsGroup" 10001 "fsGroupChangePolicy" "OnRootMismatch" }}
       {{- end }}
-      {{- mergeOverwrite $podContext (deepCopy (.Values.podSecurityContext | default dict)) (deepCopy ($collectorValues.podSecurityContext | default dict)) | toYaml | nindent 2 | printf "securityContext:%s" | nindent 6 }}
+      {{- mergeOverwrite $podContext (include "logfire.podSecurityContext" . | fromJson) (deepCopy ($collectorValues.podSecurityContext | default dict)) | toYaml | nindent 2 | printf "securityContext:%s" | nindent 6 }}
       {{- $nodeSpread := dict "maxSkew" 1 "topologyKey" "kubernetes.io/hostname" "whenUnsatisfiable" "ScheduleAnyway" "labelSelector" (dict "matchLabels" (dict "app.kubernetes.io/instance" .Release.Name "app.kubernetes.io/component" $serviceName)) }}
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName "defaultTopologySpreadConstraints" (list $nodeSpread)) | nindent 6}}
       {{- $otelCollector := default (dict) .Values.otel_collector }}
       {{- $otelImage := get $otelCollector "image" | default dict }}
       {{- $collectorResourceAttributes := (get .Values "otelResourceAttributes") | default dict }}
-      {{- $extraEnv := (index .Values $serviceName | default dict).env | default list }}
+      {{- $extraEnv := include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
       {{- $envState := dict "hasOtelResourceAttributes" false "hasGoMemLimit" false }}
-      {{- range $extraEnv }}
+      {{- range fromYamlArray $extraEnv }}
         {{- if eq .name "GOMEMLIMIT" }}
           {{- $_ := set $envState "hasGoMemLimit" true }}
         {{- end }}
@@ -158,11 +158,12 @@ spec:
       {{- end }}
       containers:
         - name: otel-collector
-          image: {{ include "logfire.imageRef" (dict "image" $otelImage "defaultRepository" "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib" "defaultTag" "0.160.0") }}
+          image: {{ include "logfire.imageRef" (dict "image" $otelImage "defaultRepository" "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib" "defaultTag" "0.163.1@sha256:1175b03003053962012f5a231f5567f66a3e8fdb960c7835c0e48f7aa1555806") }}
           imagePullPolicy: {{ default .Values.image.pullPolicy (get $otelImage "pullPolicy") | quote }}
           command:
           - /otelcol-contrib
           - --config=/etc/otel-collector/otel-collector-config.yaml
+          - --feature-gates=-processor.k8sattributes.DontEmitV0K8sConventions
           ports:
             - containerPort: 4317
             - containerPort: 4318
@@ -190,6 +191,20 @@ spec:
             {{- end }}
           {{- include "logfire.otelCollectorResources" . | nindent 10 }}
           env:
+            {{- if dig "enabled" true (.Values.otel_collector.selfMetrics | default dict) }}
+            - name: OTELCOL_POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: OTELCOL_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OTELCOL_POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            {{- end }}
             {{- if not (get $envState "hasGoMemLimit") }}
             # 80% of the memory limiter's 75% hard limit; leaves room for non-Go memory.
             # Without a pod limit, match the fixed 512MiB limiter rather than node memory.
@@ -206,7 +221,7 @@ spec:
               value: {{ include "logfire.renderOtelResourceAttributes" $collectorResourceAttributes | quote }}
             {{- end }}
             {{- with $extraEnv }}
-              {{- . | toYaml | nindent 12 }}
+              {{- . | nindent 12 }}
             {{- end}}
       volumes:
         - name: otel-collector-config

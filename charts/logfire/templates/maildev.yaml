@@ -1,4 +1,4 @@
-{{ if (.Values.dev).deployMaildev }}
+{{ if .Values.dev.deployMaildev }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,13 +20,19 @@ spec:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: logfire-maildev
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" "maildev") | nindent 6 }}
       {{- $maildev := default (dict) .Values.maildev }}
       {{- $maildevImage := get $maildev "image" | default dict }}
-      {{- $maildevPodSecurityContext := get $maildev "podSecurityContext" | default .Values.podSecurityContext }}
+      {{- $maildevPodSecurityContext := get $maildev "podSecurityContext" | default (include "logfire.podSecurityContext" . | fromJson) }}
       {{- include "logfire.securityContext" $maildevPodSecurityContext | nindent 6 }}
       containers:
         - name: logfire-maildev
@@ -59,10 +65,10 @@ metadata:
   name: logfire-maildev
 spec:
   ports:
-    - name: "1080"
+    - name: http-web
       port: 1080
       targetPort: 1080
-    - name: "1025"
+    - name: tcp-smtp
       port: 1025
       targetPort: 1025
   selector:
