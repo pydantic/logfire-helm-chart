@@ -61,7 +61,7 @@ spec:
       {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       containers:
         - name: {{ $serviceName }}
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
+          image: '{{ .Values.image.repository | default "" }}{{ include "logfire.pythonImage" (dict "Values" .Values "key" "remoteMcpImage") }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           command: ["python", "-m", "logfire_remote_mcp"]
           {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
