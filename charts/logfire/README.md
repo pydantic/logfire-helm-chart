@@ -162,7 +162,6 @@ Each preset gives the query API these resources:
 
 Without a preset or per-workload resources, the chart sets no Kubernetes CPU or memory requests or limits.
 FusionFire uses the `tiny` resource baseline for internal execution limits.
-These defaults increase some no-preset FusionFire budgets compared with earlier chart versions.
 Select a preset or explicit workload resources for constrained clusters.
 
 Override individual workloads only after selecting a preset:
@@ -545,8 +544,7 @@ FusionFire pods that start before the new Redis pod is ready exit and restart un
 
 ### Istio service mesh
 
-From chart 0.14.4, every Logfire pod can run with an Istio sidecar, under STRICT or PERMISSIVE mTLS.
-Split query mode (`logfire-ff-query-worker.enabled: true`) needs chart 0.14.5 or later in a mesh.
+Every Logfire pod can run with an Istio sidecar, under STRICT or PERMISSIVE mTLS, including split query mode (`logfire-ff-query-worker.enabled: true`).
 CI installs the chart into Istio with STRICT mTLS and runs the integration suite.
 
 Istio must inject native sidecars.
@@ -568,7 +566,7 @@ Each workload's `podAnnotations` reaches its own pods.
 
 In a namespace that enforces the `baseline` or `restricted` Pod Security level, install Istio with its CNI plugin.
 The default `istio-init` container needs the `NET_ADMIN` capability, which those levels reject.
-From chart 0.14.5, every chart pod sets a pod-level `RuntimeDefault` seccomp profile, which the injected sidecar needs to pass the `restricted` level.
+Every chart pod sets a pod-level `RuntimeDefault` seccomp profile, which the injected sidecar needs to pass the `restricted` level.
 The bundled Redis keeps its pod template unchanged across upgrades, so set the profile for it yourself:
 
 ```yaml

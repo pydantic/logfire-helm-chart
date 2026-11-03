@@ -406,7 +406,7 @@ through maildev instead of smtp.host and get a placeholder sender.
 */}}
 {{- define "logfire.validate.smtp" -}}
 {{- $smtp := .Values.smtp | default dict -}}
-{{- if and (get $smtp "host") (not (get $smtp "fromAddress")) (not (.Values.dev).deployMaildev) -}}
+{{- if and (get $smtp "host") (not (get $smtp "fromAddress")) (not .Values.dev.deployMaildev) -}}
   {{- fail "smtp.fromAddress is required when smtp.host is set. Set it to the sender address of Logfire email, such as logfire@example.com, on a domain that your SMTP server may send for. Logfire does not send email as pydantic.dev from a self-hosted install." -}}
 {{- end -}}
 {{- $domain := (get $smtp "fromAddress" | default "" | toString | splitList "@" | last | trim | trimSuffix "." | lower) -}}

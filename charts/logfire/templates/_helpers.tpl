@@ -1812,7 +1812,7 @@ the bundled maildev, which replaces smtp.host.
 {{- $caBundle := (.Values.smtp | default dict).caBundle | default dict -}}
 {{- $configMapName := dig "existingConfigMap" "name" "" $caBundle -}}
 {{- $secretName := dig "existingSecret" "name" "" $caBundle -}}
-{{- if and (not (.Values.dev).deployMaildev) (or $configMapName $secretName) -}}
+{{- if and (not .Values.dev.deployMaildev) (or $configMapName $secretName) -}}
 true
 {{- end -}}
 {{- end -}}
@@ -1822,7 +1822,7 @@ TLS settings of the SMTP client, beside the SMTP_* variables. The SMTP CA bundle
 client through `logfire.trustedCa.env`.
 */}}
 {{- define "logfire.smtp.tlsEnv" -}}
-{{- if not (.Values.dev).deployMaildev -}}
+{{- if not .Values.dev.deployMaildev -}}
 {{- $validateCerts := (.Values.smtp | default dict).validate_certs -}}
 {{- if not (kindIs "invalid" $validateCerts) }}
 - name: SMTP_VALIDATE_CERTS

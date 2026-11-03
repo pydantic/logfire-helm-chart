@@ -1,4 +1,4 @@
-{{- if (.Values.dev).deployPostgres -}}
+{{- if .Values.dev.deployPostgres -}}
 {{- $name := include "logfire.devPostgres.fullname" . -}}
 {{- $password := include "logfire.devPostgres.password" . -}}
 {{- $devPostgres := .Values.devPostgres | default dict -}}
