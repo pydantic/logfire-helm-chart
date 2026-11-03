@@ -1,4 +1,4 @@
-{{ if (.Values.dev).deployMaildev }}
+{{ if .Values.dev.deployMaildev }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

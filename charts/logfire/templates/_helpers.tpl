@@ -1,8 +1,9 @@
 {{- define "logfire.hpa" }}
-{{- $cpuAverage := dig "hpa" "cpuAverage" .cpuAverage . }}
-{{- $memAverage := dig "hpa" "memAverage" .memAverage . }}
-{{- $extraMetrics := dig "hpa" "extraMetrics" .extraMetrics . }}
-{{- $behavior := dig "hpa" "behavior" nil . }}
+{{- $hpa := .hpa | default dict }}
+{{- $cpuAverage := $hpa.cpuAverage }}
+{{- $memAverage := $hpa.memAverage }}
+{{- $extraMetrics := $hpa.extraMetrics }}
+{{- $behavior := $hpa.behavior }}
 {{- $hasMetrics := or $cpuAverage $memAverage $extraMetrics }}
 ---
 apiVersion: autoscaling/v2
@@ -26,7 +27,7 @@ spec:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: {{ $cpuAverage | default "75" }}
+        averageUtilization: {{ $cpuAverage }}
   {{- end }}
   {{- if $memAverage }}
   - type: Resource
@@ -34,7 +35,7 @@ spec:
       name: memory
       target:
         type: Utilization
-        averageUtilization: {{ $memAverage | default "75" }}
+        averageUtilization: {{ $memAverage }}
   {{- end }}
 {{- if $extraMetrics }}
 {{- toYaml $extraMetrics | nindent 2 }}
@@ -67,17 +68,8 @@ spec:
   {{- end }}
 {{- end}}
 
-{{/*
-Determine if HPA is enabled maintaining backward compatibility with old values format
-*/}}
 {{- define "logfire.hpa.enabled" -}}
-{{- if hasKey . "hpa" -}}
-  {{- .hpa.enabled  -}}
-{{- else if or .memAverage .cpuAverage .extraMetrics -}}
-  {{- true -}}
-{{- else -}}
-  {{- false -}}
-{{- end -}}
+{{- dig "hpa" "enabled" false . -}}
 {{- end -}}
 
 {{- define "logfire.redisDsnFor" -}}
@@ -333,8 +325,6 @@ Returns a wrapped object {"hosts": [...]} to work around fromJson limitation wit
   {{- $hosts = .Values.gateway.hostnames -}}
 {{- else if .Values.ingress.hostnames -}}
   {{- $hosts = .Values.ingress.hostnames -}}
-{{- else if .Values.ingress.hostname -}}
-  {{- $hosts = list .Values.ingress.hostname -}}
 {{- end -}}
 {{- dict "hosts" $hosts | toJson -}}
 {{- end -}}
@@ -519,19 +509,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/*
 Create the name of the service account to use.
-Supports both new serviceAccount.name and deprecated serviceAccountName for backward compatibility.
 */}}
 {{- define "logfire.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
   {{- default (include "logfire.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
-  {{- if .Values.serviceAccount.name }}
-    {{- .Values.serviceAccount.name }}
-  {{- else if .Values.serviceAccountName }}
-    {{- .Values.serviceAccountName }}
-  {{- else }}
-    {{- "default" }}
-  {{- end }}
+  {{- .Values.serviceAccount.name | default "default" }}
 {{- end }}
 {{- end }}
 
@@ -837,10 +820,9 @@ The platform names that topology `pgbouncer`, whatever the pooler is.
 {{- end }}
 {{- end -}}
 
-{{/* Whether the chart deploys an in-cluster S3-compatible object store (RustFS, with `dev.deployMinio` as its deprecated alias). */}}
+{{/* Whether the chart deploys the in-cluster RustFS object store. */}}
 {{- define "logfire.inClusterObjectStoreEnabled" -}}
-{{- $dev := .Values.dev | default dict -}}
-{{- if or (get $dev "deployRustfs") (get $dev "deployMinio") -}}true{{- end -}}
+{{- if .Values.dev.deployRustfs -}}true{{- end -}}
 {{- end -}}
 
 {{/* Service that fronts the in-cluster object store. */}}
@@ -859,7 +841,7 @@ URI its bucket is authoritative, so RustFS creates the bucket the workloads actu
 {{- $bucket = splitList "/" (trimPrefix "s3://" (trim $uri)) | first | trim -}}
 {{- end -}}
 {{- if not $bucket -}}
-{{- $bucket = get (.Values.rustfs | default dict) "bucket" | default "" | trim -}}
+{{- $bucket = .Values.rustfs.bucket | trim -}}
 {{- if not $bucket -}}
 {{- $bucket = "logfire" -}}
 {{- end -}}
@@ -870,101 +852,6 @@ URI its bucket is authoritative, so RustFS creates the bucket the workloads actu
 {{/* Render objectStore.uri as configured, before in-cluster defaults. */}}
 {{- define "logfire.objectStoreUriValue" -}}
 {{- tpl (.Values.objectStore.uri | default "") . -}}
-{{- end -}}
-
-{{/*
-Credentials for the in-cluster object store, JSON encoded. While `dev.deployMinio` is set the
-legacy credentials win: `minio.auth` -> string-valued `objectStore.env` keys -> the old
-`logfire-minio` default. With only `dev.deployRustfs`, `rustfs.auth` is used.
-*/}}
-{{/*
-Resolve an objectStore.env value backed by `valueFrom.secretKeyRef`, or "" when it cannot be
-resolved (for example outside a cluster, where `lookup` returns nothing).
-*/}}
-{{- define "logfire.objectStoreEnvSecretKeyRef" -}}
-{{- $root := .root -}}
-{{- $ref := dig "valueFrom" "secretKeyRef" dict .env -}}
-{{- $name := get $ref "name" | default "" -}}
-{{- $key := get $ref "key" | default "" -}}
-{{- $value := "" -}}
-{{- if and $name $key -}}
-{{- $secret := lookup "v1" "Secret" $root.Release.Namespace (toString $name) -}}
-{{- if $secret -}}
-{{- $value = get (get $secret "data" | default dict) $key | default "" | b64dec -}}
-{{- end -}}
-{{- end -}}
-{{- $value -}}
-{{- end -}}
-
-{{/*
-Credentials for the in-cluster object store, JSON encoded. While `dev.deployMinio` is set the
-legacy credentials win: `minio.auth` (inline or through `minio.auth.existingSecret`) -> string
-values or `valueFrom.secretKeyRef` references in `objectStore.env` -> the old `logfire-minio`
-default. With only `dev.deployRustfs`, `rustfs.auth` is used.
-*/}}
-{{- define "logfire.inClusterObjectStoreAuth" -}}
-{{- $dev := .Values.dev | default dict -}}
-{{- $legacyMinio := get $dev "deployMinio" -}}
-{{- $rustfs := .Values.rustfs | default dict -}}
-{{- $minio := .Values.minio | default dict -}}
-{{- $objectStoreEnv := get (.Values.objectStore | default dict) "env" | default dict -}}
-{{- $accessKey := "" -}}
-{{- $secretKey := "" -}}
-{{- if $legacyMinio -}}
-{{- $legacyAuth := get $minio "auth" | default dict -}}
-{{- $accessKey = get $legacyAuth "rootUser" | default "" | toString -}}
-{{- $secretKey = get $legacyAuth "rootPassword" | default "" | toString -}}
-{{- $existingSecret := get $legacyAuth "existingSecret" | default "" -}}
-{{- if and $existingSecret (not (and $accessKey $secretKey)) -}}
-{{- $userKey := get $legacyAuth "existingSecretUserKey" | default "rootUser" -}}
-{{- $passwordKey := get $legacyAuth "existingSecretPasswordKey" | default "rootPassword" -}}
-{{- $secret := lookup "v1" "Secret" .Release.Namespace (toString $existingSecret) -}}
-{{- if $secret -}}
-{{- $data := get $secret "data" | default dict -}}
-{{- if not $accessKey -}}
-{{- $accessKey = get $data $userKey | default "" | b64dec -}}
-{{- end -}}
-{{- if not $secretKey -}}
-{{- $secretKey = get $data $passwordKey | default "" | b64dec -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
-{{- if not (and $accessKey $secretKey) -}}
-{{- $envAccessKey := get $objectStoreEnv "AWS_ACCESS_KEY_ID" -}}
-{{- if kindIs "string" $envAccessKey -}}
-{{- $envAccessKey = tpl $envAccessKey . -}}
-{{- else if kindIs "map" $envAccessKey -}}
-{{- $envAccessKey = include "logfire.objectStoreEnvSecretKeyRef" (dict "env" $envAccessKey "root" .) -}}
-{{- else -}}
-{{- $envAccessKey = "" -}}
-{{- end -}}
-{{- $envSecretKey := get $objectStoreEnv "AWS_SECRET_ACCESS_KEY" -}}
-{{- if kindIs "string" $envSecretKey -}}
-{{- $envSecretKey = tpl $envSecretKey . -}}
-{{- else if kindIs "map" $envSecretKey -}}
-{{- $envSecretKey = include "logfire.objectStoreEnvSecretKeyRef" (dict "env" $envSecretKey "root" .) -}}
-{{- else -}}
-{{- $envSecretKey = "" -}}
-{{- end -}}
-{{- if not $accessKey -}}
-{{- $accessKey = $envAccessKey -}}
-{{- end -}}
-{{- if not $secretKey -}}
-{{- $secretKey = $envSecretKey -}}
-{{- end -}}
-{{- end -}}
-{{- if not $accessKey -}}
-{{- $accessKey = "logfire-minio" -}}
-{{- end -}}
-{{- if not $secretKey -}}
-{{- $secretKey = "logfire-minio" -}}
-{{- end -}}
-{{- else -}}
-{{- $auth := get $rustfs "auth" | default dict -}}
-{{- $accessKey = get $auth "accessKey" | default "logfire-rustfs" -}}
-{{- $secretKey = get $auth "secretKey" | default "logfire-rustfs" -}}
-{{- end -}}
-{{- dict "accessKey" $accessKey "secretKey" $secretKey | toJson -}}
 {{- end -}}
 
 {{/* Resolve the object store URI consistently for validation and consumers. */}}
@@ -995,7 +882,7 @@ client reads it as the alias of `AWS_ENDPOINT_URL` (see `logfire_services/object
 {{- define "logfire.objectStoreProviderEnv" -}}
 {{- $objectStoreEnv := .Values.objectStore.env | default dict -}}
 {{- if eq (include "logfire.inClusterObjectStoreEnabled" .) "true" }}
-{{- $auth := include "logfire.inClusterObjectStoreAuth" . | fromJson }}
+{{- $auth := .Values.rustfs.auth }}
 {{- $inClusterDefaults := list
   (dict "name" "AWS_ENDPOINT" "value" (printf "http://%s:9000" (include "logfire.inClusterObjectStoreServiceName" .)))
   (dict "name" "AWS_ACCESS_KEY_ID" "value" $auth.accessKey)
@@ -1360,18 +1247,6 @@ Custom labels for workloads pods
 {{- $serviceValues := index .Values $serviceName | default dict -}}
 {{- $servicePodLabels := $serviceValues.podLabels | default dict -}}
 {{- $merged := deepCopy $servicePodLabels -}}
-{{- if dig "disableSidecarOnKnownWorkloads" false (.Values.istio | default dict) -}}
-  {{- $knownWorkloads := list
-    "logfire-service"
-    "logfire-backend-migrations"
-    "logfire-ff-migrations"
-    "logfire-redis"
-    "logfire-otel-collector"
-    -}}
-  {{- if and (has $serviceName $knownWorkloads) (not (hasKey $merged "sidecar.istio.io/inject")) -}}
-    {{- $_ := set $merged "sidecar.istio.io/inject" "false" -}}
-  {{- end -}}
-{{- end -}}
 {{- if $merged -}}
 {{- toYaml $merged -}}
 {{- end -}}
@@ -1670,7 +1545,7 @@ image and reading its `USER` or its user database:
 - `rustfs`: the `rustfs` user in `rustfs/rustfs:1.0.0`, uid and gid 10001.
 - `maildev`: the `node` user in `maildev/maildev:3.0.0`, uid and gid 1000.
 - `otel_collector`: the `USER` in the collector image, uid and gid 10001.
-- `postgres-wait`: the `postgres` user in `postgres:17`, uid and gid 999.
+- `postgres`: the `postgres` user in `postgres:17`, uid and gid 999.
 - `tls-wait`: the `curl_user` in `curlimages/curl:8.12.1`, uid 101 and gid 102.
 */}}
 {{- define "logfire.thirdPartyImageIdentity" -}}
@@ -1685,7 +1560,7 @@ image and reading its `USER` or its user database:
 {{- dict "uid" 1000 "gid" 1000 | toJson -}}
 {{- else if eq $name "otel_collector" -}}
 {{- dict "uid" 10001 "gid" 10001 | toJson -}}
-{{- else if eq $name "postgres-wait" -}}
+{{- else if eq $name "postgres" -}}
 {{- dict "uid" 999 "gid" 999 | toJson -}}
 {{- else if eq $name "tls-wait" -}}
 {{- dict "uid" 101 "gid" 102 | toJson -}}
@@ -1881,20 +1756,6 @@ cluster, since that is where their key lives.
 {{- end -}}
 {{- end -}}
 
-{{- define "logfire.rateLimits" -}}
-{{- with .Values.rateLimits -}}
-{{- $queries := get . "queries" | default dict -}}
-- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_QUERY__PER_MINUTE
-  value: {{ (get $queries "perMinute" | default 99999) | quote }}
-- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_QUERY__PER_HOUR
-  value: {{ (get $queries "perHour" | default 99999) | quote }}
-- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_V1_QUERY__PER_MINUTE
-  value: {{ (get $queries "perMinute" | default 99999) | quote }}
-- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_V1_QUERY__PER_HOUR
-  value: {{ (get $queries "perHour" | default 99999) | quote }}
-{{- end -}}
-{{- end -}}
-
 {{/*
 ================================================================================
 In-cluster TLS helpers
@@ -1945,7 +1806,7 @@ the bundled maildev, which replaces smtp.host.
 {{- $caBundle := (.Values.smtp | default dict).caBundle | default dict -}}
 {{- $configMapName := dig "existingConfigMap" "name" "" $caBundle -}}
 {{- $secretName := dig "existingSecret" "name" "" $caBundle -}}
-{{- if and (not (.Values.dev).deployMaildev) (or $configMapName $secretName) -}}
+{{- if and (not .Values.dev.deployMaildev) (or $configMapName $secretName) -}}
 true
 {{- end -}}
 {{- end -}}
@@ -1955,7 +1816,7 @@ TLS settings of the SMTP client, beside the SMTP_* variables. The SMTP CA bundle
 client through `logfire.trustedCa.env`.
 */}}
 {{- define "logfire.smtp.tlsEnv" -}}
-{{- if not (.Values.dev).deployMaildev -}}
+{{- if not .Values.dev.deployMaildev -}}
 {{- $validateCerts := (.Values.smtp | default dict).validate_certs -}}
 {{- if not (kindIs "invalid" $validateCerts) }}
 - name: SMTP_VALIDATE_CERTS
@@ -2290,6 +2151,35 @@ Dev Postgres helpers
 ================================================================================
 */}}
 
+{{/*
+The `devPostgres` values, JSON encoded. A `--reuse-values` upgrade from a chart before 0.15.0
+renders with the old release's values in place of this chart's defaults, so the block is
+missing, or holds only the keys the user set. Every reader goes through here, so that upgrade
+fails with this message wherever the render stops first.
+*/}}
+{{- define "logfire.devPostgres.values" -}}
+{{- $devPostgres := .Values.devPostgres | default dict -}}
+{{- range $key := list "fullnameOverride" "image" "auth" "initdb" "persistence" "podSecurityContext" "resources" -}}
+  {{- if not (hasKey $devPostgres $key) -}}
+    {{- fail (printf "dev.deployPostgres needs devPostgres.%s, a chart 0.15.0 default that a --reuse-values upgrade from an older chart does not carry. Upgrade with --reset-then-reuse-values, or pass your values file with -f." $key) -}}
+  {{- end -}}
+{{- end -}}
+{{- $devPostgres | toJson -}}
+{{- end -}}
+
+{{/* The dev Postgres Service and Deployment name. */}}
+{{- define "logfire.devPostgres.fullname" -}}
+{{- (include "logfire.devPostgres.values" . | fromJson).fullnameOverride -}}
+{{- end -}}
+
+{{/*
+The dev Postgres image. The database wait init container runs the same image, so a mirrored
+image reaches both.
+*/}}
+{{- define "logfire.devPostgres.image" -}}
+{{- include "logfire.imageRef" (dict "image" (include "logfire.devPostgres.values" . | fromJson).image) -}}
+{{- end -}}
+
 {{- define "logfire.dev.waitForPostgres.initContainers" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := .serviceName -}}
@@ -2313,13 +2203,13 @@ Dev Postgres helpers
   "logfire-remote-mcp"
 )) -}}
 - name: check-db-ready
-  image: postgres:17
+  image: {{ include "logfire.devPostgres.image" $ctx }}
   command:
     - sh
     - -c
     - >-
-      until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432 -U postgres; do echo "Waiting for postgres..."; sleep 2; done
-  {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" $ctx "identity" "postgres-wait" "readOnlyRootFilesystem" true) | fromJson }}
+      until pg_isready -h {{ include "logfire.devPostgres.fullname" $ctx }} -p 5432 -U postgres; do echo "Waiting for postgres..."; sleep 2; done
+  {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" $ctx "identity" "postgres" "serviceName" "postgres-wait" "readOnlyRootFilesystem" true) | fromJson }}
   {{- include "logfire.securityContext" $waitSecurityContext | nindent 2 }}
 {{- end -}}
 {{- end -}}
