@@ -414,11 +414,11 @@ through maildev instead of smtp.host and get a placeholder sender.
 Master validation template - runs all validations
 Call this from templates that need to ensure configuration is valid.
 */}}
-{{/* The chart publishes this token in the served frontend configuration. Only a public token is safe. */}}
+{{/* The chart serves this token to browsers. Only a public token is safe. */}}
 {{- define "logfire.validate.frontendApplicationToken" -}}
 {{- $token := .Values.frontendApplicationToken | default "" -}}
 {{- if and $token (not (regexMatch "^pylf_v1_[a-z]+_pub[a-zA-Z0-9]+$" $token)) -}}
-  {{- fail (printf "frontendApplicationToken must match pylf_v1_<region>_pub<random>, got %q. The chart publishes this token in the frontend runtime configuration, so a private token would expose more than telemetry writes." $token) -}}
+  {{- fail (printf "frontendApplicationToken must match pylf_v1_<region>_pub<random>, got %q. The chart serves this token to browsers, so a private token would expose more than telemetry writes." $token) -}}
 {{- end -}}
 {{- end -}}
 

@@ -40,10 +40,9 @@ adminEmail: hello@example.dev
 variablesApiKey: ""
 
 # -- Public write token (`pylf_v1_<region>_pub<random>`) for the chart's own browser telemetry.
-# The token is published in the frontend runtime configuration, so it must carry the public
-# `pub` body marker and only the `project:write_otlp` scope. Leave empty to generate one and
-# keep it in the `logfire-frontend-service-config` ConfigMap. Set it when a GitOps tool renders
-# without cluster lookups, so the value stays stable across syncs.
+# The chart serves this token in the frontend runtime configuration, so it must carry the
+# public `pub` body marker and only the `project:write_otlp` scope. Leave empty to derive a
+# stable token from the release. Set it to pin or rotate the value. Do not use a private token.
 frontendApplicationToken: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.

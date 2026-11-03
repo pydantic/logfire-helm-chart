@@ -4,8 +4,8 @@
 {{- $wsProtocol := $tls | default false | ternary "wss" "ws" -}}
 {{- $gatewayCimdEnabled := and $tls (index .Values "logfire-ai-gateway" "enabled") -}}
 {{- $gatewayClientId := printf "%s/clients/logfire-gateway.json" (include "logfire.url" .) -}}
-{{/* The token is published in config.1.js. Derive the default from the release so the config
-checksum stays stable when a render has no cluster to look up. */}}
+{{/* The frontend publishes the token in config.1.js. The chart derives the default from the
+release so the ConfigMap checksum stays stable when a render has no cluster to look up. */}}
 {{- $existingConfig := (lookup "v1" "ConfigMap" .Release.Namespace "logfire-frontend-service-config") | default dict -}}
 {{- $existingToken := get ((get $existingConfig "data") | default dict) "frontend-application-token" -}}
 {{- $generatedToken := printf "pylf_v1_%s_pub%s" (.Values.logfireRegion | default "local") (sha256sum (printf "%s/%s" .Release.Name .Release.Namespace) | trunc 32) -}}
@@ -32,8 +32,8 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-frontend-service-config
 data:
-  # The browser publishes this token in config.1.js. It is public by design and has
-  # only the `project:write_otlp` scope, so the backend can read it from here too.
+  # The frontend publishes this token in config.1.js, so the token is public by design
+  # and has only the `project:write_otlp` scope. The backend reads it from here.
   frontend-application-token: {{ $rumExportToken | quote }}
   config.1.js: |
     window.appConfig = {
