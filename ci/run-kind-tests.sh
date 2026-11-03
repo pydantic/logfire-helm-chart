@@ -7,6 +7,11 @@ repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 namespace=${LOGFIRE_TEST_NAMESPACE:-logfire-restricted}
 release=lf
 
+dev_postgres_args=()
+if [[ "${LOGFIRE_TEST_FRESH_INSTALL:-}" != true ]]; then
+  dev_postgres_args=(--set dev.deployPostgres=false)
+fi
+
 for command in kubectl helm curl uv python3; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "Required command is missing: $command" >&2
@@ -54,6 +59,7 @@ upgrade_current() {
   helm upgrade "$release" "$repo_root/charts/logfire" \
     --kube-context "$context" --namespace "$namespace" \
     "$values_mode" "${values[@]}" \
+    "${dev_postgres_args[@]+"${dev_postgres_args[@]}"}" \
     --set "logfire-ff-query-worker.enabled=$split" \
     --wait --wait-for-jobs --timeout 10m
 }
@@ -153,10 +159,17 @@ if [[ -z "$META_FRONTEND_TOKEN" ]]; then
 fi
 export META_FRONTEND_TOKEN
 
+if [[ "${LOGFIRE_TEST_FRESH_INSTALL:-}" != true ]]; then
+  echo "Starting the standalone Postgres for the upgrade probe"
+  kubectl --context "$context" --namespace "$namespace" apply -f "$repo_root/ci/test-postgres.yaml"
+  kubectl --context "$context" --namespace "$namespace" rollout status deployment/logfire-postgres --timeout=5m
+fi
+
 echo "Installing the $baseline_version baseline in $context/$namespace"
 helm upgrade --install "$release" "$baseline_chart" \
   --kube-context "$context" --namespace "$namespace" \
   --reset-values "${values[@]}" --set logfire-ff-query-worker.enabled=false \
+  "${dev_postgres_args[@]+"${dev_postgres_args[@]}"}" \
   --wait --wait-for-jobs --timeout 10m
 restart_forwards
 uv run --directory "$repo_root/tests/integration" python upgrade_probe.py seed "$state_file"

@@ -1,0 +1,182 @@
+# Standalone Postgres for the stable-upgrade suite.
+#
+# The suite installs chart 0.14.0, seeds a trace, upgrades to the current chart, and
+# queries that trace again. The 0.14.0 baseline keeps its data in the bundled
+# Postgres subchart, so this fixture keeps the database outside the release and
+# points both charts at it. That way the probe tests application data across the
+# upgrade instead of a dev database replacement.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: logfire-postgres
+  labels:
+    app.kubernetes.io/name: logfire
+    app.kubernetes.io/instance: lf
+    app.kubernetes.io/component: logfire-postgres
+type: Opaque
+stringData:
+  postgres-password: "postgres"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logfire-postgres-initdb
+  labels:
+    app.kubernetes.io/name: logfire
+    app.kubernetes.io/instance: lf
+    app.kubernetes.io/component: logfire-postgres
+data:
+  create_databases.sql: |
+    CREATE DATABASE crud;
+    CREATE DATABASE dex;
+    CREATE DATABASE ff;
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: logfire-postgres
+  labels:
+    app.kubernetes.io/name: logfire
+    app.kubernetes.io/instance: lf
+    app.kubernetes.io/component: logfire-postgres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logfire-postgres
+  labels:
+    app.kubernetes.io/name: logfire
+    app.kubernetes.io/instance: lf
+    app.kubernetes.io/component: logfire-postgres
+spec:
+  selector:
+    app.kubernetes.io/name: logfire
+    app.kubernetes.io/instance: lf
+    app.kubernetes.io/component: logfire-postgres
+  ports:
+    - protocol: TCP
+      name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logfire-postgres
+  labels:
+    app.kubernetes.io/name: logfire
+    app.kubernetes.io/instance: lf
+    app.kubernetes.io/component: logfire-postgres
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: logfire
+      app.kubernetes.io/instance: lf
+      app.kubernetes.io/component: logfire-postgres
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: logfire
+        app.kubernetes.io/instance: lf
+        app.kubernetes.io/component: logfire-postgres
+      annotations: {}
+    spec:
+      securityContext:
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: postgres:17
+          imagePullPolicy: "IfNotPresent"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 999
+            runAsNonRoot: true
+            runAsUser: 999
+            seccompProfile:
+              type: RuntimeDefault
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: logfire-postgres
+                  key: postgres-password
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+          startupProbe:
+            exec:
+              command:
+                - pg_isready
+                - -h
+                - 127.0.0.1
+                - -U
+                - postgres
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -h
+                - 127.0.0.1
+                - -U
+                - postgres
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -h
+                - 127.0.0.1
+                - -U
+                - postgres
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: logfire-postgres
+        - name: initdb
+          configMap:
+            name: logfire-postgres-initdb
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
