@@ -2,41 +2,22 @@
 {{- $name := include "logfire.devPostgres.fullname" . -}}
 {{- $password := include "logfire.devPostgres.password" . -}}
 {{- $devPostgres := .Values.devPostgres | default dict -}}
-{{- $legacyPostgres := .Values.postgresql | default dict -}}
-{{- $legacyPersistence := dig "primary" "persistence" dict $legacyPostgres -}}
 {{- $persistence := get $devPostgres "persistence" | default dict -}}
-{{- /*
-The `devPostgres` block is absent on an upgrade that carries the old `postgresql` values with
-`--reuse-values`, so each persistence setting falls back to the subchart path it replaced.
-*/ -}}
 {{- $persistenceEnabled := true -}}
 {{- if hasKey $persistence "enabled" -}}
 {{- $persistenceEnabled = get $persistence "enabled" -}}
-{{- else if hasKey $legacyPersistence "enabled" -}}
-{{- $persistenceEnabled = get $legacyPersistence "enabled" -}}
 {{- end -}}
-{{- $storageClassName := "" -}}
-{{- if hasKey $persistence "storageClassName" -}}
-{{- $storageClassName = get $persistence "storageClassName" -}}
-{{- else if hasKey $legacyPersistence "storageClassName" -}}
-{{- $storageClassName = get $legacyPersistence "storageClassName" -}}
-{{- end -}}
-{{- $size := get $persistence "size" | default (get $legacyPersistence "size") | default "10Gi" -}}
-{{- $mountPath := get $persistence "mountPath" | default (get $legacyPersistence "mountPath") | default "/var/lib/postgresql/data" -}}
+{{- $storageClassName := get $persistence "storageClassName" | default "" -}}
+{{- $size := get $persistence "size" | default "10Gi" -}}
+{{- $mountPath := get $persistence "mountPath" | default "/var/lib/postgresql/data" -}}
 {{- $persistenceValues := dict "enabled" $persistenceEnabled "size" $size "storageClassName" $storageClassName "mountPath" $mountPath -}}
-{{- $initdbScripts := dict -}}
-{{- if hasKey $devPostgres "initdb" -}}
-{{- $initdbScripts = dig "initdb" "scripts" dict $devPostgres -}}
-{{- else -}}
-{{- $initdbScripts = dig "primary" "initdb" "scripts" dict $legacyPostgres -}}
+{{- $initdbScripts := dig "initdb" "scripts" dict $devPostgres -}}
+{{- if not $initdbScripts -}}
+{{- $initdbScripts = dict "create_databases.sql" "CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n" -}}
 {{- end -}}
-{{- $resources := dict -}}
-{{- if hasKey $devPostgres "resources" -}}
-{{- $resources = get $devPostgres "resources" -}}
-{{- else if hasKey $legacyPostgres "primary" -}}
-{{- $resources = dig "primary" "resources" dict $legacyPostgres -}}
-{{- end -}}
-{{- $dataDir := get $devPostgres "postgresqlDataDir" | default "/var/lib/postgresql/data/pgdata" -}}
+{{- $resources := get $devPostgres "resources" | default dict -}}
+{{- /* Keep PGDATA inside the mounted volume so a custom mount works with a read-only root filesystem. */ -}}
+{{- $dataDir := printf "%s/pgdata" (trimSuffix "/" $mountPath) -}}
 {{- $image := get $devPostgres "image" | default dict -}}
 apiVersion: v1
 kind: Secret

@@ -2293,25 +2293,22 @@ Dev Postgres helpers
 */}}
 
 {{/*
-The dev Postgres Service and Deployment name. The old `postgresql` subchart block is
-a fallback for upgrades that carry the old values with `--reuse-values`.
+The dev Postgres Service and Deployment name. The template supplies the default so a
+`--reuse-values` upgrade that does not carry the `devPostgres` block still works.
 */}}
 {{- define "logfire.devPostgres.fullname" -}}
 {{- $devPostgres := .Values.devPostgres | default dict -}}
-{{- $legacyPostgres := .Values.postgresql | default dict -}}
-{{- get $devPostgres "fullnameOverride" | default (get $legacyPostgres "fullnameOverride") | default "logfire-postgres" -}}
+{{- get $devPostgres "fullnameOverride" | default "logfire-postgres" -}}
 {{- end -}}
 
 {{/*
-The dev Postgres superuser password. The old `postgresql` subchart value is the
-fallback for `--reuse-values` upgrades.
+The dev Postgres superuser password. The template supplies the default for the same
+`--reuse-values` case.
 */}}
 {{- define "logfire.devPostgres.password" -}}
 {{- $devPostgres := .Values.devPostgres | default dict -}}
-{{- $legacyPostgres := .Values.postgresql | default dict -}}
 {{- $auth := get $devPostgres "auth" | default dict -}}
-{{- $legacyAuth := get $legacyPostgres "auth" | default dict -}}
-{{- get $auth "postgresPassword" | default (get $legacyAuth "postgresPassword") | default "postgres" -}}
+{{- get $auth "postgresPassword" | default "postgres" -}}
 {{- end -}}
 
 {{- define "logfire.dev.waitForPostgres.initContainers" -}}

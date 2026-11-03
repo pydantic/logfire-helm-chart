@@ -2081,8 +2081,6 @@ devPostgres:
     # -- Password for the `postgres` superuser. Update `postgresDsn` and `postgresFFDsn` when you change it.
     # An existing volume keeps the old database password.
     postgresPassword: "postgres"
-  # -- PostgreSQL data directory inside the mounted volume.
-  postgresqlDataDir: /var/lib/postgresql/data/pgdata
   initdb:
     # -- SQL scripts run by the official Postgres entrypoint on first initialization.
     scripts:

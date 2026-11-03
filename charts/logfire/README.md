@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.6-rc.3](https://img.shields.io/badge/Version-0.14.6--rc.3-informational?style=flat-square) ![AppVersion: 54a9b858](https://img.shields.io/badge/AppVersion-54a9b858-informational?style=flat-square)
+![Version: 0.15.0-rc.1](https://img.shields.io/badge/Version-0.15.0--rc.1-informational?style=flat-square) ![AppVersion: 54a9b858](https://img.shields.io/badge/AppVersion-54a9b858-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -676,7 +676,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | dev.deployMinio | bool | `false` | Deprecated alias for `dev.deployRustfs` that existing MinIO values keep working. While set, the chart keeps the `logfire-minio` Service name and uses the credentials from `minio.auth` (including `minio.auth.existingSecret`) or `objectStore.env` and the persistence from `minio.persistence`, so `objectStore.env` keeps matching the deployed object store. Remove it after moving to `dev.deployRustfs` and the `rustfs.*` values. |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
 | dev.deployRustfs | bool | `false` | Deploy a local RustFS instance as S3-compatible object storage (NOT for production) |
-| devPostgres | object | `{"auth":{"postgresPassword":"postgres"},"fullnameOverride":"logfire-postgres","image":{"pullPolicy":"IfNotPresent","repository":"postgres","tag":"17"},"initdb":{"scripts":{"create_databases.sql":"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"}},"persistence":{"enabled":true,"mountPath":"/var/lib/postgresql/data","size":"10Gi","storageClassName":""},"podSecurityContext":{},"postgresqlDataDir":"/var/lib/postgresql/data/pgdata","resources":{},"securityContext":{}}` | Dev Postgres configuration (only used when `dev.deployPostgres` is true) |
+| devPostgres | object | `{"auth":{"postgresPassword":"postgres"},"fullnameOverride":"logfire-postgres","image":{"pullPolicy":"IfNotPresent","repository":"postgres","tag":"17"},"initdb":{"scripts":{"create_databases.sql":"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"}},"persistence":{"enabled":true,"mountPath":"/var/lib/postgresql/data","size":"10Gi","storageClassName":""},"podSecurityContext":{},"resources":{},"securityContext":{}}` | Dev Postgres configuration (only used when `dev.deployPostgres` is true) |
 | devPostgres.auth.postgresPassword | string | `"postgres"` | Password for the `postgres` superuser. Update `postgresDsn` and `postgresFFDsn` when you change it. An existing volume keeps the old database password. |
 | devPostgres.fullnameOverride | string | `"logfire-postgres"` | Name of the dev Postgres Service and Deployment. |
 | devPostgres.image | object | `{"pullPolicy":"IfNotPresent","repository":"postgres","tag":"17"}` | Dev Postgres image configuration. The default uses the official PostgreSQL image. |
@@ -686,7 +686,6 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | devPostgres.persistence.size | string | `"10Gi"` | Size of the chart-managed claim. |
 | devPostgres.persistence.storageClassName | string | `""` | Storage class for the chart-managed claim. Defaults to `defaultStorageClassName`. |
 | devPostgres.podSecurityContext | object | `{}` | Pod SecurityContext for the dev Postgres pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 999`. |
-| devPostgres.postgresqlDataDir | string | `"/var/lib/postgresql/data/pgdata"` | PostgreSQL data directory inside the mounted volume. |
 | devPostgres.resources | object | `{}` | Resources for the dev Postgres container. |
 | devPostgres.securityContext | object | `{}` | Container SecurityContext for the dev Postgres container. Merged over the chart-wide `securityContext` and the image defaults: uid and gid 999, all capabilities dropped, no privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root. |
 | existingGatewaySecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret for the AI Gateway with the following keys:  - key (gateway encryption key)  - internalSecret (gateway internal secret) |

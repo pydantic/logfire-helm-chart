@@ -43,73 +43,41 @@ tests:
           path: kind
           value: Deployment
 
-  - it: reads the legacy postgresql values when devPostgres is absent
+  - it: keeps a usable default database when devPostgres is absent
     set:
       devPostgres: null
-      postgresql:
-        fullnameOverride: legacy-postgres
-        auth:
-          postgresPassword: legacy-password
-        primary:
-          initdb:
-            scripts:
-              create_databases.sql: |
-                CREATE DATABASE legacy;
-          resources:
-            requests:
-              cpu: 200m
-              memory: 128Mi
-          persistence:
-            enabled: true
-            size: 5Gi
-            storageClassName: legacy-storage
-            mountPath: /legacy/data
     asserts:
       - equal:
           path: metadata.name
-          value: legacy-postgres
+          value: logfire-postgres
         template: templates/dev-postgres.yaml
         documentSelector:
           path: kind
           value: Service
       - equal:
           path: stringData.postgres-password
-          value: legacy-password
+          value: postgres
         template: templates/dev-postgres.yaml
         documentSelector:
           path: kind
           value: Secret
       - matchRegex:
           path: data["create_databases.sql"]
-          pattern: "CREATE DATABASE legacy;"
+          pattern: "CREATE DATABASE dex;"
         template: templates/dev-postgres.yaml
         documentSelector:
           path: kind
           value: ConfigMap
       - equal:
           path: spec.resources.requests.storage
-          value: 5Gi
+          value: 10Gi
         template: templates/dev-postgres.yaml
         documentSelector:
           path: kind
           value: PersistentVolumeClaim
       - equal:
-          path: spec.storageClassName
-          value: legacy-storage
-        template: templates/dev-postgres.yaml
-        documentSelector:
-          path: kind
-          value: PersistentVolumeClaim
-      - equal:
-          path: spec.template.spec.containers[0].resources.requests.cpu
-          value: 200m
-        template: templates/dev-postgres.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-      - equal:
-          path: spec.template.spec.containers[0].volumeMounts[?(@.name == "data")].mountPath
-          value: /legacy/data
+          path: spec.template.spec.containers[0].env[?(@.name == "PGDATA")].value
+          value: /var/lib/postgresql/data/pgdata
         template: templates/dev-postgres.yaml
         documentSelector:
           path: kind
@@ -224,6 +192,13 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].volumeMounts[?(@.name == "data")].mountPath
           value: /custom/data
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "PGDATA")].value
+          value: /custom/data/pgdata
         template: templates/dev-postgres.yaml
         documentSelector:
           path: kind
