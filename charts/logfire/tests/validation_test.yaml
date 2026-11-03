@@ -612,6 +612,13 @@ tests:
       - failedTemplate:
           errorPattern: 'logfire-ff-cache-byte is no longer a values block'
 
+  - it: names the move when the removed dev.deployMinio alias is still set
+    set:
+      dev.deployMinio: true
+    asserts:
+      - failedTemplate:
+          errorPattern: 'dev\.deployMinio was removed in chart 0\.15\.0\. Set dev\.deployRustfs=true'
+
   # --- frontend nginx ---
   - it: rejects a frontend nginx worker count that is neither auto nor positive
     set:

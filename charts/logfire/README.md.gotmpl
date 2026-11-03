@@ -327,7 +327,7 @@ The identity needs read and write access to the bucket.
 On AWS, grant `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket`.
 On GCP, grant the `Storage Object Admin` role on the bucket.
 
-For local evaluation, `dev.deployRustfs` (or the deprecated `dev.deployMinio`) deploys RustFS.
+For local evaluation, `dev.deployRustfs` deploys RustFS.
 It fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credential environment variables, so the workloads reach the in-cluster bucket.
 An `s3://` `objectStore.uri` also sets the bucket that RustFS creates.
 

@@ -10,7 +10,7 @@ when required values are missing or incorrectly configured.
 Validate that objectStore.uri resolves to a nonblank value (required for production)
 */}}
 {{- define "logfire.validate.objectStore" -}}
-{{- if not (or .Values.dev.deployRustfs .Values.dev.deployMinio) -}}
+{{- if not .Values.dev.deployRustfs -}}
   {{- if not (include "logfire.objectStoreUri" . | trim) -}}
     {{- fail "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead." -}}
   {{- end -}}
@@ -212,11 +212,17 @@ Validate scratch volume configuration.
 
 
 {{/*
-The v1 byte cache values block is gone. Its settings moved to `logfire-ff-bcache`, and a value
-left under the old key is silently ignored. That would turn zone routing off with no error, so
-name the move instead of letting the install quietly change behaviour.
+Removed values that would otherwise be ignored without an error. Each guard names the move
+instead of letting the install quietly change behaviour. A check reads a value, not a key, when
+the 0.14.0 defaults carry the key, because `--reuse-values` keeps those defaults.
+- The v1 byte cache block: its settings moved to `logfire-ff-bcache`, and ignoring it would turn
+  zone routing off.
+- `dev.deployMinio`: ignoring it would drop the in-cluster object store.
 */}}
-{{- define "logfire.validate.removedByteCacheValues" -}}
+{{- define "logfire.validate.removedValues" -}}
+{{- if .Values.dev.deployMinio -}}
+  {{- fail "dev.deployMinio was removed in chart 0.15.0. Set dev.deployRustfs=true and move minio.auth and minio.persistence to rustfs.auth and rustfs.persistence. Existing MinIO data does not carry over, and the object store Service is logfire-rustfs." -}}
+{{- end -}}
 {{- if hasKey .Values "logfire-ff-cache-byte" -}}
   {{- fail "logfire-ff-cache-byte is no longer a values block. Move its settings to logfire-ff-bcache: replica, resource, autoscaling and PDB settings keep their names, scratchVolume and cacheDiskCapacity become logfire-ff-bcache.disk.storage, and clientSideRouting.zoneAware becomes logfire-ff-bcache.topology.zoneAware." -}}
 {{- end -}}
@@ -443,7 +449,7 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.trustedCaBundle"
   "logfire.validate.inClusterTls"
   "logfire.validate.scratchVolumes"
-  "logfire.validate.removedByteCacheValues"
+  "logfire.validate.removedValues"
   "logfire.validate.frontendWorkerProcesses"
   "logfire.validate.frontendApplicationToken"
   -}}

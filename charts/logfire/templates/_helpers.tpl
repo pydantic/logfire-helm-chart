@@ -837,10 +837,9 @@ The platform names that topology `pgbouncer`, whatever the pooler is.
 {{- end }}
 {{- end -}}
 
-{{/* Whether the chart deploys an in-cluster S3-compatible object store (RustFS, with `dev.deployMinio` as its deprecated alias). */}}
+{{/* Whether the chart deploys the in-cluster RustFS object store. */}}
 {{- define "logfire.inClusterObjectStoreEnabled" -}}
-{{- $dev := .Values.dev | default dict -}}
-{{- if or (get $dev "deployRustfs") (get $dev "deployMinio") -}}true{{- end -}}
+{{- if .Values.dev.deployRustfs -}}true{{- end -}}
 {{- end -}}
 
 {{/* Service that fronts the in-cluster object store. */}}
@@ -872,99 +871,10 @@ URI its bucket is authoritative, so RustFS creates the bucket the workloads actu
 {{- tpl (.Values.objectStore.uri | default "") . -}}
 {{- end -}}
 
-{{/*
-Credentials for the in-cluster object store, JSON encoded. While `dev.deployMinio` is set the
-legacy credentials win: `minio.auth` -> string-valued `objectStore.env` keys -> the old
-`logfire-minio` default. With only `dev.deployRustfs`, `rustfs.auth` is used.
-*/}}
-{{/*
-Resolve an objectStore.env value backed by `valueFrom.secretKeyRef`, or "" when it cannot be
-resolved (for example outside a cluster, where `lookup` returns nothing).
-*/}}
-{{- define "logfire.objectStoreEnvSecretKeyRef" -}}
-{{- $root := .root -}}
-{{- $ref := dig "valueFrom" "secretKeyRef" dict .env -}}
-{{- $name := get $ref "name" | default "" -}}
-{{- $key := get $ref "key" | default "" -}}
-{{- $value := "" -}}
-{{- if and $name $key -}}
-{{- $secret := lookup "v1" "Secret" $root.Release.Namespace (toString $name) -}}
-{{- if $secret -}}
-{{- $value = get (get $secret "data" | default dict) $key | default "" | b64dec -}}
-{{- end -}}
-{{- end -}}
-{{- $value -}}
-{{- end -}}
-
-{{/*
-Credentials for the in-cluster object store, JSON encoded. While `dev.deployMinio` is set the
-legacy credentials win: `minio.auth` (inline or through `minio.auth.existingSecret`) -> string
-values or `valueFrom.secretKeyRef` references in `objectStore.env` -> the old `logfire-minio`
-default. With only `dev.deployRustfs`, `rustfs.auth` is used.
-*/}}
+{{/* Credentials for the in-cluster object store, JSON encoded. */}}
 {{- define "logfire.inClusterObjectStoreAuth" -}}
-{{- $dev := .Values.dev | default dict -}}
-{{- $legacyMinio := get $dev "deployMinio" -}}
-{{- $rustfs := .Values.rustfs | default dict -}}
-{{- $minio := .Values.minio | default dict -}}
-{{- $objectStoreEnv := get (.Values.objectStore | default dict) "env" | default dict -}}
-{{- $accessKey := "" -}}
-{{- $secretKey := "" -}}
-{{- if $legacyMinio -}}
-{{- $legacyAuth := get $minio "auth" | default dict -}}
-{{- $accessKey = get $legacyAuth "rootUser" | default "" | toString -}}
-{{- $secretKey = get $legacyAuth "rootPassword" | default "" | toString -}}
-{{- $existingSecret := get $legacyAuth "existingSecret" | default "" -}}
-{{- if and $existingSecret (not (and $accessKey $secretKey)) -}}
-{{- $userKey := get $legacyAuth "existingSecretUserKey" | default "rootUser" -}}
-{{- $passwordKey := get $legacyAuth "existingSecretPasswordKey" | default "rootPassword" -}}
-{{- $secret := lookup "v1" "Secret" .Release.Namespace (toString $existingSecret) -}}
-{{- if $secret -}}
-{{- $data := get $secret "data" | default dict -}}
-{{- if not $accessKey -}}
-{{- $accessKey = get $data $userKey | default "" | b64dec -}}
-{{- end -}}
-{{- if not $secretKey -}}
-{{- $secretKey = get $data $passwordKey | default "" | b64dec -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
-{{- if not (and $accessKey $secretKey) -}}
-{{- $envAccessKey := get $objectStoreEnv "AWS_ACCESS_KEY_ID" -}}
-{{- if kindIs "string" $envAccessKey -}}
-{{- $envAccessKey = tpl $envAccessKey . -}}
-{{- else if kindIs "map" $envAccessKey -}}
-{{- $envAccessKey = include "logfire.objectStoreEnvSecretKeyRef" (dict "env" $envAccessKey "root" .) -}}
-{{- else -}}
-{{- $envAccessKey = "" -}}
-{{- end -}}
-{{- $envSecretKey := get $objectStoreEnv "AWS_SECRET_ACCESS_KEY" -}}
-{{- if kindIs "string" $envSecretKey -}}
-{{- $envSecretKey = tpl $envSecretKey . -}}
-{{- else if kindIs "map" $envSecretKey -}}
-{{- $envSecretKey = include "logfire.objectStoreEnvSecretKeyRef" (dict "env" $envSecretKey "root" .) -}}
-{{- else -}}
-{{- $envSecretKey = "" -}}
-{{- end -}}
-{{- if not $accessKey -}}
-{{- $accessKey = $envAccessKey -}}
-{{- end -}}
-{{- if not $secretKey -}}
-{{- $secretKey = $envSecretKey -}}
-{{- end -}}
-{{- end -}}
-{{- if not $accessKey -}}
-{{- $accessKey = "logfire-minio" -}}
-{{- end -}}
-{{- if not $secretKey -}}
-{{- $secretKey = "logfire-minio" -}}
-{{- end -}}
-{{- else -}}
-{{- $auth := get $rustfs "auth" | default dict -}}
-{{- $accessKey = get $auth "accessKey" | default "logfire-rustfs" -}}
-{{- $secretKey = get $auth "secretKey" | default "logfire-rustfs" -}}
-{{- end -}}
-{{- dict "accessKey" $accessKey "secretKey" $secretKey | toJson -}}
+{{- $auth := get (.Values.rustfs | default dict) "auth" | default dict -}}
+{{- dict "accessKey" (get $auth "accessKey" | default "logfire-rustfs") "secretKey" (get $auth "secretKey" | default "logfire-rustfs") | toJson -}}
 {{- end -}}
 
 {{/* Resolve the object store URI consistently for validation and consumers. */}}

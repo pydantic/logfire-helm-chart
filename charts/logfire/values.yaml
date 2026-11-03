@@ -1511,7 +1511,7 @@ logfire-otel-collector:
 objectStore:
   # -- URI for object storage (e.g., `s3://bucket`). Supports Helm templating,
   # e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release.
-  # When `dev.deployRustfs` (or the deprecated `dev.deployMinio`) is enabled and
+  # When `dev.deployRustfs` is enabled and
   # this is empty, it defaults to `s3://<rustfs.bucket>`.
   #
   # The backend and the worker keep session replay and visual-test blobs under the
@@ -2038,8 +2038,6 @@ dev:
   deployPostgres: false
   # -- Deploy a local RustFS instance as S3-compatible object storage (NOT for production)
   deployRustfs: false
-  # -- Deprecated alias for `dev.deployRustfs` that existing MinIO values keep working. While set, the chart keeps the `logfire-minio` Service name and uses the credentials from `minio.auth` (including `minio.auth.existingSecret`) or `objectStore.env` and the persistence from `minio.persistence`, so `objectStore.env` keeps matching the deployed object store. Remove it after moving to `dev.deployRustfs` and the `rustfs.*` values.
-  deployMinio: false
   # -- Deploy cert-manager (NOT for production; includes cluster-scoped resources).
   deployCertManager: false
 
@@ -2115,14 +2113,14 @@ rustfs:
     tag: "1.0.0"
     # -- RustFS image pull policy. Defaults to `image.pullPolicy` when unset.
     pullPolicy: ""
-  # -- Root credentials. Ignored while `dev.deployMinio` is set. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values.
+  # -- Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values.
   auth:
     accessKey: logfire-rustfs
     secretKey: logfire-rustfs
   # -- Bucket that RustFS creates at startup when `objectStore.uri` is not an `s3://` URI. With an `s3://` `objectStore.uri`, the bucket in the URI is used.
   bucket: logfire
   persistence:
-    # -- Store data on a PersistentVolumeClaim. Set false to use an emptyDir. Ignored while `dev.deployMinio` is set and `minio.persistence` is present.
+    # -- Store data on a PersistentVolumeClaim. Set false to use an emptyDir.
     enabled: true
     # -- Existing PersistentVolumeClaim to use in place of a chart-managed claim
     existingClaim: ""
