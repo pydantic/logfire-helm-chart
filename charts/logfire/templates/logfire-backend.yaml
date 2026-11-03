@@ -255,9 +255,9 @@ spec:
             - name: MIN_DATE_USAGE_CHART  # TODO: make this optional?
               value: "2025-01-01"
             - name: DEFAULT_SUBSCRIPTION_PLAN
-              value: non_stripe
+              value: enterprise
             - name: DEFAULT_PERSONAL_SUBSCRIPTION_PLAN
-              value: non_stripe
+              value: enterprise
             - name: LOGFIRE_REGION
               value: {{ .Values.logfireRegion | default "local" }}
             - name: KNOWN_LOGFIRE_REGIONS
@@ -279,6 +279,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-meta-frontend-token") }}
                   key: logfire-meta-frontend-token
+            - name: META_FRONTEND_APPLICATION_TOKEN
+              valueFrom:
+                configMapKeyRef:
+                  name: logfire-frontend-service-config
+                  key: frontend-application-token
             - name: UNSUBSCRIBE_SECRET
               valueFrom:
                 secretKeyRef:
@@ -315,7 +320,7 @@ spec:
               # This will make it possible to log-in sans-credentials by visiting a URL like:
               # http://localhost:8080/logfire-meta/logfire-meta#token=U8TO1taNdD7YwgBMcfeQVU7RB6Hgtrwd
               # You'll need to get the right host and get the secret from k8s
-              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)"}]{{- if $oauthClients }}, "oauth_clients": {{ $oauthClients | toJson }}{{- end }}}]'
+              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)", "frontend_application_token": "$(META_FRONTEND_APPLICATION_TOKEN)"}]{{- if $oauthClients }}, "oauth_clients": {{ $oauthClients | toJson }}{{- end }}}]'
             {{- include "logfire.pythonObjectStoreEnv" . | nindent 12 }}
             {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}

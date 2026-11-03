@@ -4,6 +4,15 @@
 {{- $wsProtocol := $tls | default false | ternary "wss" "ws" -}}
 {{- $gatewayCimdEnabled := and $tls (index .Values "logfire-ai-gateway" "enabled") -}}
 {{- $gatewayClientId := printf "%s/clients/logfire-gateway.json" (include "logfire.url" .) -}}
+{{/* The frontend publishes the token in config.1.js. The chart derives the default from the
+release so the ConfigMap checksum stays stable when a render has no cluster to look up. */}}
+{{- $existingConfig := (lookup "v1" "ConfigMap" .Release.Namespace "logfire-frontend-service-config") | default dict -}}
+{{- $existingToken := get ((get $existingConfig "data") | default dict) "frontend-application-token" -}}
+{{- $generatedToken := printf "pylf_v1_%s_pub%s" (.Values.logfireRegion | default "local") (sha256sum (printf "%s/%s" .Release.Name .Release.Namespace) | trunc 32) -}}
+{{- $rumExportToken := .Values.frontendApplicationToken | default $generatedToken -}}
+{{- if and (not .Values.frontendApplicationToken) $existingToken -}}
+{{- $rumExportToken = $existingToken -}}
+{{- end -}}
 {{- $gatewayClientMetadata := dict
   "client_id" $gatewayClientId
   "client_name" "Logfire Gateway CLI"
@@ -23,6 +32,9 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-frontend-service-config
 data:
+  # The frontend publishes this token in config.1.js, so the token is public by design
+  # and has only the `project:write_otlp` scope. The backend reads it from here.
+  frontend-application-token: {{ $rumExportToken | quote }}
   config.1.js: |
     window.appConfig = {
       apiHost: '{{ include "logfire.primary_hostname" . }}',
@@ -32,6 +44,7 @@ data:
       dexDynamicRedirect: {{ .Values.dexDynamicRedirect | default false }},
       appVersion: '{{ .Chart.AppVersion }}',
       selfHosted: true,
+      rumExport: { baseUrl: '{{ include "logfire.url" . }}', token: '{{ $rumExportToken }}', sessionReplay: false },
       {{ with .Values.variablesApiKey }}
       variablesApiKey: {{ . | toJson }}
       {{- end }}
