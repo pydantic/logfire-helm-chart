@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import base64
+import gzip
+import json
 import os
 import time
+import uuid
 
 from opentelemetry.proto.collector.profiles.v1development.profiles_service_pb2 import (
     ExportProfilesServiceRequest,
@@ -220,3 +224,40 @@ def profiles_payload(service_name: str, values: tuple[int, ...]) -> bytes:
         ],
     )
     return request.SerializeToString()
+
+
+def firehose_delivery(service_name: str, message: str) -> tuple[str, bytes, dict[str, str]]:
+    """An Amazon Data Firehose delivery of one CloudWatch Logs event.
+
+    CloudWatch Logs gzips each subscription message before Firehose adds it to a
+    record, and Firehose sends endpoint parameters as common attributes.
+    Returns the request ID that the acknowledgement must echo, the gzip body,
+    and the headers without the access key.
+    """
+    now_ms = time.time_ns() // 1_000_000
+    data_message = {
+        "messageType": "DATA_MESSAGE",
+        "owner": "123456789012",
+        "logGroup": "/helm/integration",
+        "logStream": "helm-it",
+        "subscriptionFilters": ["helm-it"],
+        "logEvents": [{"id": "1", "timestamp": now_ms, "message": message}],
+    }
+    request_id = str(uuid.uuid4())
+    body = {
+        "requestId": request_id,
+        "timestamp": now_ms,
+        "records": [
+            {"data": base64.b64encode(gzip.compress(json.dumps(data_message).encode())).decode()},
+        ],
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Content-Encoding": "gzip",
+        "X-Amz-Firehose-Protocol-Version": "1.0",
+        "X-Amz-Firehose-Request-Id": request_id,
+        "X-Amz-Firehose-Common-Attributes": json.dumps(
+            {"commonAttributes": {"service.name": service_name}}
+        ),
+    }
+    return request_id, gzip.compress(json.dumps(body).encode()), headers
