@@ -89,6 +89,8 @@ logfire-ff-ingest:
   env:
     - name: RUST_LOG
       value: warn,otel::tracing=info
+    - name: FF_ENABLE_PROFILES_INGEST
+      value: "true"
     - name: FF_ENABLE_FIREHOSE_INGEST
       value: "true"
 

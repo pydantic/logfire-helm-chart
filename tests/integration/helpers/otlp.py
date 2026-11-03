@@ -7,6 +7,27 @@ import os
 import time
 import uuid
 
+from opentelemetry.proto.collector.profiles.v1development.profiles_service_pb2 import (
+    ExportProfilesServiceRequest,
+)
+from opentelemetry.proto.common.v1.common_pb2 import AnyValue, KeyValue
+from opentelemetry.proto.profiles.v1development.profiles_pb2 import (
+    Function,
+    KeyValueAndUnit,
+    Line,
+    Link,
+    Location,
+    Mapping,
+    Profile,
+    ProfilesDictionary,
+    ResourceProfiles,
+    Sample,
+    ScopeProfiles,
+    Stack,
+    ValueType,
+)
+from opentelemetry.proto.resource.v1.resource_pb2 import Resource
+
 
 def _ids() -> tuple[str, str, int, int]:
     trace_id = os.urandom(16).hex()
@@ -162,6 +183,47 @@ def exception_log_payload(service_name: str, run_id: str) -> dict:
             },
         ],
     }
+
+
+def profiles_payload(service_name: str, values: tuple[int, ...]) -> bytes:
+    """One CPU profile with a sample per value, all on the same one-frame stack.
+
+    The pinned ingest decodes the current `v1development` schema, which keeps
+    strings, functions, locations, and stacks in a shared dictionary.
+    """
+    request = ExportProfilesServiceRequest(
+        dictionary=ProfilesDictionary(
+            mapping_table=[Mapping()],
+            location_table=[Location(), Location(lines=[Line(function_index=1, line=42)])],
+            function_table=[Function(), Function(name_strindex=3, filename_strindex=4)],
+            link_table=[Link()],
+            string_table=["", "cpu", "nanoseconds", "helm_profile_work", "helm_profile.py"],
+            attribute_table=[KeyValueAndUnit()],
+            stack_table=[Stack(), Stack(location_indices=[1])],
+        ),
+        resource_profiles=[
+            ResourceProfiles(
+                resource=Resource(
+                    attributes=[
+                        KeyValue(key="service.name", value=AnyValue(string_value=service_name)),
+                    ],
+                ),
+                scope_profiles=[
+                    ScopeProfiles(
+                        profiles=[
+                            Profile(
+                                sample_type=ValueType(type_strindex=1, unit_strindex=2),
+                                samples=[Sample(stack_index=1, values=[value]) for value in values],
+                                time_unix_nano=time.time_ns(),
+                                duration_nano=1_000_000,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    )
+    return request.SerializeToString()
 
 
 def firehose_delivery(service_name: str, message: str) -> tuple[str, bytes, dict[str, str]]:
