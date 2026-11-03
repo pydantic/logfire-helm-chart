@@ -1762,20 +1762,6 @@ cluster, since that is where their key lives.
 {{- end -}}
 {{- end -}}
 
-{{- define "logfire.rateLimits" -}}
-{{- with .Values.rateLimits -}}
-{{- $queries := get . "queries" | default dict -}}
-- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_QUERY__PER_MINUTE
-  value: {{ (get $queries "perMinute" | default 99999) | quote }}
-- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_QUERY__PER_HOUR
-  value: {{ (get $queries "perHour" | default 99999) | quote }}
-- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_V1_QUERY__PER_MINUTE
-  value: {{ (get $queries "perMinute" | default 99999) | quote }}
-- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_V1_QUERY__PER_HOUR
-  value: {{ (get $queries "perHour" | default 99999) | quote }}
-{{- end -}}
-{{- end -}}
-
 {{/*
 ================================================================================
 In-cluster TLS helpers

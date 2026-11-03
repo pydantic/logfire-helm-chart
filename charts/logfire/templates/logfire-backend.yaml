@@ -268,7 +268,6 @@ spec:
               value: {{ include "logfire.url" . | quote }}
             - name: MCP_RESOURCE_URL
               value: {{ printf "%s/mcp" (include "logfire.url" .) | quote }}
-            {{- include "logfire.rateLimits" . | nindent 12 }}
             - name: META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:

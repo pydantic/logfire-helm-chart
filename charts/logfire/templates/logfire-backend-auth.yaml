@@ -147,7 +147,6 @@ spec:
             - name: GATEWAY_OAUTH_RESOURCE_URL
               value: {{ include "logfire.gatewayOauthResourceUrl" . | trim | quote }}
             {{- end }}
-            {{- include "logfire.rateLimits" . | nindent 12 }}
             {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
             - name: LOGFIRE_CA_PATH
               value: /etc/logfire/incluster-ca/ca.crt

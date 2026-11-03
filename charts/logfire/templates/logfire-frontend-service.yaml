@@ -110,8 +110,6 @@ spec:
           env:
             - name: APP_VERSION
               value: {{ .Values.releaseVersion | default (include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName)) | quote }}
-            - name: STRIPE_PUBLISHABLE_KEY
-              value: ""
             - name: IMAGE_TAG
               value: {{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) | quote }}
             - name: POSTHOG_API_KEY

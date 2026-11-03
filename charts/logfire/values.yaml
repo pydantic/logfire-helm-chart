@@ -64,12 +64,6 @@ groupOrganizationMapping: []
 #          - project_name: "admin-project"
 #            role: "admin"
 
-# -- Configure Rate Limiting rules for Logfire endpoints
-rateLimits: {}
-#  queries:
-#    perHour: 60
-#    perMinute: 10
-
 # -- Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults.
 sizingPreset: ""
 
