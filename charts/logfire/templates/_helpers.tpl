@@ -1670,7 +1670,7 @@ image and reading its `USER` or its user database:
 - `rustfs`: the `rustfs` user in `rustfs/rustfs:1.0.0`, uid and gid 10001.
 - `maildev`: the `node` user in `maildev/maildev:3.0.0`, uid and gid 1000.
 - `otel_collector`: the `USER` in the collector image, uid and gid 10001.
-- `postgres-wait`: the `postgres` user in `postgres:17`, uid and gid 999.
+- `postgres` and `postgres-wait`: the `postgres` user in `postgres:17`, uid and gid 999.
 - `tls-wait`: the `curl_user` in `curlimages/curl:8.12.1`, uid 101 and gid 102.
 */}}
 {{- define "logfire.thirdPartyImageIdentity" -}}
@@ -1685,6 +1685,8 @@ image and reading its `USER` or its user database:
 {{- dict "uid" 1000 "gid" 1000 | toJson -}}
 {{- else if eq $name "otel_collector" -}}
 {{- dict "uid" 10001 "gid" 10001 | toJson -}}
+{{- else if eq $name "postgres" -}}
+{{- dict "uid" 999 "gid" 999 | toJson -}}
 {{- else if eq $name "postgres-wait" -}}
 {{- dict "uid" 999 "gid" 999 | toJson -}}
 {{- else if eq $name "tls-wait" -}}
@@ -2290,6 +2292,28 @@ Dev Postgres helpers
 ================================================================================
 */}}
 
+{{/*
+The dev Postgres Service and Deployment name. The old `postgresql` subchart block is
+a fallback for upgrades that carry the old values with `--reuse-values`.
+*/}}
+{{- define "logfire.devPostgres.fullname" -}}
+{{- $devPostgres := .Values.devPostgres | default dict -}}
+{{- $legacyPostgres := .Values.postgresql | default dict -}}
+{{- get $devPostgres "fullnameOverride" | default (get $legacyPostgres "fullnameOverride") | default "logfire-postgres" -}}
+{{- end -}}
+
+{{/*
+The dev Postgres superuser password. The old `postgresql` subchart value is the
+fallback for `--reuse-values` upgrades.
+*/}}
+{{- define "logfire.devPostgres.password" -}}
+{{- $devPostgres := .Values.devPostgres | default dict -}}
+{{- $legacyPostgres := .Values.postgresql | default dict -}}
+{{- $auth := get $devPostgres "auth" | default dict -}}
+{{- $legacyAuth := get $legacyPostgres "auth" | default dict -}}
+{{- get $auth "postgresPassword" | default (get $legacyAuth "postgresPassword") | default "postgres" -}}
+{{- end -}}
+
 {{- define "logfire.dev.waitForPostgres.initContainers" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := .serviceName -}}
@@ -2318,7 +2342,7 @@ Dev Postgres helpers
     - sh
     - -c
     - >-
-      until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432 -U postgres; do echo "Waiting for postgres..."; sleep 2; done
+      until pg_isready -h {{ include "logfire.devPostgres.fullname" $ctx }} -p 5432 -U postgres; do echo "Waiting for postgres..."; sleep 2; done
   {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" $ctx "identity" "postgres-wait" "readOnlyRootFilesystem" true) | fromJson }}
   {{- include "logfire.securityContext" $waitSecurityContext | nindent 2 }}
 {{- end -}}

@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.6-rc.2](https://img.shields.io/badge/Version-0.14.6--rc.2-informational?style=flat-square) ![AppVersion: 54a9b858](https://img.shields.io/badge/AppVersion-54a9b858-informational?style=flat-square)
+![Version: 0.14.6-rc.3](https://img.shields.io/badge/Version-0.14.6--rc.3-informational?style=flat-square) ![AppVersion: 54a9b858](https://img.shields.io/badge/AppVersion-54a9b858-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -569,18 +569,13 @@ Each workload's `podAnnotations` reaches its own pods.
 In a namespace that enforces the `baseline` or `restricted` Pod Security level, install Istio with its CNI plugin.
 The default `istio-init` container needs the `NET_ADMIN` capability, which those levels reject.
 From chart 0.14.5, every chart pod sets a pod-level `RuntimeDefault` seccomp profile, which the injected sidecar needs to pass the `restricted` level.
-The bundled Redis and PostgreSQL keep their pod templates unchanged across upgrades, so set the profile for them yourself:
+The bundled Redis keeps its pod template unchanged across upgrades, so set the profile for it yourself:
 
 ```yaml
 logfire-redis:
   podSecurityContext:
     seccompProfile:
       type: RuntimeDefault
-postgresql:
-  primary:
-    podSecurityContext:
-      seccompProfile:
-        type: RuntimeDefault
 ```
 
 The bundled Redis also needs its other `restricted` overrides, described in Restricted Pod Security.
@@ -639,13 +634,13 @@ For enterprise support, contact [sales@pydantic.dev](mailto:sales@pydantic.dev).
 
 ## Optional dev dependencies
 
-These subcharts deploy only when you set `dev.deployPostgres` or `dev.deployCertManager`.
+The cert-manager subchart deploys only when you set `dev.deployCertManager`.
+The bundled dev Postgres deploys only when you set `dev.deployPostgres`; it is a chart-owned template, not a dependency.
 Production installs use external PostgreSQL, and a separately installed cert-manager when in-cluster TLS uses cert-manager.
 
 | Repository | Name | Version |
 |------------|------|---------|
-| https://charts.bitnami.com/bitnami | postgresql | 16.7.27 |
-| https://charts.jetstack.io | cert-manager | v1.19.2 |
+| oci://quay.io/jetstack/charts | cert-manager | v1.19.2 |
 
 ## Values
 
@@ -673,7 +668,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | aiGatewayOauth | object | `{"issuer":"","resourceUrl":""}` | AI gateway OAuth metadata configuration. If left empty, the chart derives self-hosted defaults from the primary Logfire URL:   resourceUrl = <logfire.url>/proxy   issuer      = <logfire.url> |
 | aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
 | aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
-| cert-manager | object | `{"installCRDs":true}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
+| cert-manager | object | `{"crds":{"enabled":true,"keep":true}}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
 | clusterDomain | string | `"cluster.local"` | Kubernetes cluster domain for service discovery. |
 | defaultStorageClassName | string | `""` | Default StorageClass for chart-managed PVCs. Set this when chart PVCs should use a specific class. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass. |
 | dev.deployCertManager | bool | `false` | Deploy cert-manager (NOT for production; includes cluster-scoped resources). |
@@ -681,6 +676,19 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | dev.deployMinio | bool | `false` | Deprecated alias for `dev.deployRustfs` that existing MinIO values keep working. While set, the chart keeps the `logfire-minio` Service name and uses the credentials from `minio.auth` (including `minio.auth.existingSecret`) or `objectStore.env` and the persistence from `minio.persistence`, so `objectStore.env` keeps matching the deployed object store. Remove it after moving to `dev.deployRustfs` and the `rustfs.*` values. |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
 | dev.deployRustfs | bool | `false` | Deploy a local RustFS instance as S3-compatible object storage (NOT for production) |
+| devPostgres | object | `{"auth":{"postgresPassword":"postgres"},"fullnameOverride":"logfire-postgres","image":{"pullPolicy":"IfNotPresent","repository":"postgres","tag":"17"},"initdb":{"scripts":{"create_databases.sql":"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"}},"persistence":{"enabled":true,"mountPath":"/var/lib/postgresql/data","size":"10Gi","storageClassName":""},"podSecurityContext":{},"postgresqlDataDir":"/var/lib/postgresql/data/pgdata","resources":{},"securityContext":{}}` | Dev Postgres configuration (only used when `dev.deployPostgres` is true) |
+| devPostgres.auth.postgresPassword | string | `"postgres"` | Password for the `postgres` superuser. Update `postgresDsn` and `postgresFFDsn` when you change it. An existing volume keeps the old database password. |
+| devPostgres.fullnameOverride | string | `"logfire-postgres"` | Name of the dev Postgres Service and Deployment. |
+| devPostgres.image | object | `{"pullPolicy":"IfNotPresent","repository":"postgres","tag":"17"}` | Dev Postgres image configuration. The default uses the official PostgreSQL image. |
+| devPostgres.initdb.scripts | object | `{"create_databases.sql":"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"}` | SQL scripts run by the official Postgres entrypoint on first initialization. |
+| devPostgres.persistence.enabled | bool | `true` | Store data on a PersistentVolumeClaim. Set false to use an emptyDir. |
+| devPostgres.persistence.mountPath | string | `"/var/lib/postgresql/data"` | Mount path for the data volume. |
+| devPostgres.persistence.size | string | `"10Gi"` | Size of the chart-managed claim. |
+| devPostgres.persistence.storageClassName | string | `""` | Storage class for the chart-managed claim. Defaults to `defaultStorageClassName`. |
+| devPostgres.podSecurityContext | object | `{}` | Pod SecurityContext for the dev Postgres pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 999`. |
+| devPostgres.postgresqlDataDir | string | `"/var/lib/postgresql/data/pgdata"` | PostgreSQL data directory inside the mounted volume. |
+| devPostgres.resources | object | `{}` | Resources for the dev Postgres container. |
+| devPostgres.securityContext | object | `{}` | Container SecurityContext for the dev Postgres container. Merged over the chart-wide `securityContext` and the image defaults: uid and gid 999, all capabilities dropped, no privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root. |
 | existingGatewaySecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret for the AI Gateway with the following keys:  - key (gateway encryption key)  - internalSecret (gateway internal secret) |
 | existingGatewaySecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
@@ -854,15 +862,6 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | postgresSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | postgresSecret.sessionDsn | bool | `false` | Set to true when the Secret also has a `postgresSessionDsn` key. See `postgresSessionDsn`. |
 | postgresSessionDsn | string | `""` | Optional session DSN for the `crud` database: a session-mode pool or a direct connection to PostgreSQL. Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it, because migrations need session state: advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README. |
-| postgresql.auth.postgresPassword | string | `"postgres"` |  |
-| postgresql.fullnameOverride | string | `"logfire-postgres"` |  |
-| postgresql.image.registry | string | `"docker.io"` |  |
-| postgresql.image.repository | string | `"bitnamilegacy/postgresql"` |  |
-| postgresql.postgresqlDataDir | string | `"/var/lib/postgresql/data/pgdata"` |  |
-| postgresql.primary.initdb.scripts."create_databases.sql" | string | `"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"` |  |
-| postgresql.primary.persistence.mountPath | string | `"/var/lib/postgresql"` |  |
-| postgresql.primary.persistence.size | string | `"10Gi"` |  |
-| postgresql.primary.resourcesPreset | string | `"small"` |  |
 | priorityClassName | string | `""` | Pod priority class See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
 | rateLimits | object | `{}` | Configure Rate Limiting rules for Logfire endpoints |
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN for the shared role, and the live-tail DSN. Change if using an external Redis instance. |

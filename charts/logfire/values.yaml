@@ -2045,7 +2045,9 @@ dev:
 
 # -- cert-manager chart values (only used when `dev.deployCertManager` is true)
 cert-manager:
-  installCRDs: true
+  crds:
+    enabled: true
+    keep: true
 
 # -- MailDev configuration (only used when `dev.deployMaildev` is true)
 maildev:
@@ -2066,25 +2068,45 @@ maildev:
 # Embedded Postgres & RustFS defaults (dev/test)
 # ==============================================================================
 
-postgresql:
-  image:
-    registry: docker.io
-    repository: bitnamilegacy/postgresql
+# -- Dev Postgres configuration (only used when `dev.deployPostgres` is true)
+devPostgres:
+  # -- Name of the dev Postgres Service and Deployment.
   fullnameOverride: "logfire-postgres"
+  # -- Dev Postgres image configuration. The default uses the official PostgreSQL image.
+  image:
+    repository: postgres
+    tag: "17"
+    pullPolicy: IfNotPresent
   auth:
+    # -- Password for the `postgres` superuser. Update `postgresDsn` and `postgresFFDsn` when you change it.
+    # An existing volume keeps the old database password.
     postgresPassword: "postgres"
+  # -- PostgreSQL data directory inside the mounted volume.
   postgresqlDataDir: /var/lib/postgresql/data/pgdata
-  primary:
-    resourcesPreset: small
-    initdb:
-      scripts:
-        create_databases.sql: |
-          CREATE DATABASE crud;
-          CREATE DATABASE dex;
-          CREATE DATABASE ff;
-    persistence:
-      size: 10Gi
-      mountPath: /var/lib/postgresql
+  initdb:
+    # -- SQL scripts run by the official Postgres entrypoint on first initialization.
+    scripts:
+      create_databases.sql: |
+        CREATE DATABASE crud;
+        CREATE DATABASE dex;
+        CREATE DATABASE ff;
+  persistence:
+    # -- Store data on a PersistentVolumeClaim. Set false to use an emptyDir.
+    enabled: true
+    # -- Size of the chart-managed claim.
+    size: 10Gi
+    # -- Mount path for the data volume.
+    mountPath: /var/lib/postgresql/data
+    # -- Storage class for the chart-managed claim. Defaults to `defaultStorageClassName`.
+    storageClassName: ""
+  # -- Pod SecurityContext for the dev Postgres pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 999`.
+  podSecurityContext: {}
+  # -- Container SecurityContext for the dev Postgres container. Merged over the chart-wide
+  # `securityContext` and the image defaults: uid and gid 999, all capabilities dropped, no
+  # privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root.
+  securityContext: {}
+  # -- Resources for the dev Postgres container.
+  resources: {}
 
 # -- RustFS configuration (only used when `dev.deployRustfs` is true)
 rustfs:

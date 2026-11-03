@@ -100,10 +100,9 @@ logfire-ff-compaction-worker:
 logfire-ai-gateway:
   enabled: true
 
-postgresql:
-  primary:
-    persistence:
-      size: 1Gi
+devPostgres:
+  persistence:
+    size: 1Gi
 
 # Keep object storage across pod restarts, so an upgrade that rolls RustFS keeps the data
 # that tests wrote before it.

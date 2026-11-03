@@ -570,18 +570,13 @@ Each workload's `podAnnotations` reaches its own pods.
 In a namespace that enforces the `baseline` or `restricted` Pod Security level, install Istio with its CNI plugin.
 The default `istio-init` container needs the `NET_ADMIN` capability, which those levels reject.
 From chart 0.14.5, every chart pod sets a pod-level `RuntimeDefault` seccomp profile, which the injected sidecar needs to pass the `restricted` level.
-The bundled Redis and PostgreSQL keep their pod templates unchanged across upgrades, so set the profile for them yourself:
+The bundled Redis keeps its pod template unchanged across upgrades, so set the profile for it yourself:
 
 ```yaml
 logfire-redis:
   podSecurityContext:
     seccompProfile:
       type: RuntimeDefault
-postgresql:
-  primary:
-    podSecurityContext:
-      seccompProfile:
-        type: RuntimeDefault
 ```
 
 The bundled Redis also needs its other `restricted` overrides, described in Restricted Pod Security.
@@ -640,7 +635,8 @@ For enterprise support, contact [sales@pydantic.dev](mailto:sales@pydantic.dev).
 
 ## Optional dev dependencies
 
-These subcharts deploy only when you set `dev.deployPostgres` or `dev.deployCertManager`.
+The cert-manager subchart deploys only when you set `dev.deployCertManager`.
+The bundled dev Postgres deploys only when you set `dev.deployPostgres`; it is a chart-owned template, not a dependency.
 Production installs use external PostgreSQL, and a separately installed cert-manager when in-cluster TLS uses cert-manager.
 
 {{ template "chart.requirementsTable" . }}
