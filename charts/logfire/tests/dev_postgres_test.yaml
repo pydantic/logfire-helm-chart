@@ -1,7 +1,6 @@
 suite: development Postgres
-# The dev Postgres is a chart-owned replacement for the removed Bitnami subchart. Integration
-# installs cover the happy path; this suite keeps the upgrade contract (`postgresql.*` values on
-# an install that has no `devPostgres` block), the name coupling with the database wait init
+# Integration installs cover the happy path. This suite keeps the `--reuse-values` contract (an
+# install from 0.14 has no `devPostgres` block), the name coupling with the database wait init
 # container, and the security-context merge precedence, which all fail silently when they break.
 release:
   name: lf

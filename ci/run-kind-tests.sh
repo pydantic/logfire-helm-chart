@@ -160,8 +160,13 @@ fi
 export META_FRONTEND_TOKEN
 
 if [[ "${LOGFIRE_TEST_FRESH_INSTALL:-}" != true ]]; then
+  # The 0.14.0 baseline runs the Bitnami subchart, which the current chart replaces with an
+  # empty dev database. Apply the current dev Postgres outside the release so the probe
+  # checks application data across the upgrade.
   echo "Starting the standalone Postgres for the upgrade probe"
-  kubectl --context "$context" --namespace "$namespace" apply -f "$repo_root/ci/test-postgres.yaml"
+  helm template "$release" "$repo_root/charts/logfire" --namespace "$namespace" \
+    "${values[@]}" --show-only templates/dev-postgres.yaml \
+    | kubectl --context "$context" --namespace "$namespace" apply -f -
   kubectl --context "$context" --namespace "$namespace" rollout status deployment/logfire-postgres --timeout=5m
 fi
 

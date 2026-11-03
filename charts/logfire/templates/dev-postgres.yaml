@@ -117,7 +117,7 @@ spec:
       {{- include "logfire.securityContext" $podSecurityContext | nindent 6 }}
       containers:
         - name: postgres
-          image: {{ include "logfire.imageRef" (dict "image" $image "defaultRepository" "postgres" "defaultTag" "17") }}
+          image: {{ include "logfire.devPostgres.image" . }}
           imagePullPolicy: {{ default .Values.image.pullPolicy (get $image "pullPolicy") | quote }}
           {{- $postgresSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" . "identity" "postgres" "serviceName" "devPostgres" "readOnlyRootFilesystem" true) | fromJson }}
           {{- include "logfire.securityContext" $postgresSecurityContext | nindent 10 }}

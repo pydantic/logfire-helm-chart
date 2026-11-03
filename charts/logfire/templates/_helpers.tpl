@@ -1670,7 +1670,7 @@ image and reading its `USER` or its user database:
 - `rustfs`: the `rustfs` user in `rustfs/rustfs:1.0.0`, uid and gid 10001.
 - `maildev`: the `node` user in `maildev/maildev:3.0.0`, uid and gid 1000.
 - `otel_collector`: the `USER` in the collector image, uid and gid 10001.
-- `postgres` and `postgres-wait`: the `postgres` user in `postgres:17`, uid and gid 999.
+- `postgres`: the `postgres` user in `postgres:17`, uid and gid 999.
 - `tls-wait`: the `curl_user` in `curlimages/curl:8.12.1`, uid 101 and gid 102.
 */}}
 {{- define "logfire.thirdPartyImageIdentity" -}}
@@ -1686,8 +1686,6 @@ image and reading its `USER` or its user database:
 {{- else if eq $name "otel_collector" -}}
 {{- dict "uid" 10001 "gid" 10001 | toJson -}}
 {{- else if eq $name "postgres" -}}
-{{- dict "uid" 999 "gid" 999 | toJson -}}
-{{- else if eq $name "postgres-wait" -}}
 {{- dict "uid" 999 "gid" 999 | toJson -}}
 {{- else if eq $name "tls-wait" -}}
 {{- dict "uid" 101 "gid" 102 | toJson -}}
@@ -2311,6 +2309,15 @@ The dev Postgres superuser password. The template supplies the default for the s
 {{- get $auth "postgresPassword" | default "postgres" -}}
 {{- end -}}
 
+{{/*
+The dev Postgres image. The database wait init container runs the same image, so a mirrored
+image reaches both.
+*/}}
+{{- define "logfire.devPostgres.image" -}}
+{{- $devPostgres := .Values.devPostgres | default dict -}}
+{{- include "logfire.imageRef" (dict "image" (get $devPostgres "image") "defaultRepository" "postgres" "defaultTag" "17") -}}
+{{- end -}}
+
 {{- define "logfire.dev.waitForPostgres.initContainers" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := .serviceName -}}
@@ -2334,13 +2341,13 @@ The dev Postgres superuser password. The template supplies the default for the s
   "logfire-remote-mcp"
 )) -}}
 - name: check-db-ready
-  image: postgres:17
+  image: {{ include "logfire.devPostgres.image" $ctx }}
   command:
     - sh
     - -c
     - >-
       until pg_isready -h {{ include "logfire.devPostgres.fullname" $ctx }} -p 5432 -U postgres; do echo "Waiting for postgres..."; sleep 2; done
-  {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" $ctx "identity" "postgres-wait" "readOnlyRootFilesystem" true) | fromJson }}
+  {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" $ctx "identity" "postgres" "serviceName" "postgres-wait" "readOnlyRootFilesystem" true) | fromJson }}
   {{- include "logfire.securityContext" $waitSecurityContext | nindent 2 }}
 {{- end -}}
 {{- end -}}
