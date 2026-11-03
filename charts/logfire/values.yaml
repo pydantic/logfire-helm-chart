@@ -20,14 +20,6 @@ tolerations: []
 # -- topologySpreadConstraints applied to all workloads
 topologySpreadConstraints: []
 
-# -- Istio compatibility options
-istio:
-  # -- Deprecated. Leave unset: every Logfire pod works with a sidecar since chart 0.14.4.
-  #    When enabled, sets `sidecar.istio.io/inject: "false"` on logfire-service,
-  #    logfire-backend-migrations, logfire-ff-migrations, logfire-redis, and logfire-otel-collector.
-  #    Under STRICT mTLS those pods cannot reach meshed services, so the install stops at the migrations.
-  disableSidecarOnKnownWorkloads: false
-
 # -- Kubernetes cluster domain for service discovery.
 clusterDomain: cluster.local
 
@@ -112,10 +104,6 @@ ingress:
   # Preferred method. Supports one or more hostnames; put the primary domain first.
   hostnames:
     - logfire.example.com
-
-  # -- DEPRECATED (kept for backward compatibility).
-  # Use `hostnames` (list) for all new deployments.
-  hostname: "logfire.example.com"
 
   # -- IngressClass to use (e.g., nginx)
   ingressClassName: nginx
@@ -1612,10 +1600,6 @@ serviceAccount:
   # -- Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template.
   # If create is false and this is not set, the default ServiceAccount is used.
   name: ""
-
-# -- DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility.
-# @deprecated
-serviceAccountName: default
 
 # -- Pod priority class
 # See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority).

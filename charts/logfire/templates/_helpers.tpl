@@ -1,8 +1,9 @@
 {{- define "logfire.hpa" }}
-{{- $cpuAverage := dig "hpa" "cpuAverage" .cpuAverage . }}
-{{- $memAverage := dig "hpa" "memAverage" .memAverage . }}
-{{- $extraMetrics := dig "hpa" "extraMetrics" .extraMetrics . }}
-{{- $behavior := dig "hpa" "behavior" nil . }}
+{{- $hpa := .hpa | default dict }}
+{{- $cpuAverage := $hpa.cpuAverage }}
+{{- $memAverage := $hpa.memAverage }}
+{{- $extraMetrics := $hpa.extraMetrics }}
+{{- $behavior := $hpa.behavior }}
 {{- $hasMetrics := or $cpuAverage $memAverage $extraMetrics }}
 ---
 apiVersion: autoscaling/v2
@@ -26,7 +27,7 @@ spec:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: {{ $cpuAverage | default "75" }}
+        averageUtilization: {{ $cpuAverage }}
   {{- end }}
   {{- if $memAverage }}
   - type: Resource
@@ -34,7 +35,7 @@ spec:
       name: memory
       target:
         type: Utilization
-        averageUtilization: {{ $memAverage | default "75" }}
+        averageUtilization: {{ $memAverage }}
   {{- end }}
 {{- if $extraMetrics }}
 {{- toYaml $extraMetrics | nindent 2 }}
@@ -67,17 +68,8 @@ spec:
   {{- end }}
 {{- end}}
 
-{{/*
-Determine if HPA is enabled maintaining backward compatibility with old values format
-*/}}
 {{- define "logfire.hpa.enabled" -}}
-{{- if hasKey . "hpa" -}}
-  {{- .hpa.enabled  -}}
-{{- else if or .memAverage .cpuAverage .extraMetrics -}}
-  {{- true -}}
-{{- else -}}
-  {{- false -}}
-{{- end -}}
+{{- dig "hpa" "enabled" false . -}}
 {{- end -}}
 
 {{- define "logfire.redisDsnFor" -}}
@@ -333,8 +325,6 @@ Returns a wrapped object {"hosts": [...]} to work around fromJson limitation wit
   {{- $hosts = .Values.gateway.hostnames -}}
 {{- else if .Values.ingress.hostnames -}}
   {{- $hosts = .Values.ingress.hostnames -}}
-{{- else if .Values.ingress.hostname -}}
-  {{- $hosts = list .Values.ingress.hostname -}}
 {{- end -}}
 {{- dict "hosts" $hosts | toJson -}}
 {{- end -}}
@@ -519,19 +509,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/*
 Create the name of the service account to use.
-Supports both new serviceAccount.name and deprecated serviceAccountName for backward compatibility.
 */}}
 {{- define "logfire.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
   {{- default (include "logfire.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
-  {{- if .Values.serviceAccount.name }}
-    {{- .Values.serviceAccount.name }}
-  {{- else if .Values.serviceAccountName }}
-    {{- .Values.serviceAccountName }}
-  {{- else }}
-    {{- "default" }}
-  {{- end }}
+  {{- .Values.serviceAccount.name | default "default" }}
 {{- end }}
 {{- end }}
 
@@ -1270,18 +1253,6 @@ Custom labels for workloads pods
 {{- $serviceValues := index .Values $serviceName | default dict -}}
 {{- $servicePodLabels := $serviceValues.podLabels | default dict -}}
 {{- $merged := deepCopy $servicePodLabels -}}
-{{- if dig "disableSidecarOnKnownWorkloads" false (.Values.istio | default dict) -}}
-  {{- $knownWorkloads := list
-    "logfire-service"
-    "logfire-backend-migrations"
-    "logfire-ff-migrations"
-    "logfire-redis"
-    "logfire-otel-collector"
-    -}}
-  {{- if and (has $serviceName $knownWorkloads) (not (hasKey $merged "sidecar.istio.io/inject")) -}}
-    {{- $_ := set $merged "sidecar.istio.io/inject" "false" -}}
-  {{- end -}}
-{{- end -}}
 {{- if $merged -}}
 {{- toYaml $merged -}}
 {{- end -}}

@@ -591,11 +591,6 @@ With `outboundTrafficPolicy.mode: REGISTRY_ONLY`, add a `ServiceEntry` for each 
 
 Inside the mesh, use Istio mTLS instead of `inClusterTls`.
 
-`istio.disableSidecarOnKnownWorkloads` is deprecated.
-It removes the sidecar from HAProxy, the migration Jobs, Redis, and the collector.
-Under STRICT mTLS, those pods cannot reach meshed services, so the install stops at the migrations.
-Leave it unset.
-
 ## Configure SDKs
 
 Create a write token for your project as described in [Create write tokens](https://pydantic.dev/docs/logfire/manage/create-write-tokens/).

@@ -505,7 +505,6 @@ tests:
     set:
       ingress:
         hostnames: []
-        hostname: ""
       gateway:
         hostnames: []
     asserts:
@@ -618,6 +617,31 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: 'dev\.deployMinio was removed in chart 0\.15\.0\. Set dev\.deployRustfs=true'
+
+  - it: names the move when the removed serviceAccountName is set to a custom account
+    set:
+      serviceAccountName: workload-identity
+    asserts:
+      - failedTemplate:
+          errorPattern: 'serviceAccountName was removed in chart 0\.15\.0\. Set serviceAccount\.name'
+
+  - it: accepts the serviceAccountName default that a 0.14 --reuse-values upgrade carries
+    set:
+      serviceAccountName: default
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: names the move when an HPA metric is still at the top level of autoscaling
+    set:
+      logfire-backend.autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        cpuAverage: 60
+    asserts:
+      - failedTemplate:
+          errorPattern: 'logfire-backend\.autoscaling\.cpuAverage was removed in chart 0\.15\.0\. Move it to logfire-backend\.autoscaling\.hpa\.cpuAverage'
 
   # --- frontend nginx ---
   - it: rejects a frontend nginx worker count that is neither auto nor positive

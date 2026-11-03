@@ -590,11 +590,6 @@ With `outboundTrafficPolicy.mode: REGISTRY_ONLY`, add a `ServiceEntry` for each 
 
 Inside the mesh, use Istio mTLS instead of `inClusterTls`.
 
-`istio.disableSidecarOnKnownWorkloads` is deprecated.
-It removes the sidecar from HAProxy, the migration Jobs, Redis, and the collector.
-Under STRICT mTLS, those pods cannot reach meshed services, so the install stops at the migrations.
-Leave it unset.
-
 ## Configure SDKs
 
 Create a write token for your project as described in [Create write tokens](https://pydantic.dev/docs/logfire/manage/create-write-tokens/).
@@ -743,15 +738,12 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | inClusterTls.waitImage.tag | string | `"8.12.1"` | Image tag |
 | ingress.annotations | object | `{}` | Ingress annotations. Logfire Live View requires WebSocket support, and some controllers require an explicit annotation. For example, F5 NGINX Ingress Controller uses `nginx.org/websocket-services: logfire-service`. |
 | ingress.enabled | bool | `true` | Enable the Ingress resource. If you are NOT using an ingress resource, you still need to set `tls` and `hostnames` via either `ingress.*` or `gateway.*` so the application can generate correct URLs/CORS. |
-| ingress.hostname | string | `"logfire.example.com"` | DEPRECATED (kept for backward compatibility). Use `hostnames` (list) for all new deployments. |
 | ingress.hostnames | list | `["logfire.example.com"]` | Hostname(s) for Pydantic Logfire. Preferred method. Supports one or more hostnames; put the primary domain first. |
 | ingress.ingressClassName | string | `"nginx"` | IngressClass to use (e.g., nginx) |
 | ingress.secretName | string | `"logfire-frontend-cert"` | TLS Secret name if you want to do a custom one |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS. Required for correct CORS behavior. |
 | intakeOauth | object | `{"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When `resourceUrl` is empty, the chart derives the self-hosted resource URL from the primary Logfire URL:   resourceUrl = <logfire.url>/v1 |
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
-| istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
-| istio.disableSidecarOnKnownWorkloads | bool | `false` | Deprecated. Leave unset: every Logfire pod works with a sidecar since chart 0.14.4.    When enabled, sets `sidecar.istio.io/inject: "false"` on logfire-service,    logfire-backend-migrations, logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    Under STRICT mTLS those pods cannot reach meshed services, so the install stops at the migrations. |
 | keepAliveTimeout | string | `"120s"` | Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of the ingress or tunnel in front of the release; if HAProxy closes an idle connection first, the client sees a 502/520 when it reuses it. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
@@ -887,7 +879,6 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | serviceAccount.annotations | object | `{}` | Annotations to add to the ServiceAccount (e.g., for IAM roles) Example for AWS IRSA:   annotations:     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/my-role Example for GCP Workload Identity:   annotations:     iam.gke.io/gcp-service-account: my-sa@my-project.iam.gserviceaccount.com |
 | serviceAccount.create | bool | `false` | Create a ServiceAccount |
 | serviceAccount.name | string | `""` | Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template. If create is false and this is not set, the default ServiceAccount is used. |
-| serviceAccountName | string | `"default"` | DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility. @deprecated |
 | sizingPreset | string | `""` | Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults. |
 | smtp.caBundle | object | `{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}}` | CA bundle (PEM) that verifies the SMTP server certificate, for a relay signed by an internal CA. Provide exactly one of existingConfigMap or existingSecret, in the release namespace. `logfire-task-runner` and `logfire-worker` trust these certificates in addition to the system trust store. `trustedCaBundle` does the same for these and the other workloads that connect to Redis, so prefer it for new installs. |
 | smtp.fromAddress | string | `nil` | Sender address of every email Logfire sends (`From` and SMTP envelope sender), such as `logfire@example.com`. Required when `smtp.host` is set. Use an address on a domain that your SMTP server may send for. Logfire does not send email as `pydantic.dev` from a self-hosted install. |
