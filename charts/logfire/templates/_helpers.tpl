@@ -1,8 +1,9 @@
 {{- define "logfire.hpa" }}
-{{- $cpuAverage := dig "hpa" "cpuAverage" .cpuAverage . }}
-{{- $memAverage := dig "hpa" "memAverage" .memAverage . }}
-{{- $extraMetrics := dig "hpa" "extraMetrics" .extraMetrics . }}
-{{- $behavior := dig "hpa" "behavior" nil . }}
+{{- $hpa := .hpa | default dict }}
+{{- $cpuAverage := $hpa.cpuAverage }}
+{{- $memAverage := $hpa.memAverage }}
+{{- $extraMetrics := $hpa.extraMetrics }}
+{{- $behavior := $hpa.behavior }}
 {{- $hasMetrics := or $cpuAverage $memAverage $extraMetrics }}
 ---
 apiVersion: autoscaling/v2
@@ -26,7 +27,7 @@ spec:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: {{ $cpuAverage | default "75" }}
+        averageUtilization: {{ $cpuAverage }}
   {{- end }}
   {{- if $memAverage }}
   - type: Resource
@@ -34,7 +35,7 @@ spec:
       name: memory
       target:
         type: Utilization
-        averageUtilization: {{ $memAverage | default "75" }}
+        averageUtilization: {{ $memAverage }}
   {{- end }}
 {{- if $extraMetrics }}
 {{- toYaml $extraMetrics | nindent 2 }}
@@ -67,17 +68,8 @@ spec:
   {{- end }}
 {{- end}}
 
-{{/*
-Determine if HPA is enabled maintaining backward compatibility with old values format
-*/}}
 {{- define "logfire.hpa.enabled" -}}
-{{- if hasKey . "hpa" -}}
-  {{- .hpa.enabled  -}}
-{{- else if or .memAverage .cpuAverage .extraMetrics -}}
-  {{- true -}}
-{{- else -}}
-  {{- false -}}
-{{- end -}}
+{{- dig "hpa" "enabled" false . -}}
 {{- end -}}
 
 {{- define "logfire.redisDsnFor" -}}
@@ -92,6 +84,76 @@ Determine if HPA is enabled maintaining backward compatibility with old values f
 {{- $valuesKey := required "logfire.redisPrefixFor: need .valuesKey" .valuesKey -}}
 {{- $redisValues := get $root.Values $valuesKey | default dict -}}
 {{- get $redisValues "prefix" | default "" -}}
+{{- end -}}
+
+{{/*
+Name of the Secret that holds the Redis DSNs. It is the user's Secret when
+`redisSecret.enabled` is true, otherwise the Secret the chart creates from
+`redisDsn`, `tokenRedis.dsn` and `usageRedis.dsn`.
+*/}}
+{{- define "logfire.redisSecretName" -}}
+{{- $redisSecret := .Values.redisSecret | default dict -}}
+{{- if get $redisSecret "enabled" -}}
+{{- get $redisSecret "name" -}}
+{{- else -}}
+{{- printf "%s-redis-dsns" (include "logfire.fullname" .) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The DSN behind one Redis Secret key, read from the values. Pass `.root` and
+`.key`, which is one of `sharedDsn`, `tailDsn`, `tokenDsn` or `usageDsn`. The
+live-tail role shares `redisDsn` with the shared role, as it does everywhere
+else in the values.
+*/}}
+{{- define "logfire.redisDsnValue" -}}
+{{- $root := required "logfire.redisDsnValue: need .root" .root -}}
+{{- $key := required "logfire.redisDsnValue: need .key" .key -}}
+{{- if eq $key "tokenDsn" -}}
+{{- include "logfire.redisDsnFor" (dict "root" $root "valuesKey" "tokenRedis") -}}
+{{- else if eq $key "usageDsn" -}}
+{{- include "logfire.redisDsnFor" (dict "root" $root "valuesKey" "usageRedis") -}}
+{{- else -}}
+{{- $root.Values.redisDsn -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Render the `valueFrom` that reads one DSN from the Redis Secret. Pass `.root` and
+the Secret key `.key`. The Redis DSNs never appear in a ConfigMap or a plain env
+value.
+*/}}
+{{- define "logfire.redisDsnValueFrom" -}}
+{{- $root := required "logfire.redisDsnValueFrom: need .root" .root -}}
+{{- $key := required "logfire.redisDsnValueFrom: need .key" .key -}}
+valueFrom:
+  secretKeyRef:
+    name: {{ include "logfire.redisSecretName" $root }}
+    key: {{ $key }}
+{{- end -}}
+
+{{/*
+The `FF_*` Redis DSN env vars of a Fusionfire service, read from the Redis
+Secret. Pass the root context. Callers indent the block.
+*/}}
+{{- define "logfire.ffRedisEnv" -}}
+{{- $root := required "logfire.ffRedisEnv: need ." . -}}
+- name: FF_SHARED_REDIS_DSN
+{{ include "logfire.redisDsnValueFrom" (dict "root" $root "key" "sharedDsn") | indent 2 }}
+- name: FF_TOKEN_REDIS_DSN
+{{ include "logfire.redisDsnValueFrom" (dict "root" $root "key" "tokenDsn") | indent 2 }}
+- name: FF_USAGE_REDIS_DSN
+{{ include "logfire.redisDsnValueFrom" (dict "root" $root "key" "usageDsn") | indent 2 }}
+{{- end -}}
+
+{{/*
+The `FF_REDIS_TAIL_DSN` env var of a Fusionfire service that registers live
+tails. Pass the root context. Callers indent the block.
+*/}}
+{{- define "logfire.ffRedisTailEnv" -}}
+{{- $root := required "logfire.ffRedisTailEnv: need ." . -}}
+- name: FF_REDIS_TAIL_DSN
+{{ include "logfire.redisDsnValueFrom" (dict "root" $root "key" "tailDsn") | indent 2 }}
 {{- end -}}
 
 {{- define "logfire.keda.enabled" -}}
@@ -109,6 +171,7 @@ Only sizing and portable availability keys are inherited from presets.
 {{- define "logfire.effectiveServiceValues" -}}
 {{- $serviceName := .serviceName -}}
 {{- $serviceValues := get .Values $serviceName | default dict -}}
+{{- $serviceValues = include "logfire.normalizeResources" (dict "values" $serviceValues) | fromJson -}}
 {{- $merged := dict -}}
 {{- $presetName := .Values.sizingPreset | default "" -}}
 {{- if $presetName -}}
@@ -121,7 +184,18 @@ Only sizing and portable availability keys are inherited from presets.
     {{- $presetValues = mergeOverwrite (deepCopy (get $presets "standard")) (deepCopy $presetValues) -}}
   {{- end -}}
   {{- $presetServiceValues := get $presetValues $serviceName | default dict -}}
-  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "maxQueryCostPerPod" "queryParallelism" "datafusionThreads" "datafusionTargetPartitions" "datafusionBatchSize" "ioThreads" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "scratchVolume" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" -}}
+  {{- $presetHpaBehavior := get $presetValues "hpaBehavior" | default dict -}}
+  {{- if and $presetHpaBehavior (hasKey $presetServiceValues "autoscaling") -}}
+    {{- $presetServiceValues = deepCopy $presetServiceValues -}}
+    {{- $autoscaling := get $presetServiceValues "autoscaling" | default dict -}}
+    {{- $hpa := get $autoscaling "hpa" | default dict -}}
+    {{- if and $hpa (not (hasKey $hpa "behavior")) -}}
+      {{- $_ := set $hpa "behavior" (deepCopy $presetHpaBehavior) -}}
+      {{- $_ := set $autoscaling "hpa" $hpa -}}
+      {{- $_ := set $presetServiceValues "autoscaling" $autoscaling -}}
+    {{- end -}}
+  {{- end -}}
+  {{- range $key := list "resources" "autoscaling" "pdb" "replicas" "maxQueryCostPerPod" "queryParallelism" "datafusionThreads" "datafusionTargetPartitions" "datafusionBatchSize" "ioThreads" "datafusionMemory" "maintenanceRecordBatchMemory" "spillToDiskQuota" "scratchVolume" "disk" "volumeClaimTemplates" "jobParallelism" "cpuConcurrency" "parquetSpoolThresholdBytes" "maxCompactionJobSizeBytes" "directFileBufferMaxBytes" "directFileSubmitConcurrency" "topologySpreadConstraints" "spreadAcrossZones" "sendingQueueBytes" -}}
     {{- if hasKey $presetServiceValues $key -}}
       {{- $_ := set $merged $key (deepCopy (get $presetServiceValues $key)) -}}
     {{- end -}}
@@ -132,11 +206,14 @@ Only sizing and portable availability keys are inherited from presets.
 {{- end -}}
 
 {{/*
-Render spec.replicas only when autoscaling is not configured for the workload.
+Render spec.replicas only when no autoscaler is enabled for the workload.
 */}}
 {{- define "logfire.replicas" -}}
 {{- $serviceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- if not (hasKey $serviceValues "autoscaling") -}}
+{{- $autoscaling := get $serviceValues "autoscaling" | default dict -}}
+{{- $hpaEnabled := include "logfire.hpa.enabled" $autoscaling | eq "true" -}}
+{{- $kedaEnabled := include "logfire.keda.enabled" $autoscaling | eq "true" -}}
+{{- if not (or $hpaEnabled $kedaEnabled) -}}
 replicas: {{ dig "replicas" "1" $serviceValues }}
 {{- end -}}
 {{- end -}}
@@ -145,7 +222,7 @@ replicas: {{ dig "replicas" "1" $serviceValues }}
 {{- include "logfire.validate.autoscaling" (dict "Values" .Values "serviceName" .serviceName) -}}
 {{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" .serviceName) | fromJson -}}
 {{- if index $serviceValues "autoscaling" }}
-{{- $kind := (not (eq .serviceName "logfire-ff-ingest") | ternary "Deployment" "StatefulSet" ) }}
+{{- $kind := (has .serviceName (list "logfire-ff-ingest" "logfire-ff-bcache") | ternary "StatefulSet" "Deployment") }}
 {{- with index $serviceValues "autoscaling" }}
   {{- $ctx := deepCopy . -}}
   {{- $_ := set $ctx "serviceName" $.serviceName -}}
@@ -168,7 +245,9 @@ replicas: {{ dig "replicas" "1" $serviceValues }}
 {{- if hasKey . "pdb" -}}
   {{- $pdb = .pdb -}}
 {{- end -}}
-{{- include "logfire.validate.pdb" (dict "Values" $root.Values "serviceName" $serviceName "pdb" $pdb) -}}
+{{- if and (hasKey ($pdb | default dict) "minAvailable") (hasKey ($pdb | default dict) "maxUnavailable") -}}
+  {{- fail (printf "pdb.minAvailable and pdb.maxUnavailable are mutually exclusive for '%s'. Specify only one." $serviceName) -}}
+{{- end -}}
 {{- if $pdb }}
 {{- with $pdb }}
 ---
@@ -246,8 +325,6 @@ Returns a wrapped object {"hosts": [...]} to work around fromJson limitation wit
   {{- $hosts = .Values.gateway.hostnames -}}
 {{- else if .Values.ingress.hostnames -}}
   {{- $hosts = .Values.ingress.hostnames -}}
-{{- else if .Values.ingress.hostname -}}
-  {{- $hosts = list .Values.ingress.hostname -}}
 {{- end -}}
 {{- dict "hosts" $hosts | toJson -}}
 {{- end -}}
@@ -414,6 +491,15 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
+Hash rendered configuration without the chart-version label. The label is
+resource metadata and must not restart workloads during a version-only chart
+promotion.
+*/}}
+{{- define "logfire.configChecksum" -}}
+{{- regexReplaceAll `(?m)(^metadata:\n(?:^[ \t]+[^\n]*\n)*?^[ \t]+labels:\n)[ \t]+helm[.]sh/chart:[^\n]*\n` . `${1}` | sha256sum -}}
+{{- end }}
+
+{{/*
 Selector labels
 */}}
 {{- define "logfire.selectorLabels" -}}
@@ -423,19 +509,12 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/*
 Create the name of the service account to use.
-Supports both new serviceAccount.name and deprecated serviceAccountName for backward compatibility.
 */}}
 {{- define "logfire.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
   {{- default (include "logfire.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
-  {{- if .Values.serviceAccount.name }}
-    {{- .Values.serviceAccount.name }}
-  {{- else if .Values.serviceAccountName }}
-    {{- .Values.serviceAccountName }}
-  {{- else }}
-    {{- "default" }}
-  {{- end }}
+  {{- .Values.serviceAccount.name | default "default" }}
 {{- end }}
 {{- end }}
 
@@ -562,6 +641,45 @@ Render AI model environment variables shared across workloads.
 {{- end -}}
 
 {{/*
+A service's extra environment as a YAML list, or "" when it has none. `<service>.env` is either a
+list of EnvVar entries or a map from name to a scalar or to an EnvVar body (`value` or
+`valueFrom`). Helm merges maps across values files but replaces lists, so only the map form lets a
+layered file add one variable. Map entries render sorted by name and a null entry is dropped.
+An empty default stays `null` in values.yaml, because Helm warns when a user value's shape differs
+from a non-null default. Call with `(dict "Values" .Values "serviceName" $serviceName)`.
+*/}}
+{{- define "logfire.serviceEnv" -}}
+{{- $env := get (get .Values .serviceName | default dict) "env" -}}
+{{- if kindIs "map" $env -}}
+  {{- $entries := list -}}
+  {{- range $name, $value := $env -}}
+    {{- if kindIs "map" $value -}}
+      {{- $entry := merge (dict "name" $name) (deepCopy $value) -}}
+      {{- if hasKey $entry "value" -}}
+        {{- $_ := set $entry "value" (include "logfire.envString" $entry.value) -}}
+      {{- end -}}
+      {{- $entries = append $entries $entry -}}
+    {{- else if not (kindIs "invalid" $value) -}}
+      {{- $entries = append $entries (dict "name" $name "value" (include "logfire.envString" $value)) -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $env = $entries -}}
+{{- end -}}
+{{- with $env }}{{ toYaml . }}{{ end -}}
+{{- end -}}
+
+{{/*
+Values files load numbers as float64, so print whole numbers without an exponent.
+*/}}
+{{- define "logfire.envString" -}}
+{{- if and (kindIs "float64" .) (eq . (floor .)) -}}
+{{- printf "%.0f" . -}}
+{{- else -}}
+{{- toString . -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Render shared AI provider environment variables for workloads that construct AI clients.
 */}}
 {{- define "logfire.aiProviderEnv" -}}
@@ -648,54 +766,180 @@ Create Postgres secret name
 {{- end -}}
 
 {{/*
-Logfire secret name
+The Secret key that holds the session DSN of a database, given its runtime key:
+`postgresDsn` gives `postgresSessionDsn`, and `postgresFFDsn` gives `postgresFFSessionDsn`.
 */}}
-{{- define "logfire.secretName" -}}
-{{- $ctx := required "logfire.secretName: need .ctx" .ctx -}}
-{{- $ex := get $ctx.Values "existingSecret" | default dict -}}
-{{- if and (get $ex "enabled") (get $ex "name") -}}
-    {{ get $ex "name" }}
+{{- define "logfire.postgresSessionDsnKey" -}}
+{{- printf "%sSessionDsn" (trimSuffix "Dsn" .) -}}
+{{- end -}}
+
+{{/*
+Renders "true" when the database of the runtime key `.key` has a session DSN.
+The chart cannot read an existing Secret, so with `postgresSecret` a flag declares the key.
+*/}}
+{{- define "logfire.postgresHasSessionDsn" -}}
+{{- $ctx := required "logfire.postgresHasSessionDsn: need .ctx" .ctx -}}
+{{- $key := required "logfire.postgresHasSessionDsn: need .key" .key -}}
+{{- $secret := $ctx.Values.postgresSecret | default dict -}}
+{{- if get $secret "enabled" -}}
+{{- if get $secret (eq $key "postgresFFDsn" | ternary "ffSessionDsn" "sessionDsn") -}}true{{- end -}}
+{{- else if get $ctx.Values (include "logfire.postgresSessionDsnKey" $key) -}}true
+{{- end -}}
+{{- end -}}
+
+{{/*
+The Secret key that a migration Job reads: the session DSN when the database has
+one, otherwise the runtime DSN.
+*/}}
+{{- define "logfire.postgresMigrationKey" -}}
+{{- if include "logfire.postgresHasSessionDsn" . -}}
+{{- include "logfire.postgresSessionDsnKey" .key -}}
+{{- else -}}
+{{- .key -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+With a session DSN for `crud`, `CRUD_PG_DSN` is a transaction-mode pool.
+The platform names that topology `pgbouncer`, whatever the pooler is.
+*/}}
+{{- define "logfire.crudPgTopologyEnv" -}}
+{{- if include "logfire.postgresHasSessionDsn" (dict "ctx" . "key" "postgresDsn") -}}
+- name: CRUD_PG_TOPOLOGY
+  value: "pgbouncer"
+{{- end -}}
+{{- end -}}
+
+{{/* Use an external Secret name when configured, otherwise the managed name. */}}
+{{- define "logfire.externalSecretName" -}}
+{{- $external := .external | default dict -}}
+{{- if and (get $external "enabled") (get $external "name") -}}
+{{- get $external "name" -}}
 {{- else }}
 {{- .secretName }}
 {{- end }}
 {{- end -}}
 
-{{/*
-Logfire secret name
-*/}}
-{{- define "logfire.adminSecretName" -}}
-{{- $ctx := required "logfire.adminSecretName: need .ctx" .ctx -}}
-{{- $ex := get $ctx.Values "adminSecret" | default dict -}}
-{{- if and (get $ex "enabled") (get $ex "name") -}}
-    {{ get $ex "name" }}
-{{- else }}
-{{- .secretName }}
-{{- end }}
+{{/* Whether the chart deploys the in-cluster RustFS object store. */}}
+{{- define "logfire.inClusterObjectStoreEnabled" -}}
+{{- if .Values.dev.deployRustfs -}}true{{- end -}}
+{{- end -}}
+
+{{/* Service that fronts the in-cluster object store. */}}
+{{- define "logfire.inClusterObjectStoreServiceName" -}}
+logfire-rustfs
 {{- end -}}
 
 {{/*
-Gateway secret name
+Bucket the in-cluster object store creates at startup. When `objectStore.uri` is an `s3://`
+URI its bucket is authoritative, so RustFS creates the bucket the workloads actually read.
 */}}
-{{- define "logfire.gatewaySecretName" -}}
-{{- $ctx := required "logfire.gatewaySecretName: need .ctx" .ctx -}}
-{{- $ex := get $ctx.Values "existingGatewaySecret" | default dict -}}
-{{- if and (get $ex "enabled") (get $ex "name") -}}
-    {{ get $ex "name" }}
-{{- else }}
-{{- .secretName }}
-{{- end }}
+{{- define "logfire.inClusterObjectStoreBucket" -}}
+{{- $uri := include "logfire.objectStoreUriValue" . -}}
+{{- $bucket := "" -}}
+{{- if hasPrefix "s3://" (trim $uri) -}}
+{{- $bucket = splitList "/" (trimPrefix "s3://" (trim $uri)) | first | trim -}}
+{{- end -}}
+{{- if not $bucket -}}
+{{- $bucket = .Values.rustfs.bucket | trim -}}
+{{- if not $bucket -}}
+{{- $bucket = "logfire" -}}
+{{- end -}}
+{{- end -}}
+{{- $bucket -}}
+{{- end -}}
+
+{{/* Render objectStore.uri as configured, before in-cluster defaults. */}}
+{{- define "logfire.objectStoreUriValue" -}}
+{{- tpl (.Values.objectStore.uri | default "") . -}}
+{{- end -}}
+
+{{/* Resolve the object store URI consistently for validation and consumers. */}}
+{{- define "logfire.objectStoreUri" -}}
+{{- $uri := include "logfire.objectStoreUriValue" . -}}
+{{- if and (not (trim $uri)) (eq (include "logfire.inClusterObjectStoreEnabled" .) "true") -}}
+{{- $uri = printf "s3://%s" (include "logfire.inClusterObjectStoreBucket" .) -}}
+{{- end -}}
+{{- $uri -}}
 {{- end -}}
 
 {{- define "logfire.objectStoreEnv" -}}
 - name: FF_OBJECT_STORE_URI
-  value: {{ .Values.objectStore.uri }}
+  value: {{ include "logfire.objectStoreUri" . | quote }}
 {{- with .Values.objectStore.sseCKeyB64 }}
 - name: FF_S3_SSE_C_KEY_B64
 {{ include "logfire.envValue" (dict "value" . "quote" true) | indent 2 }}
 {{- end }}
-{{- range $key, $value := .Values.objectStore.env }}
+{{- include "logfire.objectStoreProviderEnv" . }}
+{{- end -}}
+
+{{/*
+The provider environment for the configured object store: the endpoint, the credentials and the
+entries the deployment added under `objectStore.env`. FusionFire and the Python services read the
+same variable names, so one map configures both. FusionFire reads `AWS_ENDPOINT`; the Python S3
+client reads it as the alias of `AWS_ENDPOINT_URL` (see `logfire_services/object_store.py`).
+*/}}
+{{- define "logfire.objectStoreProviderEnv" -}}
+{{- $objectStoreEnv := .Values.objectStore.env | default dict -}}
+{{- if eq (include "logfire.inClusterObjectStoreEnabled" .) "true" }}
+{{- $auth := .Values.rustfs.auth }}
+{{- $inClusterDefaults := list
+  (dict "name" "AWS_ENDPOINT" "value" (printf "http://%s:9000" (include "logfire.inClusterObjectStoreServiceName" .)))
+  (dict "name" "AWS_ACCESS_KEY_ID" "value" $auth.accessKey)
+  (dict "name" "AWS_SECRET_ACCESS_KEY" "value" $auth.secretKey)
+  (dict "name" "AWS_ALLOW_HTTP" "value" "true")
+}}
+{{- range $default := $inClusterDefaults }}
+{{- if not (hasKey $objectStoreEnv $default.name) }}
+- name: {{ $default.name }}
+  value: {{ $default.value | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- range $key, $value := $objectStoreEnv }}
+{{- if kindIs "string" $value }}
+{{- $value = tpl $value $ }}
+{{- end }}
 - name: {{ $key }}
 {{ include "logfire.envValue" (dict "value" $value "quote" (not (kindIs "map" $value)) "allowValueKey" true) | indent 2 }}
+{{- end }}
+{{- end -}}
+
+{{/*
+A feature's blob store inside the configured bucket, or "" when no object store is configured.
+
+The Python services keep session replay and visual-test blobs under their own prefixes of the
+bucket, so the two never share one path and the replay objects do not sit among the Fusionfire
+parquet objects. `value` names the optional `objectStore` key that overrides the derived URI for a
+deployment that keeps one feature in its own bucket or container. Call with
+`(dict "root" . "value" "sessionReplayUri" "suffix" "session-replays")`.
+*/}}
+{{- define "logfire.featureObjectStoreUri" -}}
+{{- $override := get (.root.Values.objectStore | default dict) .value | default "" | toString | trim -}}
+{{- if $override -}}
+{{- tpl $override .root -}}
+{{- else -}}
+{{- $base := include "logfire.objectStoreUri" .root | trim -}}
+{{- if $base -}}
+{{- printf "%s/%s" (trimSuffix "/" $base) .suffix -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The object-store environment for the Python services (backend, worker): the two feature URIs the
+platform reads plus the provider settings. Emitted only when a store is configured, because the
+platform falls back to its own local directory otherwise.
+*/}}
+{{- define "logfire.pythonObjectStoreEnv" -}}
+{{- $replay := include "logfire.featureObjectStoreUri" (dict "root" . "value" "sessionReplayUri" "suffix" "session-replays") -}}
+{{- $visual := include "logfire.featureObjectStoreUri" (dict "root" . "value" "visualTestsUri" "suffix" "visual-tests") -}}
+{{- if or $replay $visual }}
+- name: SESSION_REPLAY_OBJECT_STORE_URI
+  value: {{ $replay | quote }}
+- name: VISUAL_TESTS_OBJECT_STORE_URI
+  value: {{ $visual | quote }}
+{{- include "logfire.objectStoreProviderEnv" . }}
 {{- end }}
 {{- end -}}
 
@@ -722,7 +966,7 @@ Create dex config secret name
 Create dex configuration secret, merging backend static clients with user provided storage and oauth connectors.
 */}}
 {{- define "logfire.dexConfig" -}}
-{{- $dexConfig := dig "config" dict (index .Values "logfire-dex" | default dict) -}}
+{{- $dexConfig := dig "config" dict (index .Values "logfire-dex" | default dict) | deepCopy -}}
 {{- $staticClients := list -}}
 {{- $logfireFrontend := (include "logfire.url" .) -}}
 {{- $logfireUrls := include "logfire.all_urls" . | splitList " " }}
@@ -810,6 +1054,22 @@ Create dex configuration secret, merging backend static clients with user provid
 Render a fully-qualified container image reference using chart defaults when
 overrides are not provided.
 */}}
+{{/*
+Resolve the image name for a Python service.
+
+Falls back to `image.backendImage` when the per-service key is unset. An install created before
+these keys existed upgrades with `--reuse-values`, which carries `image.backendImage` forward and
+knows nothing of the newer keys. Without the fallback such an upgrade would move three workloads
+onto per-service images that the install never asked for, and change what it pulls on an upgrade it
+expected to be a no-op. Setting the per-service key, or taking the chart's own defaults on a fresh
+install, opts in.
+*/}}
+{{- define "logfire.pythonImage" -}}
+{{- $image := .Values.image -}}
+{{- $key := .key -}}
+{{- (index $image $key) | default $image.backendImage -}}
+{{- end }}
+
 {{- define "logfire.imageRef" -}}
 {{- $image := .image | default dict -}}
 {{- $repository := $image.repository | default .defaultRepository -}}
@@ -943,6 +1203,11 @@ annotations have final precedence.
     {{- if and (get $adminSecret "enabled") (not (empty (get $adminSecret "annotations"))) -}}
       {{- $merged = mergeOverwrite $merged (get $adminSecret "annotations") -}}
     {{- end -}}
+  {{- else if eq $secretSource "redis" -}}
+    {{- $redisSecret := get $values "redisSecret" | default dict -}}
+    {{- if and (get $redisSecret "enabled") (not (empty (get $redisSecret "annotations"))) -}}
+      {{- $merged = mergeOverwrite $merged (get $redisSecret "annotations") -}}
+    {{- end -}}
   {{- end -}}
 {{- end -}}
 {{- $serviceValues := index $values $serviceName | default dict -}}
@@ -982,19 +1247,6 @@ Custom labels for workloads pods
 {{- $serviceValues := index .Values $serviceName | default dict -}}
 {{- $servicePodLabels := $serviceValues.podLabels | default dict -}}
 {{- $merged := deepCopy $servicePodLabels -}}
-{{- if dig "disableSidecarOnKnownWorkloads" false (.Values.istio | default dict) -}}
-  {{- $knownWorkloads := list
-    "logfire-service"
-    "logfire-ff-proxy-cache-byte"
-    "logfire-backend-migrations"
-    "logfire-ff-migrations"
-    "logfire-redis"
-    "logfire-otel-collector"
-    -}}
-  {{- if and (has $serviceName $knownWorkloads) (not (hasKey $merged "sidecar.istio.io/inject")) -}}
-    {{- $_ := set $merged "sidecar.istio.io/inject" "false" -}}
-  {{- end -}}
-{{- end -}}
 {{- if $merged -}}
 {{- toYaml $merged -}}
 {{- end -}}
@@ -1039,14 +1291,66 @@ default-checksum
 {{- $ctx := required "logfire.postgresSecretChecksumAnnotation: need .ctx" .ctx -}}
 {{- $key := .key | default "postgresDsn" -}}
 {{- $annotationKey := .annotationKey | default (eq $key "postgresFFDsn" | ternary "checksum/logfire-postgres-ff-dsn" "checksum/logfire-postgres-dsn") -}}
-{{- include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" $annotationKey "name" (include "logfire.postgresSecretName" $ctx) "key" $key) -}}
+{{- if $ctx.Values.postgresSecret.enabled -}}
+{{- $name := include "logfire.postgresSecretName" $ctx | trim -}}
+{{- /* Without a name there is no Secret to checksum. Stay silent here so the
+       user-facing validation in logfire.validate.postgres reports the missing
+       postgresSecret.name instead of an internal guard error. */ -}}
+{{- if $name -}}
+{{- include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" $annotationKey "name" $name "key" $key) -}}
+{{- end -}}
+{{- else -}}
+{{- /* Each Secret key has a value of the same name. */ -}}
+{{- $value := get $ctx.Values $key | default "" -}}
+{{- printf "%s: %s" $annotationKey ($value | b64enc | sha256sum) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Roll the Redis consumers when a DSN changes. Emits nothing when an external
+Secret has reload annotations, because those roll the workloads instead. The
+roles are read together by the workloads that consume them, and a DSN change is
+deliberate and rare, so one annotation covers the whole Secret instead of one
+per role.
+
+An upgrade from a release whose values predate `redisSecret` leaves the value
+unset, so every read here tolerates a missing key.
+*/}}
+{{- define "logfire.redisSecretChecksumAnnotation" -}}
+{{- $ctx := required "logfire.redisSecretChecksumAnnotation: need .ctx" .ctx -}}
+{{- $redisSecret := $ctx.Values.redisSecret | default dict -}}
+{{- $external := get $redisSecret "enabled" -}}
+{{- if not (and $external (not (empty (get $redisSecret "annotations")))) -}}
+{{- $annotationKey := "checksum/logfire-redis-dsns" -}}
+{{- $keys := list "sharedDsn" "tailDsn" "tokenDsn" "usageDsn" -}}
+{{- if $external -}}
+{{- $name := include "logfire.redisSecretName" $ctx | trim -}}
+{{- /* Without a name there is no Secret to checksum. Stay silent here so the
+       user-facing validation in logfire.validate.redis reports the missing
+       redisSecret.name instead of an internal guard error. */ -}}
+{{- if $name -}}
+{{- $lines := list -}}
+{{- range $key := $keys -}}
+  {{- $lines = append $lines (include "utils.secretChecksum" (dict "ctx" $ctx "name" $name "key" $key) | trim) -}}
+{{- end -}}
+{{- printf "%s: %s" $annotationKey (join "|" $lines | sha256sum) -}}
+{{- end -}}
+{{- else -}}
+{{- $values := list -}}
+{{- range $key := $keys -}}
+  {{- $values = append $values (include "logfire.redisDsnValue" (dict "root" $ctx "key" $key) | trim) -}}
+{{- end -}}
+{{- printf "%s: %s" $annotationKey (join "|" $values | b64enc | sha256sum) -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{- define "logfire.logfireSecretChecksumAnnotations" -}}
 {{- $ctx := required "logfire.logfireSecretChecksumAnnotations: need .ctx" .ctx -}}
 {{- $lines := list -}}
 {{- range $secretName := required "logfire.logfireSecretChecksumAnnotations: need .secrets" .secrets }}
-{{- $lines = append $lines (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "name" (include "logfire.secretName" (dict "ctx" $ctx "secretName" $secretName) | trim) "key" $secretName)) -}}
+  {{- $name := include "logfire.externalSecretName" (dict "external" $ctx.Values.existingSecret "secretName" $secretName) | trim -}}
+  {{- $lines = append $lines (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "name" $name "key" $secretName)) -}}
 {{- end -}}
 {{- join "\n" $lines -}}
 {{- end -}}
@@ -1054,8 +1358,8 @@ default-checksum
 {{- define "logfire.gatewaySecretChecksumAnnotations" -}}
 {{- $ctx := required "logfire.gatewaySecretChecksumAnnotations: need .ctx" .ctx -}}
 {{- list
-  (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-encryption" "name" (include "logfire.gatewaySecretName" (dict "ctx" $ctx "secretName" "gateway-encryption") | trim) "key" "key"))
-  (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-internal-secret" "name" (include "logfire.gatewaySecretName" (dict "ctx" $ctx "secretName" "gateway-internal-secret") | trim) "key" "internalSecret"))
+  (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-encryption" "name" (include "logfire.externalSecretName" (dict "external" $ctx.Values.existingGatewaySecret "secretName" "gateway-encryption") | trim) "key" "key"))
+  (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "annotationKey" "checksum/gateway-internal-secret" "name" (include "logfire.externalSecretName" (dict "external" $ctx.Values.existingGatewaySecret "secretName" "gateway-internal-secret") | trim) "key" "internalSecret"))
   | join "\n" -}}
 {{- end -}}
 
@@ -1063,25 +1367,66 @@ default-checksum
 {{- $ctx := required "logfire.adminSecretChecksumAnnotations: need .ctx" .ctx -}}
 {{- $lines := list -}}
 {{- range $secretName := list "logfire-admin-password" "logfire-admin-totp-secret" "logfire-admin-totp-recovery-codes" }}
-{{- $lines = append $lines (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "name" (include "logfire.adminSecretName" (dict "ctx" $ctx "secretName" $secretName) | trim) "key" $secretName)) -}}
+  {{- $name := include "logfire.externalSecretName" (dict "external" $ctx.Values.adminSecret "secretName" $secretName) | trim -}}
+  {{- $lines = append $lines (include "logfire.secretChecksumAnnotation" (dict "ctx" $ctx "name" $name "key" $secretName)) -}}
 {{- end -}}
 {{- join "\n" $lines -}}
 {{- end -}}
 
-{{- define "logfire.backendMigrations.name" -}}
-{{- if .Values.dev.deployPostgres -}}
-"logfire-backend-migrations-{{ .Release.Revision }}"
+{{- define "logfire.migrationJobName" -}}
+{{- $name := required "logfire.migrationJobName: need .name" .name -}}
+{{- $ctx := required "logfire.migrationJobName: need .ctx" .ctx -}}
+{{- if $ctx.Values.dev.deployPostgres -}}
+{{- printf "%s-%d" $name $ctx.Release.Revision | quote -}}
 {{- else -}}
-"logfire-backend-migrations"
+{{- $name | quote -}}
 {{- end -}}
 {{- end -}}
 
+{{/*
+Render global and service-level pod scheduling. Optional default topology spread
+constraints are appended only when the merged user/preset list does not already
+contain the same topologyKey.
+*/}}
 {{- define "logfire.podScheduling" -}}
 {{- $serviceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
 {{- $nodeSelector := merge (deepCopy ($serviceValues.nodeSelector | default dict)) (.Values.nodeSelector | default dict) -}}
 {{- $affinity := merge (deepCopy ($serviceValues.affinity | default dict)) (.Values.affinity | default dict) -}}
 {{- $tolerations := concat ($serviceValues.tolerations | default list) (.Values.tolerations | default list) -}}
 {{- $topologySpreadConstraints := concat ($serviceValues.topologySpreadConstraints | default list) (.Values.topologySpreadConstraints | default list) -}}
+{{- if get $serviceValues "spreadAcrossZones" -}}
+  {{- $selector := dict "matchLabels" (dict "app.kubernetes.io/component" .serviceName) -}}
+  {{- $presetTopologySpreadConstraints := list
+    (dict "maxSkew" 1 "topologyKey" "topology.kubernetes.io/zone" "whenUnsatisfiable" "ScheduleAnyway" "labelSelector" $selector)
+    (dict "maxSkew" 1 "topologyKey" "kubernetes.io/hostname" "whenUnsatisfiable" "ScheduleAnyway" "labelSelector" $selector)
+  -}}
+  {{- range $presetTopologySpreadConstraints -}}
+    {{- $presetConstraint := . -}}
+    {{- $topologyKey := get $presetConstraint "topologyKey" -}}
+    {{- $hasTopologyKey := false -}}
+    {{- range $topologySpreadConstraints -}}
+      {{- if eq (get . "topologyKey") $topologyKey -}}
+        {{- $hasTopologyKey = true -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if not $hasTopologyKey -}}
+      {{- $topologySpreadConstraints = append $topologySpreadConstraints $presetConstraint -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- range (.defaultTopologySpreadConstraints | default list) -}}
+  {{- $defaultConstraint := . -}}
+  {{- $topologyKey := get $defaultConstraint "topologyKey" -}}
+  {{- $hasTopologyKey := false -}}
+  {{- range $topologySpreadConstraints -}}
+    {{- if eq (get . "topologyKey") $topologyKey -}}
+      {{- $hasTopologyKey = true -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $hasTopologyKey -}}
+    {{- $topologySpreadConstraints = append $topologySpreadConstraints $defaultConstraint -}}
+  {{- end -}}
+{{- end -}}
 {{- $blocks := list -}}
 {{- if $nodeSelector -}}
 {{- $blocks = append $blocks (printf "nodeSelector:%s" (toYaml $nodeSelector | nindent 2 | trimSuffix "\n")) -}}
@@ -1105,9 +1450,186 @@ securityContext:
 {{- end -}}
 {{- end -}}
 
+{{/*
+The numeric identity a chart-owned image runs as. The kubelet verifies `runAsNonRoot` against
+`runAsUser`, and a named image user cannot be verified. The Python, Fusionfire, bcache, and
+gateway images all run as uid/gid 1000; the frontend nginx image runs as uid/gid 33. The
+platform contract tests keep the image `USER` and these numbers in step.
+*/}}
+{{- define "logfire.containerImageIdentity" -}}
+{{- $serviceName := required "logfire.containerImageIdentity: need .serviceName" .serviceName -}}
+{{- $uidGid1000 := list
+  "logfire-backend"
+  "logfire-backend-auth"
+  "logfire-backend-migrations"
+  "logfire-worker"
+  "logfire-task-runner"
+  "logfire-remote-mcp"
+  "logfire-ai-gateway"
+  "logfire-ff-ingest"
+  "logfire-ff-ingest-processor"
+  "logfire-ff-query-api"
+  "logfire-ff-query-worker"
+  "logfire-ff-crud-api"
+  "logfire-ff-maintenance-scheduler"
+  "logfire-ff-maintenance-worker"
+  "logfire-ff-compaction-worker"
+  "logfire-ff-bcache"
+  "logfire-ff-migrations"
+-}}
+{{- if has $serviceName $uidGid1000 -}}
+{{- dict "uid" 1000 "gid" 1000 | toJson -}}
+{{- else if eq $serviceName "logfire-frontend-service" -}}
+{{- dict "uid" 33 "gid" 33 | toJson -}}
+{{- else -}}
+{{- fail (printf "logfire.containerImageIdentity: unknown chart-owned service %q; add its verified image identity" $serviceName) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Merge the container SecurityContext layers with later layers winning:
+1. the provided chart defaults;
+2. the chart-wide `.Values.securityContext`;
+3. the service's own `<service>.securityContext` value.
+
+A layer value of `null` removes the field from the result, so a user can clear `runAsUser` or
+`runAsGroup` for OpenShift or a policy-managed cluster, and can set `readOnlyRootFilesystem`
+back to false. Returns JSON so callers can parse it with `fromJson`.
+*/}}
+{{- define "logfire.mergeSecurityContext" -}}
+{{- $ctx := required "logfire.mergeSecurityContext: need .ctx" .ctx -}}
+{{- $serviceName := required "logfire.mergeSecurityContext: need .serviceName" .serviceName -}}
+{{- $defaults := .defaults | default dict -}}
+{{- $serviceValues := get $ctx.Values $serviceName | default dict -}}
+{{- $layers := list ($ctx.Values.securityContext | default dict) (get $serviceValues "securityContext" | default dict) -}}
+{{- $merged := $defaults -}}
+{{- range $layer := $layers -}}
+  {{- $merged = mergeOverwrite $merged (deepCopy $layer) -}}
+  {{- range $key, $value := $layer -}}
+    {{- if kindIs "invalid" $value -}}
+      {{- $_ := unset $merged $key -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $merged | toJson -}}
+{{- end -}}
+
+{{/*
+Chart-owned container SecurityContext: the chart defaults (the portable controls plus the
+verified image identity) merged with the chart-wide and per-service contexts. The defaults stay
+in the chart rather than in values, so an upgrade that carries no service `securityContext` key
+still applies them.
+*/}}
+{{- define "logfire.containerSecurityContext" -}}
+{{- $ctx := required "logfire.containerSecurityContext: need .ctx" .ctx -}}
+{{- $serviceName := required "logfire.containerSecurityContext: need .serviceName" .serviceName -}}
+{{- $identity := include "logfire.containerImageIdentity" (dict "serviceName" $serviceName) | fromJson -}}
+{{- $defaults := dict
+  "runAsNonRoot" true
+  "runAsUser" (get $identity "uid")
+  "runAsGroup" (get $identity "gid")
+  "allowPrivilegeEscalation" false
+  "capabilities" (dict "drop" (list "ALL"))
+  "seccompProfile" (dict "type" "RuntimeDefault")
+  "readOnlyRootFilesystem" true
+-}}
+{{- include "logfire.mergeSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName "defaults" $defaults) -}}
+{{- end -}}
+
+{{/*
+The numeric identity a bundled third-party image runs as. Each value is verified by running the
+image and reading its `USER` or its user database:
+
+- `logfire-redis`: the `redis` user in `redis:7.2`, uid and gid 999.
+- `logfire-dex`: the `USER` in the mirrored Dex image, uid and gid 1001.
+- `rustfs`: the `rustfs` user in `rustfs/rustfs:1.0.0`, uid and gid 10001.
+- `maildev`: the `node` user in `maildev/maildev:3.0.0`, uid and gid 1000.
+- `otel_collector`: the `USER` in the collector image, uid and gid 10001.
+- `postgres`: the `postgres` user in `postgres:17`, uid and gid 999.
+- `tls-wait`: the `curl_user` in `curlimages/curl:8.12.1`, uid 101 and gid 102.
+*/}}
+{{- define "logfire.thirdPartyImageIdentity" -}}
+{{- $name := required "logfire.thirdPartyImageIdentity: need .name" .name -}}
+{{- if eq $name "logfire-redis" -}}
+{{- dict "uid" 999 "gid" 999 | toJson -}}
+{{- else if eq $name "logfire-dex" -}}
+{{- dict "uid" 1001 "gid" 1001 | toJson -}}
+{{- else if eq $name "rustfs" -}}
+{{- dict "uid" 10001 "gid" 10001 | toJson -}}
+{{- else if eq $name "maildev" -}}
+{{- dict "uid" 1000 "gid" 1000 | toJson -}}
+{{- else if eq $name "otel_collector" -}}
+{{- dict "uid" 10001 "gid" 10001 | toJson -}}
+{{- else if eq $name "postgres" -}}
+{{- dict "uid" 999 "gid" 999 | toJson -}}
+{{- else if eq $name "tls-wait" -}}
+{{- dict "uid" 101 "gid" 102 | toJson -}}
+{{- else -}}
+{{- fail (printf "logfire.thirdPartyImageIdentity: unknown third-party image %q; add its verified image identity" $name) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Bundled third-party container SecurityContext: the portable controls plus the verified image
+identity, merged with the chart-wide and per-service contexts. The helper keeps
+`readOnlyRootFilesystem` off unless the caller sets `.readOnlyRootFilesystem`, because an image
+may write outside its data volume. The `.identity` names the image; the optional `.serviceName`
+selects the per-service `<serviceName>.securityContext` override and defaults to the identity.
+*/}}
+{{- define "logfire.thirdPartyContainerSecurityContext" -}}
+{{- $ctx := required "logfire.thirdPartyContainerSecurityContext: need .ctx" .ctx -}}
+{{- $identityName := required "logfire.thirdPartyContainerSecurityContext: need .identity" .identity -}}
+{{- $serviceName := .serviceName | default $identityName -}}
+{{- $identity := include "logfire.thirdPartyImageIdentity" (dict "name" $identityName) | fromJson -}}
+{{- $defaults := dict
+  "runAsNonRoot" true
+  "runAsUser" (get $identity "uid")
+  "runAsGroup" (get $identity "gid")
+  "allowPrivilegeEscalation" false
+  "capabilities" (dict "drop" (list "ALL"))
+  "seccompProfile" (dict "type" "RuntimeDefault")
+-}}
+{{- if .readOnlyRootFilesystem -}}
+{{- $_ := set $defaults "readOnlyRootFilesystem" true -}}
+{{- end -}}
+{{- include "logfire.mergeSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName "defaults" $defaults) -}}
+{{- end -}}
+
+{{/*
+The writable `/tmp` mount every chart-owned container gets. The production images keep a
+writable `HOME` or write scratch data under `/tmp`, so a read-only image root needs this
+emptyDir. List the mount before any mount nested under `/tmp`, because the kubelet applies
+container mounts in spec order and a later `/tmp` mount shadows the nested path.
+*/}}
+{{- define "logfire.tmpVolumeMounts" -}}
+- name: tmp
+  mountPath: /tmp
+{{- end -}}
+
+{{- define "logfire.tmpVolume" -}}
+- name: tmp
+  emptyDir: {}
+{{- end -}}
+
+{{/*
+The writable local object store directory for the Python workloads that use it. Self-hosted
+deployments default the session-replay and visual-test stores to `file:///var/lib/logfire`, so
+the backend and the worker need the directory writable under a read-only image root.
+*/}}
+{{- define "logfire.logfireDataVolumeMounts" -}}
+- name: logfire-data
+  mountPath: /var/lib/logfire
+{{- end -}}
+
+{{- define "logfire.logfireDataVolume" -}}
+- name: logfire-data
+  emptyDir: {}
+{{- end -}}
+
 {{- define "logfire.standardPodSpecFields" -}}
 {{- $ctx := required "logfire.standardPodSpecFields: need .ctx" .ctx -}}
 {{- $serviceName := required "logfire.standardPodSpecFields: need .serviceName" .serviceName -}}
+{{- $podSecurityContext := .podSecurityContext | default (include "logfire.podSecurityContext" $ctx | fromJson) -}}
 {{- $lines := list -}}
 {{- with ($ctx.Values.priorityClassName | default "") -}}
   {{- $lines = append $lines (printf "priorityClassName: %s" .) -}}
@@ -1124,7 +1646,7 @@ securityContext:
 {{- if $initContainers -}}
   {{- $lines = append $lines $initContainers -}}
 {{- end -}}
-{{- with $ctx.Values.podSecurityContext -}}
+{{- with $podSecurityContext -}}
   {{- $lines = append $lines (include "logfire.securityContext" . | trim) -}}
 {{- end -}}
 {{- $podScheduling := include "logfire.podScheduling" (dict "Values" $ctx.Values "serviceName" $serviceName) | trim -}}
@@ -1194,13 +1716,43 @@ securityContext:
 {{- end -}}
 {{- end -}}
 
-{{- define "logfire.rateLimits" -}}
-{{- with .Values.rateLimits -}}
-{{- $queries := get . "queries" | default dict -}}
-- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_V1_QUERY__PER_MINUTE
-  value: {{ (get $queries "perMinute" | default 99999) | quote }}
-- name: ENTERPRISE_CLOUD_RATE_LIMITS__SDK_V1_QUERY__PER_HOUR
-  value: {{ (get $queries "perHour" | default 99999) | quote }}
+{{/*
+The VAPID application-server identity every Web Push request is signed with, for the
+workloads that register a device or send to one. Emits nothing while webPush is disabled,
+where the backend reports push unavailable and the settings panel says so.
+*/}}
+{{- define "logfire.webPushEnv" -}}
+{{- if .Values.webPush.enabled -}}
+- name: WEB_PUSH_VAPID_SUBJECT
+  value: {{ .Values.webPush.subject | default (printf "mailto:%s" .Values.adminEmail) | quote }}
+- name: WEB_PUSH_VAPID_PRIVATE_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-web-push-vapid-key") }}
+      key: logfire-web-push-vapid-key
+{{- end -}}
+{{- end -}}
+
+{{/*
+Rolls the workloads that hold the VAPID key when it changes, so a rotation cannot leave one pod
+signing with the old key while another signs with the new one. Emits nothing while webPush is
+disabled.
+
+A key supplied in the values is hashed from there rather than from the live Secret, which still
+holds the pre-upgrade key while the templates render: hashing that would leave the pod template
+unchanged on the very upgrade that rotates the key, so a pod would pick the new one up only at
+some later unrelated restart. The hash is taken over the base64 value the Secret stores, which is
+what the lookup path hashes once the new key is applied, so a subsequent no-op upgrade does not
+roll the workloads a second time. The generated and existingSecret cases keep reading the
+cluster, since that is where their key lives.
+*/}}
+{{- define "logfire.webPushChecksumAnnotation" -}}
+{{- if .Values.webPush.enabled -}}
+{{- if and .Values.webPush.privateKey (not .Values.existingSecret.enabled) -}}
+{{- printf "checksum/logfire-web-push-vapid-key: %s" (.Values.webPush.privateKey | b64enc | sha256sum) -}}
+{{- else -}}
+{{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-web-push-vapid-key")) -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
@@ -1210,29 +1762,238 @@ In-cluster TLS helpers
 ================================================================================
 */}}
 
-{{- define "logfire.inClusterTls.enabled" -}}
-{{- .Values.inClusterTls.enabled | default false -}}
-{{- end -}}
-
-{{- define "logfire.inClusterTls.secretNamePrefix" -}}
-{{- if .Values.inClusterTls.secretNamePrefix -}}
-{{- .Values.inClusterTls.secretNamePrefix -}}
-{{- else -}}
-{{- .Release.Name -}}
-{{- end -}}
-{{- end -}}
-
-{{- define "logfire.inClusterTls.secretName" -}}
-{{- $prefix := include "logfire.inClusterTls.secretNamePrefix" .ctx -}}
-{{- printf "%s-%s-tls" $prefix .serviceName -}}
-{{- end -}}
-
-{{- define "logfire.inClusterTls.caBundle.isConfigMap" -}}
-{{- if and (include "logfire.inClusterTls.enabled" . | eq "true") (.Values.inClusterTls.caBundle.existingConfigMap.name) -}}
+{{/*
+Whether this deployment has an SMTP server behind it, which is what decides if the producers
+queue transactional email at all. Derived from the SMTP configuration rather than a separate
+switch, so the two cannot disagree: a configured server that no producer knows about sends
+nothing, and `emails_enabled` without a reachable server queues mail that can only fail at
+delivery. This gates the producers only. `logfire-task-runner` drains the Absurd queues and is
+deployed unconditionally, so queued email always has something behind it.
+*/}}
+{{- define "logfire.emailsEnabled" -}}
+{{- if or .Values.dev.deployMaildev .Values.smtp.host -}}
 true
 {{- else -}}
 false
 {{- end -}}
+{{- end -}}
+
+{{/*
+The sender of every email the platform sends, for the workloads that deliver it. A self-hosted
+install (`ON_PREM`) with an SMTP server refuses to start without `EMAIL_FROM_ADDRESS`, because
+the platform does not send email as `pydantic.dev` from a self-hosted install. The bundled
+maildev accepts any sender, so it gets a placeholder on the reserved `.localhost` domain.
+*/}}
+{{- define "logfire.emailSenderEnv" -}}
+{{- $smtp := .Values.smtp | default dict -}}
+{{- $fromAddress := get $smtp "fromAddress" | default (ternary "no-reply@logfire.localhost" "" (.Values.dev.deployMaildev | default false)) -}}
+{{- with $fromAddress }}
+- name: EMAIL_FROM_ADDRESS
+  value: {{ . | quote }}
+{{- end }}
+{{- with get $smtp "fromName" }}
+- name: EMAIL_FROM_NAME
+  value: {{ . | quote }}
+{{- end }}
+{{- end -}}
+
+{{/*
+The CA bundle that verifies the SMTP server certificate, for relays signed by an internal CA.
+It is one source of the trusted CA bundle of the two services that send email. Not used with
+the bundled maildev, which replaces smtp.host.
+*/}}
+{{- define "logfire.smtp.caBundle.source" -}}
+{{- $caBundle := (.Values.smtp | default dict).caBundle | default dict -}}
+{{- $configMapName := dig "existingConfigMap" "name" "" $caBundle -}}
+{{- $secretName := dig "existingSecret" "name" "" $caBundle -}}
+{{- if and (not .Values.dev.deployMaildev) (or $configMapName $secretName) -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+TLS settings of the SMTP client, beside the SMTP_* variables. The SMTP CA bundle reaches the
+client through `logfire.trustedCa.env`.
+*/}}
+{{- define "logfire.smtp.tlsEnv" -}}
+{{- if not .Values.dev.deployMaildev -}}
+{{- $validateCerts := (.Values.smtp | default dict).validate_certs -}}
+{{- if not (kindIs "invalid" $validateCerts) }}
+- name: SMTP_VALIDATE_CERTS
+  value: {{ $validateCerts | toString | quote }}
+{{- end }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Trusted CA bundle: extra CA certificates for outbound TLS, such as a `rediss://` Redis or an
+SMTP relay signed by a private CA. `trustedCaBundle` reaches every service in the list below.
+`smtp.caBundle` reaches only the two services that send email.
+
+The `trusted-ca-bundle` init container joins the certificates into one file in an emptyDir.
+Python (OpenSSL, httpx) and Rust (`rustls-native-certs`) read it through `SSL_CERT_FILE`, which
+replaces their default trust store. So the file starts with the system bundle of the image, and
+public endpoints such as object storage and model providers stay trusted.
+
+The AI gateway runs on Node, which ignores `SSL_CERT_FILE`. It reads the file through
+`NODE_EXTRA_CA_CERTS`, which adds to the built-in roots of Node. That variable takes one file, so
+the file also holds the in-cluster CA when in-cluster TLS is enabled.
+
+The other in-cluster TLS clients are unaffected. They trust `LOGFIRE_CA_PATH` explicitly.
+*/}}
+{{- define "logfire.trustedCa.sources" -}}
+{{- $ctx := required "logfire.trustedCa.sources: need .ctx" .ctx -}}
+{{- $serviceName := required "logfire.trustedCa.sources: need .serviceName" .serviceName -}}
+{{- $services := list
+  "logfire-backend"
+  "logfire-backend-auth"
+  "logfire-worker"
+  "logfire-task-runner"
+  "logfire-remote-mcp"
+  "logfire-ai-gateway"
+  "logfire-ff-ingest"
+  "logfire-ff-ingest-processor"
+  "logfire-ff-query-api"
+  "logfire-ff-query-worker"
+  "logfire-ff-crud-api"
+  "logfire-ff-maintenance-scheduler"
+  "logfire-ff-maintenance-worker"
+  "logfire-ff-compaction-worker"
+-}}
+{{- $sources := list -}}
+{{- $trusted := $ctx.Values.trustedCaBundle | default dict -}}
+{{- if and (has $serviceName $services) (or (dig "existingConfigMap" "name" "" $trusted) (dig "existingSecret" "name" "" $trusted)) -}}
+  {{- $sources = append $sources (dict "bundle" $trusted "path" "trusted-ca.crt") -}}
+{{- end -}}
+{{- if and (has $serviceName (list "logfire-task-runner" "logfire-worker")) (include "logfire.smtp.caBundle.source" $ctx) -}}
+  {{- $sources = append $sources (dict "bundle" $ctx.Values.smtp.caBundle "path" "smtp-ca.crt") -}}
+{{- end -}}
+{{- dict "sources" $sources | toJson -}}
+{{- end -}}
+
+{{/* "true" when the service trusts extra CA certificates. Pass (dict "ctx" . "serviceName" $serviceName). */}}
+{{- define "logfire.trustedCa.enabled" -}}
+{{- if (include "logfire.trustedCa.sources" . | fromJson).sources -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.trustedCa.initContainer" -}}
+{{- $ctx := .ctx -}}
+{{- $serviceName := .serviceName -}}
+{{- if include "logfire.trustedCa.enabled" . -}}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName) | fromJson -}}
+{{- $gateway := eq $serviceName "logfire-ai-gateway" -}}
+{{- $inClusterCa := and $gateway (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+{{- $repository := $ctx.Values.image.repository | default "" -}}
+{{- $image := $ctx.Values.image.backendImage -}}
+{{- $baseFile := "/etc/ssl/certs/ca-certificates.crt" -}}
+{{- if $gateway -}}
+  {{- $repository = $ctx.Values.image.gatewayRepository | default "" -}}
+  {{- $image = $ctx.Values.image.gatewayImage -}}
+  {{- $baseFile = ternary "/etc/logfire/incluster-ca/ca.crt" "" $inClusterCa -}}
+{{- else if hasPrefix "logfire-ff-" $serviceName -}}
+  {{- $image = $ctx.Values.image.fusionfireImage -}}
+{{- else if eq $serviceName "logfire-worker" -}}
+  {{- $image = $ctx.Values.image.workerImage -}}
+{{- end -}}
+- name: trusted-ca-bundle
+  image: '{{ $repository }}{{ $image }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
+  imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
+  command:
+    - sh
+    - -c
+    - |
+      set -eu
+      for f in {{ with $baseFile }}{{ . }} {{ end }}/etc/logfire/trusted-ca-sources/*.crt; do
+        cat "$f"
+        echo
+      done > /etc/logfire/trusted-ca/ca-bundle.crt
+  {{- include "logfire.resources" (dict "Values" $ctx.Values "serviceName" $serviceName) | nindent 2 }}
+  {{- include "logfire.securityContext" $containerSecurityContext | nindent 2 }}
+  volumeMounts:
+    - name: logfire-trusted-ca-sources
+      mountPath: /etc/logfire/trusted-ca-sources
+      readOnly: true
+    - name: logfire-trusted-ca
+      mountPath: /etc/logfire/trusted-ca
+    {{- if $inClusterCa }}
+    {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" $ctx "mountPath" "/etc/logfire/incluster-ca") | nindent 4 }}
+    {{- end }}
+{{- end -}}
+{{- end -}}
+
+{{/* The env var that points the TLS clients of the service at the trusted CA file. */}}
+{{- define "logfire.trustedCa.env" -}}
+{{- if include "logfire.trustedCa.enabled" . -}}
+- name: {{ ternary "NODE_EXTRA_CA_CERTS" "SSL_CERT_FILE" (eq .serviceName "logfire-ai-gateway") }}
+  value: /etc/logfire/trusted-ca/ca-bundle.crt
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.trustedCa.volumeMount" -}}
+{{- if include "logfire.trustedCa.enabled" . -}}
+- name: logfire-trusted-ca
+  mountPath: /etc/logfire/trusted-ca
+  readOnly: true
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.trustedCa.volumes" -}}
+{{- $sources := (include "logfire.trustedCa.sources" . | fromJson).sources -}}
+{{- if $sources -}}
+- name: logfire-trusted-ca-sources
+  projected:
+    sources:
+      {{- range $sources }}
+      {{- $bundle := .bundle }}
+      {{- if dig "existingConfigMap" "name" "" $bundle }}
+      - configMap:
+          name: {{ $bundle.existingConfigMap.name }}
+          items:
+            - key: {{ dig "existingConfigMap" "key" "ca.crt" $bundle }}
+              path: {{ .path }}
+      {{- else }}
+      - secret:
+          name: {{ $bundle.existingSecret.name }}
+          items:
+            - key: {{ dig "existingSecret" "key" "ca.crt" $bundle }}
+              path: {{ .path }}
+      {{- end }}
+      {{- end }}
+- name: logfire-trusted-ca
+  emptyDir:
+    sizeLimit: 16Mi
+{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.enabled" -}}
+{{- .Values.inClusterTls.enabled | default false -}}
+{{- end -}}
+
+{{- define "logfire.serviceHost" -}}
+{{- printf "%s.%s.svc.%s" .serviceName .ctx.Release.Namespace (.ctx.Values.clusterDomain | default "cluster.local") -}}
+{{- end -}}
+
+{{/*
+Render an HAProxy server line, including in-cluster TLS when enabled.
+*/}}
+{{- define "logfire.inClusterTls.haproxyUpstream" -}}
+{{- $ctx := required "logfire.inClusterTls.haproxyUpstream: need .ctx" .ctx -}}
+{{- $name := required "logfire.inClusterTls.haproxyUpstream: need .name" .name -}}
+{{- $serviceName := required "logfire.inClusterTls.haproxyUpstream: need .serviceName" .serviceName -}}
+{{- $cleartextPort := required "logfire.inClusterTls.haproxyUpstream: need .cleartextPort" .cleartextPort -}}
+{{- $certificateServiceName := .certificateServiceName | default $serviceName -}}
+{{- $host := include "logfire.serviceHost" (dict "ctx" $ctx "serviceName" $serviceName) -}}
+{{- $certificateHost := include "logfire.serviceHost" (dict "ctx" $ctx "serviceName" $certificateServiceName) -}}
+{{- $checkSsl := true -}}
+{{- if hasKey . "checkSsl" -}}{{- $checkSsl = .checkSsl -}}{{- end -}}
+{{- if .replicas -}}server-template {{ $name }} 1-{{ .replicas }}{{- else -}}server {{ $name }}{{- end }} {{ $host }}.:{{ ternary $ctx.Values.inClusterTls.httpsPort $cleartextPort (include "logfire.inClusterTls.enabled" $ctx | eq "true") }}{{ with .options }} {{ . }}{{ end }}{{- if (include "logfire.inClusterTls.enabled" $ctx | eq "true") }} ssl verify required ca-file /usr/local/etc/haproxy/ca/ca.crt sni str({{ $certificateHost }}) verifyhost {{ $certificateHost }}{{ if $checkSsl }} check-ssl{{ end }}{{- end -}}
+{{- end -}}
+
+{{- define "logfire.inClusterTls.secretName" -}}
+{{- $prefix := .ctx.Values.inClusterTls.secretNamePrefix | default .ctx.Release.Name -}}
+{{- printf "%s-%s-tls" $prefix .serviceName -}}
 {{- end -}}
 
 {{- define "logfire.inClusterTls.certs.mode" -}}
@@ -1336,7 +2097,7 @@ false
 {{- $caBundleSecretName := dig "existingSecret" "name" "" $ctx.Values.inClusterTls.caBundle -}}
 {{- $autoIssuer := include "logfire.inClusterTls.certs.certManager.autoIssuer" $ctx | eq "true" -}}
 - name: {{ $volumeName }}
-  {{- if (include "logfire.inClusterTls.caBundle.isConfigMap" $ctx | eq "true") }}
+  {{- if $ctx.Values.inClusterTls.caBundle.existingConfigMap.name }}
   configMap:
     name: {{ $ctx.Values.inClusterTls.caBundle.existingConfigMap.name }}
     items:
@@ -1390,12 +2151,43 @@ Dev Postgres helpers
 ================================================================================
 */}}
 
+{{/*
+The `devPostgres` values, JSON encoded. A `--reuse-values` upgrade from a chart before 0.15.0
+renders with the old release's values in place of this chart's defaults, so the block is
+missing, or holds only the keys the user set. Every reader goes through here, so that upgrade
+fails with this message wherever the render stops first.
+*/}}
+{{- define "logfire.devPostgres.values" -}}
+{{- $devPostgres := .Values.devPostgres | default dict -}}
+{{- range $key := list "fullnameOverride" "image" "auth" "initdb" "persistence" "podSecurityContext" "resources" -}}
+  {{- if not (hasKey $devPostgres $key) -}}
+    {{- fail (printf "dev.deployPostgres needs devPostgres.%s, a chart 0.15.0 default that a --reuse-values upgrade from an older chart does not carry. Upgrade with --reset-then-reuse-values, or pass your values file with -f." $key) -}}
+  {{- end -}}
+{{- end -}}
+{{- $devPostgres | toJson -}}
+{{- end -}}
+
+{{/* The dev Postgres Service and Deployment name. */}}
+{{- define "logfire.devPostgres.fullname" -}}
+{{- (include "logfire.devPostgres.values" . | fromJson).fullnameOverride -}}
+{{- end -}}
+
+{{/*
+The dev Postgres image. The database wait init container runs the same image, so a mirrored
+image reaches both.
+*/}}
+{{- define "logfire.devPostgres.image" -}}
+{{- include "logfire.imageRef" (dict "image" (include "logfire.devPostgres.values" . | fromJson).image) -}}
+{{- end -}}
+
 {{- define "logfire.dev.waitForPostgres.initContainers" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := .serviceName -}}
 {{- if and $ctx.Values.dev.deployPostgres (has $serviceName (list
   "logfire-backend"
+  "logfire-backend-auth"
   "logfire-worker"
+  "logfire-task-runner"
   "logfire-dex"
   "logfire-backend-migrations"
   "logfire-ff-migrations"
@@ -1411,35 +2203,106 @@ Dev Postgres helpers
   "logfire-remote-mcp"
 )) -}}
 - name: check-db-ready
-  image: postgres:17
+  image: {{ include "logfire.devPostgres.image" $ctx }}
   command:
     - sh
     - -c
     - >-
-      until pg_isready -h {{ $ctx.Values.postgresql.fullnameOverride | default "logfire-postgres" }} -p 5432; do echo "Waiting for postgres..."; sleep 2; done
-  {{- include "logfire.securityContext" $ctx.Values.securityContext | nindent 2 }}
+      until pg_isready -h {{ include "logfire.devPostgres.fullname" $ctx }} -p 5432 -U postgres; do echo "Waiting for postgres..."; sleep 2; done
+  {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" $ctx "identity" "postgres" "serviceName" "postgres-wait" "readOnlyRootFilesystem" true) | fromJson }}
+  {{- include "logfire.securityContext" $waitSecurityContext | nindent 2 }}
 {{- end -}}
 {{- end -}}
 
 {{/*
 Merge initContainers from values with dev Postgres wait initContainer.
 */}}
+{{/*
+`logfire-task-runner` drains the `default` Absurd queue and exits 1 at startup when that queue is
+missing. Only `absurd.create_queue` creates the per-queue tables, and `logfire-backend-migrations`
+calls it through `ensure_queues` right after it installs the `absurd` schema (see
+`logfire_db.migrations.main`). Migrations are a Helm hook only when the bundled Postgres is off
+(see the annotations on that Job), so nothing otherwise orders the two. Waiting for the runner's
+queue here makes the dependency explicit rather than leaving it to scheduling order.
+*/}}
+{{- define "logfire.absurdSchemaReady.initContainer" -}}
+{{- $ctx := .ctx -}}
+{{- $serviceName := .serviceName -}}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName) | fromJson -}}
+- name: wait-for-absurd-schema
+  image: '{{ $ctx.Values.image.repository | default "" }}{{ include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "taskRunnerImage") }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
+  imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
+  command:
+    - python
+    - -c
+    - |
+      import os, time, psycopg
+
+      dsn = os.environ["CRUD_PG_DSN"]
+      while True:
+          try:
+              with psycopg.connect(dsn) as conn:
+                  (queue_ready,) = conn.execute("SELECT to_regclass('absurd.t_default')").fetchone()
+              if queue_ready:
+                  break
+              print("Waiting for the 'default' Absurd queue...", flush=True)
+          except psycopg.OperationalError as exc:
+              print(f"Waiting for postgres: {exc}", flush=True)
+          time.sleep(2)
+  env:
+    - name: CRUD_PG_DSN
+      valueFrom:
+        secretKeyRef:
+          name: {{ include "logfire.postgresSecretName" $ctx }}
+          key: postgresDsn
+  {{- include "logfire.securityContext" $containerSecurityContext | nindent 2 }}
+  volumeMounts:
+    {{- include "logfire.tmpVolumeMounts" $ctx | nindent 4 }}
+{{- end -}}
+
+{{/*
+The chart-wide pod security context over a pod-level `RuntimeDefault` seccomp profile, so containers
+the chart does not render, such as injected mesh sidecars, pass the `restricted` Pod Security level.
+The bundled Redis reads `podSecurityContext` directly, so its pod template stays unchanged.
+*/}}
+{{- define "logfire.podSecurityContext" -}}
+{{- mergeOverwrite (dict "seccompProfile" (dict "type" "RuntimeDefault")) (deepCopy (.Values.podSecurityContext | default dict)) | toJson -}}
+{{- end -}}
+
 {{- define "logfire.initContainers" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := required "logfire.initContainers: serviceName is required" .serviceName -}}
 {{- $userInit := (index $ctx.Values $serviceName | default dict).initContainers -}}
 {{- $devInit := include "logfire.dev.waitForPostgres.initContainers" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
+{{- $absurdInit := "" -}}
+{{- if eq $serviceName "logfire-task-runner" -}}
+  {{- $absurdInit = include "logfire.absurdSchemaReady.initContainer" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
+{{- end -}}
 {{- $userHasCheckDbReady := dict "value" false -}}
+{{- $userHasAbsurdWait := dict "value" false -}}
 {{- range $userInit }}
   {{- if eq .name "check-db-ready" }}
     {{- $_ := set $userHasCheckDbReady "value" true -}}
   {{- end -}}
+  {{- if eq .name "wait-for-absurd-schema" }}
+    {{- $_ := set $userHasAbsurdWait "value" true -}}
+  {{- end -}}
 {{- end -}}
+{{- if $userHasAbsurdWait.value -}}
+  {{- $absurdInit = "" -}}
+{{- end -}}
+{{- $trustedCaInit := include "logfire.trustedCa.initContainer" (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
 {{- $includeDevInit := and $devInit (not $userHasCheckDbReady.value) -}}
-{{- if or $includeDevInit $userInit -}}
+{{- if or $trustedCaInit $includeDevInit $userInit $absurdInit -}}
 initContainers:
+{{- if $trustedCaInit }}
+{{ $trustedCaInit | nindent 2 }}
+{{- end }}
 {{- if $includeDevInit }}
 {{ $devInit | nindent 2 }}
+{{- end }}
+{{- if $absurdInit }}
+{{ $absurdInit | nindent 2 }}
 {{- end }}
 {{- with $userInit }}
 {{ toYaml . | nindent 2 }}

@@ -1,8 +1,9 @@
 {{- $serviceName := "logfire-backend-migrations" }}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "logfire.backendMigrations.name" . }}
+  name: {{ include "logfire.migrationJobName" (dict "ctx" . "name" "logfire-backend-migrations") }}
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
@@ -16,7 +17,7 @@ metadata:
     {{- include "logfire.hooksAnnotations" . | nindent 4 }}
 spec:
   backoffLimit: 5
-  activeDeadlineSeconds: 300
+  activeDeadlineSeconds: {{ dig "activeDeadlineSeconds" 3600 (.Values.migrations | default dict) }}
   template:
     metadata:
       annotations:
@@ -36,18 +37,20 @@ spec:
       restartPolicy: OnFailure
       {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $serviceName) | nindent 6}}
       {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" $serviceName) | nindent 6}}
-      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
+      {{- include "logfire.securityContext" (include "logfire.podSecurityContext" . | fromJson) | nindent 6 }}
       containers:
         - name: logfire-backend-migrations
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
-          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
           command:
             - "python"
-            - "src/packages/logfire-db/logfire_db/migrations/main.py"
+            - "-m"
+            - "logfire_db.migrations.main"
           env:
             - name: LOGFIRE_SEND_TO_LOGFIRE
               value: "false"
+            {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             - name: ON_PREM
               value: "true"
             - name: CRUD_MIGRATIONS_RESPECT_AUTO_RUN_FLAG
@@ -56,4 +59,8 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
-                  key: postgresDsn
+                  key: {{ include "logfire.postgresMigrationKey" (dict "ctx" . "key" "postgresDsn") }}
+          volumeMounts:
+            {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
+      volumes:
+        {{- include "logfire.tmpVolume" . | nindent 8 }}

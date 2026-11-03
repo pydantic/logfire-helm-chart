@@ -1,0 +1,184 @@
+{{- if .Values.dev.deployPostgres -}}
+{{- $devPostgres := include "logfire.devPostgres.values" . | fromJson -}}
+{{- $name := $devPostgres.fullnameOverride -}}
+{{- $persistence := $devPostgres.persistence -}}
+{{- $initdbScripts := $devPostgres.initdb.scripts -}}
+{{- $image := $devPostgres.image -}}
+{{- /* Keep PGDATA inside the mounted volume so a custom mount works with a read-only root filesystem. */ -}}
+{{- $dataDir := printf "%s/pgdata" (trimSuffix "/" $persistence.mountPath) -}}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-postgres
+type: Opaque
+stringData:
+  postgres-password: {{ $devPostgres.auth.postgresPassword | quote }}
+{{- if $initdbScripts }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-initdb
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-postgres
+data:
+  {{- toYaml $initdbScripts | nindent 2 }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-postgres
+spec:
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-postgres
+  ports:
+    - protocol: TCP
+      name: postgres
+      port: 5432
+      targetPort: postgres
+{{- if $persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-postgres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- include "logfire.storageClassName" (dict "root" . "values" $persistence) | nindent 2 }}
+  resources:
+    requests:
+      storage: {{ $persistence.size | quote }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: logfire-postgres
+spec:
+  replicas: 1
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "logfire.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: logfire-postgres
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: logfire-postgres
+      annotations:
+        checksum/postgres-initdb: {{ $initdbScripts | toYaml | sha256sum }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      {{- include "logfire.podScheduling" (dict "Values" .Values "serviceName" "devPostgres") | nindent 6 }}
+      {{- /* The official image writes as uid and gid 999, so a fresh volume needs `fsGroup: 999`. */}}
+      {{- $podSecurityContext := dict "fsGroup" 999 "fsGroupChangePolicy" "OnRootMismatch" }}
+      {{- $podSecurityContext = mergeOverwrite $podSecurityContext (include "logfire.podSecurityContext" . | fromJson) }}
+      {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy $devPostgres.podSecurityContext) }}
+      {{- include "logfire.securityContext" $podSecurityContext | nindent 6 }}
+      containers:
+        - name: postgres
+          image: {{ include "logfire.devPostgres.image" . }}
+          imagePullPolicy: {{ default .Values.image.pullPolicy $image.pullPolicy | quote }}
+          {{- $postgresSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" . "identity" "postgres" "serviceName" "devPostgres" "readOnlyRootFilesystem" true) | fromJson }}
+          {{- include "logfire.securityContext" $postgresSecurityContext | nindent 10 }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $name }}
+                  key: postgres-password
+            - name: PGDATA
+              value: {{ $dataDir | quote }}
+          startupProbe:
+            exec:
+              command:
+                - pg_isready
+                - -h
+                - 127.0.0.1
+                - -U
+                - postgres
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -h
+                - 127.0.0.1
+                - -U
+                - postgres
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -h
+                - 127.0.0.1
+                - -U
+                - postgres
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            {{- toYaml $devPostgres.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ $persistence.mountPath }}
+            {{- if $initdbScripts }}
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            {{- end }}
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          {{- if $persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ $name }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- if $initdbScripts }}
+        - name: initdb
+          configMap:
+            name: {{ $name }}-initdb
+        {{- end }}
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+{{- end }}

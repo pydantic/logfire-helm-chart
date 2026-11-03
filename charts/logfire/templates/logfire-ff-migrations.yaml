@@ -1,8 +1,10 @@
 {{- $serviceName := "logfire-ff-migrations" }}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
+{{- $podSecurityContext := include "logfire.fusionfirePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "logfire.ffMigrations.name" . }}
+  name: {{ include "logfire.migrationJobName" (dict "ctx" . "name" "logfire-ff-migrations") }}
   labels:
     {{- include "logfire.labels" . | nindent 4 }}
     {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
@@ -28,7 +30,7 @@ spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
-      {{- include "logfire.securityContext" .Values.podSecurityContext | nindent 6 }}
+      {{- include "logfire.securityContext" $podSecurityContext | nindent 6 }}
       serviceAccountName: {{ include "logfire.hookServiceAccountName" . }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -43,7 +45,7 @@ spec:
         - name: logfire-ff-migrations
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
-          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
           command:
             - "fusionfire"
             - "migrate"
@@ -52,7 +54,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
-                  key: postgresFFDsn
+                  key: {{ include "logfire.postgresMigrationKey" (dict "ctx" . "key" "postgresFFDsn") }}
             - name: FF_SEND_TO_LOGFIRE
               value: "false"
             - name: FF_FORCE_CONSOLE_LOGGING
@@ -61,3 +63,7 @@ spec:
               value: "full"
             - name: RUST_LOG
               value: "info"
+          volumeMounts:
+            {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
+      volumes:
+        {{- include "logfire.tmpVolume" . | nindent 8 }}

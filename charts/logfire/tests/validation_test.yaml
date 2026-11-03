@@ -1,0 +1,1137 @@
+suite: values validation contract
+# Bad values must fail the install with a clear message. Integration tests only
+# exercise valid values, so this suite is the only coverage the contract has.
+#
+# This is not every fail site in the chart: the validation helpers carry ~55
+# `fail` calls and only the cases below are pinned. When you add or change a
+# fail site in _helpers-validation.tpl or logfire-validate-config.yaml, add a
+# case here.
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: rejects extra exporters that replace the backend exporter
+    set:
+      otel_collector.extraExporters:
+        otlp_http:
+          endpoint: https://elsewhere.example.com
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraExporters cannot replace chart-owned component "otlp_http"'
+
+  - it: rejects extra processors that replace the memory limiter
+    set:
+      otel_collector.extraProcessors:
+        memory_limiter:
+          limit_mib: 1
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraProcessors cannot replace chart-owned component "memory_limiter"'
+
+  - it: rejects extra pipelines that replace backend metrics
+    set:
+      otel_collector.extraPipelines:
+        metrics:
+          exporters: [debug]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraPipelines cannot replace chart-owned component "metrics"'
+
+  - it: reserves the Prometheus pipeline even while disabled
+    set:
+      otel_collector.extraPipelines:
+        metrics/prometheus:
+          exporters: [debug]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraPipelines cannot replace chart-owned component "metrics/prometheus"'
+
+  - it: rejects an exporter list
+    set:
+      otel_collector.extraExporters: [googlecloud]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraExporters must be a map'
+
+  - it: reserves the collector self-metric pipeline
+    set:
+      otel_collector.extraPipelines:
+        metrics/self:
+          exporters: [debug]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraPipelines cannot replace chart-owned component "metrics/self"'
+
+  - it: reserves the collector self-metric identity processor
+    set:
+      otel_collector.extraProcessors:
+        resource/self:
+          attributes: []
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraProcessors cannot replace chart-owned component "resource/self"'
+
+  - it: preserves custom self-metric components when built-in forwarding is disabled
+    set:
+      otel_collector.selfMetrics.enabled: false
+      otel_collector.extraProcessors:
+        resource/self:
+          attributes: []
+      otel_collector.extraPipelines:
+        metrics/self:
+          receivers: [otlp]
+          processors: [resource/self]
+          exporters: [otlp_http]
+    templates:
+      - templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects a processor list
+    set:
+      otel_collector.extraProcessors: [resourcedetection]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraProcessors must be a map'
+
+  - it: rejects a pipeline list
+    set:
+      otel_collector.extraPipelines: [metrics/gcp]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'extraPipelines must be a map'
+
+  - it: existingSecret.enabled=true with empty name fails validation
+    set:
+      existingSecret:
+        enabled: true
+        name: ""
+    asserts:
+      - failedTemplate:
+          errorMessage: "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-encryption-key, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys."
+
+  - it: rejects empty template result in production
+    set:
+      objectStore:
+        uri: '{{ "" }}'
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
+
+  - it: rejects missing value template result in production
+    set:
+      objectStore:
+        uri: '{{ .Values.missingBucket | default "" }}'
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
+
+  - it: rejects whitespace template result in production
+    set:
+      objectStore:
+        uri: '{{ "   " }}'
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
+
+  - it: rejects whitespace literal in production
+    set:
+      objectStore:
+        uri: "   "
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
+
+  - it: rejects empty literal in production
+    set:
+      objectStore:
+        uri: ''
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead."
+
+  - it: defaults an empty template result to the in-cluster bucket with development RustFS
+    set:
+      dev:
+        deployRustfs: true
+      objectStore:
+        uri: '{{ "" }}'
+    templates:
+      - templates/logfire-validate-config.yaml
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_OBJECT_STORE_URI
+          value: s3://logfire
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-base-config
+        template: templates/logfire-ff-config.yaml
+
+  - it: rejects an objectStore.volumes entry named tmp
+    set:
+      objectStore:
+        volumes:
+          - name: tmp
+            emptyDir: {}
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumes[0].name 'tmp' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, scratch-data, ingest-data, logfire-data."
+
+  - it: rejects an objectStore.volumes entry named logfire-data
+    set:
+      objectStore:
+        volumes:
+          - name: logfire-data
+            emptyDir: {}
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumes[0].name 'logfire-data' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, scratch-data, ingest-data, logfire-data."
+
+  - it: rejects an objectStore.volumeMounts entry at /tmp
+    set:
+      objectStore:
+        volumeMounts:
+          - name: credentials
+            mountPath: /tmp
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumeMounts[0].mountPath '/tmp' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /scratch, /fusionfire/ingest-data, /var/lib/logfire."
+
+  - it: rejects an objectStore.volumeMounts entry at /var/lib/logfire
+    set:
+      objectStore:
+        volumeMounts:
+          - name: credentials
+            mountPath: /var/lib/logfire
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumeMounts[0].mountPath '/var/lib/logfire' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /scratch, /fusionfire/ingest-data, /var/lib/logfire."
+
+  - it: accepts objectStore volumes and mounts outside the reserved names and paths
+    set:
+      objectStore:
+        volumes:
+          - name: credentials
+            secret:
+              secretName: object-store-credentials
+        volumeMounts:
+          - name: credentials
+            mountPath: /etc/object-store
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an objectStore.volumes entry that collides with an in-cluster TLS volume
+    set:
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+      objectStore:
+        volumes:
+          - name: logfire-incluster-tls
+            emptyDir: {}
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumes[0].name 'logfire-incluster-tls' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: tmp, scratch-data, ingest-data, logfire-data, logfire-incluster-tls, logfire-incluster-ca-bundle."
+
+  - it: rejects an objectStore.volumeMounts entry that collides with an in-cluster TLS mount
+    set:
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+      objectStore:
+        volumeMounts:
+          - name: credentials
+            mountPath: /etc/logfire/incluster-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "objectStore.volumeMounts[0].mountPath '/etc/logfire/incluster-ca' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: /tmp, /scratch, /fusionfire/ingest-data, /var/lib/logfire, /etc/tls, /etc/logfire/incluster-ca."
+
+  - it: accepts in-cluster TLS volume names when in-cluster TLS is disabled
+    set:
+      objectStore:
+        volumes:
+          - name: logfire-incluster-tls
+            emptyDir: {}
+        volumeMounts:
+          - name: logfire-incluster-tls
+            mountPath: /etc/tls
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: rejects an objectStore.volumeMounts entry that collides with the trusted CA mount
+    set:
+      smtp:
+        caBundle:
+          existingConfigMap:
+            name: logfire-smtp-ca
+      objectStore:
+        volumeMounts:
+          - name: credentials
+            mountPath: /etc/logfire/trusted-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "objectStore.volumeMounts\\[0\\].mountPath '/etc/logfire/trusted-ca' is reserved by the chart"
+
+  - it: accepts the trusted CA mount path while no CA bundle is configured
+    set:
+      objectStore:
+        volumeMounts:
+          - name: credentials
+            mountPath: /etc/logfire/trusted-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: unknown preset name fails the install
+    set:
+      sizingPreset: not-a-real-preset
+    asserts:
+      - failedTemplate:
+          errorMessage: 'Unknown sizingPreset "not-a-real-preset". Valid presets: dev, large, small, standard, tiny'
+
+  - it: rejects scratch volume quantities below 1Mi
+    set:
+      logfire-ff-compaction-worker:
+        scratchVolume:
+          storage: 512Ki
+    templates:
+      - templates/logfire-ff-compaction-worker.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'scratchVolume.storage "512Ki" is below the 1Mi minimum'
+
+  - it: requires a multi-region location for Gemini 3.5
+    set:
+      ai:
+        model: google-cloud:gemini-3.5-flash
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "ai.vertexAi.multiRegionLocation is required when ai.model contains Google Cloud model 'google-cloud:gemini-3.5-flash'. Set it to 'us' or 'eu'."
+
+  - it: requires a region for a regional fallback
+    set:
+      ai:
+        reasoningModel: "google-cloud:gemini-3.5-flash, google-cloud:gemini-2.5-flash"
+        vertexAi:
+          multiRegionLocation: eu
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorMessage: "ai.vertexAi.region is required when ai.reasoningModel contains regional Google Cloud model 'google-cloud:gemini-2.5-flash'."
+
+  - it: accepts a mixed fallback chain when both locations are configured
+    set:
+      ai:
+        model: "google-cloud:gemini-3.5-flash,google-cloud:gemini-2.5-flash"
+        vertexAi:
+          region: europe-west4
+          multiRegionLocation: eu
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  # --- AI provider config ---
+  - it: rejects a multi-region location outside us/eu
+    set:
+      ai:
+        vertexAi:
+          multiRegionLocation: global
+    asserts:
+      - failedTemplate:
+          errorPattern: "multiRegionLocation must be exactly 'us' or 'eu'"
+
+  - it: requires an OpenAI API key for OpenAI models
+    set:
+      ai:
+        model: openai:gpt-4o
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.openAi\.apiKey is required'
+
+  - it: requires an OpenAI API key for a secondary fallback
+    set:
+      ai:
+        chatModel: "google-cloud:gemini-3.5-flash, openai-chat:gpt-4o"
+        vertexAi:
+          multiRegionLocation: eu
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.openAi\.apiKey is required when ai\.chatModel uses OpenAI model'
+
+  - it: requires the Azure endpoint for a secondary fallback
+    set:
+      ai:
+        model: "openai:gpt-4o, azure:gpt-4o"
+        openAi:
+          apiKey: test
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.azureOpenAi\.endpoint is required'
+
+  - it: requires the Azure API key for a secondary fallback
+    set:
+      ai:
+        model: "openai:gpt-4o, azure:gpt-4o"
+        openAi:
+          apiKey: test
+        azureOpenAi:
+          endpoint: https://example.openai.azure.com
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.azureOpenAi\.apiKey is required'
+
+  - it: requires a region for a secondary Google Vertex fallback
+    set:
+      ai:
+        reasoningModel: "openai:gpt-4o, google-vertex:gemini-2.5-flash"
+        openAi:
+          apiKey: test
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.vertexAi\.region is required'
+
+  - it: requires a project id for a secondary Anthropic Vertex fallback
+    set:
+      ai:
+        llmJudgeModel: "openai:gpt-4o, anthropic-vertex:claude-sonnet-4"
+        openAi:
+          apiKey: test
+        vertexAi:
+          region: europe-west4
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.vertexAi\.anthropicProjectId is required'
+
+  - it: accepts a cross-provider fallback chain with provider configuration
+    set:
+      ai:
+        model: "openai:gpt-4o, azure:gpt-4o, google-vertex:gemini-2.5-flash, anthropic-vertex:claude-sonnet-4"
+        openAi:
+          apiKey: test
+        azureOpenAi:
+          endpoint: https://example.openai.azure.com
+          apiKey: test
+        vertexAi:
+          region: europe-west4
+          anthropicProjectId: test-project
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: requires the Azure OpenAI endpoint
+    set:
+      ai:
+        model: azure:gpt-4o
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.azureOpenAi\.endpoint is required'
+
+  - it: requires the Azure OpenAI API key
+    set:
+      ai:
+        model: azure:gpt-4o
+        azureOpenAi:
+          endpoint: https://example.openai.azure.com
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.azureOpenAi\.apiKey is required'
+
+  - it: requires a region for Google Vertex AI models
+    set:
+      ai:
+        model: google-vertex:gemini-2.5-flash
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.vertexAi\.region is required'
+
+  - it: requires a project id for Anthropic Vertex models
+    set:
+      ai:
+        model: anthropic-vertex:claude-sonnet-4
+        vertexAi:
+          region: europe-west4
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ai\.vertexAi\.anthropicProjectId is required'
+
+  # --- public hostnames ---
+  - it: requires at least one public hostname
+    set:
+      ingress:
+        hostnames: []
+      gateway:
+        hostnames: []
+    asserts:
+      - failedTemplate:
+          errorPattern: 'At least one hostname is required for Logfire'
+
+  # --- postgres and dex storage ---
+  - it: requires postgresSecret.name when postgresSecret is enabled
+    set:
+      dev:
+        deployPostgres: false
+      postgresSecret:
+        enabled: true
+        name: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'postgresSecret\.name is required'
+
+  - it: requires postgresDsn without dev postgres or a secret
+    set:
+      dev:
+        deployPostgres: false
+      postgresDsn: ""
+      postgresFFDsn: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'postgresDsn is required'
+
+  - it: requires postgresFFDsn without dev postgres or a secret
+    set:
+      dev:
+        deployPostgres: false
+      postgresDsn: postgres://crud
+      postgresFFDsn: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'postgresFFDsn is required'
+
+  - it: requires the Dex postgres host when Dex stores state in postgres
+    set:
+      dev:
+        deployPostgres: false
+      postgresDsn: postgres://crud
+      postgresFFDsn: postgres://ff
+      logfire-dex:
+        config:
+          storage:
+            type: postgres
+            config:
+              host: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'storage\.config\.host is required'
+
+  # --- secrets ---
+  - it: requires adminSecret.name when adminSecret is enabled
+    set:
+      adminSecret:
+        enabled: true
+        name: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: 'adminSecret\.name is required'
+
+  - it: requires existingGatewaySecret.name when enabled
+    set:
+      logfire-ai-gateway:
+        enabled: true
+      existingGatewaySecret:
+        enabled: true
+        name: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'existingGatewaySecret\.name is required'
+
+  # --- scratch volumes ---
+  - it: requires scratchVolume.storage when a scratch volume is configured
+    set:
+      logfire-ff-query-api:
+        scratchVolume:
+          storageClassName: standard
+    asserts:
+      - failedTemplate:
+          errorPattern: 'scratchVolume\.storage is required'
+
+  # --- removed values blocks ---
+  - it: names the upgrade flag when a --reuse-values upgrade lacks the devPostgres block
+    set:
+      dev.deployPostgres: true
+      devPostgres: null
+    asserts:
+      - failedTemplate:
+          errorPattern: 'dev\.deployPostgres needs devPostgres\.fullnameOverride, a chart 0\.15\.0 default'
+
+  - it: names the move when the v1 byte cache values block is still set
+    set:
+      logfire-ff-cache-byte:
+        clientSideRouting:
+          zoneAware: true
+    asserts:
+      # The key is ignored otherwise, so zone routing would silently turn off.
+      - failedTemplate:
+          errorPattern: 'logfire-ff-cache-byte is no longer a values block'
+
+  - it: names the move when the removed dev.deployMinio alias is still set
+    set:
+      dev.deployMinio: true
+    asserts:
+      - failedTemplate:
+          errorPattern: 'dev\.deployMinio was removed in chart 0\.15\.0\. Set dev\.deployRustfs=true'
+
+  - it: names the move when the removed serviceAccountName is set to a custom account
+    set:
+      serviceAccountName: workload-identity
+    asserts:
+      - failedTemplate:
+          errorPattern: 'serviceAccountName was removed in chart 0\.15\.0\. Set serviceAccount\.name'
+
+  - it: accepts the serviceAccountName default that a 0.14 --reuse-values upgrade carries
+    set:
+      serviceAccountName: default
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - notFailedTemplate: {}
+
+  - it: names the move when an HPA metric is still at the top level of autoscaling
+    set:
+      logfire-backend.autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        cpuAverage: 60
+    asserts:
+      - failedTemplate:
+          errorPattern: 'logfire-backend\.autoscaling\.cpuAverage was removed in chart 0\.15\.0\. Move it to logfire-backend\.autoscaling\.hpa\.cpuAverage'
+
+  # --- frontend nginx ---
+  - it: rejects a frontend nginx worker count that is neither auto nor positive
+    set:
+      logfire-frontend-service.nginx.workerProcesses: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: 'workerProcesses must be auto or a positive integer'
+
+  # --- autoscaling ---
+  - it: rejects enabling both HPA and KEDA
+    set:
+      logfire-ff-ingest:
+        autoscaling:
+          hpa:
+            enabled: true
+            cpuAverage: 50
+          keda:
+            enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Both HPA and KEDA are enabled'
+
+  - it: rejects an HPA without metrics
+    set:
+      sizingPreset: ""
+      logfire-ff-ingest:
+        autoscaling:
+          hpa:
+            enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: 'no metrics are configured'
+
+  - it: rejects minReplicas above maxReplicas
+    set:
+      logfire-ff-ingest:
+        autoscaling:
+          minReplicas: 5
+          maxReplicas: 2
+    asserts:
+      - failedTemplate:
+          errorPattern: 'cannot be greater than autoscaling\.maxReplicas'
+
+  # --- admin email ---
+  - it: requires adminEmail
+    set:
+      adminEmail: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: 'adminEmail is required'
+
+  - it: rejects an invalid adminEmail
+    set:
+      adminEmail: not-an-email
+    asserts:
+      - failedTemplate:
+          errorPattern: 'does not appear to be a valid email address'
+
+  # --- in-cluster TLS ---
+  - it: rejects an unknown in-cluster TLS cert mode
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: mystery
+    asserts:
+      - failedTemplate:
+          errorPattern: 'certs\.mode must be one of'
+
+  - it: rejects configuring both CA bundle sources
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: existingSecrets
+        caBundle:
+          existingConfigMap:
+            name: ca-map
+          existingSecret:
+            name: ca-secret
+    asserts:
+      - failedTemplate:
+          errorPattern: 'specify only one'
+
+  - it: rejects an unknown cert-manager issuer kind
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+          certManager:
+            issuerRef:
+              kind: Weird
+              name: my-issuer
+        caBundle:
+          existingConfigMap:
+            name: ca-map
+    asserts:
+      - failedTemplate:
+          errorPattern: 'issuerRef\.kind must be'
+
+  - it: rejects an empty issuer name with a non-namespaced issuer kind
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+          certManager:
+            issuerRef:
+              kind: ClusterIssuer
+        caBundle:
+          existingConfigMap:
+            name: ca-map
+    asserts:
+      - failedTemplate:
+          errorPattern: 'chart-managed \*namespaced\* Issuer'
+
+  - it: rejects cert-manager mode without a CA bundle or chart-managed issuer
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+          certManager:
+            issuerRef:
+              kind: Issuer
+              name: my-issuer
+        caBundle:
+          existingConfigMap:
+            name: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: 'no CA bundle was provided'
+
+  - it: requires cert-manager CRDs for certManager mode
+    set:
+      dev:
+        deployCertManager: false
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+          certManager:
+            issuerRef:
+              kind: Issuer
+              name: my-issuer
+        caBundle:
+          existingConfigMap:
+            name: ca-map
+    asserts:
+      - failedTemplate:
+          errorPattern: 'requires cert-manager CRDs'
+
+  - it: rejects existingSecrets mode without a CA bundle
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: existingSecrets
+        caBundle:
+          existingConfigMap:
+            name: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: 'no CA bundle was provided'
+
+  # --- redis ---
+  - it: requires redisDsn when the bundled redis is disabled
+    set:
+      logfire-redis:
+        enabled: false
+      redisDsn: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'redisDsn is required'
+
+  - it: requires redisSecret.name when the external Redis Secret is enabled
+    set:
+      redisSecret:
+        enabled: true
+        name: ""
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: 'redisSecret\.name is required'
+
+  # --- gateway api ---
+  - it: requires gateway.gatewayClassName when the chart creates the Gateway
+    set:
+      ingress:
+        enabled: false
+      gateway:
+        enabled: true
+        create: true
+    asserts:
+      - failedTemplate:
+          errorPattern: 'gateway\.gatewayClassName is required'
+
+  - it: requires gateway.name when attaching to an existing Gateway
+    set:
+      ingress:
+        enabled: false
+      gateway:
+        enabled: true
+        create: false
+    asserts:
+      - failedTemplate:
+          errorPattern: 'gateway\.name is required'
+
+  - it: rejects enabling ingress and gateway together
+    set:
+      ingress:
+        enabled: true
+      gateway:
+        enabled: true
+        create: true
+        gatewayClassName: istio
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Enable only one of Ingress or Gateway API'
+
+  # --- resource quantities ---
+  - it: rejects an invalid CPU quantity
+    set:
+      logfire-ff-ingest:
+        resources:
+          cpu: not-a-quantity
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Invalid CPU format'
+
+  - it: rejects a CPU quantity below 1m
+    set:
+      logfire-ff-ingest:
+        resources:
+          cpu: 0.5m
+    asserts:
+      - failedTemplate:
+          errorPattern: 'effective millicores must be >= 1m'
+
+  - it: rejects an invalid memory quantity
+    set:
+      logfire-ff-ingest:
+        resources:
+          memory: not-a-quantity
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Invalid quantity format'
+
+  - it: rejects the removed ephemeralStorageRequest key
+    set:
+      logfire-ff-ingest:
+        resources:
+          ephemeralStorageRequest: 1Gi
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ephemeralStorageRequest is not supported'
+
+  # --- pdb ---
+  - it: rejects both pdb minAvailable and maxUnavailable
+    set:
+      logfire-backend:
+        pdb:
+          minAvailable: 1
+          maxUnavailable: 1
+    asserts:
+      - failedTemplate:
+          errorPattern: 'mutually exclusive'
+
+  # --- group organization mapping ---
+  - it: rejects a group mapping without group_id
+    set:
+      groupOrganizationMapping:
+        - organization_roles:
+            - organization_name: logfire-meta
+              role: admin
+    asserts:
+      - failedTemplate:
+          errorPattern: 'group_id. is required'
+
+  - it: rejects a group mapping without organization_roles
+    set:
+      groupOrganizationMapping:
+        - group_id: "38aad352-dcfb-4a08-946a-469abe30cdc4"
+    asserts:
+      - failedTemplate:
+          errorPattern: 'organization_roles. is required'
+
+  - it: rejects an organization role without a role
+    set:
+      groupOrganizationMapping:
+        - group_id: "38aad352-dcfb-4a08-946a-469abe30cdc4"
+          organization_roles:
+            - organization_name: logfire-meta
+    asserts:
+      - failedTemplate:
+          errorPattern: 'role. is required for organization'
+
+  - it: rejects a project role without a role
+    set:
+      groupOrganizationMapping:
+        - group_id: "38aad352-dcfb-4a08-946a-469abe30cdc4"
+          organization_roles:
+            - organization_name: logfire-meta
+              role: admin
+              project_roles:
+                - project_name: some-project
+    asserts:
+      - failedTemplate:
+          errorPattern: 'project_roles\[0\]: .role. is required'
+
+  # --- fusionfire query limits ---
+  - it: rejects a non-positive maxQueryCostPerPod
+    set:
+      logfire-ff-query-api:
+        maxQueryCostPerPod: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: 'maxQueryCostPerPod must be a positive integer'
+
+  # --- SMTP sender contract ---
+  # A self-hosted install sends through its own SMTP server, so mail as pydantic.dev would fail
+  # DMARC at the receiver. The platform refuses to start without a sender, and this check stops
+  # the install or upgrade before any workload rolls out.
+  - it: an SMTP server without a sender fails before anything rolls out
+    set:
+      smtp:
+        host: smtp.example.com
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.fromAddress is required when smtp.host is set"
+
+  # The platform refuses a pydantic.dev sender on a self-hosted install. This check says so
+  # before any workload rolls out.
+  - it: a pydantic.dev sender fails before anything rolls out
+    set:
+      smtp:
+        host: smtp.example.com
+        fromAddress: No-Reply@Alerts.Pydantic.Dev
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.fromAddress must not be a pydantic.dev address"
+
+  - it: an SMTP CA bundle from both a ConfigMap and a Secret fails
+    set:
+      smtp:
+        host: smtp.example.com
+        fromAddress: logfire@example.com
+        caBundle:
+          existingConfigMap:
+            name: smtp-ca
+          existingSecret:
+            name: smtp-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.caBundle: specify only one of existingConfigMap.name or existingSecret.name"
+
+  # A bundle with verification off would be silently ignored, so the install fails instead.
+  - it: an SMTP CA bundle with certificate verification off fails
+    set:
+      smtp:
+        host: smtp.example.com
+        fromAddress: logfire@example.com
+        validate_certs: false
+        caBundle:
+          existingConfigMap:
+            name: smtp-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "smtp.caBundle is set but smtp.validate_certs is false"
+
+  - it: a trusted CA bundle from both a ConfigMap and a Secret fails
+    set:
+      trustedCaBundle:
+        existingConfigMap:
+          name: private-ca
+        existingSecret:
+          name: private-ca
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: "trustedCaBundle: specify only one of existingConfigMap.name or existingSecret.name"
+
+  # --- otel collector queue and storage budgets ---
+  - it: rejects a self-metrics port equal to the Prometheus exporter port
+    set:
+      otel_collector.prometheus.enabled: true
+      otel_collector.prometheus.port: 9090
+      otel_collector.selfMetricsPort: 9090
+    asserts:
+      - failedTemplate:
+          errorPattern: 'selfMetricsPort.*must differ from otel_collector.prometheus.port'
+
+  - it: rejects an ephemeral-storage limit below queueStorage.sizeLimit by a fraction of an MiB
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.queueStorage.maxSizeBytes: 1048576
+      otel_collector.queueStorage.sizeLimit: 1536.9Mi
+      otel_collector.queueStorage.ephemeralStorageLimit: 1536.1Mi
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit'
+
+  - it: rejects a volume smaller than the database and compaction budget
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.queueStorage.sizeLimit: 1Gi
+    asserts:
+      - failedTemplate:
+          errorPattern: 'must allow at least 6x maxSizeBytes'
+
+  - it: rejects a container disk limit smaller than the queue volume
+    set:
+      otel_collector.queueStorage.enabled: true
+      logfire-otel-collector.resources.limits.ephemeral-storage: 1Gi
+    asserts:
+      - failedTemplate:
+          errorPattern: 'ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit'
+
+  - it: rejects an enlarged byte queue without database headroom
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.exporter.sending_queue.queue_size: 268435456
+    asserts:
+      - failedTemplate:
+          errorPattern: 'must allow at least 4x the effective byte queue_size'
+
+  - it: uses the effective preset queue for database validation
+    set:
+      sizingPreset: standard
+      otel_collector.queueStorage.enabled: true
+      otel_collector.queueStorage.maxSizeBytes: 268435456
+    asserts:
+      - failedTemplate:
+          errorPattern: 'must allow at least 4x the effective byte queue_size'
+
+  - it: accepts an enlarged queue when all disk budgets are raised
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.queueStorage.maxSizeBytes: 1073741824
+      otel_collector.queueStorage.sizeLimit: 8Gi
+      otel_collector.queueStorage.ephemeralStorageLimit: 9Gi
+      otel_collector.exporter.sending_queue.queue_size: 268435456
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'queue_size: 268435456'
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'max_size: 1073741824'
+
+  - it: does not compare item counts with byte database limits
+    set:
+      otel_collector.queueStorage.enabled: true
+      otel_collector.exporter.sending_queue.sizer: items
+      otel_collector.exporter.sending_queue.queue_size: 268435456
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'sizer: items'
+
+  - it: accepts signed and decimal memory quantities
+    set:
+      otel_collector.prometheus.enabled: true
+      logfire-otel-collector.resources.limits.memory: "+1Gi"
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'limit_percentage: 75'

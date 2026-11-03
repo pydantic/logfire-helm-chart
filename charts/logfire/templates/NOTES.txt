@@ -26,6 +26,7 @@ A PostgreSQL database has been deployed as part of this installation.
 You are using an external PostgreSQL database.
 {{- end }}
 
+
 When configuring authentication with an external provider, set the redirect URI to:
 - {{ printf "%s/auth-api/callback" (include "logfire.url" .) }}
 
@@ -33,5 +34,12 @@ An admin account was created with access to Logfire's own internal observability
 The email address used is {{ .Values.adminEmail }}.
 You'll need to reset the password to log in.
 This admin account has no special access over other accounts or new organizations / projects you might create.
+
+{{- if and (include "logfire.inClusterTls.enabled" . | eq "true") (include "logfire.inClusterTls.certs.mode" . | eq "existingSecrets") }}
+bcache clients connect directly to the logfire-ff-bcache-internal
+headless service: ensure the {{ include "logfire.inClusterTls.secretName" (dict "ctx" . "serviceName" "logfire-ff-bcache") }} TLS secret
+includes the logfire-ff-bcache-internal DNS names, or bcache access
+fails TLS verification. See the In-cluster HTTPS docs.
+{{- end }}
 
 For more information and documentation, visit: https://logfire.pydantic.dev/docs/

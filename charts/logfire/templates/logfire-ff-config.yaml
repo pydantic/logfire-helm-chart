@@ -1,3 +1,5 @@
+{{- $maintenanceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-maintenance-worker") | fromJson -}}
+{{- $materializedViews := .Values.fusionfireMaterializedViews | default dict -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,15 +11,16 @@ data:
   RUST_BACKTRACE: "full"
   RUST_LOG: "info"
   FF_SEND_TO_LOGFIRE: "true"
-  FF_FORCE_CONSOLE_LOGGING: "true"
+  FF_FORCE_CONSOLE_LOGGING: {{ .Values.fusionfireForceConsoleLogging | quote }}
+  FRONTEND_HOST: {{ include "logfire.url" . | quote }}
+  FF_MV_INITIAL_BACKFILL_WINDOW: {{ dig "initialBackfillWindow" "1d" $materializedViews | quote }}
+  FF_MV_MIN_SOURCE_BYTES: {{ dig "minSourceBytes" "5gb" $materializedViews | quote }}
+  FF_DERIVED_MV_MEMBERS: {{ dig "derivedMembers" false $materializedViews | toString | quote }}
+  FF_DERIVED_MV_BASE_READS: {{ dig "derivedBaseReads" false $materializedViews | toString | quote }}
   FF_COLLECT_STATISTICS_FROM_ZONE_MAP_INDEXES: "false"
-  FF_CACHE_OBJECT_STORE_URI: "{{ include "logfire.scheme" . }}://logfire-ff-cache-byte:{{ include "logfire.port" (dict "port" 9001 "root" .) }}"
-  FF_SHARED_REDIS_DSN: {{ .Values.redisDsn }}
-  FF_TOKEN_REDIS_DSN: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "tokenRedis") }}
   FF_TOKEN_REDIS_PREFIX: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "tokenRedis") | quote }}
-  FF_USAGE_REDIS_DSN: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "usageRedis") }}
   FF_USAGE_REDIS_PREFIX: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "usageRedis") | quote }}
-  FF_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}
+  FF_OBJECT_STORE_URI: {{ include "logfire.objectStoreUri" . | quote }}
   FF_PG_TRANSACTION_TIMEOUT: "30s"
 {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
   FF_TLS_MODE: "allow"
@@ -39,9 +42,11 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-ff-config
 data:
-  FF_BACKEND_SERVICE_URL: "{{ include "logfire.scheme" . }}://logfire-backend:{{ include "logfire.port" (dict "port" 8000 "root" .) }}"
+  FF_BACKEND_SERVICE_URL: "{{ include "logfire.scheme" . }}://logfire-backend-auth:{{ include "logfire.port" (dict "port" 8000 "root" .) }}"
   FF_DISTRIBUTED_CHANCE: "0"
   FF_RETRY_FAILED_DISTRIBUTED_QUERIES: "false"
+  FF_LIVE_TAIL_CREATED_AT_STABILITY_WINDOW: "120s"
+  FF_INGEST_MAX_TIME_SKEW: "120s"
   FF_EXTERNAL_TABLES_PG_ENABLED_TABLES: "logfire.annotations,logfire.experiments,logfire.datasets,logfire.dataset_cases,logfire.alerts_ext,logfire.alert_runs_ext,logfire.alert_issues_ext,logfire.filter_alert_issue_hits_ext,logfire.saved_searches_ext"
 
 ---
@@ -68,10 +73,9 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-ff-config
 data:
-  FF_CACHE_OBJECT_STORE_HTTP_HEADERS: x-ff-no-warm-cache=1
   FF_COMPACTION_LOOP_BACKOFF_DELAY: "1s"
-  {{- with (include "logfire.ffCompactionTiersValue" .) }}
-  FF_COMPACTION_TIERS: {{ . | squote }}
+  {{- with (get $maintenanceValues "compactionTiers") }}
+  FF_COMPACTION_TIERS: {{ . | toJson | squote }}
   {{- end }}
   FF_MAX_COMPACTION_JOB_SIZE_BYTES: {{ include "logfire.ffMaxCompactionJobSizeBytes" . | quote }}
   FF_INGEST_MAX_TIME_SKEW: "120s"
@@ -86,9 +90,8 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: logfire-ff-config
 data:
-  FF_BACKEND_SERVICE_URL: "{{ include "logfire.scheme" . }}://logfire-backend:{{ include "logfire.port" (dict "port" 8000 "root" .) }}"
-  FF_REDIS_TAIL_DSN: {{ .Values.redisDsn }}
-  FF_FAILOVER_OBJECT_STORE_URI: {{ .Values.objectStore.uri }}/_ingest_failover
+  FF_BACKEND_SERVICE_URL: "{{ include "logfire.scheme" . }}://logfire-backend-auth:{{ include "logfire.port" (dict "port" 8000 "root" .) }}"
+  FF_FAILOVER_OBJECT_STORE_URI: {{ printf "%s/_ingest_failover" (include "logfire.objectStoreUri" .) | quote }}
   FF_INGEST_MAX_TIME_SKEW: "120s"
   FF_INGEST_MAX_FUTURE_TIME_DRIFT: "1h"
   FF_INGEST_MAX_PAST_TIME_DRIFT: "24h"

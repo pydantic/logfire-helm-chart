@@ -12,12 +12,16 @@ ingress:
   - logfire.example.com
   maildevHostname: maildev.example.com
 
+# Exercise HTTPS public-URL rendering while the Kind ingress itself remains HTTP.
+gateway:
+  tls: true
+
 objectStore:
   uri: s3://logfire
   env:
-    AWS_ACCESS_KEY_ID: logfire-minio
-    AWS_SECRET_ACCESS_KEY: logfire-minio
-    AWS_ENDPOINT: http://logfire-minio:9000
+    AWS_ACCESS_KEY_ID: logfire-rustfs
+    AWS_SECRET_ACCESS_KEY: logfire-rustfs
+    AWS_ENDPOINT: http://logfire-rustfs:9000
     AWS_ALLOW_HTTP: "true"
 
 ai:
@@ -27,7 +31,7 @@ ai:
 
 dev:
   deployPostgres: true
-  deployMinio: true
+  deployRustfs: true
   deployMaildev: true
 
 postgresSecret:
@@ -64,6 +68,14 @@ logfire-backend:
   pdb:
     minUnavailable: 1
 
+logfire-ff-query-api:
+  replicas: 2
+  autoscaling:
+    hpa:
+      enabled: false
+    keda:
+      enabled: false
+
 logfire-ff-maintenance-worker:
   scratchVolume:
     storageClassName: standard
@@ -72,13 +84,19 @@ logfire-ff-ingest:
   volumeClaimTemplates:
     storageClassName: standard
     storage: "1Gi"
+  # Turn on the opt-in ingest endpoints so the integration suite can prove the
+  # chart routes them. A list replaces the default env, so keep its RUST_LOG.
+  env:
+    - name: RUST_LOG
+      value: warn,otel::tracing=info
+    - name: FF_ENABLE_PROFILES_INGEST
+      value: "true"
 
-logfire-ff-cache-byte:
-  autoscaling:
-    minReplicas: 1
+logfire-ff-bcache:
+  replicas: 1
   pdb:
     minAvailable: 0
-  scratchVolume:
+  disk:
     storageClassName: standard
     storage: "1Gi"
 
@@ -89,11 +107,14 @@ logfire-ff-compaction-worker:
 logfire-ai-gateway:
   enabled: true
 
-postgresql:
-  primary:
-    persistence:
-      size: 1Gi
-
-minio:
+devPostgres:
   persistence:
-    enabled: false
+    size: 1Gi
+
+# Keep object storage across pod restarts, so an upgrade that rolls RustFS keeps the data
+# that tests wrote before it.
+rustfs:
+  persistence:
+    enabled: true
+    storageClassName: standard
+    size: 2Gi

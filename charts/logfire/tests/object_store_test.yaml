@@ -1,0 +1,182 @@
+suite: Python object store wiring
+# Contract with the platform images: the backend and the worker select their session-replay and
+# visual-test blob store from these env keys, and the deployment's provider settings and
+# credential volumes reach the same pods. A rename here breaks self-hosted replay storage with no
+# other symptom, and the CI install exercises the round trip through the in-cluster store.
+release:
+  name: lf
+  namespace: default
+templates:
+  - templates/logfire-backend.yaml
+  - templates/logfire-worker.yaml
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://logfire/replays
+  dev:
+    deployPostgres: true
+tests:
+  - it: derives the replay and visual-test URIs under the configured bucket
+    set:
+      objectStore:
+        env:
+          AWS_ENDPOINT: http://logfire-rustfs:9000
+          AWS_ACCESS_KEY_ID: logfire-rustfs
+          AWS_SECRET_ACCESS_KEY: logfire-rustfs
+          AWS_ALLOW_HTTP: "true"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SESSION_REPLAY_OBJECT_STORE_URI
+            value: s3://logfire/replays/session-replays
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: VISUAL_TESTS_OBJECT_STORE_URI
+            value: s3://logfire/replays/visual-tests
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ENDPOINT
+            value: http://logfire-rustfs:9000
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ACCESS_KEY_ID
+            value: logfire-rustfs
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: fills the provider settings from the in-cluster store
+    set:
+      objectStore:
+        uri: ""
+      dev:
+        deployRustfs: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SESSION_REPLAY_OBJECT_STORE_URI
+            value: s3://logfire/session-replays
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_ENDPOINT
+            value: http://logfire-rustfs:9000
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AWS_SECRET_ACCESS_KEY
+            value: logfire-rustfs
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: mounts credentials and passes the Azure settings
+    set:
+      objectStore:
+        # A trailing slash must not double up in the derived prefix.
+        uri: az://logfirefiles/
+        env:
+          AZURE_STORAGE_ACCOUNT_NAME: logfirefiles
+          AZURE_STORAGE_ACCOUNT_KEY:
+            valueFrom:
+              secretKeyRef:
+                name: azure-account-key
+                key: account-key
+        volumes:
+          - name: object-store-credentials
+            secret:
+              secretName: azure-account-key
+        volumeMounts:
+          - name: object-store-credentials
+            mountPath: /etc/azure
+            readOnly: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SESSION_REPLAY_OBJECT_STORE_URI
+            value: az://logfirefiles/session-replays
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AZURE_STORAGE_ACCOUNT_NAME
+            value: logfirefiles
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: object-store-credentials
+            mountPath: /etc/azure
+            readOnly: true
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: object-store-credentials
+            secret:
+              secretName: azure-account-key
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: puts one feature in its own bucket and keeps the other derived
+    set:
+      objectStore:
+        sessionReplayUri: 's3://{{ .Release.Name }}-replays'
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SESSION_REPLAY_OBJECT_STORE_URI
+            value: s3://lf-replays
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: VISUAL_TESTS_OBJECT_STORE_URI
+            value: s3://logfire/replays/visual-tests
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment

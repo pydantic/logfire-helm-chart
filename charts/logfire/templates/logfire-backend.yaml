@@ -1,4 +1,31 @@
 {{- $serviceName := "logfire-backend" }}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
+{{- $oauthEnabled := or (include "logfire.effective_tls" . | eq "true") (eq (include "logfire.primary_hostname" .) "localhost") }}
+{{- $gatewayStaticOauthEnabled := and
+  (not (include "logfire.effective_tls" . | eq "true"))
+  (eq (include "logfire.primary_hostname" .) "localhost")
+-}}
+{{- $oauthClients := list }}
+{{- if $oauthEnabled }}
+  {{- $oauthClients = append $oauthClients (dict
+    "client_id" "logfire-mcp"
+    "client_secret" "$(MCP_OAUTH_CLIENT_SECRET)"
+    "client_name" "Logfire Remote MCP Server"
+    "redirect_uris" (list (printf "%s/mcp/oauth/callback" (include "logfire.url" .)))
+    "allowed_scopes" (list "project:read" "project:write" "project:write_token" "project:read_dashboard" "project:write_dashboard" "project:read_alert" "project:write_alert" "project:read_variables" "project:write_variables" "organization:create_project" "organization:read_channel" "organization:write_channel")
+  ) }}
+  {{- if and $gatewayStaticOauthEnabled (index .Values "logfire-ai-gateway" "enabled") }}
+    {{- $oauthClients = append $oauthClients (dict
+      "client_id" (printf "%s/clients/logfire-gateway.json" (include "logfire.url" .))
+      "client_name" "Logfire Gateway CLI"
+      "redirect_uris" (list "http://127.0.0.1/callback" "http://localhost/callback")
+      "allowed_scopes" (list "project:gateway_proxy")
+      "client_type" "public"
+      "grant_types" (list "authorization_code" "refresh_token" "urn:ietf:params:oauth:grant-type:device_code")
+      "require_pkce" true
+    ) }}
+  {{- end }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -28,7 +55,7 @@ metadata:
     {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   annotations: 
-    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres" "existing" "gateway" "admin")) | nindent 4 }}
+    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres" "existing" "gateway" "admin" "redis")) | nindent 4 }}
 spec:
   {{- include "logfire.replicas" (dict "Values" .Values "serviceName" $serviceName) | nindent 2 }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
@@ -49,6 +76,9 @@ spec:
           "logfire-unsubscribe-secret"
           "logfire-mcp-oauth-client-secret"
         )) | nindent 8 }}
+        {{- with (include "logfire.webPushChecksumAnnotation" . | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- end }}
         {{- if (index .Values "logfire-ai-gateway" "enabled") }}
         {{- $gwEx := get .Values "existingGatewaySecret" | default dict }}
@@ -58,6 +88,9 @@ spec:
         {{- end }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
+        {{- end }}
+        {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
+        {{- . | nindent 8 }}
         {{- end }}
         {{- if or (not .Values.adminSecret.enabled) (empty .Values.adminSecret.annotations) }}
         {{- include "logfire.adminSecretChecksumAnnotations" (dict "ctx" .) | nindent 8 }}
@@ -73,9 +106,15 @@ spec:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
-          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command: ["python", "-m", "logfire_backend"]
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "sleep"
+                  - "5"
           ports:
             - containerPort: 8000
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
@@ -91,8 +130,10 @@ spec:
               path: /health/live
               port: 8000
             periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 3
+            # An overloaded pod answers /health/live slowly but still serves
+            # traffic. Restarting it removes capacity and deepens the overload.
+            timeoutSeconds: 5
+            failureThreshold: 12
           readinessProbe:
             httpGet:
               path: /health
@@ -111,20 +152,23 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresDsn
+            {{- with (include "logfire.crudPgTopologyEnv" $ | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: SHARED_REDIS_DSN
-              value: {{ .Values.redisDsn }}
+              {{- include "logfire.redisDsnValueFrom" (dict "root" . "key" "sharedDsn") | nindent 14 }}
             - name: TOKEN_REDIS_DSN
-              value: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "tokenRedis") }}
+              {{- include "logfire.redisDsnValueFrom" (dict "root" . "key" "tokenDsn") | nindent 14 }}
             - name: TOKEN_REDIS_PREFIX
               value: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "tokenRedis") | quote }}
             - name: USAGE_REDIS_DSN
-              value: {{ include "logfire.redisDsnFor" (dict "root" . "valuesKey" "usageRedis") }}
+              {{- include "logfire.redisDsnValueFrom" (dict "root" . "key" "usageDsn") | nindent 14 }}
             - name: USAGE_REDIS_PREFIX
               value: {{ include "logfire.redisPrefixFor" (dict "root" . "valuesKey" "usageRedis") | quote }}
             - name: REDIS_DSN
-              value: {{ .Values.redisDsn }}
+              {{- include "logfire.redisDsnValueFrom" (dict "root" . "key" "sharedDsn") | nindent 14 }}
             - name: WORKER_REDIS_DSN
-              value: {{ .Values.redisDsn }}
+              {{- include "logfire.redisDsnValueFrom" (dict "root" . "key" "sharedDsn") | nindent 14 }}
             - name: DEX_INTERNAL_URL
               value: "{{ include "logfire.scheme" . }}://logfire-dex:{{ include "logfire.port" (dict "port" 5556 "root" .) }}"
             {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
@@ -148,7 +192,7 @@ spec:
             - name: DEX_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-dex-client-secret") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-dex-client-secret") }}
                   key: logfire-dex-client-secret
             - name: ON_PREM
               value: "true"
@@ -162,15 +206,17 @@ spec:
               value: {{ $serviceName }}
             - name: LOGFIRE_SERVICE_VERSION
               value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName) | quote }}
+            - name: APP_VERSION
+              value: {{ .Values.releaseVersion | default (include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName)) | quote }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-jwt-secret") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
             - name: ENCRYPTION_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-encryption-key") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-encryption-key") }}
                   key: logfire-encryption-key
             - name: FUSIONFIRE_QUERY_HOST
               value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
@@ -199,62 +245,73 @@ spec:
               valueFrom:
                 secretKeyRef:
                   key: key
-                  name: {{ include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-encryption") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingGatewaySecret "secretName" "gateway-encryption") }}
             - name: GATEWAY_INTERNAL_SECRET
               valueFrom:
                 secretKeyRef:
                   key: internalSecret
-                  name: {{ include "logfire.gatewaySecretName" (dict "ctx" . "secretName" "gateway-internal-secret") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingGatewaySecret "secretName" "gateway-internal-secret") }}
             {{- end }}
             - name: MIN_DATE_USAGE_CHART  # TODO: make this optional?
               value: "2025-01-01"
             - name: DEFAULT_SUBSCRIPTION_PLAN
-              value: non_stripe
+              value: enterprise
             - name: DEFAULT_PERSONAL_SUBSCRIPTION_PLAN
-              value: non_stripe
+              value: enterprise
             - name: LOGFIRE_REGION
               value: {{ .Values.logfireRegion | default "local" }}
             - name: KNOWN_LOGFIRE_REGIONS
               value: '[{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}]'
+            - name: EMAILS_ENABLED
+              value: {{ include "logfire.emailsEnabled" . | quote }}
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
-            {{- include "logfire.rateLimits" . | nindent 12 }}
+            - name: MCP_RESOURCE_URL
+              value: {{ printf "%s/mcp" (include "logfire.url" .) | quote }}
             - name: META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-write-token") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-meta-write-token") }}
                   key: logfire-meta-write-token
             - name: META_FRONTEND_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-meta-frontend-token") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-meta-frontend-token") }}
                   key: logfire-meta-frontend-token
+            - name: META_FRONTEND_APPLICATION_TOKEN
+              valueFrom:
+                configMapKeyRef:
+                  name: logfire-frontend-service-config
+                  key: frontend-application-token
             - name: UNSUBSCRIBE_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-unsubscribe-secret") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-unsubscribe-secret") }}
                   key: logfire-unsubscribe-secret
+            {{- with (include "logfire.webPushEnv" . | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.adminSecretName" (dict "ctx" . "secretName" "logfire-admin-password") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.adminSecret "secretName" "logfire-admin-password") }}
                   key: logfire-admin-password
             - name: ADMIN_TOTP_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.adminSecretName" (dict "ctx" . "secretName" "logfire-admin-totp-secret") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.adminSecret "secretName" "logfire-admin-totp-secret") }}
                   key: logfire-admin-totp-secret
             - name: ADMIN_TOTP_RECOVERY_CODES
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.adminSecretName" (dict "ctx" . "secretName" "logfire-admin-totp-recovery-codes") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.adminSecret "secretName" "logfire-admin-totp-recovery-codes") }}
                   key: logfire-admin-totp-recovery-codes
             {{- /* MCP OAuth2 is not supported without TLS for hostnames different than localhost */ -}}
-            {{- if or (include "logfire.effective_tls" . | eq "true") (eq (include "logfire.primary_hostname" .) "localhost") }}
+            {{- if $oauthEnabled }}
             - name: MCP_OAUTH_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "logfire.secretName" (dict "ctx" . "secretName" "logfire-mcp-oauth-client-secret") }}
+                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-mcp-oauth-client-secret") }}
                   key: logfire-mcp-oauth-client-secret
             {{- end }}
             {{- include "logfire.groupOrganizationMapping" . | nindent 12 }}
@@ -262,19 +319,25 @@ spec:
               # This will make it possible to log-in sans-credentials by visiting a URL like:
               # http://localhost:8080/logfire-meta/logfire-meta#token=U8TO1taNdD7YwgBMcfeQVU7RB6Hgtrwd
               # You'll need to get the right host and get the secret from k8s
-              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)"}]{{- if or (include "logfire.effective_tls" . | eq "true") (eq (include "logfire.primary_hostname" .) "localhost") }}, "oauth_clients": [{"client_id": "logfire-mcp", "client_secret": "$(MCP_OAUTH_CLIENT_SECRET)", "client_name": "Logfire Remote MCP Server", "redirect_uris": ["{{ include "logfire.url" . }}/mcp/oauth/callback"], "allowed_scopes": ["project:read", "project:write", "project:write_token", "project:read_dashboard", "project:write_dashboard", "project:read_alert", "project:write_alert", "project:read_variables", "project:write_variables", "organization:create_project", "organization:read_channel", "organization:write_channel"]}]{{- end }}}]'
-            {{- with (index .Values $serviceName | default dict).env }}
-              {{- . | toYaml | nindent 12 }}
+              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)", "frontend_application_token": "$(META_FRONTEND_APPLICATION_TOKEN)"}]{{- if $oauthClients }}, "oauth_clients": {{ $oauthClients | toJson }}{{- end }}}]'
+            {{- include "logfire.pythonObjectStoreEnv" . | nindent 12 }}
+            {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
+            {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
+              {{- . | nindent 12 }}
             {{- end}}
-          {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
           volumeMounts:
+            {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
+            {{- include "logfire.logfireDataVolumeMounts" . | nindent 12 }}
+            {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.trustedCa.volumeMount" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
-          {{- end }}
-      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
       volumes:
+        {{- include "logfire.tmpVolume" . | nindent 8 }}
+        {{- include "logfire.logfireDataVolume" . | nindent 8 }}
+        {{- include "logfire.objectStoreVolumes" . | nindent 8 }}
         {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
+        {{- include "logfire.trustedCa.volumes" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
-      {{- end }}
 {{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
 {{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}

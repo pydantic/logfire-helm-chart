@@ -1,0 +1,839 @@
+suite: cross-component coupling
+# Every case here asserts that two templates agree on a value — a service DNS
+# name, port, scheme, or shared constant. A mismatch deploys cleanly and fails
+# at runtime with no hint of the cause, and the TLS variants are topologies CI
+# never deploys. Cases merged from the former backend_auth, gateway_auth_service,
+# query_worker_address, mcp_resource, backend_migrations, feature_toggle,
+# cache_routing, and live_view suites.
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: renders the auth profile Deployment and Service on the auth entrypoint
+    templates:
+      - templates/logfire-backend-auth.yaml
+    asserts:
+      - containsDocument:
+          kind: Deployment
+          apiVersion: apps/v1
+          name: logfire-backend-auth
+          any: true
+      - containsDocument:
+          kind: Service
+          apiVersion: v1
+          name: logfire-backend-auth
+          any: true
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: ["python", "-m", "logfire_auth.main"]
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: FusionFire resolves tokens against the auth profile, not the catch-all backend
+    templates:
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_BACKEND_SERVICE_URL
+          value: http://logfire-backend-auth:8000
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config
+      - equal:
+          path: data.FF_BACKEND_SERVICE_URL
+          value: http://logfire-backend-auth:8000
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-config
+
+  - it: FusionFire reaches the auth profile over HTTPS when in-cluster TLS is on
+    set:
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_BACKEND_SERVICE_URL
+          value: https://logfire-backend-auth:8443
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config
+      - equal:
+          path: data.FF_BACKEND_SERVICE_URL
+          value: https://logfire-backend-auth:8443
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-config
+
+  - it: the auth profile shares the token cache and JWT secret with the backend
+    templates:
+      - templates/logfire-backend.yaml
+      - templates/logfire-backend-auth.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TOKEN_REDIS_DSN
+            valueFrom:
+              secretKeyRef:
+                name: lf-logfire-redis-dsns
+                key: tokenDsn
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TOKEN_REDIS_DSN
+            valueFrom:
+              secretKeyRef:
+                name: lf-logfire-redis-dsns
+                key: tokenDsn
+        template: templates/logfire-backend-auth.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JWT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: logfire-jwt-secret
+                key: logfire-jwt-secret
+        template: templates/logfire-backend-auth.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ON_PREM
+            value: "true"
+        template: templates/logfire-backend-auth.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: gets an in-cluster certificate of its own
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+      dev:
+        deployCertManager: true
+    templates:
+      - templates/logfire-incluster-tls-certmanager.yaml
+    asserts:
+      - equal:
+          path: spec.secretName
+          value: lf-logfire-backend-auth-tls
+        documentSelector:
+          path: metadata.name
+          value: logfire-backend-auth-incluster-tls
+
+  - it: follows the backend image tag, so both entrypoints run one image
+    set:
+      logfire-backend:
+        image:
+          tag: pinned-backend
+    templates:
+      - templates/logfire-backend-auth.yaml
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ":pinned-backend$"
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOGFIRE_SERVICE_VERSION
+            value: pinned-backend
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: an explicit auth image tag overrides the backend one
+    set:
+      logfire-backend:
+        image:
+          tag: pinned-backend
+      logfire-backend-auth:
+        image:
+          tag: pinned-auth
+    templates:
+      - templates/logfire-backend-auth.yaml
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ":pinned-auth$"
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: points the gateway at the backend auth profile over plaintext HTTP
+    set:
+      logfire-ai-gateway:
+        enabled: true
+    templates:
+      - templates/logfire-ai-gateway.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "GATEWAY_AUTH_SERVICE_URL")].value
+          value: http://logfire-backend-auth:8000
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: reaches the backend auth profile over HTTPS when in-cluster TLS is on
+    set:
+      logfire-ai-gateway:
+        enabled: true
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-ai-gateway.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "GATEWAY_AUTH_SERVICE_URL")].value
+          value: https://logfire-backend-auth:8443
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: points the task runner at the gateway service over plaintext HTTP
+    set:
+      logfire-ai-gateway:
+        enabled: true
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GATEWAY_BASE_URL
+            value: http://logfire-ai-gateway:8788
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GATEWAY_INTERNAL_SECRET
+            valueFrom:
+              secretKeyRef:
+                key: internalSecret
+                name: gateway-internal-secret
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: points the task runner at the gateway service over HTTPS when in-cluster TLS is on
+    set:
+      logfire-ai-gateway:
+        enabled: true
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-task-runner.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GATEWAY_BASE_URL
+            value: https://logfire-ai-gateway:8443
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: points the gateway at the in-cluster ingest service over plaintext HTTP
+    set:
+      logfire-ai-gateway:
+        enabled: true
+    templates:
+      - templates/logfire-ai-gateway.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GATEWAY_INGEST_BASE_URL
+            value: http://logfire-ff-ingest:8012
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: points the gateway at the in-cluster ingest service over HTTPS when in-cluster TLS is on
+    set:
+      logfire-ai-gateway:
+        enabled: true
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-ai-gateway.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GATEWAY_INGEST_BASE_URL
+            value: https://logfire-ff-ingest:8443
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: NODE_EXTRA_CA_CERTS
+            value: /etc/logfire/incluster-ca/ca.crt
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: addresses logfire-ff-query-api with remote worker false and TLS false
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    set:
+      logfire-ff-query-worker.enabled: false
+      inClusterTls.enabled: false
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_SNI_HOSTNAME
+            value: "logfire-ff-query-api"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "8011"
+  - it: addresses logfire-ff-query-api with remote worker false and TLS true
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    set:
+      logfire-ff-query-worker.enabled: false
+      inClusterTls.enabled: true
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_SNI_HOSTNAME
+            value: "logfire-ff-query-api"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "9443"
+  - it: points the logfire-ff-query-worker Service at the pods that execute queries
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-query-worker.yaml
+    set:
+      logfire-ff-query-worker.enabled: true
+    asserts:
+      - equal:
+          path: spec.selector["app.kubernetes.io/component"]
+          value: logfire-ff-query-worker
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-worker
+      - equal:
+          path: spec.template.metadata.labels["app.kubernetes.io/component"]
+          value: logfire-ff-query-worker
+        template: templates/logfire-ff-query-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+  - it: exposes the query execution port on the logfire-ff-query-worker Service when in-cluster TLS is on
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    set:
+      logfire-ff-query-worker.enabled: false
+      inClusterTls.enabled: true
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "9443"
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.ports
+          value:
+            - name: tcp-peer
+              appProtocol: tcp
+              port: 9443
+              targetPort: 9443
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-worker
+  - it: addresses logfire-ff-query-api with remote worker true and TLS false
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    set:
+      logfire-ff-query-worker.enabled: true
+      inClusterTls.enabled: false
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_SNI_HOSTNAME
+            value: "logfire-ff-query-worker"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "8011"
+  - it: addresses logfire-ff-query-worker with remote worker true and TLS false
+    templates:
+      - templates/logfire-ff-query-worker.yaml
+    set:
+      logfire-ff-query-worker.enabled: true
+      inClusterTls.enabled: false
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_SNI_HOSTNAME
+            value: "logfire-ff-query-worker"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "8011"
+  - it: addresses logfire-ff-query-api with remote worker true and TLS true
+    templates:
+      - templates/logfire-ff-query-api.yaml
+    set:
+      logfire-ff-query-worker.enabled: true
+      inClusterTls.enabled: true
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_SNI_HOSTNAME
+            value: "logfire-ff-query-worker"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "9443"
+  - it: addresses logfire-ff-query-worker with remote worker true and TLS true
+    templates:
+      - templates/logfire-ff-query-worker.yaml
+    set:
+      logfire-ff-query-worker.enabled: true
+      inClusterTls.enabled: true
+      inClusterTls.httpsPort: 9443
+      inClusterTls.caBundle.existingConfigMap.name: test-ca
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_SNI_HOSTNAME
+            value: "logfire-ff-query-worker"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_TLS_CLIENT_PORT
+            value: "9443"
+
+  - it: gives the backend and remote MCP the same public resource URL
+    set:
+      gateway:
+        tls: true
+        hostnames:
+          - logfire.example.com
+      logfire-remote-mcp:
+        enabled: true
+    templates:
+      - templates/logfire-backend.yaml
+      - templates/logfire-remote-mcp.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MCP_RESOURCE_URL
+            value: https://logfire.example.com/mcp
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MCP_SERVER_URL
+            value: https://logfire.example.com/mcp
+        template: templates/logfire-remote-mcp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: lets remote MCP accept the Host that HAProxy sends it
+    set:
+      gateway:
+        hostnames:
+          - logfire.example.com
+      logfire-remote-mcp:
+        enabled: true
+    templates:
+      - templates/logfire-service-config.yaml
+      - templates/logfire-remote-mcp.yaml
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "backend logfire-remote-mcp\\n(?:.*\\n)*? +http-request set-header Host logfire-remote-mcp\\.default\\.svc\\.cluster\\.local\\n"
+        template: templates/logfire-service-config.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ALLOWED_HOSTS
+            value: '["logfire.example.com","logfire-remote-mcp.default.svc.cluster.local"]'
+        template: templates/logfire-remote-mcp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: exports migration telemetry to the in-cluster collector
+    templates:
+      - templates/logfire-backend-migrations.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: COLLECTOR_OTLP_GRPC_HOST
+            value: http://logfire-otel-collector:4317
+
+  - it: includes the internal cache service names in its managed certificate
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+      dev:
+        deployCertManager: true
+    templates:
+      - templates/logfire-incluster-tls-certmanager.yaml
+    asserts:
+      # FF_BCACHE_K8S_SERVICE points at logfire-ff-bcache-internal; if the
+      # Service is renamed without updating the cert SANs, internal cache traffic
+      # fails TLS at runtime and CI never sees it (no cert-manager there).
+      - equal:
+          path: spec.dnsNames
+          value:
+            - logfire-ff-bcache
+            - logfire-ff-bcache.default
+            - logfire-ff-bcache.default.svc
+            - logfire-ff-bcache.default.svc.cluster.local
+            - logfire-ff-bcache-internal
+            - logfire-ff-bcache-internal.default
+            - logfire-ff-bcache-internal.default.svc
+            - logfire-ff-bcache-internal.default.svc.cluster.local
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-bcache-incluster-tls
+
+  - it: points readers at the bcache service name and port name
+    set:
+      inClusterTls:
+        enabled: true
+        certs:
+          mode: certManager
+      dev:
+        deployCertManager: true
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # A reader lists the EndpointSlices of FF_BCACHE_K8S_SERVICE and picks the
+      # port named FF_BCACHE_K8S_PORT_NAME. A mismatch makes every read fall back
+      # to object storage with no error.
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_K8S_SERVICE
+            value: logfire-ff-bcache-internal
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_K8S_PORT_NAME
+            value: https
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.ports
+          content:
+            name: https
+            port: 9443
+            targetPort: https
+        template: templates/logfire-ff-bcache.yaml
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-bcache-internal
+
+  - it: gives bcache enough grace period to finish draining its disk tier
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # `/health` answers 503 for the whole shutdown, so the pod must outlive the
+      # readiness delay, shutdown timeout and tier drain plus an exit margin.
+      # SIGKILL mid-drain leaves the disk tier unclean.
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 45
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_READINESS_DELAY
+            value: "10s"
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_SHUTDOWN_TIMEOUT
+            value: "25s"
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_BCACHE_TIER_DRAIN_TIMEOUT
+            value: "5s"
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: releases the bcache disk tier with its StatefulSet
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # A claim kept across a replacement would hold its old storage class and
+      # size, because `volumeClaimTemplates` is immutable. The cache regenerates.
+      - equal:
+          path: spec.persistentVolumeClaimRetentionPolicy.whenDeleted
+          value: Delete
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: sizes the bcache disk from disk.storage rather than scratchVolume
+    set:
+      logfire-ff-bcache:
+        scratchVolume:
+          storage: 128Gi
+        disk:
+          storage: 4Gi
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # The sizing presets once named `scratchVolume`, which the template never
+      # reads, so the preset size was silently dropped in favour of the default.
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.resources.requests.storage
+          value: 4Gi
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: places the bcache disk on the chart-wide default storage class
+    set:
+      defaultStorageClassName: slow-ssd
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      # A claim with no storage class lands on the cluster default, which may not
+      # exist. Pin the class the operator asked for.
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.storageClassName
+          value: slow-ssd
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: lets the bcache disk name its own storage class over the default
+    set:
+      defaultStorageClassName: slow-ssd
+      logfire-ff-bcache:
+        disk:
+          storageClassName: fast-ssd
+    templates:
+      - templates/logfire-ff-bcache.yaml
+    asserts:
+      - equal:
+          path: spec.volumeClaimTemplates[0].spec.storageClassName
+          value: fast-ssd
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: keeps the readers zoneless by default
+    set:
+      dev:
+        deployPostgres: false
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-cache-routing-rbac.yaml
+    asserts:
+      # Zoneless routing is right for a single-zone cluster, and the zone lookup needs a
+      # cluster-wide `nodes` `get` role that nobody should get by default.
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_NODE_NAME
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_ZONE
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: opts the readers into zone routing with the node-read cluster role
+    set:
+      dev:
+        deployPostgres: false
+      logfire-ff-bcache:
+        topology:
+          zoneAware: true
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-cache-routing-rbac.yaml
+    asserts:
+      # FF_NODE_NAME makes the reader read its own node's topology label at startup.
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - containsDocument:
+          kind: ClusterRole
+          apiVersion: rbac.authorization.k8s.io/v1
+          any: true
+        template: templates/logfire-ff-cache-routing-rbac.yaml
+
+  - it: takes a static zone without granting the node-read cluster role
+    set:
+      dev:
+        deployPostgres: false
+      logfire-ff-bcache:
+        topology:
+          zoneAware: true
+          zone: eu
+    templates:
+      - templates/logfire-ff-query-api.yaml
+      - templates/logfire-ff-cache-routing-rbac.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_ZONE
+            value: eu
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      # The Role and RoleBinding for endpoint discovery only. No cluster role.
+      - hasDocuments:
+          count: 2
+        template: templates/logfire-ff-cache-routing-rbac.yaml
+
+  - it: keeps query stability aligned with the ingest visibility budget
+    templates:
+      - templates/logfire-ff-config.yaml
+    asserts:
+      - equal:
+          path: data.FF_LIVE_TAIL_CREATED_AT_STABILITY_WINDOW
+          value: "120s"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-config
+      - equal:
+          path: data.FF_INGEST_MAX_TIME_SKEW
+          value: "120s"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-query-config
+      - equal:
+          path: data.FF_INGEST_MAX_TIME_SKEW
+          value: "120s"
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config

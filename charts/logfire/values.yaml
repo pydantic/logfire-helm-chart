@@ -20,21 +20,37 @@ tolerations: []
 # -- topologySpreadConstraints applied to all workloads
 topologySpreadConstraints: []
 
-# -- Istio compatibility options
-istio:
-  # -- When enabled, automatically sets `sidecar.istio.io/inject: "false"` on known-sensitive workloads:
-  #    logfire-service, logfire-ff-proxy-cache-byte, logfire-backend-migrations,
-  #    logfire-ff-migrations, logfire-redis, and logfire-otel-collector.
-  #    You can still override per workload via `<workload>.podLabels`.
-  disableSidecarOnKnownWorkloads: false
-
 # -- Kubernetes cluster domain for service discovery.
 clusterDomain: cluster.local
 
 # -- Starter admin email address
 adminEmail: hello@example.dev
 
-# -- List of mapping to automatically assign members of OIDC group to logfire roles
+# -- Client-safe API key used by the frontend to evaluate external managed variables through OFREP.
+# The key is written to the public runtime configuration, so it must only have the
+# `project:read_external_variables` scope.
+variablesApiKey: ""
+
+# -- Public write token (`pylf_v1_<region>_pub<random>`) for the chart's own browser telemetry.
+# The chart serves this token in the frontend runtime configuration, so it must carry the
+# public `pub` body marker and only the `project:write_otlp` scope. Leave empty to derive a
+# stable token from the release. Set it to pin or rotate the value. Do not use a private token.
+frontendApplicationToken: ""
+
+# -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
+releaseVersion: "v2026-11-02.01"
+
+# -- CRUD database migration Job settings.
+migrations:
+  # -- Maximum time the backend migration Job may run, in seconds. The deadline covers all retries. Raise it for large databases where a concurrent index build takes several minutes.
+  activeDeadlineSeconds: 3600
+
+# -- Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of
+# the ingress or tunnel in front of the release; if HAProxy closes an idle connection first,
+# the client sees a 502/520 when it reuses it.
+keepAliveTimeout: 120s
+
+# -- Grant Logfire organization and project roles to members of identity-provider groups when they sign in
 groupOrganizationMapping: []
 #  - group_id: "example-group-id"
 #    organization_roles:
@@ -48,14 +64,22 @@ groupOrganizationMapping: []
 #          - project_name: "admin-project"
 #            role: "admin"
 
-# -- Configure Rate Limiting rules for Logfire endpoints
-rateLimits: {}
-#  queries:
-#    perHour: 60
-#    perMinute: 10
-
 # -- Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults.
 sizingPreset: ""
+
+# -- Also write Fusionfire telemetry to the container console in addition to sending it through OTLP.
+fusionfireForceConsoleLogging: false
+
+# -- Materialized-view creation policy shared by all Fusionfire services.
+fusionfireMaterializedViews:
+  # -- Maximum source-history window to materialize when a new view is created. Set to `0s` to opt into a full-history initial backfill. Existing views retain the floor stamped when they were created.
+  initialBackfillWindow: 1d
+  # -- Minimum source data written over the trailing seven days required to materialize a new view. Set to `0` to disable the source-volume floor.
+  minSourceBytes: 5gb
+  # -- Create a 1 hour and a 1 day derived view for each eligible aggregating view. The derived views are refreshed by `derived_mv_refresh` jobs.
+  derivedMembers: false
+  # -- Read whole hours and days from the derived views when the requested bucket width allows. Requires `derivedMembers`.
+  derivedBaseReads: false
 
 # ==============================================================================
 # Ingress
@@ -75,17 +99,15 @@ ingress:
   hostnames:
     - logfire.example.com
 
-  # -- DEPRECATED (kept for backward compatibility).
-  # Use `hostnames` (list) for all new deployments.
-  hostname: "logfire.example.com"
-
   # -- IngressClass to use (e.g., nginx)
   ingressClassName: nginx
 
   # -- TLS Secret name if you want to do a custom one
   secretName: logfire-frontend-cert
 
-  # -- Ingress annotations
+  # -- Ingress annotations. Logfire Live View requires WebSocket support, and
+  # some controllers require an explicit annotation. For example, F5 NGINX
+  # Ingress Controller uses `nginx.org/websocket-services: logfire-service`.
   annotations: {}
 
 
@@ -203,6 +225,18 @@ inClusterTls:
   # Use a non-privileged port to avoid securityContext constraints.
   httpsPort: 8443
 
+  # -- Image for the in-cluster TLS wait Job. The Job only runs when certs.mode=certManager and
+  # dev.deployCertManager=true. Point this at a registry mirror for private-registry installs.
+  # The default container securityContext pins the uid/gid of `curlimages/curl`; override
+  # `tls-wait.securityContext` if you substitute an image that runs as a different user.
+  waitImage:
+    # -- Image repository
+    repository: curlimages/curl
+    # -- Image tag
+    tag: "8.12.1"
+    # -- Image pull policy. Defaults to `image.pullPolicy` when unset.
+    pullPolicy: ""
+
   # -- CA bundle used by clients (HAProxy and other workloads) to verify service certificates.
   # Required when:
   # - certs.mode=existingSecrets
@@ -258,6 +292,10 @@ postgresSecret:
   #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
   #    Per-workload `annotations` override duplicate keys.
   annotations: {}
+  # -- Set to true when the Secret also has a `postgresSessionDsn` key. See `postgresSessionDsn`.
+  sessionDsn: false
+  # -- Set to true when the Secret also has a `postgresFFSessionDsn` key. See `postgresFFSessionDsn`.
+  ffSessionDsn: false
 
 # -- Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks)
 hooksAnnotations:
@@ -272,6 +310,18 @@ postgresDsn: "postgresql://postgres:postgres@logfire-postgres:5432/crud"
 # -- Postgres DSN used for the `ff` database
 postgresFFDsn: "postgresql://postgres:postgres@logfire-postgres:5432/ff"
 
+# -- Optional session DSN for the `crud` database: a session-mode pool or a direct connection to PostgreSQL.
+# Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it,
+# because migrations need session state: advisory locks, `SET`, and concurrent index DDL.
+# See "Connection poolers" in the README.
+postgresSessionDsn: ""
+
+# -- Optional session DSN for the `ff` database: a session-mode pool or a direct connection to PostgreSQL.
+# Set it when `postgresFFDsn` points at a transaction-mode pool. `logfire-ff-migrations` and the
+# index rebuilds of `logfire-ff-maintenance-scheduler` then use it, because they need session state:
+# advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README.
+postgresFFSessionDsn: ""
+
 
 # ==============================================================================
 # SMTP
@@ -282,17 +332,32 @@ smtp:
   host:
   # -- SMTP server port
   port: 25
-  # -- SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
+  # -- SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). Leave both username and password unset for a relay that does not use authentication; set both or neither.
   username:
   # -- SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
   password:
-  # -- Use TLS for SMTP
+  # -- Use implicit TLS from the first byte, for SMTPS ports such as 465. If it is false, Logfire connects in plaintext and upgrades with STARTTLS whenever the server offers it, which is what a port 25 or 587 relay expects.
   use_tls: false
+  # -- (bool) Verify the SMTP server certificate. If it is not set, Logfire verifies it. Setting it to false sends email, including password reset links, over a connection open to interception. Prefer `smtp.caBundle` for a relay signed by an internal CA.
+  validate_certs:
+  # -- CA bundle (PEM) that verifies the SMTP server certificate, for a relay signed by an internal CA. Provide exactly one of existingConfigMap or existingSecret, in the release namespace. `logfire-task-runner` and `logfire-worker` trust these certificates in addition to the system trust store. `trustedCaBundle` does the same for these and the other workloads that connect to Redis, so prefer it for new installs.
+  caBundle:
+    existingConfigMap:
+      name: ""
+      key: "ca.crt"
+    existingSecret:
+      name: ""
+      key: "ca.crt"
+  # -- Sender address of every email Logfire sends (`From` and SMTP envelope sender), such as `logfire@example.com`. Required when `smtp.host` is set. Use an address on a domain that your SMTP server may send for. Logfire does not send email as `pydantic.dev` from a self-hosted install.
+  fromAddress:
+  # -- Sender display name of every email Logfire sends. If it is not set, the name is `Pydantic Logfire`.
+  fromName:
 
 # SMTP example using secrets:
 # smtp:
 #   host: smtp.example.com
 #   port: 587
+#   fromAddress: logfire@example.com
 #   username:
 #     valueFrom:
 #       secretKeyRef:
@@ -304,6 +369,25 @@ smtp:
 #         name: smtp
 #         key: password
 #   use_tls: true
+
+
+# ==============================================================================
+# Web push notifications
+# ==============================================================================
+
+webPush:
+  # -- Let users turn on browser push notifications for alerts. Needs the deployment to be
+  # served over HTTPS, since browsers register a service worker only on a secure origin.
+  # While this is false the settings panel reports push as unavailable.
+  enabled: false
+  # -- Contact the push service operator can reach you on, a `mailto:` or `https:` URL
+  # (RFC 8292). Defaults to `mailto:` and `adminEmail`.
+  subject: ""
+  # -- VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as
+  # `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one
+  # and keep it across upgrades. Replacing it unregisters every device that had push on, which
+  # each browser recovers from by subscribing again on its next visit.
+  privateKey: ""
 
 
 # ==============================================================================
@@ -410,17 +494,53 @@ logfire-dex:
     # If specified, the custom value will be honored.
     connectors: []
 
+  # Dex expands `$VAR` references in the storage config and in every connector
+  # config from the container environment, so no credential has to be written
+  # here. Supply the variables through `env`, which accepts `valueFrom`. The map
+  # form merges across values files, so a second file can add a connector secret
+  # without repeating the database password:
+  #
+  # logfire-dex:
+  #   env:
+  #     DEX_DB_PASSWORD:
+  #       valueFrom:
+  #         secretKeyRef:
+  #           name: dex-credentials
+  #           key: db-password
+  #     GITHUB_CLIENT_ID: my-github-client-id
+  #     GITHUB_CLIENT_SECRET:
+  #       valueFrom:
+  #         secretKeyRef:
+  #           name: dex-credentials
+  #           key: github-client-secret
+  #   config:
+  #     storage:
+  #       config:
+  #         password: $DEX_DB_PASSWORD
+  #     connectors:
+  #       - type: github
+  #         id: github
+  #         name: GitHub
+  #         config:
+  #           clientID: $GITHUB_CLIENT_ID
+  #           clientSecret: $GITHUB_CLIENT_SECRET
+
+  # -- (list or map) Extra environment variables for the Dex pod. Accepts `valueFrom`, so a
+  # credential can come from a Secret. Dex expands `$VAR` from this environment
+  # in the storage and connector config, so `DEX_EXPAND_ENV=false` keeps a
+  # literal `$` in a password or DN.
+  env: ~
+
   # -- Resource requests/limits
   # resources:
-  #   cpu: "250m"
-  #   memory: "256Mi"
-  #   # requests:
-  #   #   cpu: "250m"
-  #   #   memory: "256Mi"
-  #   # limits:
-  #   #   cpu: "500m"
-  #   #   memory: "512Mi"
-  #   # If limits are omitted, they default to requests (Guaranteed QoS).
+  #   requests:
+  #     cpu: "250m"
+  #     memory: "256Mi"
+  #   limits:
+  #     cpu: "500m"
+  #     memory: "512Mi"
+  # Omit `limits` for uncapped pods. Legacy flat `cpu`/`memory` values set
+  # requests and limits to the same value.
 
   # autoscaling:
   #   minReplicas: 1
@@ -483,7 +603,10 @@ logfire-ff-ingest:
   # -- Extra env vars for the ingest pod
   env:
     - name: RUST_LOG
-      value: warn
+      # The HTTP middleware creates otel::tracing spans at INFO. With only
+      # `warn`, its disabled span makes set_parent emit a warning per request.
+      # Keep other targets at WARN while allowing the sampled HTTP spans.
+      value: warn,otel::tracing=info
 
   # //// Enables serviceName for older K8s versions
   # serviceName: true
@@ -494,15 +617,16 @@ logfire-ff-ingest:
   # directFileSubmitConcurrency: 32
 
   # resources:
-  #   cpu: "1"
-  #   memory: "2Gi"
+  #   requests:
+  #     cpu: "1"
+  #     memory: "2Gi"
   # autoscaling:
   #   minReplicas: 2
   #   maxReplicas: 24
   #   hpa:
   #     enabled: true
   #     memAverage: 40
-  #     cpuAverage: 60
+  #     cpuAverage: 45
   #     behavior:
   #       scaleDown:
   #         stabilizationWindowSeconds: 300
@@ -572,11 +696,11 @@ logfire-ff-ingest-processor:
 
 # -- Environment overrides for the query API pod
 logfire-ff-query-api:
-  env: []
+  env: ~
 
 # -- Environment overrides for the maintenance scheduler pod
 logfire-ff-maintenance-scheduler:
-  env: []
+  env: ~
 
 # -- Autoscaling & resources for the `logfire-backend` pod
 # logfire-backend:
@@ -619,6 +743,42 @@ logfire-ff-maintenance-scheduler:
 #     maxUnavailable: 1
 #     minAvailable: 1
 
+
+# -- Autoscaling & resources for the `logfire-backend-auth` pod
+# logfire-backend-auth:
+#   # -- Workload labels
+#   labels: {}
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   service:
+#     # -- Service annotations
+#     annotations: {}
+#   # -- Number of replicas
+#   replicas: 2
+#   # -- Resource requests/limits
+#   resources:
+#     cpu: "200m"
+#     memory: "512Mi"
+#   # -- Autoscaler settings
+#   autoscaling:
+#     minReplicas: 2
+#     maxReplicas: 4
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 60
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+#   # -- Additional environment variables
+#   env: []
 
 # -- Autoscaling & resources for the `logfire-ai-gateway` pod
 # @default -- disabled
@@ -798,6 +958,11 @@ logfire-remote-mcp:
 #   service:
 #     # -- Service annotations
 #     annotations: {}
+#   nginx:
+#     # -- Number of nginx worker processes, `auto` or a positive integer. `auto`
+#     # starts one worker per node CPU and ignores the CPU limit. Each worker adds
+#     # memory, so set a number on large nodes to stay under the memory limit.
+#     workerProcesses: auto
 #   replicas: 1
 #   resources:
 #     cpu: "100m"
@@ -861,6 +1026,38 @@ logfire-remote-mcp:
 #     minAvailable: 1
 
 
+# -- Autoscaling & resources for the Absurd task runner. Always deployed: it drains the Absurd
+# queues, which transactional email uses today and further features will use, so it does not
+# depend on SMTP being configured.
+# logfire-task-runner:
+#   # -- Workload labels
+#   labels: {}
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   replicas: 1
+#   resources:
+#     cpu: "100m"
+#     memory: "256Mi"
+#     ephemeralStorage: "512Mi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 3
+#     hpa:
+#       enabled: true
+#       memAverage: 65
+#       cpuAverage: 70
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
 # -- Autoscaling & resources for the proxy pods
 # logfire-service:
 #   # -- Workload labels
@@ -899,8 +1096,8 @@ logfire-remote-mcp:
 #     minAvailable: 1
 
 
-# -- Autoscaling & resources for the byte cache pods
-logfire-ff-cache-byte:
+# -- Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use
+logfire-ff-bcache:
 #   # -- Workload labels
 #   labels: {}
 #   # -- Workload annotations
@@ -909,7 +1106,7 @@ logfire-ff-cache-byte:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-  # -- Number of byte-cache replicas when autoscaling is not configured.
+  # -- Number of bcache replicas when autoscaling is not configured.
   replicas: 3
 #   resources:
 #     cpu: "1"
@@ -919,68 +1116,37 @@ logfire-ff-cache-byte:
 #     maxReplicas: 6
 #     hpa:
 #       enabled: true
-#       memAverage: 65
-#       cpuAverage: 20
-#     keda:
-#       enabled: true
-#       triggers:
-#         - type: cpu
-#           metricType: Utilization
-#           metadata:
-#             value: "50"
+#       cpuAverage: 60
 #   nodeSelector: {}
 #   affinity: {}
 #   tolerations: []
-#   # -- PodDisruptionBudget for byte-cache pods.
+#   # -- PodDisruptionBudget for bcache pods.
 #   pdb:
 #     maxUnavailable: 1
   pdb: {}
-  # -- Cache byte ephemeral volume
-  scratchVolume:
-    storage: 32Gi
-    #  storageClassName: my-storage-class
-
-#     labels:
-#       type: my-volume
-
-
-# -- Autoscaling & resources for the byte proxy cache pods
-# logfire-ff-proxy-cache-byte:
-#   # -- Workload labels
-#   labels: {}
-#   # -- Workload annotations
-#   annotations: {}
-#   # -- Pod labels
-#   podLabels: {}
-#   # -- Pod annotations
-#   podAnnotations: {}
-#   service:
-#     # -- Service annotations
-#     annotations: {}
-#   replicas: 2
-#   resources:
-#     cpu: "750m"
-#     memory: "768Mi"
-#   autoscaling:
-#     minReplicas: 1
-#     maxReplicas: 2
-#     hpa:
-#       enabled: true
-#       memAverage: 65
-#       cpuAverage: 40
-#     keda:
-#       enabled: true
-#       triggers:
-#         - type: cpu
-#           metricType: Utilization
-#           metadata:
-#             value: "50"
-#   nodeSelector: {}
-#   affinity: {}
-#   tolerations: []
-#   pdb:
-#     maxUnavailable: 1
-#     minAvailable: 1
+  # -- Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it.
+  # A StatefulSet cannot change its volumeClaimTemplates, so a later change to storage fails `helm upgrade`.
+  # To resize, expand the existing `bcache-data-*` PVCs if the storage class allows it,
+  # or delete the StatefulSet with `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
+  # Unset `disk.storage` takes the sizing preset's size, or 32Gi without a preset.
+  disk: {}
+  #  storage: 32Gi
+  #  storageClassName: my-storage-class
+  # -- StatefulSet update strategy, used as given. Empty means `RollingUpdate` with `maxUnavailable: 25%`,
+  # which needs the `MaxUnavailableStatefulSet` feature gate; set `type: RollingUpdate` alone to leave it out.
+  updateStrategy: {}
+  # -- Topology routing for the readers that use this cache. Zone routing is off by default.
+  topology:
+    # -- Route reads to cache pods in this pod's topology zone. The reader resolves the zone from
+    # its own node label at startup, so this needs a cluster-wide `nodes` `get` role, and every
+    # zone must run a cache pod or reads in the other zones get no caching at all.
+    zoneAware: false
+    # -- Static topology zone, for tests and for single-zone clusters whose nodes carry no zone
+    # label. Every pod gets this zone, so it must match the zone the pods run in. It does not
+    # serve a multi-zone cluster that refuses node-read RBAC: leave `zoneAware` off there and
+    # take global routing instead. Takes precedence over `zoneAware`, and then no cluster role
+    # is created.
+    zone: ""
 
 
 # -- Maintenance worker
@@ -1047,6 +1213,7 @@ logfire-ff-cache-byte:
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
+#   # -- Ephemeral scratch volume. storage accepts Kubernetes quantities (e.g. 32Gi, 1.5Gi, 10G) of at least 1Mi.
 #   scratchVolume:
 #     storageClassName: my-storage-class
 #     storage: 1Gi
@@ -1116,6 +1283,7 @@ logfire-ff-cache-byte:
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
+#   # -- Ephemeral scratch volume. storage accepts Kubernetes quantities (e.g. 32Gi, 1.5Gi, 10G) of at least 1Mi.
 #   scratchVolume:
 #     storageClassName: my-storage-class
 #     storage: 1Gi
@@ -1169,6 +1337,38 @@ logfire-ff-cache-byte:
 #   pdb:
 #     maxUnavailable: 1
 #     minAvailable: 1
+
+# -- Collector health checks and rollout settings. Override probes here, or set a probe to null
+# to disable it. GOMEMLIMIT defaults to 60% of the rendered memory limit (409MiB with no limit);
+# an explicit GOMEMLIMIT in env takes precedence.
+logfire-otel-collector:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  terminationGracePeriodSeconds: 60
+  startupProbe:
+    httpGet:
+      path: /
+      port: health
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 24
+  readinessProbe:
+    httpGet:
+      path: /
+      port: health
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  livenessProbe:
+    httpGet:
+      path: /
+      port: health
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
 
 # -- OpenTelemetry collector
 # logfire-otel-collector:
@@ -1291,23 +1491,55 @@ logfire-ff-cache-byte:
 
 # -- Object storage details
 objectStore:
-  # -- URI for object storage (e.g., `s3://bucket`)
+  # -- URI for object storage (e.g., `s3://bucket`). Supports Helm templating,
+  # e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release.
+  # When `dev.deployRustfs` is enabled and
+  # this is empty, it defaults to `s3://<rustfs.bucket>`.
+  #
+  # The backend and the worker keep session replay and visual-test blobs under the
+  # `session-replays/` and `visual-tests/` prefixes of the same bucket, and receive the
+  # `env` entries and `volumeMounts` below, so one object store serves FusionFire and
+  # both Python services.
   uri:
+  # -- Optional override for the session-replay blob store, e.g. `s3://logfire-replays`.
+  # Defaults to `<uri>/session-replays`. The bucket or container must exist, and it must
+  # be reachable with the same endpoint and credentials as `uri`: a different account or
+  # provider needs its own `env` and credential volumes, which the per-service `env`
+  # lists under `logfire-backend` and `logfire-worker` can carry.
+  sessionReplayUri:
+  # -- Optional override for the visual-test blob store, e.g. `az://logfirefiles/visual-tests`.
+  # Defaults to `<uri>/visual-tests`, with the same requirements as `sessionReplayUri`.
+  visualTestsUri:
   # -- Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C).
   # Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy
-  # requests. Only used when the object store is S3. Can be a plain string or a
-  # map with valueFrom (e.g., secretKeyRef).
+  # requests. Only used when the object store is S3, and only for FusionFire: the
+  # session-replay and visual-test objects do not use SSE-C.
   #
   # IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on
   # a bucket that already contains FusionFire data will break all reads of the
   # pre-existing objects.
   # losing the key means losing the data — AWS does not store it.
   sseCKeyB64:
-  # -- Additional environment variables for the object store connection
+  # -- Additional environment variables for the object store connection.
+  # String values support Helm templating. When the in-cluster RustFS store is
+  # enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+  # and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. The
+  # backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint
+  # alias the Python S3 client accepts, and Azure clients read
+  # `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or
+  # `AZURE_STORAGE_CONNECTION_STRING`.
   env: {}
-  # -- Volume mounts for object store credentials
+  # -- Volume mounts for object store credentials, on FusionFire, the backend and the
+  # worker. The chart reserves the mount paths `/tmp`, `/scratch`, `/fusionfire/ingest-data`,
+  # and `/var/lib/logfire` for its own volumes, adds `/etc/tls` and
+  # `/etc/logfire/incluster-ca` when in-cluster TLS is enabled, and `/etc/logfire/smtp-ca`
+  # while the SMTP CA bundle is configured.
   volumeMounts: []
-  # -- Volumes for object store credentials
+  # -- Volumes for object store credentials, on FusionFire, the backend and the worker.
+  # The chart reserves the volume names `tmp`, `scratch-data`, `ingest-data`, and
+  # `logfire-data` for its own volumes, adds `logfire-incluster-tls` and
+  # `logfire-incluster-ca-bundle` when in-cluster TLS is enabled, and
+  # `logfire-smtp-ca-bundle` while the SMTP CA bundle is configured.
   volumes: []
 
 # Azure example:
@@ -1363,10 +1595,6 @@ serviceAccount:
   # If create is false and this is not set, the default ServiceAccount is used.
   name: ""
 
-# -- DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility.
-# @deprecated
-serviceAccountName: default
-
 # -- Pod priority class
 # See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority).
 priorityClassName: ""
@@ -1378,11 +1606,26 @@ revisionHistoryLimit: 2
 
 # -- Pod SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-pod)
 # See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context for details
+# Fusionfire and bcache pods merge this context over their default `fsGroup: 1000` and
+# `fsGroupChangePolicy: OnRootMismatch`, which let their uid 1000 images write chart-managed
+# scratch volumes. `logfire-ff-ingest` defaults to `fsGroupChangePolicy: Always` instead,
+# because its spool is a retained volume that `OnRootMismatch` can leave unrepaired. A
+# per-service `podSecurityContext` wins over both. Every chart-owned pod except the bundled Redis
+# also defaults to the `RuntimeDefault` seccomp profile at pod level, which covers containers the
+# chart does not render, such as injected service mesh sidecars.
 podSecurityContext: {}
   # fsGroup: 2000
 
 # -- Container SecurityContext (https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container)
 # See: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#security-context-1 for details
+# Chart-owned containers (the Python, Fusionfire, gateway, and frontend images) and HAProxy merge
+# this context over chart defaults: the image's verified identity, `allowPrivilegeEscalation: false`,
+# all capabilities dropped, the `RuntimeDefault` seccomp profile, and a read-only root. The bundled
+# third-party containers (Redis, Dex, RustFS, MailDev, and the OTel collector) merge it over the
+# same portable controls with their own verified identities. A per-workload
+# `<workload>.securityContext` merges over both layers, for example `logfire-backend.securityContext`
+# or `logfire-dex.securityContext`. Set a field to `null` to clear it, for example `runAsUser: null`
+# for OpenShift, or set `readOnlyRootFilesystem: false` to restore a writable root.
 securityContext: {}
   # capabilities:
   #   drop:
@@ -1402,13 +1645,21 @@ image:
   # @ignored
   repository: us-docker.pkg.dev/pydantic-public-registries/logfire/
   # @ignored
-  workerImage: python-prod
+  workerImage: logfire-worker-prod
   # @ignored
-  backendImage: python-prod
+  backendImage: logfire-backend-prod
+  # @ignored
+  authImage: logfire-auth-prod
+  # @ignored
+  taskRunnerImage: logfire-task-runner-prod
+  # @ignored
+  remoteMcpImage: logfire-remote-mcp-prod
   # @ignored
   frontendImage: frontend
   # @ignored
   fusionfireImage: fusionfire
+  # @ignored
+  bcacheImage: bcache
   # @ignored
   dexImage: dex
   # @ignored
@@ -1420,8 +1671,17 @@ image:
 haproxy:
   image:
     repository: haproxy
-    tag: "3.2"
+    tag: "3.4"
     pullPolicy: IfNotPresent
+  # -- Container SecurityContext for the HAProxy proxies. The chart default pins the numeric
+  # identity the image already uses, so the kubelet can verify `runAsNonRoot`, applies the
+  # portable controls (no privilege escalation, all capabilities dropped, `RuntimeDefault`
+  # seccomp), and makes the image root read-only. The chart-wide `securityContext` merges over
+  # that default and this value merges over both; set a field to `null` to clear it. HAProxy
+  # writes no file outside its mounts, so it needs no scratch volume.
+  securityContext: {}
+  # -- Pod SecurityContext for the HAProxy pod. Defaults to the chart-wide `podSecurityContext`.
+  podSecurityContext: {}
 
 
 # ==============================================================================
@@ -1453,6 +1713,15 @@ logfire-redis:
   #   memory: "128Mi"
   # or native requests/limits.
   resources: {}
+
+  # -- Pod SecurityContext for the bundled Redis pod. Merged over the chart-wide
+  # `podSecurityContext` and a default of `fsGroup: 999` with `fsGroupChangePolicy:
+  # OnRootMismatch`, so the non-root Redis user can write a fresh data volume.
+  podSecurityContext: {}
+  # -- Container SecurityContext for the bundled Redis container. Merged over the chart-wide
+  # `securityContext` and the image defaults: uid and gid 999, all capabilities dropped, no
+  # privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root.
+  securityContext: {}
 
   # -- Redis liveness probe. Override or set to null to disable.
   livenessProbe:
@@ -1508,7 +1777,31 @@ logfire-redis:
   #   maxUnavailable: 0
   pdb: {}
 
-# -- Redis DSN. Change if using an external Redis instance.
+# -- User-provided Secret containing the Redis DSNs, one key per role:
+#
+#  - `sharedDsn`  shared caches, the generic `REDIS_DSN` of every service, and
+#                 the arq queues (`WORKER_REDIS_DSN`, `BACKEND_REDIS_DSN`)
+#  - `tailDsn`    Fusionfire live-tail registration (`FF_REDIS_TAIL_DSN`)
+#  - `tokenDsn`   auth token caches
+#  - `usageDsn`   usage, autocomplete, and rate limiting data
+#
+# The chart reads the DSNs only from a Secret, so a password never reaches a
+# ConfigMap or a plain env value. When `enabled` is false the chart creates its
+# own Secret from `redisDsn`, `tokenRedis.dsn` and `usageRedis.dsn`.
+redisSecret:
+  # -- Set to true to use an existing Secret (recommended for Argo CD users).
+  enabled: false
+  # -- Name of the Kubernetes Secret resource.
+  name: ""
+  # -- Optional workload annotations for external Secret reload controllers.
+  #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
+  #    Per-workload `annotations` override duplicate keys.
+  annotations: {}
+
+# -- NOTE: The DSNs below are ignored if `redisSecret.enabled` is true.
+
+# -- Redis DSN for the shared role, and the live-tail DSN.
+# Change if using an external Redis instance.
 redisDsn: redis://logfire-redis:6379
 
 # -- Redis settings for auth token caches. Empty DSN falls back to `redisDsn`.
@@ -1527,6 +1820,28 @@ usageRedis:
   # -- Key prefix for usage keys.
   prefix: ""
 
+# ==============================================================================
+# Trusted CA certificates
+# ==============================================================================
+
+# -- CA certificates (PEM) that Logfire workloads trust for outbound TLS, in addition to the
+# system trust store of each image. Use it for a `rediss://` Redis or an SMTP relay whose
+# certificate is signed by a private CA, such as Memorystore with in-transit encryption.
+# Provide exactly one of existingConfigMap or existingSecret, in the release namespace.
+# It applies to every Logfire workload that connects to Redis or sends email.
+# An init container joins the system trust store and these certificates into one file.
+# Python and FusionFire workloads read that file through `SSL_CERT_FILE`, and
+# `logfire-ai-gateway` reads it through `NODE_EXTRA_CA_CERTS`. Public endpoints stay trusted.
+# The pods read the certificates when they start, so restart them after you change the
+# certificates. In-cluster TLS is not affected.
+trustedCaBundle:
+  existingConfigMap:
+    name: ""
+    key: "ca.crt"
+  existingSecret:
+    name: ""
+    key: "ca.crt"
+
 
 # ==============================================================================
 # OpenTelemetry Collector
@@ -1541,6 +1856,50 @@ otelResourceAttributes: {}
 
 # -- otel-collector configuration
 otel_collector:
+  serviceAccount:
+    # -- Annotations for the collector's ServiceAccount, for example a Workload Identity binding.
+    annotations: {}
+  # -- Additional collector exporters. Chart-owned component names are reserved.
+  extraExporters: {}
+  # -- Additional collector processors. These only run in pipelines that reference them.
+  extraProcessors: {}
+  # -- Additional collector pipelines. The chart's existing telemetry pipelines stay unchanged.
+  extraPipelines: {}
+  # -- Disk-backed OTLP queues on a per-pod emptyDir. Survives container restarts,
+  # but not pod replacement, rollouts, or eviction. Disable to use memory queues.
+  # Storage exhaustion can still lose already-acknowledged records.
+  queueStorage:
+    enabled: true
+    sizeLimit: 4Gi
+    # -- Scheduling reservation for node-local storage, including logs.
+    # Explicit logfire-otel-collector.resources ephemeral-storage settings take precedence.
+    ephemeralStorageRequest: 512Mi
+    # -- Container limit for node-local storage, including queues, compaction, and logs.
+    ephemeralStorageLimit: 5Gi
+    # -- Force each database write to stable storage. Off by default, like upstream:
+    # process-restart recovery uses the live node filesystem; unclean host failure can lose
+    # unsynced writes or corrupt the database. Enabling this adds substantial disk I/O cost.
+    fsync: false
+    # -- Per-database limit. There are three signal databases. Keep the volume large enough
+    # for all three plus their temporary compaction copies (at least 6x this value).
+    # Byte queues require at least 4x payload capacity per database for page/index overhead;
+    # this headroom minimum is not a guarantee for arbitrary request shapes or disk failure.
+    maxSizeBytes: 536870912
+  debug:
+    # -- Emit per-request summaries to collector logs. Enable for troubleshooting; disabled
+    # by default to avoid logging every incoming telemetry request.
+    enabled: false
+  # -- Byte size of the OTLP/HTTP exporter sending queue. The sizing presets set this per
+  # profile; this value applies when no sizing preset is used.
+  sendingQueueBytes: 67108864
+  # -- Port for the collector's own Prometheus self-metrics. Must differ from `prometheus.port`
+  # (the application exporter), or the collector cannot bind both and fails to start.
+  selfMetricsPort: 8888
+  selfMetrics:
+    # -- Forward collector queue, delivery, and receiver metrics to the configured OTLP exporter
+    # every 60 seconds. Each pod scrapes only itself. Independent external monitoring is still
+    # needed to detect a collector or destination outage.
+    enabled: true
   # -- exporter configuration for the otlp_http exporter
   # Override these to send telemetry data to a different OTLP-compatible destination.
   exporter:
@@ -1548,9 +1907,19 @@ otel_collector:
     tls:
       insecure: true
     headers: {}
+    # -- Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP
+    # ingestion, so senders can retry refused data. Queue limits measure serialized bytes.
+    # The queue capacity still comes from the sizing preset or sendingQueueBytes unless
+    # queue_size is explicitly overridden here. Each signal has its own queue and consumers.
+    sending_queue:
+      batch:
+        sizer: bytes
+        min_size: 1048576
+        max_size: 4194304
+        flush_timeout: 1s
   image:
     repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
-    tag: "0.152.0"
+    tag: "0.163.1@sha256:1175b03003053962012f5a231f5567f66a3e8fdb960c7835c0e48f7aa1555806"
     pullPolicy: IfNotPresent
   prometheus:
     enabled: false
@@ -1560,6 +1929,27 @@ otel_collector:
     metric_expiration: 180m
     enable_open_metrics: true
     add_metric_suffixes: false
+    # -- Override the Prometheus exporter `translation_strategy`. When empty it is derived from
+    # `add_metric_suffixes`: `UnderscoreEscapingWithoutSuffixes` when false, and
+    # `UnderscoreEscapingWithSuffixes` when true. The exporter no longer emits `add_metric_suffixes`
+    # (deprecated and ignored by recent collectors); this value drives `translation_strategy`.
+    translation_strategy: ""
+    # -- Convert delta metrics to cumulative for Prometheus with the alpha `delta_to_cumulative` processor.
+    # Runs only when `otel_collector.prometheus.enabled` is true.
+    # The OTLP pipeline keeps delta metrics unchanged.
+    # Each stream must reach the same collector replica.
+    # Cumulative state resets when that replica is replaced.
+    # Set false to pass metrics through unchanged.
+    delta_to_cumulative: true
+    # -- Retention of inactive delta-to-cumulative streams. Independent of metric_expiration.
+    max_stale: 5m
+    # -- Cap on the delta-to-cumulative stream map. The in-pipeline `memory_limiter` bounds ingress
+    # but cannot evict this processor's state, so an unbounded cap lets high-cardinality attributes
+    # grow until the collector refuses telemetry. Streams past the cap are dropped, so raise this
+    # for high-cardinality scrapes.
+    max_streams: 10000
+    # -- OpenTelemetry resource attributes exposed as Prometheus metric labels. Review this
+    # deprecated option when upgrading the collector to use resource_constant_labels instead.
     resource_to_telemetry_conversion:
       enabled: true
 
@@ -1576,6 +1966,7 @@ otel_collector:
 #  - logfire-jwt-secret
 #  - logfire-unsubscribe-secret
 #  - logfire-mcp-oauth-client-secret
+#  - logfire-web-push-vapid-key (only when webPush.enabled is true)
 existingSecret:
   # -- Use an existing Secret (recommended for Argo CD users).
   enabled: false
@@ -1623,92 +2014,117 @@ dev:
   deployMaildev: false
   # -- Deploy internal Postgres (NOT for production)
   deployPostgres: false
-  # -- Use a local MinIO instance as object storage (NOT for production)
-  deployMinio: false
+  # -- Deploy a local RustFS instance as S3-compatible object storage (NOT for production)
+  deployRustfs: false
   # -- Deploy cert-manager (NOT for production; includes cluster-scoped resources).
   deployCertManager: false
 
 # -- cert-manager chart values (only used when `dev.deployCertManager` is true)
 cert-manager:
-  installCRDs: true
+  crds:
+    enabled: true
+    keep: true
 
 # -- MailDev configuration (only used when `dev.deployMaildev` is true)
 maildev:
   image:
     repository: maildev/maildev
-    tag: latest
+    tag: "3.0.0"
     pullPolicy: IfNotPresent
   # -- Pod SecurityContext for the MailDev pod. Defaults to the chart-wide `podSecurityContext` when unset.
   podSecurityContext: {}
-  # -- Container SecurityContext for the MailDev container. Defaults to the chart-wide `securityContext` when unset.
-  # Set this when running under a restricted PodSecurity policy, e.g.:
-  #   runAsNonRoot: true
-  #   runAsUser: 1000
-  #   allowPrivilegeEscalation: false
-  #   capabilities:
-  #     drop: ["ALL"]
-  #   seccompProfile:
-  #     type: RuntimeDefault
+  # -- Container SecurityContext for the MailDev container. Merged over the chart-wide
+  # `securityContext` and the image defaults: uid and gid 1000, all capabilities dropped, no
+  # privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root with
+  # a writable `/tmp` emptyDir. Set a field here to override a default.
   securityContext: {}
 
 
 # ==============================================================================
-# Embedded Postgres & MinIO defaults (dev/test)
+# Embedded Postgres & RustFS defaults (dev/test)
 # ==============================================================================
 
-postgresql:
-  image:
-    registry: docker.io
-    repository: bitnamilegacy/postgresql
+# -- Dev Postgres configuration (only used when `dev.deployPostgres` is true)
+devPostgres:
+  # -- Name of the dev Postgres Service and Deployment.
   fullnameOverride: "logfire-postgres"
-  auth:
-    postgresPassword: "postgres"
-  postgresqlDataDir: /var/lib/postgresql/data/pgdata
-  primary:
-    resourcesPreset: small
-    initdb:
-      scripts:
-        create_databases.sql: |
-          CREATE DATABASE crud;
-          CREATE DATABASE dex;
-          CREATE DATABASE ff;
-    persistence:
-      size: 10Gi
-      mountPath: /var/lib/postgresql
-
-minio:
+  # -- Dev Postgres image configuration. The default uses the official PostgreSQL image.
   image:
-    registry: docker.io
-    repository: bitnamilegacy/minio
-  console:
-    image:
-      registry: docker.io
-      repository: bitnamilegacy/minio-object-browser
-  fullnameOverride: "logfire-minio"
+    repository: postgres
+    tag: "17"
+    pullPolicy: IfNotPresent
   auth:
-    rootUser: logfire-minio
-    rootPassword: logfire-minio
+    # -- Password for the `postgres` superuser. Update `postgresDsn` and `postgresFFDsn` when you change it.
+    # An existing volume keeps the old database password.
+    postgresPassword: "postgres"
+  initdb:
+    # -- SQL scripts run by the official Postgres entrypoint on first initialization.
+    scripts:
+      create_databases.sql: |
+        CREATE DATABASE crud;
+        CREATE DATABASE dex;
+        CREATE DATABASE ff;
   persistence:
-    mountPath: /data
+    # -- Store data on a PersistentVolumeClaim. Set false to use an emptyDir.
+    enabled: true
+    # -- Size of the chart-managed claim.
+    size: 10Gi
+    # -- Mount path for the data volume.
+    mountPath: /var/lib/postgresql/data
+    # -- Storage class for the chart-managed claim. Defaults to `defaultStorageClassName`.
+    storageClassName: ""
+  # -- Pod SecurityContext for the dev Postgres pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 999`.
+  podSecurityContext: {}
+  # -- Container SecurityContext for the dev Postgres container. Merged over the chart-wide
+  # `securityContext` and the image defaults: uid and gid 999, all capabilities dropped, no
+  # privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root.
+  securityContext: {}
+  # -- Resources for the dev Postgres container.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+# -- RustFS configuration (only used when `dev.deployRustfs` is true)
+rustfs:
+  image:
+    # -- RustFS image repository
+    repository: rustfs/rustfs
+    # -- RustFS image tag
+    tag: "1.0.0"
+    # -- RustFS image pull policy. Defaults to `image.pullPolicy` when unset.
+    pullPolicy: ""
+  # -- Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values.
+  auth:
+    accessKey: logfire-rustfs
+    secretKey: logfire-rustfs
+  # -- Bucket that RustFS creates at startup when `objectStore.uri` is not an `s3://` URI. With an `s3://` `objectStore.uri`, the bucket in the URI is used.
+  bucket: logfire
+  persistence:
+    # -- Store data on a PersistentVolumeClaim. Set false to use an emptyDir.
+    enabled: true
+    # -- Existing PersistentVolumeClaim to use in place of a chart-managed claim
+    existingClaim: ""
+    # -- Storage class for the chart-managed claim. Defaults to `defaultStorageClassName`.
+    storageClassName: ""
+    # -- Size of the chart-managed claim
     size: 32Gi
-  command:
-    - minio
-  args:
-    - server
-    - /data
-  lifecycleHooks:
-    postStart:
-      exec:
-        command:
-          - sh
-          - -c
-          - |
-            # Wait for the server to start
-            sleep 5
-            # Create a bucket
-            mc alias set local http://localhost:9000 logfire-minio logfire-minio
-            mc mb local/logfire
-            mc anonymous set public local/logfire
+  # -- Resource requests and limits for the RustFS container
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  # -- Pod SecurityContext for the RustFS pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 10001`.
+  podSecurityContext: {}
+  # -- Container SecurityContext for the RustFS container. Merged over the chart-wide
+  # `securityContext` and the image defaults: uid and gid 10001, all capabilities dropped, no
+  # privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root with
+  # the `/data` and `/logs` emptyDirs writable.
+  securityContext: {}
 
 # ==============================================================================
 # Extra Kubernetes manifests
@@ -1763,8 +2179,11 @@ sizingPresets:
   tiny:
     logfire-dex:
       resources:
-        cpu: "50m"
-        memory: "96Mi"
+        requests:
+          cpu: "50m"
+          memory: "96Mi"
+        limits:
+          memory: "96Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 3
@@ -1775,16 +2194,19 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-ingest:
+      # Requests only, so a hash-pinned pod can burst instead of being
+      # CFS-throttled at a hard limit.
       resources:
-        cpu: "500m"
-        memory: "1Gi"
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 12
         hpa:
           enabled: true
           memAverage: 40
-          cpuAverage: 60
+          cpuAverage: 45
       pdb:
         maxUnavailable: 1
     logfire-ff-ingest-processor:
@@ -1800,10 +2222,25 @@ sizingPresets:
           cpuAverage: 45
       pdb:
         maxUnavailable: 1
+    logfire-backend-auth:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "384Mi"
+        limits:
+          memory: "768Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 4
+        hpa:
+          enabled: true
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
     logfire-backend:
       resources:
         requests:
-          cpu: "750m"
+          cpu: "500m"
           memory: "1Gi"
         limits:
           memory: "2Gi"
@@ -1821,7 +2258,6 @@ sizingPresets:
           cpu: "100m"
           memory: "256Mi"
         limits:
-          cpu: "250m"
           memory: "384Mi"
       autoscaling:
         minReplicas: 1
@@ -1859,8 +2295,11 @@ sizingPresets:
         storage: "1Gi"
     logfire-ff-crud-api:
       resources:
-        cpu: "100m"
-        memory: "192Mi"
+        requests:
+          cpu: "100m"
+          memory: "192Mi"
+        limits:
+          memory: "192Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -1872,8 +2311,11 @@ sizingPresets:
         maxUnavailable: 1
     logfire-frontend-service:
       resources:
-        cpu: "50m"
-        memory: "96Mi"
+        requests:
+          cpu: "50m"
+          memory: "96Mi"
+        limits:
+          memory: "96Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 3
@@ -1881,6 +2323,23 @@ sizingPresets:
           enabled: true
           memAverage: 70
           cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+    logfire-task-runner:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+          ephemeral-storage: "512Mi"
+        limits:
+          memory: "512Mi"
+          ephemeral-storage: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          cpuAverage: 70
       pdb:
         maxUnavailable: 1
     logfire-worker:
@@ -1902,9 +2361,13 @@ sizingPresets:
         maxUnavailable: 1
     logfire-ai-gateway:
       resources:
-        cpu: "100m"
-        memory: "256Mi"
-        ephemeralStorage: "1Gi"
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+          ephemeral-storage: "1Gi"
+        limits:
+          memory: "256Mi"
+          ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -1916,8 +2379,11 @@ sizingPresets:
         maxUnavailable: 1
     logfire-service:
       resources:
-        cpu: "250m"
-        memory: "256Mi"
+        requests:
+          cpu: "250m"
+          memory: "256Mi"
+        limits:
+          memory: "256Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -1926,31 +2392,21 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
-    logfire-ff-cache-byte:
+    logfire-ff-bcache:
       resources:
-        cpu: "1"
-        memory: "6Gi"
-      scratchVolume:
+        requests:
+          cpu: "1"
+          memory: "6Gi"
+        limits:
+          memory: "6Gi"
+      disk:
         storage: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 24
         hpa:
           enabled: true
-          cpuAverage: 25
-    logfire-ff-proxy-cache-byte:
-      resources:
-        cpu: "150m"
-        memory: "256Mi"
-      autoscaling:
-        minReplicas: 1
-        maxReplicas: 6
-        hpa:
-          enabled: true
-          memAverage: 65
-          cpuAverage: 40
-      pdb:
-        maxUnavailable: 1
+          cpuAverage: 50
     logfire-ff-maintenance-worker:
       resources:
         requests:
@@ -1999,9 +2455,15 @@ sizingPresets:
       scratchVolume:
         storage: "16Gi"
     logfire-otel-collector:
+      # Initial canary value for the exporter sending queue. The bound is byte-based; the exact
+      # value is not a memory measurement. Monitor OOMs, receiver refusals, and enqueue failures.
+      sendingQueueBytes: 33554432
       resources:
-        cpu: "150m"
-        memory: "256Mi"
+        requests:
+          cpu: "150m"
+          memory: "256Mi"
+        limits:
+          memory: "256Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -2012,12 +2474,40 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
   small:
+    # Production presets react quickly to demand, retain capacity through short
+    # troughs, and remove at most one pod per minute. This avoids the sustained
+    # replica churn caused by Kubernetes' default HPA behavior.
+    hpaBehavior: &productionHpaBehavior
+      scaleUp: &productionHpaScaleUp
+        stabilizationWindowSeconds: 0
+        policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 60
+          - type: Pods
+            value: 2
+            periodSeconds: 60
+        selectPolicy: Max
+      scaleDown:
+        stabilizationWindowSeconds: 900
+        policies:
+          - type: Percent
+            value: 25
+            periodSeconds: 60
+          - type: Pods
+            value: 1
+            periodSeconds: 60
+        selectPolicy: Min
     logfire-dex:
+      spreadAcrossZones: true
       resources:
-        cpu: "100m"
-        memory: "128Mi"
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          memory: "128Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 3
         hpa:
           enabled: true
@@ -2026,16 +2516,19 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-ingest:
+      # Requests only, so a hash-pinned pod can burst instead of being
+      # CFS-throttled at a hard limit.
       resources:
-        cpu: "500m"
-        memory: "1Gi"
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 12
         hpa:
           enabled: true
           memAverage: 40
-          cpuAverage: 60
+          cpuAverage: 45
       pdb:
         maxUnavailable: 1
       topologySpreadConstraints:
@@ -2077,15 +2570,32 @@ sizingPresets:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: logfire-ff-ingest-processor
-    logfire-backend:
+    logfire-backend-auth:
+      spreadAcrossZones: true
       resources:
         requests:
-          cpu: "750m"
+          cpu: "100m"
+          memory: "384Mi"
+        limits:
+          memory: "768Mi"
+      autoscaling:
+        minReplicas: 2
+        maxReplicas: 4
+        hpa:
+          enabled: true
+          cpuAverage: 50
+      pdb:
+        maxUnavailable: 1
+    logfire-backend:
+      spreadAcrossZones: true
+      resources:
+        requests:
+          cpu: "500m"
           memory: "1Gi"
         limits:
           memory: "2Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 4
         hpa:
           enabled: true
@@ -2093,15 +2603,15 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-remote-mcp:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "150m"
           memory: "384Mi"
         limits:
-          cpu: "500m"
           memory: "512Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 3
         hpa:
           enabled: true
@@ -2109,13 +2619,14 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ff-query-api:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "2"
           memory: "4Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 8
         hpa:
           enabled: true
@@ -2134,11 +2645,15 @@ sizingPresets:
       scratchVolume:
         storage: "2Gi"
     logfire-ff-crud-api:
+      spreadAcrossZones: true
       resources:
-        cpu: "125m"
-        memory: "256Mi"
+        requests:
+          cpu: "125m"
+          memory: "256Mi"
+        limits:
+          memory: "256Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 6
         hpa:
           enabled: true
@@ -2147,16 +2662,37 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-frontend-service:
+      spreadAcrossZones: true
       resources:
-        cpu: "100m"
-        memory: "128Mi"
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          memory: "128Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 3
         hpa:
           enabled: true
           memAverage: 70
           cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+    logfire-task-runner:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+          ephemeral-storage: "512Mi"
+        limits:
+          memory: "512Mi"
+          ephemeral-storage: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          cpuAverage: 70
       pdb:
         maxUnavailable: 1
     logfire-worker:
@@ -2177,17 +2713,17 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-ai-gateway:
+      spreadAcrossZones: true
       resources:
         requests:
           cpu: "150m"
           memory: "384Mi"
           ephemeral-storage: "1Gi"
         limits:
-          cpu: "500m"
           memory: "768Mi"
           ephemeral-storage: "1Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 6
         hpa:
           enabled: true
@@ -2196,9 +2732,13 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
     logfire-service:
+      spreadAcrossZones: true
       resources:
-        cpu: "500m"
-        memory: "512Mi"
+        requests:
+          cpu: "250m"
+          memory: "512Mi"
+        limits:
+          memory: "512Mi"
       autoscaling:
         minReplicas: 2
         maxReplicas: 6
@@ -2220,31 +2760,38 @@ sizingPresets:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: logfire-service
-    logfire-ff-cache-byte:
+    logfire-ff-bcache:
+      spreadAcrossZones: true
       resources:
-        cpu: "1"
-        memory: "6Gi"
-      scratchVolume:
+        requests:
+          cpu: "1"
+          memory: "6Gi"
+        limits:
+          memory: "6Gi"
+      disk:
         storage: "4Gi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 24
         hpa:
           enabled: true
-          cpuAverage: 25
-    logfire-ff-proxy-cache-byte:
-      resources:
-        cpu: "500m"
-        memory: "384Mi"
-      autoscaling:
-        minReplicas: 1
-        maxReplicas: 8
-        hpa:
-          enabled: true
-          memAverage: 65
-          cpuAverage: 40
+          cpuAverage: 50
+          # Byte-cache replicas are expensive and safe to drain gradually once
+          # a burst has passed, so do not retain peak capacity for 15 minutes.
+          behavior: &byteCacheHpaBehavior
+            scaleUp: *productionHpaScaleUp
+            scaleDown:
+              stabilizationWindowSeconds: 300
+              policies:
+                - type: Percent
+                  value: 25
+                  periodSeconds: 60
+                - type: Pods
+                  value: 1
+                  periodSeconds: 60
+              selectPolicy: Min
       pdb:
-        maxUnavailable: 1
+        minAvailable: 1
     logfire-ff-maintenance-worker:
       resources:
         requests:
@@ -2293,11 +2840,18 @@ sizingPresets:
       scratchVolume:
         storage: "32Gi"
     logfire-otel-collector:
+      spreadAcrossZones: true
+      # Initial canary value for the exporter sending queue. The bound is byte-based; the exact
+      # value is not a memory measurement. Monitor OOMs, receiver refusals, and enqueue failures.
+      sendingQueueBytes: 67108864
       resources:
-        cpu: "250m"
-        memory: "512Mi"
+        requests:
+          cpu: "250m"
+          memory: "512Mi"
+        limits:
+          memory: "512Mi"
       autoscaling:
-        minReplicas: 1
+        minReplicas: 2
         maxReplicas: 4
         hpa:
           enabled: true
@@ -2306,10 +2860,14 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
   standard:
+    hpaBehavior: *productionHpaBehavior
     logfire-dex:
       resources:
-        cpu: "100m"
-        memory: "128Mi"
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          memory: "128Mi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 5
@@ -2335,16 +2893,21 @@ sizingPresets:
     logfire-ff-ingest:
       volumeClaimTemplates:
         storage: 16Gi
+      # Requests without limits: the ingest HAProxy backend consistent-hashes a
+      # tenant's Authorization + path to a single pod, and the HPA scales on the
+      # fleet average, so a pinned pod must be able to burst into spare node
+      # capacity instead of being CFS throttled at a hard limit.
       resources:
-        cpu: "1"
-        memory: "2Gi"
+        requests:
+          cpu: "1"
+          memory: "2Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 12
         hpa:
           enabled: true
           memAverage: 40
-          cpuAverage: 60
+          cpuAverage: 45
       pdb:
         maxUnavailable: 1
       topologySpreadConstraints:
@@ -2386,10 +2949,38 @@ sizingPresets:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: logfire-ff-ingest-processor
+    logfire-backend-auth:
+      resources:
+        requests:
+          cpu: "200m"
+          memory: "512Mi"
+        limits:
+          memory: "1Gi"
+      autoscaling:
+        minReplicas: 3
+        maxReplicas: 6
+        hpa:
+          enabled: true
+          cpuAverage: 50
+      pdb:
+        maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-backend-auth
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-backend-auth
     logfire-backend:
       resources:
         requests:
-          cpu: "750m"
+          cpu: "500m"
           memory: "1Gi"
         limits:
           memory: "2Gi"
@@ -2398,7 +2989,7 @@ sizingPresets:
         maxReplicas: 6
         hpa:
           enabled: true
-          cpuAverage: 25
+          cpuAverage: 50
       pdb:
         maxUnavailable: 1
       topologySpreadConstraints:
@@ -2421,7 +3012,6 @@ sizingPresets:
           memory: "512Mi"
           ephemeral-storage: "1Gi"
         limits:
-          cpu: "500m"
           memory: "2Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
@@ -2448,8 +3038,11 @@ sizingPresets:
               app.kubernetes.io/component: logfire-ai-gateway
     logfire-remote-mcp:
       resources:
-        cpu: "250m"
-        memory: "640Mi"
+        requests:
+          cpu: "250m"
+          memory: "640Mi"
+        limits:
+          memory: "640Mi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 6
@@ -2479,7 +3072,7 @@ sizingPresets:
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 3
-        maxReplicas: 8
+        maxReplicas: 16
         hpa:
           enabled: true
           memAverage: 70
@@ -2504,15 +3097,18 @@ sizingPresets:
     logfire-ff-query-worker:
       resources:
         requests:
-          cpu: "500m"
+          cpu: "1"
           memory: "4Gi"
           ephemeral-storage: "1Gi"
       scratchVolume:
         storage: "6Gi"
     logfire-ff-crud-api:
       resources:
-        cpu: "125m"
-        memory: "512Mi"
+        requests:
+          cpu: "125m"
+          memory: "512Mi"
+        limits:
+          memory: "512Mi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 6
@@ -2537,8 +3133,11 @@ sizingPresets:
               app.kubernetes.io/component: logfire-ff-crud-api
     logfire-frontend-service:
       resources:
-        cpu: "100m"
-        memory: "128Mi"
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          memory: "128Mi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 5
@@ -2561,6 +3160,23 @@ sizingPresets:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: logfire-frontend-service
+    logfire-task-runner:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+          ephemeral-storage: "512Mi"
+        limits:
+          memory: "512Mi"
+          ephemeral-storage: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          cpuAverage: 70
+      pdb:
+        maxUnavailable: 1
     logfire-worker:
       resources:
         requests:
@@ -2580,14 +3196,17 @@ sizingPresets:
         maxUnavailable: 1
     logfire-service:
       resources:
-        cpu: "1"
-        memory: "1Gi"
+        requests:
+          cpu: "250m"
+          memory: "1Gi"
+        limits:
+          memory: "1Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 6
         hpa:
           enabled: true
-          cpuAverage: 20
+          cpuAverage: 40
       pdb:
         maxUnavailable: 1
       topologySpreadConstraints:
@@ -2603,33 +3222,24 @@ sizingPresets:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: logfire-service
-    logfire-ff-cache-byte:
+    logfire-ff-bcache:
       resources:
-        cpu: "1"
-        memory: "6Gi"
+        requests:
+          cpu: "1"
+          memory: "6Gi"
+        limits:
+          memory: "6Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 24
         hpa:
           enabled: true
-          cpuAverage: 25
-      scratchVolume:
+          cpuAverage: 50
+          behavior: *byteCacheHpaBehavior
+      disk:
         storage: 32Gi
       pdb:
         minAvailable: 2
-    logfire-ff-proxy-cache-byte:
-      resources:
-        cpu: "750m"
-        memory: "768Mi"
-      autoscaling:
-        minReplicas: 1
-        maxReplicas: 6
-        hpa:
-          enabled: true
-          memAverage: 65
-          cpuAverage: 40
-      pdb:
-        maxUnavailable: 1
     logfire-ff-maintenance-worker:
       resources:
         requests:
@@ -2678,12 +3288,20 @@ sizingPresets:
       scratchVolume:
         storage: "64Gi"
     logfire-otel-collector:
+      spreadAcrossZones: true
+      # Initial canary value for the exporter sending queue. The bound is byte-based; the exact
+      # value is not a memory measurement. Monitor OOMs, receiver refusals, and enqueue failures.
+      sendingQueueBytes: 134217728
       resources:
-        cpu: "1"
-        memory: "1Gi"
+        requests:
+          cpu: "500m"
+          memory: "512Mi"
+        limits:
+          # Prometheus retains series and cumulative state in addition to three export queues.
+          memory: "2Gi"
       autoscaling:
-        minReplicas: 1
-        maxReplicas: 2
+        minReplicas: 2
+        maxReplicas: 4
         hpa:
           enabled: true
           memAverage: 70
@@ -2691,6 +3309,10 @@ sizingPresets:
       pdb:
         maxUnavailable: 1
   large:
+    logfire-backend:
+      resources:
+        requests:
+          cpu: "750m"
     logfire-ff-ingest-processor:
       resources:
         requests:
@@ -2702,15 +3324,15 @@ sizingPresets:
       autoscaling:
         maxReplicas: 16
     logfire-service:
+      resources:
+        requests:
+          cpu: "1"
       autoscaling:
         maxReplicas: 12
-    logfire-ff-cache-byte:
+    logfire-ff-bcache:
       autoscaling:
         minReplicas: 9
         maxReplicas: 24
-    logfire-ff-proxy-cache-byte:
-      autoscaling:
-        maxReplicas: 32
     logfire-ff-maintenance-worker:
       resources:
         requests:

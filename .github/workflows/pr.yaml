@@ -7,8 +7,40 @@ on:
       - main
 
 jobs:
-  test:
-    runs-on: depot-ubuntu-24.04-16
+  # The Istio suite costs a 16-core runner, so pull requests run it only when they change what
+  # the cluster runs. Pushes to main always run it.
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      suites: ${{ steps.suites.outputs.suites }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Select suites
+        id: suites
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          suites='["chart-testing", "stable-upgrade"]'
+          if [[ -z "$BASE_REF" ]] || git diff --name-only "origin/$BASE_REF...HEAD" \
+            | grep -qE '^(charts/logfire/(templates/|values[^/]*\.yaml$|Chart\.(yaml|lock)$|ci/)|tests/integration/|ci/|\.github/workflows/pr\.yaml$)'; then
+            suites='["chart-testing", "stable-upgrade", "istio"]'
+          fi
+          echo "suites=$suites" >> "$GITHUB_OUTPUT"
+
+  suites:
+    name: ${{ matrix.suite }}
+    needs: plan
+    runs-on: ubuntu-latest-16-cores
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(needs.plan.outputs.suites) }}
     permissions:
       id-token: write
       contents: read
@@ -20,6 +52,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check release notes updates
+        if: matrix.suite == 'chart-testing'
+        run: node ci/check-release-notes.cjs
+
       - name: Set up Helm
         uses: azure/setup-helm@v4
         with:
@@ -27,9 +63,11 @@ jobs:
           version: v4.2.0
 
       - name: Install helm-unittest plugin
+        if: matrix.suite == 'chart-testing'
         run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.1.1 --verify=false
 
       - name: Run helm unittest
+        if: matrix.suite == 'chart-testing'
         run: helm unittest charts/logfire
 
       - name: Set up python
@@ -39,10 +77,25 @@ jobs:
           check-latest: true
 
       - name: Set up chart-testing
+        if: matrix.suite == 'chart-testing'
         uses: helm/chart-testing-action@v2.8.0
 
       - name: Chart linting
-        run: ct lint --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH"
+        if: matrix.suite == 'chart-testing'
+        run: |
+          "$VIRTUAL_ENV/bin/python" -m unittest discover -s ci -p 'test_chart_docs_only.py'
+          version_args=()
+          if "$VIRTUAL_ENV/bin/python" ci/chart_docs_only.py "origin/$CT_TARGET_BRANCH"; then
+            version_args=(--check-version-increment=false)
+          fi
+          ct lint --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH" "${version_args[@]}"
+
+      - name: Build chart dependencies
+        run: helm dependency build charts/logfire
+
+      - name: Check configuration rendering
+        if: matrix.suite == 'chart-testing'
+        run: ci/check-version-stable-checksums.sh
 
       - name: Set up GCP auth
         id: auth
@@ -51,7 +104,7 @@ jobs:
           workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.SERVICE_ACCOUNT }}
           token_format: 'access_token'
-          access_token_lifetime: 900s
+          access_token_lifetime: 3600s
 
       - name: Generate pull secret
         env:
@@ -71,54 +124,119 @@ jobs:
         with:
           config: 'ci/kind.yaml'
 
+      - name: Verify image pull concurrency
+        shell: bash
+        run: |
+          node=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+          kubectl get --raw "/api/v1/nodes/$node/proxy/configz" \
+            | jq -e '.kubeletconfig | {serializeImagePulls, maxParallelImagePulls}
+              | select(.serializeImagePulls == false and .maxParallelImagePulls == 4)'
+
+      - name: Create the restricted namespace
+        run: |
+          kubectl create namespace logfire-restricted
+          # Relaxed while the bundled Redis is still un-hardened. Enforce baseline and report
+          # restricted violations as warnings, so the install is not rejected. Restore
+          # `pod-security.kubernetes.io/enforce=restricted` once the Redis hardening lands.
+          kubectl label namespace logfire-restricted pod-security.kubernetes.io/enforce=baseline pod-security.kubernetes.io/warn=restricted
+
+      # The CNI plugin replaces the istio-init container, which needs NET_ADMIN and so fails
+      # the namespace's baseline Pod Security level.
+      - name: Install Istio with STRICT mTLS
+        if: matrix.suite == 'istio'
+        env:
+          ISTIO_VERSION: 1.31.3
+          ISTIOCTL_SHA256: 382c3004ce2e9c5ed3064b092ae0da7f6bbe30c766a1be282f45725add004860
+        run: |
+          archive="istioctl-$ISTIO_VERSION-linux-amd64.tar.gz"
+          curl -fsSLo "$RUNNER_TEMP/$archive" "https://github.com/istio/istio/releases/download/$ISTIO_VERSION/$archive"
+          echo "$ISTIOCTL_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          # The Kind node has 16 CPUs. Default sidecar requests (100m each) leave no room for the last pods.
+          "$RUNNER_TEMP/istioctl" install -y --set profile=minimal --set components.cni.enabled=true \
+            --set values.global.proxy.resources.requests.cpu=10m \
+            --set values.global.proxy.resources.requests.memory=64Mi
+          kubectl -n istio-system rollout status daemonset/istio-cni-node --timeout=5m
+          kubectl label namespace logfire-restricted istio-injection=enabled
+          kubectl apply -n logfire-restricted -f - <<'EOF'
+          apiVersion: security.istio.io/v1
+          kind: PeerAuthentication
+          metadata:
+            name: default
+          spec:
+            mtls:
+              mode: STRICT
+          EOF
+
       - name: Create k8s secrets
         run: |
-          kubectl create secret generic pg-dsns \
-            --from-literal="postgresDsn=postgres://postgres:postgres@logfire-postgres:5432/crud" \
-            --from-literal="postgresFFDsn=postgres://postgres:postgres@logfire-postgres:5432/ff" \
+          for ns in default logfire-restricted; do
+            kubectl create secret generic pg-dsns -n "$ns" \
+              --from-literal="postgresDsn=postgres://postgres:postgres@logfire-postgres:5432/crud" \
+              --from-literal="postgresFFDsn=postgres://postgres:postgres@logfire-postgres:5432/ff" \
 
-          kubectl create secret generic logfire-tokens \
-            --from-literal="logfire-dex-client-secret=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-meta-write-token=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-meta-frontend-token=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-unsubscribe-secret=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-encryption-key=$(head -c 32 /dev/urandom | base64 | tr -d '\n')" \
-            --from-literal="logfire-mcp-oauth-client-secret=$(date +%s%N | sha256sum | head -c 32)"
+            kubectl create secret generic logfire-tokens -n "$ns" \
+              --from-literal="logfire-dex-client-secret=$(date +%s%N | sha256sum | head -c 32)" \
+              --from-literal="logfire-meta-write-token=$(date +%s%N | sha256sum | head -c 32)" \
+              --from-literal="logfire-meta-frontend-token=$(date +%s%N | sha256sum | head -c 32)" \
+              --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)" \
+              --from-literal="logfire-unsubscribe-secret=$(date +%s%N | sha256sum | head -c 32)" \
+              --from-literal="logfire-encryption-key=$(head -c 32 /dev/urandom | base64 | tr -d '\n')" \
+              --from-literal="logfire-mcp-oauth-client-secret=$(date +%s%N | sha256sum | head -c 32)"
 
-          kubectl create secret generic logfire-admin \
-            --from-literal="logfire-admin-password=$(date +%s%N | sha256sum | head -c 32)" \
-            --from-literal="logfire-admin-totp-secret=$(head -c 20 /dev/urandom | base32 | tr -d '=' | head -c 32)" \
-            --from-literal="logfire-admin-totp-recovery-codes=[\"$(date +%s%N | sha256sum | head -c 32)\"]" \
-            --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)"
+            kubectl create secret generic logfire-admin -n "$ns" \
+              --from-literal="logfire-admin-password=$(date +%s%N | sha256sum | head -c 32)" \
+              --from-literal="logfire-admin-totp-secret=$(head -c 20 /dev/urandom | base32 | tr -d '=' | head -c 32)" \
+              --from-literal="logfire-admin-totp-recovery-codes=[\"$(date +%s%N | sha256sum | head -c 32)\"]" \
+              --from-literal="logfire-jwt-secret=$(date +%s%N | sha256sum | head -c 32)"
 
-          kubectl create secret generic logfire-gateway \
-            --from-literal="key=$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '\n')" \
-            --from-literal="internalSecret=$(date +%s%N | sha256sum | head -c 32)"
+            kubectl create secret generic logfire-gateway -n "$ns" \
+              --from-literal="key=$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '\n')" \
+              --from-literal="internalSecret=$(date +%s%N | sha256sum | head -c 32)"
+          done
 
       - name: Run chart testing
-        run: ct install --upgrade --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH"
-
-      - name: Install chart for integration tests
+        if: matrix.suite == 'chart-testing'
         run: |
-          helm dependency update charts/logfire
-          helm install lf charts/logfire \
-            -f charts/logfire/ci/ci-values.yaml \
-            --wait --timeout 10m
+          chart_args=()
+          if ! git diff --quiet "origin/$CT_TARGET_BRANCH...HEAD" -- .github/workflows/pr.yaml ci/ct.yaml ci/kind.yaml; then
+            chart_args=(--charts charts/logfire)
+          fi
+          ct install --upgrade --config ci/ct.yaml --target-branch "$CT_TARGET_BRANCH" "${chart_args[@]}"
 
       - name: Install uv
+        if: matrix.suite != 'chart-testing'
         uses: astral-sh/setup-uv@v5
 
-      - name: Run integration tests
+      - name: Test stable upgrade, release contracts, and split query topology
+        if: matrix.suite == 'stable-upgrade'
+        env:
+          LOGFIRE_TEST_NAMESPACE: logfire-restricted
+        run: ci/run-kind-tests.sh
+
+      - name: Test the chart inside an Istio mesh
+        if: matrix.suite == 'istio'
+        env:
+          LOGFIRE_TEST_NAMESPACE: logfire-restricted
+          LOGFIRE_TEST_FRESH_INSTALL: "true"
+        run: ci/run-kind-tests.sh
+
+      - name: Show unready pods
+        if: failure() && matrix.suite != 'chart-testing'
         run: |
-          kubectl port-forward -n default svc/logfire-service 8080:8080 &
-          PF_PID=$!
-          trap "kill ${PF_PID} 2>/dev/null || true" EXIT
-          for _ in $(seq 1 30); do
-            if curl -fsS http://localhost:8080/ui-api/platform-config/ >/dev/null 2>&1; then
-              break
-            fi
-            sleep 2
+          kubectl -n logfire-restricted get pods -o wide
+          kubectl describe nodes | sed -n '/Allocated resources/,/Events/p'
+          for pod in $(kubectl -n logfire-restricted get pods --no-headers | awk '$3 != "Completed" { split($2, r, "/"); if (r[1] != r[2]) print $1 }'); do
+            kubectl -n logfire-restricted describe pod "$pod" | sed -n '/^Events:/,$p'
           done
-          META_FRONTEND_TOKEN=$(kubectl get secret logfire-tokens -n default -o jsonpath='{.data.logfire-meta-frontend-token}' | base64 -d) \
-            uv run --directory tests/integration pytest -v
+
+  test:
+    needs: suites
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require both suites to pass
+        env:
+          SUITES_RESULT: ${{ needs.suites.result }}
+        run: test "$SUITES_RESULT" = success

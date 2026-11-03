@@ -1,0 +1,145 @@
+suite: bundled third-party container security contexts
+# Precedence contract for the third-party containers' securityContext values: a
+# per-service context beats the chart-wide context beats the image defaults, a
+# partial override keeps the rest of the defaults, and an explicit null clear
+# survives. The defaults themselves are enforced by the CI install, which runs
+# the whole chart under the restricted Pod Security Standard without an overlay;
+# only the merge semantics live here because they fail silently.
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: keeps the OTel collector defaults under a per-service identity override
+    templates:
+      - templates/logfire-otel-collector.yaml
+    set:
+      logfire-otel-collector:
+        securityContext:
+          runAsUser: 3000
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+          value: 3000
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.seccompProfile.type
+          value: RuntimeDefault
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: merges the chart-wide securityContext over the third-party defaults
+    templates:
+      - templates/dex/deployment.yaml
+    set:
+      securityContext:
+        runAsUser: 2000
+        runAsGroup: 2000
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            runAsNonRoot: true
+            runAsUser: 2000
+            runAsGroup: 2000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: true
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: lets a per-service securityContext override the chart-wide context
+    templates:
+      - templates/dex/deployment.yaml
+    set:
+      securityContext:
+        runAsUser: 2000
+      logfire-dex:
+        securityContext:
+          runAsUser: 3000
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+          value: 3000
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: keeps a cleared identity field cleared
+    templates:
+      - templates/dex/deployment.yaml
+    set:
+      securityContext:
+        runAsUser: null
+    asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: leaves the bundled redis on the chart-wide contexts
+    templates:
+      - templates/redis.yaml
+    asserts:
+      # The redis defaults are deferred so its pod template matches the previous
+      # stable and the upgrade does not replace the pod. Its per-workload
+      # overrides must still work, because that is how an installation supplies
+      # the restricted controls in the meantime.
+      - notExists:
+          path: spec.template.spec.securityContext
+        documentSelector:
+          path: kind
+          value: Deployment
+      - notExists:
+          path: spec.template.spec.containers[0].securityContext
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: honours the per-workload redis contexts while the defaults are deferred
+    set:
+      logfire-redis:
+        podSecurityContext:
+          fsGroup: 999
+        securityContext:
+          runAsUser: 999
+          runAsNonRoot: true
+    templates:
+      - templates/redis.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 999
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+          value: 999
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsNonRoot
+          value: true
+        documentSelector:
+          path: kind
+          value: Deployment

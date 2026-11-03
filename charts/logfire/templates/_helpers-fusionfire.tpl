@@ -6,6 +6,93 @@ Helpers specific to Fusionfire workloads and configuration.
 */}}
 
 {{/*
+Merge the Fusionfire volume-ownership defaults under the chart-wide and per-service
+pod security contexts. The uid 1000 Fusionfire and bcache images need `fsGroup: 1000`
+to write chart-managed scratch and ingest volumes.
+
+`fsGroupChangePolicy: OnRootMismatch` skips the recursive ownership pass when the
+volume root already carries the fsGroup. That skip is safe for scratch volumes,
+which are fresh when the pod starts. It is not safe for the retained ingest spool.
+A release that ran as root leaves bucket directories owned by root with mode 0755
+below a volume root that already matches `fsGroup: 1000`. The root check then skips
+the repair, and every disk write fails with EACCES. `logfire-ff-ingest` therefore
+defaults to `Always`, which walks the spool at each pod start and adds group write
+to those directories. The pass changes ownership and permissions only. It never
+touches file contents.
+
+Later layers win, and the defaults apply even when an upgrade with `--reuse-values`
+carries no `podSecurityContext` key. Returns JSON so callers can parse it with
+`fromJson`, matching `logfire.effectiveServiceValues`.
+*/}}
+{{- define "logfire.fusionfirePodSecurityContext" -}}
+{{- $ctx := required "logfire.fusionfirePodSecurityContext: need .ctx" .ctx -}}
+{{- $serviceName := required "logfire.fusionfirePodSecurityContext: need .serviceName" .serviceName -}}
+{{- $serviceValues := get $ctx.Values $serviceName | default dict -}}
+{{- $fsGroupChangePolicy := "OnRootMismatch" -}}
+{{- if eq $serviceName "logfire-ff-ingest" -}}
+{{- $fsGroupChangePolicy = "Always" -}}
+{{- end -}}
+{{- $podSecurityContext := dict "fsGroup" 1000 "fsGroupChangePolicy" $fsGroupChangePolicy -}}
+{{- $podSecurityContext = mergeOverwrite $podSecurityContext (include "logfire.podSecurityContext" $ctx | fromJson) -}}
+{{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy (get $serviceValues "podSecurityContext" | default dict)) -}}
+{{- $podSecurityContext | toJson -}}
+{{- end -}}
+
+{{/*
+Point a Fusionfire reader at bcache. The reader lists the headless
+service's EndpointSlices, so each request reaches a pod IP. Keep these defaults
+before service-specific env so operators can override them. A read-once reader,
+such as maintenance, sets `noWarm` so its reads do not displace query data.
+*/}}
+{{/*
+Resolved topology settings for the bcache readers, shared by the reader env and the RBAC that
+the zone lookup needs.
+
+`FF_ZONE` resolves the pod's zone directly, so it needs no node read. `FF_NODE_NAME` makes the
+reader read `topology.kubernetes.io/zone` off its own node at startup, which needs a read-only
+`nodes` `get` ClusterRole. With neither, the reader runs zoneless and routes on one global ring,
+which is right for a single-zone cluster.
+*/}}
+{{- define "logfire.bcacheTopology" -}}
+{{- $ctx := required "logfire.bcacheTopology: need .ctx" .ctx -}}
+{{- $topology := get (get $ctx.Values "logfire-ff-bcache" | default dict) "topology" | default dict -}}
+{{- $zone := get $topology "zone" | default "" -}}
+{{- $zoneAware := get $topology "zoneAware" | default false -}}
+{{- dict "zone" $zone "zoneAware" $zoneAware "needsNodeRead" (and $zoneAware (not $zone)) | toJson -}}
+{{- end -}}
+
+{{- define "logfire.ffBcacheReaderEnv" -}}
+{{- $root := .root -}}
+{{- $topology := include "logfire.bcacheTopology" (dict "ctx" $root) | fromJson -}}
+- name: FF_BCACHE_URI
+  value: "{{ include "logfire.scheme" $root }}://logfire-ff-bcache-internal:9443"
+- name: FF_BCACHE_K8S_SERVICE
+  value: logfire-ff-bcache-internal
+- name: FF_BCACHE_K8S_NAMESPACE
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.namespace
+- name: FF_BCACHE_K8S_PORT_NAME
+  value: {{ ternary "https" "http" ($root.Values.inClusterTls.enabled | default false) }}
+- name: FF_BCACHE_HTTP_VERSION
+  value: http1
+{{- with $topology.zone }}
+- name: FF_ZONE
+  value: {{ . | quote }}
+{{- end }}
+{{- if $topology.zoneAware }}
+- name: FF_NODE_NAME
+  valueFrom:
+    fieldRef:
+      fieldPath: spec.nodeName
+{{- end }}
+{{- if .noWarm }}
+- name: FF_READ_NO_WARM
+  value: "true"
+{{- end }}
+{{- end -}}
+
+{{/*
 Give Fusionfire processes enough time to initialize on constrained nodes before
 liveness checks can restart them. The health endpoint is checked immediately so
 fast starts are not delayed by a fixed initial delay.
@@ -32,46 +119,29 @@ timeoutSeconds: 5
 failureThreshold: 5
 {{- end -}}
 
-{{- define "logfire.ffCompactionTiersValue" -}}
-{{- $maintenanceWorker := dict "Values" .Values "serviceName" "logfire-ff-maintenance-worker" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" $maintenanceWorker | fromJson -}}
-{{- if (get $effectiveServiceValues "compactionTiers") -}}
-{{- get $effectiveServiceValues "compactionTiers" | toJson -}}
-{{- end -}}
-{{- end -}}
-
-{{- define "logfire.ffMaxCompactionJobSizeBytesDefault" -}}
-{{- $compactionWorker := dict "Values" .Values "serviceName" "logfire-ff-compaction-worker" -}}
-{{- $effectiveResources := include "logfire.effectiveResources" $compactionWorker | fromJson -}}
-{{- $memory := get $effectiveResources "memoryRequest" -}}
-{{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
-{{- $jobSizeMi := min 512 (max 32 (div $memoryMi 16)) -}}
-{{- printf "%dMB" $jobSizeMi -}}
-{{- end -}}
-
 {{- define "logfire.ffMaxCompactionJobSizeBytes" -}}
 {{- $maintenanceServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-maintenance-worker") | fromJson -}}
 {{- $compactionServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-ff-compaction-worker") | fromJson -}}
-{{- coalesce (get $compactionServiceValues "maxCompactionJobSizeBytes") (get $maintenanceServiceValues "maxCompactionJobSizeBytes") (include "logfire.ffMaxCompactionJobSizeBytesDefault" .) -}}
+{{- $effectiveResources := include "logfire.effectiveResources" (dict "Values" .Values "serviceName" "logfire-ff-compaction-worker") | fromJson -}}
+{{- $memoryMi := int (include "logfire.memoryToMi" (get $effectiveResources "memoryRequest")) -}}
+{{- $default := printf "%dMB" (min 512 (max 32 (div $memoryMi 16))) -}}
+{{- coalesce (get $compactionServiceValues "maxCompactionJobSizeBytes") (get $maintenanceServiceValues "maxCompactionJobSizeBytes") $default -}}
 {{- end -}}
 
 {{/*
-Convert storage quantities used by scratchVolume.storage to whole GiB.
+Convert storage quantities used by scratchVolume.storage to whole MiB via the
+shared Kubernetes quantity parser (case-sensitive: decimal suffixes like G are
+powers of 1000, binary suffixes like Gi are powers of 1024), rounding down so
+derived sizes never exceed the volume. Quantities below 1Mi fail rather than
+rounding to zero.
 */}}
-{{- define "logfire.storageQuantityToGi" -}}
-{{- $quantity := required "logfire.storageQuantityToGi: storage quantity is required" . | toString | trim -}}
-{{- $unit := regexFind "[a-zA-Z]+$" $quantity | lower -}}
-{{- $valueText := regexReplaceAll "[a-zA-Z]+$" $quantity "" | trim -}}
-{{- $value := int $valueText -}}
-{{- if or (eq $unit "gi") (eq $unit "g") (eq $unit "gb") -}}
-{{- $value -}}
-{{- else if or (eq $unit "ti") (eq $unit "t") (eq $unit "tb") -}}
-{{- mul $value 1024 -}}
-{{- else if or (eq $unit "mi") (eq $unit "m") (eq $unit "mb") -}}
-{{- max 1 (div (add $value 1023) 1024) -}}
-{{- else -}}
-{{- fail (printf "unsupported scratchVolume.storage quantity %q; use Mi, Gi, or Ti" $quantity) -}}
+{{- define "logfire.storageQuantityToMi" -}}
+{{- $quantity := required "logfire.storageQuantityToMi: storage quantity is required" . | toString | trim -}}
+{{- $miInt := int (include "logfire.memoryToMi" $quantity) -}}
+{{- if lt $miInt 1 -}}
+{{- fail (printf "scratchVolume.storage %q is below the 1Mi minimum" $quantity) -}}
 {{- end -}}
+{{- $miInt -}}
 {{- end -}}
 
 {{/*
@@ -87,8 +157,8 @@ overhead. No quota is derived for emptyDir scratch storage.
 {{- else -}}
 {{- $scratchVolume := get $effectiveServiceValues "scratchVolume" | default dict -}}
 {{- with (get $scratchVolume "storage") -}}
-{{- $storageGi := int (include "logfire.storageQuantityToGi" .) -}}
-{{- printf "%dGB" (max 1 (div $storageGi 2)) -}}
+{{- $storageMi := int (include "logfire.storageQuantityToMi" .) -}}
+{{- printf "%dMB" (max 1 (div $storageMi 2)) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -109,24 +179,6 @@ without rendering Kubernetes resources.
   value: {{ printf "%.3f" (divf (float64 $cpuMilli) 1000.0) | quote }}
 - name: FF_RESOURCE_MEMORY_BYTES
   value: {{ mul $memoryMi 1048576 | quote }}
-{{- end -}}
-
-{{- define "logfire.ffIoThreads" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- get $effectiveServiceValues "ioThreads" | default "auto" -}}
-{{- end -}}
-
-{{- define "logfire.ffDatafusionThreads" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- get $effectiveServiceValues "datafusionThreads" | default "auto" -}}
-{{- end -}}
-
-{{/*
-Resolve per-query DataFusion I/O parallelism independently for each service.
-*/}}
-{{- define "logfire.ffQueryParallelism" -}}
-{{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- get $effectiveServiceValues "queryParallelism" | default "auto" -}}
 {{- end -}}
 
 {{/*
@@ -153,49 +205,72 @@ request when no limit is configured), rounded up to whole cores.
 {{- end -}}
 
 {{/*
-Optional DataFusion query execution overrides. When omitted, FusionFire keeps
-its own defaults and auto-config behavior.
+Render the FusionFire query environment for an intake, worker, or combined role.
 */}}
 {{- define "logfire.ffQueryExecutionEnv" -}}
+{{- $role := required "logfire.ffQueryExecutionEnv: need .role" .role -}}
+{{- if not (has $role (list "combined" "intake" "worker")) -}}
+  {{- fail (printf "logfire.ffQueryExecutionEnv: unknown role %q" $role) -}}
+{{- end -}}
+{{- $executesQueries := ne $role "intake" -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- if hasKey $effectiveServiceValues "datafusionTargetPartitions" }}
+{{- $queryParallelism := get $effectiveServiceValues "queryParallelism" | default "auto" -}}
+{{- $maxCostPerWorker := include "logfire.ffMaxCostPerWorker" (dict "Values" .Values) -}}
+- name: FF_ENABLE_SPILL_TO_DISK
+  value: "true"
+- name: FF_TEMP_DIR
+  value: /scratch/fusionfire
+- name: FF_QUERY_PARALLELISM
+  value: {{ $queryParallelism | quote }}
+- name: FF_MAX_COST_PER_WORKER
+  value: {{ $maxCostPerWorker | quote }}
+{{ include "logfire.ffResourceEnv" . }}
+{{- if eq $role "worker" }}
+- name: FF_PG_POOL_MAX_CONNECTIONS
+  value: "4"
+{{- end }}
+{{- if $executesQueries }}
+- name: FF_IO_THREADS
+  value: {{ get $effectiveServiceValues "ioThreads" | default "auto" | quote }}
+- name: FF_DATAFUSION_THREADS
+  value: {{ get $effectiveServiceValues "datafusionThreads" | default "auto" | quote }}
+- name: FF_DATAFUSION_MEMORY_LIMIT
+  value: {{ get $effectiveServiceValues "datafusionMemory" | default "auto" | quote }}
+{{- if and (eq $role "combined") (hasKey $effectiveServiceValues "datafusionTargetPartitions") }}
 - name: FF_DATAFUSION_TARGET_PARTITIONS
   value: {{ get $effectiveServiceValues "datafusionTargetPartitions" | quote }}
 {{- end }}
-{{- if hasKey $effectiveServiceValues "datafusionBatchSize" }}
+{{- if and (eq $role "combined") (hasKey $effectiveServiceValues "datafusionBatchSize") }}
 - name: FF_DATAFUSION_BATCH_SIZE
   value: {{ get $effectiveServiceValues "datafusionBatchSize" | quote }}
+{{- end }}
+{{- if eq $role "worker" }}
+- name: FF_DATAFUSION_THREAD_STACK_SIZE
+  value: "8MB"
+{{- end }}
+- name: FF_IO_THREAD_STACK_SIZE
+  value: "8MB"
+{{- end }}
+{{- if ne $role "worker" }}
+- name: FF_DATAFUSION_THREAD_STACK_SIZE
+  value: "8MB"
 {{- end }}
 {{- end -}}
 
 {{/*
-Default ingest direct-file buffering.
-Sizes batch files from the pod memory request, then caps replay/submit
-concurrency from both memory and CPU so sub-core ingest pods do not overwhelm
-the downstream ingest-processor during disk replay.
-*/}}
-{{- define "logfire.ffIngestDirectFileSettingsDefault" -}}
-{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
-{{- $cpu := get $effectiveResources "cpuRequest" -}}
-{{- $memory := get $effectiveResources "memoryRequest" -}}
-{{- $cpuMilli := int (include "logfire.cpuMilli" $cpu) -}}
-{{- $memoryMi := int (include "logfire.memoryToMi" $memory) -}}
-{{- $bufferMi := min 8 (max 1 (div $memoryMi 256)) -}}
-{{- $memoryConcurrency := max 4 (div $memoryMi 64) -}}
-{{- $cpuConcurrency := max 4 (div (add $cpuMilli 31) 32) -}}
-{{- $submitConcurrency := min 128 (max 1 (min $cpuConcurrency $memoryConcurrency)) -}}
-{{- dict "bufferMaxBytes" (printf "%dMB" $bufferMi) "submitConcurrency" $submitConcurrency | toJson -}}
-{{- end -}}
-
-{{/*
-Resolve ingest direct-file buffering from explicit service values, falling back
-to computed defaults.
+Resolve ingest direct-file buffering from explicit values or pod resources.
 */}}
 {{- define "logfire.ffIngestDirectFileSettings" -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
-{{- $defaults := include "logfire.ffIngestDirectFileSettingsDefault" . | fromJson -}}
-{{- $bufferMaxBytes := get $effectiveServiceValues "directFileBufferMaxBytes" | default (get $defaults "bufferMaxBytes") -}}
-{{- $submitConcurrency := get $effectiveServiceValues "directFileSubmitConcurrency" | default (get $defaults "submitConcurrency") -}}
+{{- $effectiveResources := include "logfire.effectiveResources" . | fromJson -}}
+{{- $cpuMilli := int (include "logfire.cpuMilli" (get $effectiveResources "cpuRequest")) -}}
+{{- $memoryMi := int (include "logfire.memoryToMi" (get $effectiveResources "memoryRequest")) -}}
+{{- $defaultBuffer := printf "%dMB" (min 8 (max 1 (div $memoryMi 256))) -}}
+{{- $memoryConcurrency := max 4 (div $memoryMi 64) -}}
+{{- $cpuConcurrency := max 4 (div (add $cpuMilli 31) 32) -}}
+{{- $defaultConcurrency := min 128 (max 1 (min $cpuConcurrency $memoryConcurrency)) -}}
+{{- $bufferMaxBytes := get $effectiveServiceValues "directFileBufferMaxBytes" | default $defaultBuffer -}}
+{{- $submitConcurrency := get $effectiveServiceValues "directFileSubmitConcurrency" | default $defaultConcurrency -}}
 {{- dict "bufferMaxBytes" $bufferMaxBytes "submitConcurrency" $submitConcurrency | toJson -}}
 {{- end -}}
 
@@ -208,8 +283,8 @@ Common execution env for background maintenance/compaction workers.
 {{- $recordBatchMemory := get $effectiveServiceValues "maintenanceRecordBatchMemory" | default $datafusionMemory -}}
 {{- $jobParallelism := get $effectiveServiceValues "jobParallelism" | default "auto" -}}
 {{- $cpuConcurrency := get $effectiveServiceValues "cpuConcurrency" | default "auto" -}}
-{{- $ioThreads := include "logfire.ffIoThreads" . -}}
-{{- $datafusionThreads := include "logfire.ffDatafusionThreads" . -}}
+{{- $ioThreads := get $effectiveServiceValues "ioThreads" | default "auto" -}}
+{{- $datafusionThreads := get $effectiveServiceValues "datafusionThreads" | default "auto" -}}
 {{- $spillToDiskQuota := include "logfire.ffSpillToDiskQuota" . -}}
 {{- include "logfire.ffResourceEnv" . }}
 - name: FF_IO_THREADS
@@ -236,14 +311,6 @@ Common execution env for background maintenance/compaction workers.
   value: {{ $jobParallelism | quote }}
 {{- end -}}
 
-{{- define "logfire.ffMigrations.name" -}}
-{{- if .Values.dev.deployPostgres -}}
-"logfire-ff-migrations-{{ .Release.Revision }}"
-{{- else -}}
-"logfire-ff-migrations"
-{{- end -}}
-{{- end -}}
-
 {{/*
 Container command that sweeps stale FF_TEMP_DIR contents before starting fusionfire.
 
@@ -255,8 +322,7 @@ in the container command itself; keeping it in the chart (not the image entrypoi
 means running the binary outside Kubernetes never deletes anything.
 
 The swept path comes from FF_TEMP_DIR at runtime so the script and the binary always
-agree on the location; workloads without FF_TEMP_DIR (e.g. the byte cache, whose
-/scratch mount holds reusable cache data) skip the sweep. `find` rather than a shell
+agree on the location; workloads without FF_TEMP_DIR skip the sweep. `find` rather than a shell
 glob because tempfile names everything `.tmp*` and sh globs skip dotfiles.
 
 Emits the `command:` list entries; the fusionfire subcommand and flags stay in `args:`.

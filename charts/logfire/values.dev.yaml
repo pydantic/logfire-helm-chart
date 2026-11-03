@@ -1,5 +1,5 @@
 # Development values for local evaluation/testing.
-# Uses in-cluster Postgres/MinIO/MailDev and expects you to port-forward `logfire-service`.
+# Uses in-cluster Postgres/RustFS/MailDev and expects you to port-forward `logfire-service`.
 
 # -- Image pull secrets used by all pods (required for Logfire images)
 imagePullSecrets:
@@ -19,14 +19,14 @@ ingress:
 objectStore:
   uri: s3://logfire
   env:
-    # Defaults we configure for MinIO
+    # Defaults we configure for RustFS
     # Do NOT use this in production!
-    AWS_ACCESS_KEY_ID: logfire-minio
-    AWS_SECRET_ACCESS_KEY: logfire-minio
-    AWS_ENDPOINT: http://logfire-minio:9000
+    AWS_ACCESS_KEY_ID: logfire-rustfs
+    AWS_SECRET_ACCESS_KEY: logfire-rustfs
+    AWS_ENDPOINT: http://logfire-rustfs:9000
     AWS_ALLOW_HTTP: "true"
 
 dev:
   deployPostgres: true
-  deployMinio: true
+  deployRustfs: true
   deployMaildev: true

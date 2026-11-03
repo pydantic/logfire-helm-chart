@@ -1,0 +1,51 @@
+suite: autoscaling replica ownership
+release:
+  name: lf
+  namespace: default
+set:
+  objectStore.uri: s3://test-bucket
+  logfire-ff-query-api.replicas: 3
+tests:
+  - it: gives replica ownership to an enabled HPA
+    set:
+      logfire-ff-query-api:
+        autoscaling:
+          hpa:
+            enabled: true
+            cpuAverage: 75
+    asserts:
+      - notExists:
+          path: spec.replicas
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - containsDocument:
+          kind: HorizontalPodAutoscaler
+          apiVersion: autoscaling/v2
+          any: true
+        template: templates/logfire-ff-query-api.yaml
+
+  - it: gives replica ownership to enabled KEDA
+    set:
+      logfire-ff-query-api:
+        autoscaling:
+          keda:
+            enabled: true
+            triggers:
+              - type: cpu
+                metricType: Utilization
+                metadata:
+                  value: "75"
+    asserts:
+      - notExists:
+          path: spec.replicas
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - containsDocument:
+          kind: ScaledObject
+          apiVersion: keda.sh/v1alpha1
+          any: true
+        template: templates/logfire-ff-query-api.yaml

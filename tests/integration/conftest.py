@@ -36,6 +36,14 @@ async def client(base_url: str) -> AsyncIterator[httpx.AsyncClient]:
 
 
 @pytest.fixture
+async def maildev_client() -> AsyncIterator[httpx.AsyncClient]:
+    """MailDev REST API (dev.deployMaildev). CI port-forwards svc/logfire-maildev:1080."""
+    base = os.environ.get("MAILDEV_BASE_URL", "http://localhost:1080")
+    async with httpx.AsyncClient(base_url=base, timeout=10.0) as http:
+        yield http
+
+
+@pytest.fixture
 async def project(client: httpx.AsyncClient, meta_frontend_token: str) -> str:
     return await create_project(client, meta_frontend_token, META_ORG)
 

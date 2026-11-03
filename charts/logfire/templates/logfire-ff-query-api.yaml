@@ -1,9 +1,9 @@
 {{- $serviceName := "logfire-ff-query-api" }}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
+{{- $podSecurityContext := include "logfire.fusionfirePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
-{{- $queryParallelism := include "logfire.ffQueryParallelism" (dict "Values" .Values "serviceName" $serviceName) -}}
-{{- $maxCostPerWorker := include "logfire.ffMaxCostPerWorker" (dict "Values" .Values) -}}
-{{- $ioThreads := include "logfire.ffIoThreads" (dict "Values" .Values "serviceName" $serviceName) -}}
-{{- $datafusionThreads := include "logfire.ffDatafusionThreads" (dict "Values" .Values "serviceName" $serviceName) -}}
+{{- $remoteQueryWorkerEnabled := get (get .Values "logfire-ff-query-worker" | default dict) "enabled" | default false -}}
+{{- $queryExecutionRole := ternary "intake" "combined" $remoteQueryWorkerEnabled -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -25,6 +25,29 @@ spec:
   {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" "https") | nindent 2 }}
   type: ClusterIP
 ---
+# Query API finds the pods that execute queries through this headless Service and calls them by
+# pod IP: query workers when enabled, otherwise the query API pods themselves. TCP keeps a
+# service mesh from routing those calls by Host.
+{{- $executionServiceName := ternary "logfire-ff-query-worker" $serviceName $remoteQueryWorkerEnabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: logfire-ff-query-worker
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $executionServiceName) | nindent 4 }}
+    app.kubernetes.io/component: {{ $executionServiceName }}
+spec:
+  clusterIP: None
+  selector:
+    {{- include "logfire.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $executionServiceName }}
+  ports:
+  - name: tcp-peer
+    appProtocol: tcp
+    port: {{ include "logfire.port" (dict "port" 8011 "root" .) }}
+    targetPort: {{ include "logfire.port" (dict "port" 8011 "root" .) }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -33,7 +56,7 @@ metadata:
     {{- include "logfire.labels" . | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
   annotations:
-    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres")) | nindent 4 }}
+    {{- include "logfire.workloadAnnotations" (dict "Values" .Values "serviceName" $serviceName "secretSources" (list "postgres" "redis")) | nindent 4 }}
 spec:
   {{- include "logfire.replicas" (dict "Values" .Values "serviceName" $serviceName) | nindent 2 }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
@@ -48,30 +71,40 @@ spec:
         {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
-        checksum/ff-config: {{ include (print $.Template.BasePath "/logfire-ff-config.yaml") . | sha256sum }}
+        checksum/ff-config: {{ include "logfire.configChecksum" (include (print $.Template.BasePath "/logfire-ff-config.yaml") .) }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresFFDsn") | nindent 8 }}
+        {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresDsn") | nindent 8 }}
+        {{- end }}
+        {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
+        {{- . | nindent 8 }}
         {{- end }}
         {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
-      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
+      {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName "podSecurityContext" $podSecurityContext) | nindent 6 }}
       containers:
         - name: {{ $serviceName }}
           image: '{{ .Values.image.repository | default "" }}{{ .Values.image.fusionfireImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
-          {{- include "logfire.securityContext" .Values.securityContext | nindent 10 }}
+          {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
             {{- include "logfire.ffCommandWithTempDirCleanup" . | nindent 12 }}
           args:
-            {{- if (get (get .Values "logfire-ff-query-worker" | default  dict) "enabled") }}
+            {{- if $remoteQueryWorkerEnabled }}
             - query
             {{- else }}
             - query-worker
             {{- end }}
             - --host=0.0.0.0
             - --port=8011
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "sleep"
+                  - "5"
           ports:
             - name: http
               containerPort: 8011
@@ -82,35 +115,14 @@ spec:
             - configMapRef:
                 name: logfire-ff-query-config
           env:
+            {{- include "logfire.ffRedisEnv" . | nindent 12 }}
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
-            - name: FF_ENABLE_SPILL_TO_DISK
-              value: "true"
-            - name: FF_TEMP_DIR
-              value: /scratch/fusionfire
-            - name: FF_QUERY_PARALLELISM
-              value: {{ $queryParallelism | quote }}
-            - name: FF_MAX_COST_PER_WORKER
-              value: {{ $maxCostPerWorker | quote }}
-            {{- include "logfire.ffResourceEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
-            {{- if not (get (get .Values "logfire-ff-query-worker" | default  dict) "enabled") }}
-            - name: FF_IO_THREADS
-              value: {{ $ioThreads | quote }}
-            - name: FF_DATAFUSION_THREADS
-              value: {{ $datafusionThreads | quote }}
-            - name: FF_DATAFUSION_MEMORY_LIMIT
-              value: {{ (get $effectiveServiceValues "datafusionMemory" | default "auto" | quote) }}
-            {{- include "logfire.ffQueryExecutionEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
-            - name: FF_IO_THREAD_STACK_SIZE
-              value: "8MB"
-            {{- end }}
-            - name: FF_DATAFUSION_THREAD_STACK_SIZE
-              value: "8MB"
-            {{- if (get (get .Values "logfire-ff-query-worker" | default  dict) "enabled") }}
+            {{- include "logfire.ffQueryExecutionEnv" (dict "Values" .Values "serviceName" $serviceName "role" $queryExecutionRole) | nindent 12 }}
             - name: FF_TLS_CLIENT_SNI_HOSTNAME
-              value: "logfire-ff-query-worker"
-            {{- end }}
-            - name: FF_REDIS_TAIL_DSN
-              value: {{ .Values.redisDsn }}
+              value: {{ ternary "logfire-ff-query-worker" "logfire-ff-query-api" $remoteQueryWorkerEnabled | quote }}
+            - name: FF_TLS_CLIENT_PORT
+              value: {{ include "logfire.port" (dict "port" 8011 "root" .) | quote }}
+            {{- include "logfire.ffRedisTailEnv" . | nindent 12 }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:
@@ -122,14 +134,18 @@ spec:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresDsn
             {{- include "logfire.objectStoreEnv" . | nindent 12 -}}
-            {{- with (index .Values $serviceName | default dict).env }}
-              {{- . | toYaml | nindent 12 }}
+            {{- include "logfire.ffBcacheReaderEnv" (dict "root" . "noWarm" false) | nindent 12 }}
+            {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
+            {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
+              {{- . | nindent 12 }}
             {{- end }}
           volumeMounts:
+            {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
             - name: {{ include "logfire.scratchVolumeName" . }}
               mountPath: /scratch
             {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.trustedCa.volumeMount" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/etc/tls") | nindent 12 }}
           livenessProbe:
             httpGet:
@@ -144,7 +160,9 @@ spec:
           readinessProbe:
             {{- include "logfire.ffReadinessProbe" (dict "port" 8011) | nindent 12 }}
       volumes:
+      {{- include "logfire.tmpVolume" . | nindent 6 }}
       {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 6 }}
+      {{- include "logfire.trustedCa.volumes" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       {{- include "logfire.scratchVolume" (dict "root" . "scratchVolume" (get $effectiveServiceValues "scratchVolume" | default dict)) | nindent 6 }}
       {{- include "logfire.objectStoreVolumes" . | nindent 6 }}
