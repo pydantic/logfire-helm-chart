@@ -1589,6 +1589,7 @@ platform contract tests keep the image `USER` and these numbers in step.
   "logfire-backend-migrations"
   "logfire-worker"
   "logfire-task-runner"
+  "logfire-alert-runner"
   "logfire-remote-mcp"
   "logfire-ai-gateway"
   "logfire-ff-ingest"
@@ -1988,6 +1989,7 @@ The other in-cluster TLS clients are unaffected. They trust `LOGFIRE_CA_PATH` ex
   "logfire-backend-auth"
   "logfire-worker"
   "logfire-task-runner"
+  "logfire-alert-runner"
   "logfire-remote-mcp"
   "logfire-ai-gateway"
   "logfire-ff-ingest"
@@ -2035,6 +2037,8 @@ true
   {{- $image = $ctx.Values.image.fusionfireImage -}}
 {{- else if eq $serviceName "logfire-worker" -}}
   {{- $image = $ctx.Values.image.workerImage -}}
+{{- else if eq $serviceName "logfire-alert-runner" -}}
+  {{- $image = $ctx.Values.image.alertRunnerImage | default "logfire-alert-runner-prod" -}}
 {{- end -}}
 - name: trusted-ca-bundle
   image: '{{ $repository }}{{ $image }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
@@ -2298,6 +2302,7 @@ Dev Postgres helpers
   "logfire-backend-auth"
   "logfire-worker"
   "logfire-task-runner"
+  "logfire-alert-runner"
   "logfire-dex"
   "logfire-backend-migrations"
   "logfire-ff-migrations"

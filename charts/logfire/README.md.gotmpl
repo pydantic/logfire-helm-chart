@@ -398,6 +398,22 @@ ai:
           key: openai-api-key
 ```
 
+### Alert runner
+
+`logfire-alert-runner` evaluates alert runs and hands the alerts that fire to `logfire-task-runner` for delivery.
+The chart deploys it by default, with its own `logfire-alert-runner-prod` image.
+It claims only the runs of organizations whose `organizations.alert_backend` is `db`.
+New organizations start on `arq`, where `logfire-worker` evaluates their alerts, so a runner with none moved only polls.
+Moving an organization is an admin action that this chart does not ship.
+Keep the runner deployed while any organization is on `db`, because its alerts do not run without it.
+
+Resize it like any workload, or set `logfire-alert-runner.enabled: false` to remove it:
+
+```yaml
+logfire-alert-runner:
+  enabled: false
+```
+
 ## Advanced configuration
 
 ### External secrets and automatic reloads
