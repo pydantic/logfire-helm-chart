@@ -364,14 +364,13 @@ Each pod opens its own connection pool. [Connection counts](#connection-counts) 
 The bundled Redis is for evaluation. For production, set `logfire-redis.enabled: false` and connect a managed Redis or Valkey:
 
 * Use one Redis or Valkey endpoint: a standalone instance, or a primary with replicas behind one write endpoint. Logfire does not support cluster mode, in Redis Cluster or in Valkey.
-* The tested versions are Redis 7.2 and 8, and Valkey 7.2 and 9.
 * Logfire accepts `redis://` and `rediss://` DSNs. Put the password, or the ACL user and password, in the DSN, for example `rediss://USER:PASSWORD@redis.example.com:6379`.
 * With `rediss://`, Logfire verifies the Redis server certificate. If a private CA signs it, such as the CA that Memorystore creates for each instance with in-transit encryption, set `trustedCaBundle`. See [Private CA certificates](#private-ca-certificates).
 
 For Memorystore for Valkey:
 
 * Create the instance with `--mode=cluster-disabled`. The gcloud default is Cluster Mode Enabled, which Logfire does not support, and you cannot change the mode after creation.
-* Use Token Auth or no authentication. Put the token of the `default` user in the DSN as the password, for example `rediss://:TOKEN@10.0.0.5:6379`. Logfire does not support IAM authentication.
+* Use Token Auth. Put the token of the `default` user in the DSN as the password, for example `rediss://:TOKEN@10.0.0.5:6379`. Logfire does not support IAM authentication.
 * With in-transit encryption, set `trustedCaBundle` to the CA of the instance. The server certificate names the endpoint IP addresses, so the DSN can use the IP address. Download the CA into `redis-ca.pem`:
 
   ```sh
