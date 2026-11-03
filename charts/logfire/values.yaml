@@ -2080,7 +2080,12 @@ devPostgres:
   # privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root.
   securityContext: {}
   # -- Resources for the dev Postgres container.
-  resources: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
 
 # -- RustFS configuration (only used when `dev.deployRustfs` is true)
 rustfs:

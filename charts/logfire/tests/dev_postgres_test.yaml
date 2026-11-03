@@ -1,7 +1,7 @@
 suite: development Postgres
-# Integration installs cover the happy path. This suite keeps the `--reuse-values` contract (an
-# install from 0.14 has no `devPostgres` block), the name coupling with the database wait init
-# container, and the security-context merge precedence, which all fail silently when they break.
+# Integration installs cover the happy path. This suite keeps the name coupling with the
+# database wait init container, the data directory under a custom mount, and the
+# security-context merge precedence, which all fail silently when they break.
 release:
   name: lf
   namespace: default
@@ -38,46 +38,6 @@ tests:
           path: spec.template.spec.initContainers[?(@.name == "check-db-ready")].command[2]
           pattern: "custom-postgres"
         template: templates/logfire-backend.yaml
-        documentSelector:
-          path: kind
-          value: Deployment
-
-  - it: keeps a usable default database when devPostgres is absent
-    set:
-      devPostgres: null
-    asserts:
-      - equal:
-          path: metadata.name
-          value: logfire-postgres
-        template: templates/dev-postgres.yaml
-        documentSelector:
-          path: kind
-          value: Service
-      - equal:
-          path: stringData.postgres-password
-          value: postgres
-        template: templates/dev-postgres.yaml
-        documentSelector:
-          path: kind
-          value: Secret
-      - matchRegex:
-          path: data["create_databases.sql"]
-          pattern: "CREATE DATABASE dex;"
-        template: templates/dev-postgres.yaml
-        documentSelector:
-          path: kind
-          value: ConfigMap
-      - equal:
-          path: spec.resources.requests.storage
-          value: 10Gi
-        template: templates/dev-postgres.yaml
-        documentSelector:
-          path: kind
-          value: PersistentVolumeClaim
-      - equal:
-          path: spec.template.spec.containers[0].env[?(@.name == "PGDATA")].value
-          value: /var/lib/postgresql/data/pgdata
-        template: templates/dev-postgres.yaml
         documentSelector:
           path: kind
           value: Deployment

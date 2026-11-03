@@ -841,7 +841,7 @@ URI its bucket is authoritative, so RustFS creates the bucket the workloads actu
 {{- $bucket = splitList "/" (trimPrefix "s3://" (trim $uri)) | first | trim -}}
 {{- end -}}
 {{- if not $bucket -}}
-{{- $bucket = get (.Values.rustfs | default dict) "bucket" | default "" | trim -}}
+{{- $bucket = .Values.rustfs.bucket | trim -}}
 {{- if not $bucket -}}
 {{- $bucket = "logfire" -}}
 {{- end -}}
@@ -852,12 +852,6 @@ URI its bucket is authoritative, so RustFS creates the bucket the workloads actu
 {{/* Render objectStore.uri as configured, before in-cluster defaults. */}}
 {{- define "logfire.objectStoreUriValue" -}}
 {{- tpl (.Values.objectStore.uri | default "") . -}}
-{{- end -}}
-
-{{/* Credentials for the in-cluster object store, JSON encoded. */}}
-{{- define "logfire.inClusterObjectStoreAuth" -}}
-{{- $auth := get (.Values.rustfs | default dict) "auth" | default dict -}}
-{{- dict "accessKey" (get $auth "accessKey" | default "logfire-rustfs") "secretKey" (get $auth "secretKey" | default "logfire-rustfs") | toJson -}}
 {{- end -}}
 
 {{/* Resolve the object store URI consistently for validation and consumers. */}}
@@ -888,7 +882,7 @@ client reads it as the alias of `AWS_ENDPOINT_URL` (see `logfire_services/object
 {{- define "logfire.objectStoreProviderEnv" -}}
 {{- $objectStoreEnv := .Values.objectStore.env | default dict -}}
 {{- if eq (include "logfire.inClusterObjectStoreEnabled" .) "true" }}
-{{- $auth := include "logfire.inClusterObjectStoreAuth" . | fromJson }}
+{{- $auth := .Values.rustfs.auth }}
 {{- $inClusterDefaults := list
   (dict "name" "AWS_ENDPOINT" "value" (printf "http://%s:9000" (include "logfire.inClusterObjectStoreServiceName" .)))
   (dict "name" "AWS_ACCESS_KEY_ID" "value" $auth.accessKey)
@@ -2158,22 +2152,24 @@ Dev Postgres helpers
 */}}
 
 {{/*
-The dev Postgres Service and Deployment name. The template supplies the default so a
-`--reuse-values` upgrade that does not carry the `devPostgres` block still works.
+The `devPostgres` values, JSON encoded. A `--reuse-values` upgrade from a chart before 0.15.0
+renders with the old release's values in place of this chart's defaults, so the block is
+missing, or holds only the keys the user set. Every reader goes through here, so that upgrade
+fails with this message wherever the render stops first.
 */}}
-{{- define "logfire.devPostgres.fullname" -}}
+{{- define "logfire.devPostgres.values" -}}
 {{- $devPostgres := .Values.devPostgres | default dict -}}
-{{- get $devPostgres "fullnameOverride" | default "logfire-postgres" -}}
+{{- range $key := list "fullnameOverride" "image" "auth" "initdb" "persistence" "podSecurityContext" "resources" -}}
+  {{- if not (hasKey $devPostgres $key) -}}
+    {{- fail (printf "dev.deployPostgres needs devPostgres.%s, a chart 0.15.0 default that a --reuse-values upgrade from an older chart does not carry. Upgrade with --reset-then-reuse-values, or pass your values file with -f." $key) -}}
+  {{- end -}}
+{{- end -}}
+{{- $devPostgres | toJson -}}
 {{- end -}}
 
-{{/*
-The dev Postgres superuser password. The template supplies the default for the same
-`--reuse-values` case.
-*/}}
-{{- define "logfire.devPostgres.password" -}}
-{{- $devPostgres := .Values.devPostgres | default dict -}}
-{{- $auth := get $devPostgres "auth" | default dict -}}
-{{- get $auth "postgresPassword" | default "postgres" -}}
+{{/* The dev Postgres Service and Deployment name. */}}
+{{- define "logfire.devPostgres.fullname" -}}
+{{- (include "logfire.devPostgres.values" . | fromJson).fullnameOverride -}}
 {{- end -}}
 
 {{/*
@@ -2181,8 +2177,7 @@ The dev Postgres image. The database wait init container runs the same image, so
 image reaches both.
 */}}
 {{- define "logfire.devPostgres.image" -}}
-{{- $devPostgres := .Values.devPostgres | default dict -}}
-{{- include "logfire.imageRef" (dict "image" (get $devPostgres "image") "defaultRepository" "postgres" "defaultTag" "17") -}}
+{{- include "logfire.imageRef" (dict "image" (include "logfire.devPostgres.values" . | fromJson).image) -}}
 {{- end -}}
 
 {{- define "logfire.dev.waitForPostgres.initContainers" -}}

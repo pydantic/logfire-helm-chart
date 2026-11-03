@@ -1,24 +1,11 @@
 {{- if .Values.dev.deployPostgres -}}
-{{- $name := include "logfire.devPostgres.fullname" . -}}
-{{- $password := include "logfire.devPostgres.password" . -}}
-{{- $devPostgres := .Values.devPostgres | default dict -}}
-{{- $persistence := get $devPostgres "persistence" | default dict -}}
-{{- $persistenceEnabled := true -}}
-{{- if hasKey $persistence "enabled" -}}
-{{- $persistenceEnabled = get $persistence "enabled" -}}
-{{- end -}}
-{{- $storageClassName := get $persistence "storageClassName" | default "" -}}
-{{- $size := get $persistence "size" | default "10Gi" -}}
-{{- $mountPath := get $persistence "mountPath" | default "/var/lib/postgresql/data" -}}
-{{- $persistenceValues := dict "enabled" $persistenceEnabled "size" $size "storageClassName" $storageClassName "mountPath" $mountPath -}}
-{{- $initdbScripts := dig "initdb" "scripts" dict $devPostgres -}}
-{{- if not $initdbScripts -}}
-{{- $initdbScripts = dict "create_databases.sql" "CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n" -}}
-{{- end -}}
-{{- $resources := get $devPostgres "resources" | default dict -}}
+{{- $devPostgres := include "logfire.devPostgres.values" . | fromJson -}}
+{{- $name := $devPostgres.fullnameOverride -}}
+{{- $persistence := $devPostgres.persistence -}}
+{{- $initdbScripts := $devPostgres.initdb.scripts -}}
+{{- $image := $devPostgres.image -}}
 {{- /* Keep PGDATA inside the mounted volume so a custom mount works with a read-only root filesystem. */ -}}
-{{- $dataDir := printf "%s/pgdata" (trimSuffix "/" $mountPath) -}}
-{{- $image := get $devPostgres "image" | default dict -}}
+{{- $dataDir := printf "%s/pgdata" (trimSuffix "/" $persistence.mountPath) -}}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -28,7 +15,7 @@ metadata:
     app.kubernetes.io/component: logfire-postgres
 type: Opaque
 stringData:
-  postgres-password: {{ $password | quote }}
+  postgres-password: {{ $devPostgres.auth.postgresPassword | quote }}
 {{- if $initdbScripts }}
 ---
 apiVersion: v1
@@ -58,7 +45,7 @@ spec:
       name: postgres
       port: 5432
       targetPort: postgres
-{{- if $persistenceEnabled }}
+{{- if $persistence.enabled }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -70,10 +57,10 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  {{- include "logfire.storageClassName" (dict "root" . "values" $persistenceValues) | nindent 2 }}
+  {{- include "logfire.storageClassName" (dict "root" . "values" $persistence) | nindent 2 }}
   resources:
     requests:
-      storage: {{ $size | quote }}
+      storage: {{ $persistence.size | quote }}
 {{- end }}
 ---
 apiVersion: apps/v1
@@ -113,12 +100,12 @@ spec:
       {{- /* The official image writes as uid and gid 999, so a fresh volume needs `fsGroup: 999`. */}}
       {{- $podSecurityContext := dict "fsGroup" 999 "fsGroupChangePolicy" "OnRootMismatch" }}
       {{- $podSecurityContext = mergeOverwrite $podSecurityContext (include "logfire.podSecurityContext" . | fromJson) }}
-      {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy (get $devPostgres "podSecurityContext" | default dict)) }}
+      {{- $podSecurityContext = mergeOverwrite $podSecurityContext (deepCopy $devPostgres.podSecurityContext) }}
       {{- include "logfire.securityContext" $podSecurityContext | nindent 6 }}
       containers:
         - name: postgres
           image: {{ include "logfire.devPostgres.image" . }}
-          imagePullPolicy: {{ default .Values.image.pullPolicy (get $image "pullPolicy") | quote }}
+          imagePullPolicy: {{ default .Values.image.pullPolicy $image.pullPolicy | quote }}
           {{- $postgresSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" . "identity" "postgres" "serviceName" "devPostgres" "readOnlyRootFilesystem" true) | fromJson }}
           {{- include "logfire.securityContext" $postgresSecurityContext | nindent 10 }}
           ports:
@@ -164,10 +151,10 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 10
           resources:
-            {{- toYaml ($resources | default (dict "requests" (dict "cpu" "100m" "memory" "256Mi") "limits" (dict "memory" "1Gi"))) | nindent 12 }}
+            {{- toYaml $devPostgres.resources | nindent 12 }}
           volumeMounts:
             - name: data
-              mountPath: {{ $mountPath }}
+              mountPath: {{ $persistence.mountPath }}
             {{- if $initdbScripts }}
             - name: initdb
               mountPath: /docker-entrypoint-initdb.d
@@ -179,7 +166,7 @@ spec:
               mountPath: /tmp
       volumes:
         - name: data
-          {{- if $persistenceEnabled }}
+          {{- if $persistence.enabled }}
           persistentVolumeClaim:
             claimName: {{ $name }}
           {{- else }}
