@@ -92,10 +92,10 @@ tests:
     asserts:
       - matchRegex:
           path: spec.template.spec.initContainers[0].image
-          pattern: '/(fusionfire|python-prod):'
+          pattern: '/(fusionfire|python-prod|logfire-backend-prod|logfire-worker-prod):'
       - matchRegex:
           path: spec.template.spec.containers[0].image
-          pattern: '/(fusionfire|python-prod):'
+          pattern: '/(fusionfire|python-prod|logfire-backend-prod|logfire-worker-prod):'
 
   # Node ignores SSL_CERT_FILE, and NODE_EXTRA_CA_CERTS takes one file. So the gateway file holds
   # the in-cluster CA too, and only one NODE_EXTRA_CA_CERTS entry may exist.

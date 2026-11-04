@@ -17,6 +17,12 @@ spec:
         - podSelector:
             matchLabels: {app.kubernetes.io/component: logfire-backend}
       ports: [{protocol: TCP, port: 8000}]
+    {{- if dig "enabled" true (index .Values "logfire-remote-mcp" | default dict) }}
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: logfire-remote-mcp}
+      ports: [{protocol: TCP, port: 8000}]
+    {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -61,6 +67,12 @@ spec:
         - podSelector:
             matchLabels: {app.kubernetes.io/component: logfire-backend}
       ports: [{protocol: TCP, port: {{ .Values.inClusterTls.httpsPort }}}]
+    {{- if dig "enabled" true (index .Values "logfire-remote-mcp" | default dict) }}
+    - from:
+        - podSelector:
+            matchLabels: {app.kubernetes.io/component: logfire-remote-mcp}
+      ports: [{protocol: TCP, port: {{ .Values.inClusterTls.httpsPort }}}]
+    {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

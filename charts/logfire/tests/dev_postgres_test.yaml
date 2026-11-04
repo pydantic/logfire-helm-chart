@@ -1,0 +1,164 @@
+suite: development Postgres
+# Integration installs cover the happy path. This suite keeps the name coupling with the
+# database wait init container, the data directory under a custom mount, and the
+# security-context merge precedence, which all fail silently when they break.
+release:
+  name: lf
+  namespace: default
+templates:
+  - templates/dev-postgres.yaml
+  - templates/logfire-backend.yaml
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: shares one name between the Postgres resources and the database wait init container
+    set:
+      devPostgres:
+        fullnameOverride: custom-postgres
+    asserts:
+      - equal:
+          path: metadata.name
+          value: custom-postgres
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Service
+      - equal:
+          path: metadata.name
+          value: custom-postgres
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - matchRegex:
+          path: spec.template.spec.initContainers[?(@.name == "check-db-ready")].command[2]
+          pattern: "custom-postgres"
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: keeps the postgres image identity and the pod defaults
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext
+          value:
+            fsGroup: 999
+            fsGroupChangePolicy: OnRootMismatch
+            seccompProfile:
+              type: RuntimeDefault
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].securityContext
+          value:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 999
+            runAsNonRoot: true
+            runAsUser: 999
+            seccompProfile:
+              type: RuntimeDefault
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: merges the chart-wide and per-service security contexts under the defaults
+    set:
+      podSecurityContext:
+        fsGroup: 3000
+      securityContext:
+        runAsUser: 2500
+      devPostgres:
+        podSecurityContext:
+          fsGroupChangePolicy: Always
+        securityContext:
+          runAsUser: 2000
+    asserts:
+      - equal:
+          path: spec.template.spec.securityContext.fsGroup
+          value: 3000
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.securityContext.fsGroupChangePolicy
+          value: Always
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsUser
+          value: 2000
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsGroup
+          value: 999
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
+          value: true
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: mounts the init scripts and the data volume at their configured paths
+    set:
+      devPostgres:
+        persistence:
+          mountPath: /custom/data
+    asserts:
+      - matchRegex:
+          path: data["create_databases.sql"]
+          pattern: "CREATE DATABASE ff;"
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: ConfigMap
+      - equal:
+          path: spec.template.spec.volumes[?(@.name == "initdb")].configMap.name
+          value: logfire-postgres-initdb
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].volumeMounts[?(@.name == "initdb")].mountPath
+          value: /docker-entrypoint-initdb.d
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].volumeMounts[?(@.name == "data")].mountPath
+          value: /custom/data
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "PGDATA")].value
+          value: /custom/data/pgdata
+        template: templates/dev-postgres.yaml
+        documentSelector:
+          path: kind
+          value: Deployment

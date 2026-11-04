@@ -163,7 +163,6 @@ Each preset gives the query API these resources:
 
 Without a preset or per-workload resources, the chart sets no Kubernetes CPU or memory requests or limits.
 FusionFire uses the `tiny` resource baseline for internal execution limits.
-These defaults increase some no-preset FusionFire budgets compared with earlier chart versions.
 Select a preset or explicit workload resources for constrained clusters.
 
 Override individual workloads only after selecting a preset:
@@ -327,7 +326,7 @@ The identity needs read and write access to the bucket.
 On AWS, grant `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket`.
 On GCP, grant the `Storage Object Admin` role on the bucket.
 
-For local evaluation, `dev.deployRustfs` (or the deprecated `dev.deployMinio`) deploys RustFS.
+For local evaluation, `dev.deployRustfs` deploys RustFS.
 It fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credential environment variables, so the workloads reach the in-cluster bucket.
 An `s3://` `objectStore.uri` also sets the bucket that RustFS creates.
 
@@ -363,12 +362,23 @@ Each pod opens its own connection pool. [Connection counts](#connection-counts) 
 
 ### Redis
 
-The bundled Redis is for evaluation. For production, set `logfire-redis.enabled: false` and connect a managed Redis:
+The bundled Redis is for evaluation. For production, set `logfire-redis.enabled: false` and connect a managed Redis or Valkey:
 
-* Use one Redis endpoint: a standalone instance, or a primary with replicas behind one write endpoint. Logfire does not support Redis Cluster mode.
-* Redis 7.2 is the tested version.
+* Use one Redis or Valkey endpoint: a standalone instance, or a primary with replicas behind one write endpoint. Logfire does not support cluster mode, in Redis Cluster or in Valkey.
 * Logfire accepts `redis://` and `rediss://` DSNs. Put the password, or the ACL user and password, in the DSN, for example `rediss://USER:PASSWORD@redis.example.com:6379`.
 * With `rediss://`, Logfire verifies the Redis server certificate. If a private CA signs it, such as the CA that Memorystore creates for each instance with in-transit encryption, set `trustedCaBundle`. See [Private CA certificates](#private-ca-certificates).
+
+For Memorystore for Valkey:
+
+* Create the instance with `--mode=cluster-disabled`. The gcloud default is Cluster Mode Enabled, which Logfire does not support, and you cannot change the mode after creation.
+* Use Token Auth. Put the token of the `default` user in the DSN as the password, for example `rediss://:TOKEN@10.0.0.5:6379`. Logfire does not support IAM authentication.
+* With in-transit encryption, set `trustedCaBundle` to the CA of the instance. The server certificate names the endpoint IP addresses, so the DSN can use the IP address. Download the CA into `redis-ca.pem`:
+
+  ```sh
+  gcloud memorystore instances get-certificate-authority INSTANCE --location=REGION \
+    --flatten='managedServerCa.caCerts[].certificates[]' \
+    --format='value(managedServerCa.caCerts.certificates)' > redis-ca.pem
+  ```
 
 To keep the DSNs out of your values file, create a Secret with the `sharedDsn`, `tailDsn`, `tokenDsn`, and `usageDsn` keys, and reference it.
 All four keys can hold the same DSN:
@@ -505,7 +515,7 @@ For installations that require readiness waits or automatic rollback, install ce
 Logfire verifies the certificate of each TLS server it connects to, such as a `rediss://` Redis or an SMTP relay.
 By default, it trusts only the system trust store of its images.
 If the server certificate is signed by a private CA, put the CA certificate (PEM) in a ConfigMap or Secret and set `trustedCaBundle`.
-For example, Memorystore for Redis with in-transit encryption signs the server certificate with a CA for each instance.
+For example, Memorystore for Redis or Valkey with in-transit encryption signs the server certificate with a CA for each instance.
 Download the server CA certificates of the instance into `redis-ca.pem`, then create the ConfigMap:
 
 ```sh
@@ -546,8 +556,7 @@ FusionFire pods that start before the new Redis pod is ready exit and restart un
 
 ### Istio service mesh
 
-From chart 0.14.4, every Logfire pod can run with an Istio sidecar, under STRICT or PERMISSIVE mTLS.
-Split query mode (`logfire-ff-query-worker.enabled: true`) needs chart 0.14.5 or later in a mesh.
+Every Logfire pod can run with an Istio sidecar, under STRICT or PERMISSIVE mTLS, including split query mode (`logfire-ff-query-worker.enabled: true`).
 CI installs the chart into Istio with STRICT mTLS and runs the integration suite.
 
 Istio must inject native sidecars.
@@ -569,19 +578,14 @@ Each workload's `podAnnotations` reaches its own pods.
 
 In a namespace that enforces the `baseline` or `restricted` Pod Security level, install Istio with its CNI plugin.
 The default `istio-init` container needs the `NET_ADMIN` capability, which those levels reject.
-From chart 0.14.5, every chart pod sets a pod-level `RuntimeDefault` seccomp profile, which the injected sidecar needs to pass the `restricted` level.
-The bundled Redis and PostgreSQL keep their pod templates unchanged across upgrades, so set the profile for them yourself:
+Every chart pod sets a pod-level `RuntimeDefault` seccomp profile, which the injected sidecar needs to pass the `restricted` level.
+The bundled Redis keeps its pod template unchanged across upgrades, so set the profile for it yourself:
 
 ```yaml
 logfire-redis:
   podSecurityContext:
     seccompProfile:
       type: RuntimeDefault
-postgresql:
-  primary:
-    podSecurityContext:
-      seccompProfile:
-        type: RuntimeDefault
 ```
 
 The bundled Redis also needs its other `restricted` overrides, described in Restricted Pod Security.
@@ -595,11 +599,6 @@ Write mesh routes and authorization policies for traffic behind HAProxy against 
 With `outboundTrafficPolicy.mode: REGISTRY_ONLY`, add a `ServiceEntry` for each external dependency: PostgreSQL, Redis, object storage, SMTP, and any OTLP export target.
 
 Inside the mesh, use Istio mTLS instead of `inClusterTls`.
-
-`istio.disableSidecarOnKnownWorkloads` is deprecated.
-It removes the sidecar from HAProxy, the migration Jobs, Redis, and the collector.
-Under STRICT mTLS, those pods cannot reach meshed services, so the install stops at the migrations.
-Leave it unset.
 
 ## Configure SDKs
 
@@ -640,7 +639,8 @@ For enterprise support, contact [sales@pydantic.dev](mailto:sales@pydantic.dev).
 
 ## Optional dev dependencies
 
-These subcharts deploy only when you set `dev.deployPostgres` or `dev.deployCertManager`.
+The cert-manager subchart deploys only when you set `dev.deployCertManager`.
+The bundled dev Postgres deploys only when you set `dev.deployPostgres`; it is a chart-owned template, not a dependency.
 Production installs use external PostgreSQL, and a separately installed cert-manager when in-cluster TLS uses cert-manager.
 
 {{ template "chart.requirementsTable" . }}

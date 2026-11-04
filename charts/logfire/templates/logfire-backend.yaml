@@ -7,12 +7,16 @@
 -}}
 {{- $oauthClients := list }}
 {{- if $oauthEnabled }}
+{{- $mcpScopes := (list "project:read" "project:write" "project:write_token" "project:read_dashboard" "project:write_dashboard" "project:read_alert" "project:write_alert" "project:read_variables" "project:write_variables" "organization:create_project" "organization:read_channel" "organization:write_channel") }}
+{{- if (.Values.agentSandboxes | default dict).enabled }}
+{{- $mcpScopes = append $mcpScopes "project:execute_agent_sandboxes" }}
+{{- end }}
   {{- $oauthClients = append $oauthClients (dict
     "client_id" "logfire-mcp"
     "client_secret" "$(MCP_OAUTH_CLIENT_SECRET)"
     "client_name" "Logfire Remote MCP Server"
     "redirect_uris" (list (printf "%s/mcp/oauth/callback" (include "logfire.url" .)))
-    "allowed_scopes" (list "project:read" "project:write" "project:write_token" "project:read_dashboard" "project:write_dashboard" "project:read_alert" "project:write_alert" "project:read_variables" "project:write_variables" "organization:create_project" "organization:read_channel" "organization:write_channel")
+    "allowed_scopes" $mcpScopes
   ) }}
   {{- if and $gatewayStaticOauthEnabled (index .Values "logfire-ai-gateway" "enabled") }}
     {{- $oauthClients = append $oauthClients (dict
@@ -259,9 +263,9 @@ spec:
             - name: MIN_DATE_USAGE_CHART  # TODO: make this optional?
               value: "2025-01-01"
             - name: DEFAULT_SUBSCRIPTION_PLAN
-              value: non_stripe
+              value: enterprise
             - name: DEFAULT_PERSONAL_SUBSCRIPTION_PLAN
-              value: non_stripe
+              value: enterprise
             - name: LOGFIRE_REGION
               value: {{ .Values.logfireRegion | default "local" }}
             - name: KNOWN_LOGFIRE_REGIONS
@@ -272,7 +276,6 @@ spec:
               value: {{ include "logfire.url" . | quote }}
             - name: MCP_RESOURCE_URL
               value: {{ printf "%s/mcp" (include "logfire.url" .) | quote }}
-            {{- include "logfire.rateLimits" . | nindent 12 }}
             - name: META_WRITE_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -283,6 +286,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-meta-frontend-token") }}
                   key: logfire-meta-frontend-token
+            - name: META_FRONTEND_APPLICATION_TOKEN
+              valueFrom:
+                configMapKeyRef:
+                  name: logfire-frontend-service-config
+                  key: frontend-application-token
             - name: UNSUBSCRIBE_SECRET
               valueFrom:
                 secretKeyRef:
@@ -319,7 +327,7 @@ spec:
               # This will make it possible to log-in sans-credentials by visiting a URL like:
               # http://localhost:8080/logfire-meta/logfire-meta#token=U8TO1taNdD7YwgBMcfeQVU7RB6Hgtrwd
               # You'll need to get the right host and get the secret from k8s
-              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)"}]{{- if $oauthClients }}, "oauth_clients": {{ $oauthClients | toJson }}{{- end }}}]'
+              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)", "frontend_application_token": "$(META_FRONTEND_APPLICATION_TOKEN)"}]{{- if $oauthClients }}, "oauth_clients": {{ $oauthClients | toJson }}{{- end }}}]'
             {{- include "logfire.pythonObjectStoreEnv" . | nindent 12 }}
             {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}

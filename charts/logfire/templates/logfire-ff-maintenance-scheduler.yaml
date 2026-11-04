@@ -71,8 +71,6 @@ spec:
               value: {{ $ioThreads | quote }}
             - name: FF_DATAFUSION_THREADS
               value: {{ $datafusionThreads | quote }}
-            - name: FF_COMPACTION_MAX_DAYS
-              value: "3"
             - name: FF_MAX_PARTITIONS_PER_COMPACTION_SCAN
               value: "5000"
             - name: FF_DELETION_LOOP_DELAY

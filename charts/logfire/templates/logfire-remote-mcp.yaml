@@ -43,6 +43,9 @@ spec:
   template:
     metadata:
       annotations:
+        {{- if (.Values.agentSandboxes | default dict).enabled }}
+        checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.checksum" . }}
+        {{- end }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
         {{- end }}
@@ -61,7 +64,7 @@ spec:
       {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       containers:
         - name: {{ $serviceName }}
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
+          image: '{{ .Values.image.repository | default "" }}{{ include "logfire.pythonImage" (dict "Values" .Values "key" "remoteMcpImage") }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           command: ["python", "-m", "logfire_remote_mcp"]
           {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
@@ -99,6 +102,7 @@ spec:
             successThreshold: 1
             timeoutSeconds: 1
           env:
+          {{- include "logfire.agentSandboxes.env" (dict "root" . "service" $serviceName) | nindent 10 }}
           - name: LOGFIRE_SERVICE_NAME
             value: {{ $serviceName }}
           - name: LOGFIRE_SERVICE_VERSION

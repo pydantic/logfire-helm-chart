@@ -24,7 +24,7 @@
   value: "true"
 - name: MONTY_PROFILES_ENABLED
   value: {{ $root.Values.agentSandboxes.profilesEnabled | quote }}
-{{- if eq .service "logfire-backend" }}
+{{- if has .service (list "logfire-backend" "logfire-remote-mcp") }}
 - name: MONTY_WORKBENCH_ENABLED
   value: "true"
 - name: MONTY_ALLOWED_ORGANIZATIONS
@@ -88,7 +88,7 @@
 {{- if and $a.volumesEnabled (not $a.profilesEnabled) -}}
 {{- fail "agentSandboxes.volumesEnabled requires profilesEnabled" -}}
 {{- end -}}
-{{- range $service := list "logfire-backend" "logfire-backend-auth" "logfire-backend-migrations" "logfire-worker" "logfire-task-runner" "logfire-frontend-service" -}}
+{{- range $service := list "logfire-backend" "logfire-backend-auth" "logfire-backend-migrations" "logfire-worker" "logfire-task-runner" "logfire-frontend-service" "logfire-remote-mcp" -}}
 {{- if ne (include "logfire.serviceTag" (dict "Values" $.Values "Chart" $.Chart "serviceName" $service)) $.Values.agentSandboxes.imageTag -}}
 {{- fail "agentSandboxes requires matching Python and frontend image tags" -}}
 {{- end -}}

@@ -207,3 +207,64 @@ tests:
     asserts:
       - isKind:
           of: Deployment
+
+  - it: binds remote MCP to matching images and private execution credentials
+    templates: [templates/logfire-remote-mcp.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-remote-mcp-prod:compatible-test-revision
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_WORKBENCH_ENABLED, value: "true"}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MONTY_CONTROL_TOKEN
+            valueFrom:
+              secretKeyRef: {name: lf-agent-sandboxes, key: management}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_CONTROL_URL, value: "https://monty-admission.customer.svc.cluster.local:8443"}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_WORKBENCH_RELAY_URL, value: "ws://monty-relay.customer.svc.cluster.local:8000/"}
+  - it: permits the MCP caller on the private admission TLS endpoint
+    templates: [templates/logfire-agent-sandboxes-network.yaml]
+    documentSelector:
+      path: metadata.name
+      value: monty-admission-private
+    asserts:
+      - contains:
+          path: spec.ingress
+          content:
+            from:
+              - podSelector:
+                  matchLabels: {app.kubernetes.io/component: logfire-remote-mcp}
+            ports: [{protocol: TCP, port: 8443}]
+  - it: includes sandbox execution in the configured MCP OAuth consent
+    set:
+      gateway.tls: true
+    templates: [templates/logfire-backend.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].env[?(@.name == "BOOTSTRAPPED_ORGANIZATIONS")].value
+          pattern: 'project:execute_agent_sandboxes'
+  - it: keeps execution out of MCP OAuth consent when sandboxes are disabled
+    set:
+      agentSandboxes.enabled: false
+      gateway.tls: true
+    templates: [templates/logfire-backend.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notMatchRegex:
+          path: spec.template.spec.containers[0].env[?(@.name == "BOOTSTRAPPED_ORGANIZATIONS")].value
+          pattern: 'project:execute_agent_sandboxes'

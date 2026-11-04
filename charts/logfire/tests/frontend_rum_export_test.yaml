@@ -1,0 +1,81 @@
+suite: frontend rum export token
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+  dev:
+    deployPostgres: true
+tests:
+  - it: generates a public token and serves it to the browser
+    templates:
+      - templates/logfire-frontend-service-config.yaml
+    asserts:
+      - matchRegex:
+          path: data["frontend-application-token"]
+          pattern: ^pylf_v1_local_pub[a-zA-Z0-9]+$
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-service-config
+      - matchRegex:
+          path: data["config.1.js"]
+          pattern: "rumExport: \\{ baseUrl: 'http://logfire\\.example\\.com', token: 'pylf_v1_local_pub[a-zA-Z0-9]+', sessionReplay: false \\}"
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-service-config
+
+  - it: uses an explicit public token in the browser configuration
+    set:
+      frontendApplicationToken: pylf_v1_local_pubTEST123
+    templates:
+      - templates/logfire-frontend-service-config.yaml
+    asserts:
+      - equal:
+          path: data["frontend-application-token"]
+          value: pylf_v1_local_pubTEST123
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-service-config
+      - matchRegex:
+          path: data["config.1.js"]
+          pattern: "token: 'pylf_v1_local_pubTEST123'"
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-service-config
+
+  - it: registers the same token through bootstrap on the backend
+    templates:
+      - templates/logfire-backend.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: META_FRONTEND_APPLICATION_TOKEN
+            valueFrom:
+              configMapKeyRef:
+                name: logfire-frontend-service-config
+                key: frontend-application-token
+          any: true
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: BOOTSTRAPPED_ORGANIZATIONS
+            value: '[{"admin_user_email": "test@example.com", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)", "frontend_application_token": "$(META_FRONTEND_APPLICATION_TOKEN)"}]}]'
+          any: true
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: refuses a token that is not public
+    set:
+      frontendApplicationToken: private-token
+    templates:
+      - templates/logfire-validate-config.yaml
+    asserts:
+      - failedTemplate:
+          errorPattern: frontendApplicationToken must match pylf_v1_<region>_pub<random>

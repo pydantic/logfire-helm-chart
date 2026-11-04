@@ -39,7 +39,7 @@ carries no `podSecurityContext` key. Returns JSON so callers can parse it with
 {{- end -}}
 
 {{/*
-Point a Fusionfire reader at bcache (read path v2). The reader lists the headless
+Point a Fusionfire reader at bcache. The reader lists the headless
 service's EndpointSlices, so each request reaches a pod IP. Keep these defaults
 before service-specific env so operators can override them. A read-once reader,
 such as maintenance, sets `noWarm` so its reads do not displace query data.
@@ -64,8 +64,6 @@ which is right for a single-zone cluster.
 {{- define "logfire.ffBcacheReaderEnv" -}}
 {{- $root := .root -}}
 {{- $topology := include "logfire.bcacheTopology" (dict "ctx" $root) | fromJson -}}
-- name: FF_READ_PATH
-  value: v2
 - name: FF_BCACHE_URI
   value: "{{ include "logfire.scheme" $root }}://logfire-ff-bcache-internal:9443"
 - name: FF_BCACHE_K8S_SERVICE

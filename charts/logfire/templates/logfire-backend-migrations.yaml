@@ -45,7 +45,8 @@ spec:
           {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
           command:
             - "python"
-            - "src/packages/logfire-db/logfire_db/migrations/main.py"
+            - "-m"
+            - "logfire_db.migrations.main"
           env:
             - name: LOGFIRE_SEND_TO_LOGFIRE
               value: "false"
