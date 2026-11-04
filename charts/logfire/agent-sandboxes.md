@@ -21,9 +21,10 @@ not a substitute for this integration.
   `monty-controller`, `monty-reconciler` and `monty-admission`.
 - Select a compatible image revision that contains the dedicated Monty control
   image. The revision must support CPU-clock execution, immutable worker execution
-  identities and database-backed receipts. Make the backend, auth, worker, task runner, remote MCP, frontend,
-  relay and sandbox worker images available in `image.repository`. Use matching immutable image revisions. The chart's implicit
-  image revision does not select the sandbox runtime. The sandbox image selection leaves
+  identities and database-backed receipts. Use matching immutable revisions for the
+  backend, auth, background worker, task runner, remote MCP, frontend, relay and
+  sandbox worker images in `image.repository`. The chart's implicit image revision
+  does not select the sandbox runtime. The sandbox image selection leaves
   FusionFire and its migrations on their chart-selected revision.
 - Supply working Postgres, Redis and object storage through the chart's existing
   settings. The broker uses the object-store provider environment and credential
@@ -76,7 +77,7 @@ An acting user must consent to `project:execute_agent_sandboxes` for the target 
 Each call uses a fresh session and keeps project authorization and execution limits.
 The chart supplies the private admission and relay endpoints to the MCP server.
 It adds the execution scope to the configured MCP OAuth client.
-NetworkPolicy permits MCP access to these two services only.
+The relay and admission ingress policies also permit the MCP service.
 
 The chart creates separate internal credentials for management, assignment,
 state, snapshots, volume cleanup and telemetry. It retains generated credentials
