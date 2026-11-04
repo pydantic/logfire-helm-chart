@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+import os
+import secrets
+import subprocess
+from collections import Counter
+
+import httpx
+import pytest
+from helpers.poll import wait_for
+
+pytestmark = pytest.mark.anyio
+
+
+def _logs(context: str, namespace: str, component: str) -> list[str]:
+    result = subprocess.run(
+        [
+            "kubectl", "--context", context, "-n", namespace, "logs",
+            "-l", f"app.kubernetes.io/component={component}",
+            "--all-containers=true", "--prefix=true", "--max-log-requests=20",
+            "--since=5m", "--tail=-1",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return result.stdout.splitlines()
+
+
+async def _new_log_line(
+    context: str, namespace: str, component: str, before: Counter[str], marker: str
+) -> str:
+    async def find_line() -> str | None:
+        current = Counter(_logs(context, namespace, component))
+        for line in (current - before).elements():
+            if marker in line:
+                return line
+        return None
+
+    return await wait_for(find_line, timeout=30, interval=1)
+
+
+async def test_callback_token_is_redacted_from_access_logs(client: httpx.AsyncClient) -> None:
+    context = os.environ.get("LOGFIRE_TEST_KUBE_CONTEXT")
+    namespace = os.environ.get("LOGFIRE_TEST_NAMESPACE")
+    if not context or not namespace:
+        pytest.skip("Access log checks need the Kind runner's explicit context and namespace")
+
+    components = ("logfire-service", "logfire-frontend-service")
+    before = {component: Counter(_logs(context, namespace, component)) for component in components}
+    token = f"synthetic-callback-{secrets.token_hex(12)}"
+    response = await client.get(f"/auth/email-callback?token={token}&continue=dashboard")
+    assert response.status_code == 200
+    for component in components:
+        line = await _new_log_line(context, namespace, component, before[component], "/auth/email-callback")
+        assert token not in line, line
+
+    before = {component: Counter(_logs(context, namespace, component)) for component in components}
+    marker = f"log-check-{secrets.token_hex(12)}"
+    referer = f"http://example.test/auth/email-callback?continue=dashboard&token={token}"
+    response = await client.get(f"/{marker}?ordinary=visible", headers={"Referer": referer})
+    assert response.status_code < 500
+    lines = {
+        component: await _new_log_line(context, namespace, component, before[component], marker)
+        for component in components
+    }
+    for line in lines.values():
+        assert "ordinary=visible" in line, line
+        assert token not in line, line
+    assert "http://example.test/auth/email-callback" in lines["logfire-frontend-service"]
+
+    before = Counter(_logs(context, namespace, "logfire-frontend-service"))
+    marker = f"log-check-{secrets.token_hex(12)}"
+    referer = "http://example.test/ordinary?value=visible"
+    response = await client.get(f"/{marker}", headers={"Referer": referer})
+    assert response.status_code < 500
+    line = await _new_log_line(context, namespace, "logfire-frontend-service", before, marker)
+    assert referer in line, line

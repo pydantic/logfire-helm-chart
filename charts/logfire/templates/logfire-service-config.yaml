@@ -49,11 +49,13 @@ stringData:
       bind :{{ .Values.inClusterTls.httpsPort }} ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2,http/1.1
       {{- end }}
       log stdout local0 info
-      option httplog
+      log-format "%ci:%cp [%tr] %ft %b/%s %TR/%Tw/%Tc/%Tr/%Ta %ST %B %CC %CS %tsc %ac/%fc/%bc/%sc/%rc %sq/%bq %hr %hs %{+Q}[var(txn.log_request)]"
       option http-keep-alive
       no option httpclose
       timeout http-keep-alive {{ .Values.keepAliveTimeout }}
       timeout client {{ ternary $aiGatewayProxyTimeout "120s" (get $aiGatewayValues "enabled") }}
+      http-request set-var-fmt(txn.log_request) "%[capture.req.method] %[capture.req.uri] %[capture.req.ver]"
+      http-request set-var-fmt(txn.log_request) "%[capture.req.method] %[path] %[capture.req.ver]" if { path /auth/email-callback }
       http-request set-header Host %[req.hdr(Host)]
       http-request set-header X-Forwarded-Host %[req.hdr(Host)] unless { req.hdr(X-Forwarded-Host) -m found }
       http-request set-header X-Real-IP %[src]
