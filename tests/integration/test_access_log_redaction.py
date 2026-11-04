@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import secrets
 import subprocess
 from collections import Counter
+from urllib.parse import urlsplit
 
 import httpx
 import pytest
@@ -56,6 +58,20 @@ async def test_callback_token_is_redacted_from_access_logs(client: httpx.AsyncCl
         line = await _new_log_line(context, namespace, component, before[component], "/auth/email-callback")
         assert token not in line, line
 
+    before = Counter(_logs(context, namespace, "logfire-service"))
+    response = await client.get(f"/ui-api/auth/users/email-session-data/{token}/")
+    assert response.status_code == 400
+    line = await _new_log_line(context, namespace, "logfire-service", before, "/ui-api/auth/users/email-session-data/")
+    assert 'GET /ui-api/auth/users/email-session-data/[redacted]/ HTTP/1.1' in line
+    assert token not in line, line
+
+    before = Counter(_logs(context, namespace, "logfire-service"))
+    response = await client.get(f"/ui-api/%61uth/users/email-session-data/{token}/")
+    assert response.status_code == 400
+    line = await _new_log_line(context, namespace, "logfire-service", before, "/ui-api/auth/users/email-session-data/")
+    assert 'GET /ui-api/auth/users/email-session-data/[redacted]/ HTTP/1.1' in line
+    assert token not in line, line
+
     before = {component: Counter(_logs(context, namespace, component)) for component in components}
     marker = f"log-check-{secrets.token_hex(12)}"
     referer = f"http://example.test/auth/email-callback?continue=dashboard&token={token}"
@@ -77,3 +93,27 @@ async def test_callback_token_is_redacted_from_access_logs(client: httpx.AsyncCl
     assert response.status_code < 500
     line = await _new_log_line(context, namespace, "logfire-frontend-service", before, marker)
     assert referer in line, line
+
+
+async def test_haproxy_escapes_request_line(base_url: str) -> None:
+    context = os.environ.get("LOGFIRE_TEST_KUBE_CONTEXT")
+    namespace = os.environ.get("LOGFIRE_TEST_NAMESPACE")
+    if not context or not namespace:
+        pytest.skip("Access log checks need the Kind runner's explicit context and namespace")
+
+    before = Counter(_logs(context, namespace, "logfire-service"))
+    marker = f"log-check-{secrets.token_hex(12)}"
+    url = urlsplit(base_url)
+    assert url.hostname
+    port = url.port or (443 if url.scheme == "https" else 80)
+    reader, writer = await asyncio.open_connection(url.hostname, port, ssl=url.scheme == "https")
+    try:
+        writer.write(f'GET /{marker}?visible="hello" HTTP/1.1\r\nHost: {url.netloc}\r\nConnection: close\r\n\r\n'.encode())
+        await writer.drain()
+        assert (await reader.readline()).startswith(b"HTTP/1.1 ")
+        await reader.read()
+    finally:
+        writer.close()
+        await writer.wait_closed()
+    line = await _new_log_line(context, namespace, "logfire-service", before, marker)
+    assert f'"GET /{marker}?visible=#22hello#22 HTTP/1.1"' in line, line
