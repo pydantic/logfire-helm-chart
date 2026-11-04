@@ -43,63 +43,75 @@ async def _new_log_line(
     return await wait_for(find_line, timeout=30, interval=1)
 
 
-async def test_callback_token_is_redacted_from_access_logs(client: httpx.AsyncClient) -> None:
+def _kind_target() -> tuple[str, str]:
     context = os.environ.get("LOGFIRE_TEST_KUBE_CONTEXT")
     namespace = os.environ.get("LOGFIRE_TEST_NAMESPACE")
     if not context or not namespace:
         pytest.skip("Access log checks need the Kind runner's explicit context and namespace")
+    return context, namespace
 
+
+@pytest.mark.parametrize(
+    ("page", "param"),
+    [
+        ("/auth/email-callback", "token"),
+        ("/auth/reset-password-callback", "token"),
+        ("/auth/totp-reset/complete", "session_token"),
+    ],
+)
+async def test_auth_page_token_is_redacted_from_access_logs(client: httpx.AsyncClient, page: str, param: str) -> None:
+    context, namespace = _kind_target()
     components = ("logfire-service", "logfire-frontend-service")
     before = {component: Counter(_logs(context, namespace, component)) for component in components}
-    token = f"synthetic-callback-{secrets.token_hex(12)}"
-    response = await client.get(f"/auth/email-callback?token={token}&continue=dashboard")
+    token = f"synthetic-token-{secrets.token_hex(12)}"
+    response = await client.get(f"{page}?{param}={token}&continue=dashboard")
     assert response.status_code == 200
+    assert response.headers["referrer-policy"] == "no-referrer"
     for component in components:
-        line = await _new_log_line(context, namespace, component, before[component], "/auth/email-callback")
+        line = await _new_log_line(context, namespace, component, before[component], page)
         assert token not in line, line
 
+
+@pytest.mark.parametrize(
+    ("path", "redacted"),
+    [
+        ("/ui-api/auth/users/email-session-data/{token}/", "/ui-api/auth/users/email-session-data/[redacted]/"),
+        ("/ui-api/%61uth/users/email-session-data/{token}/", "/ui-api/auth/users/email-session-data/[redacted]/"),
+        ("/ui-api/auth/totp/reset/session/{token}/", "/ui-api/auth/totp/reset/session/[redacted]/"),
+    ],
+)
+async def test_session_token_path_is_redacted_from_access_logs(
+    client: httpx.AsyncClient, path: str, redacted: str
+) -> None:
+    context, namespace = _kind_target()
     before = Counter(_logs(context, namespace, "logfire-service"))
-    response = await client.get(f"/ui-api/auth/users/email-session-data/{token}/")
+    token = f"synthetic-token-{secrets.token_hex(12)}"
+    response = await client.get(path.format(token=token))
     assert response.status_code == 400
-    line = await _new_log_line(context, namespace, "logfire-service", before, "/ui-api/auth/users/email-session-data/")
-    assert 'GET /ui-api/auth/users/email-session-data/[redacted]/ HTTP/1.1' in line
+    line = await _new_log_line(context, namespace, "logfire-service", before, redacted)
     assert token not in line, line
 
-    before = Counter(_logs(context, namespace, "logfire-service"))
-    response = await client.get(f"/ui-api/%61uth/users/email-session-data/{token}/")
-    assert response.status_code == 400
-    line = await _new_log_line(context, namespace, "logfire-service", before, "/ui-api/auth/users/email-session-data/")
-    assert 'GET /ui-api/auth/users/email-session-data/[redacted]/ HTTP/1.1' in line
-    assert token not in line, line
 
+async def test_ordinary_requests_keep_query_and_referer(client: httpx.AsyncClient) -> None:
+    context, namespace = _kind_target()
+    components = ("logfire-service", "logfire-frontend-service")
     before = {component: Counter(_logs(context, namespace, component)) for component in components}
     marker = f"log-check-{secrets.token_hex(12)}"
-    referer = f"http://example.test/auth/email-callback?continue=dashboard&token={token}"
+    referer = "http://example.test/ordinary?value=visible"
     response = await client.get(f"/{marker}?ordinary=visible", headers={"Referer": referer})
     assert response.status_code < 500
+    assert "referrer-policy" not in response.headers
     lines = {
         component: await _new_log_line(context, namespace, component, before[component], marker)
         for component in components
     }
     for line in lines.values():
         assert "ordinary=visible" in line, line
-        assert token not in line, line
-    assert "http://example.test/auth/email-callback" in lines["logfire-frontend-service"]
-
-    before = Counter(_logs(context, namespace, "logfire-frontend-service"))
-    marker = f"log-check-{secrets.token_hex(12)}"
-    referer = "http://example.test/ordinary?value=visible"
-    response = await client.get(f"/{marker}", headers={"Referer": referer})
-    assert response.status_code < 500
-    line = await _new_log_line(context, namespace, "logfire-frontend-service", before, marker)
-    assert referer in line, line
+    assert referer in lines["logfire-frontend-service"]
 
 
 async def test_haproxy_escapes_request_line(base_url: str) -> None:
-    context = os.environ.get("LOGFIRE_TEST_KUBE_CONTEXT")
-    namespace = os.environ.get("LOGFIRE_TEST_NAMESPACE")
-    if not context or not namespace:
-        pytest.skip("Access log checks need the Kind runner's explicit context and namespace")
+    context, namespace = _kind_target()
 
     before = Counter(_logs(context, namespace, "logfire-service"))
     marker = f"log-check-{secrets.token_hex(12)}"

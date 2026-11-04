@@ -55,8 +55,9 @@ stringData:
       timeout http-keep-alive {{ .Values.keepAliveTimeout }}
       timeout client {{ ternary $aiGatewayProxyTimeout "120s" (get $aiGatewayValues "enabled") }}
       http-request set-var-fmt(txn.log_request) "%r"
-      http-request set-var-fmt(txn.log_request) "%[capture.req.method] %[path] %[capture.req.ver]" if { path /auth/email-callback }
+      http-request set-var-fmt(txn.log_request) "%[capture.req.method] %[path] %[capture.req.ver]" if { path,url_dec -m beg /auth/ }
       http-request set-var-fmt(txn.log_request) "%[capture.req.method] /ui-api/auth/users/email-session-data/[redacted]/ %[capture.req.ver]" if { path,url_dec -m beg /ui-api/auth/users/email-session-data/ }
+      http-request set-var-fmt(txn.log_request) "%[capture.req.method] /ui-api/auth/totp/reset/session/[redacted]/ %[capture.req.ver]" if { path,url_dec -m beg /ui-api/auth/totp/reset/session/ }
       http-request set-header Host %[req.hdr(Host)]
       http-request set-header X-Forwarded-Host %[req.hdr(Host)] unless { req.hdr(X-Forwarded-Host) -m found }
       http-request set-header X-Real-IP %[src]

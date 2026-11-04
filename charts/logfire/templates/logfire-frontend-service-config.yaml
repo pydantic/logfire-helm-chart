@@ -94,16 +94,16 @@ data:
 
         map $request_uri $logfire_log_request {
             default $request;
-            ~^(?:https?://[^/]+)?/auth/email-callback\? "$request_method /auth/email-callback?[redacted] $server_protocol";
+            ~^(?:https?://[^/]+)?(/auth/[^?]*)\? "$request_method $1?[redacted] $server_protocol";
         }
 
-        map $http_referer $logfire_log_referer {
-            default $http_referer;
-            ~^([^?]*?/auth/email-callback)\? "$1?[redacted]";
+        map $request_uri $logfire_referrer_policy {
+            default "";
+            ~^(?:https?://[^/]+)?/auth/ "no-referrer";
         }
 
         log_format logfire '$remote_addr - $remote_user [$time_local] "$logfire_log_request" '
-                           '$status $body_bytes_sent "$logfire_log_referer" '
+                           '$status $body_bytes_sent "$http_referer" '
                            '"$http_user_agent"';
 
         map $http_x_forwarded_host $logfire_forwarded_host {
@@ -333,6 +333,7 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
+                add_header Referrer-Policy $logfire_referrer_policy always;
                 add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy richScreenReaderContent dompurify iconify ProseMirrorClipboard;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
@@ -545,6 +546,7 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
+                add_header Referrer-Policy $logfire_referrer_policy always;
                 add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy richScreenReaderContent dompurify iconify ProseMirrorClipboard;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
