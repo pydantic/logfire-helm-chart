@@ -92,6 +92,15 @@ data:
 
         server_names_hash_bucket_size 128;
 
+        # Query strings and referrers can contain OAuth codes and mailed link tokens, so the log has
+        # neither. The empty referrer field keeps the field positions of the `combined` format.
+        log_format logfire '$remote_addr - $remote_user [$time_local] "$request_method $uri $server_protocol" '
+                           '$status $body_bytes_sent "-" "$http_user_agent"';
+
+        # The error log entry of a missing file has the full request line and referrer. The access
+        # log still records each 404.
+        log_not_found off;
+
         map $http_x_forwarded_host $logfire_forwarded_host {
             ""      $host;
             default $http_x_forwarded_host;
@@ -106,7 +115,7 @@ data:
         server {
             listen 8080 reuseport backlog=4096;
             server_name _;
-            access_log /dev/stdout;
+            access_log /dev/stdout logfire;
 
             location = /health {
                 add_header Content-Type text/plain;
@@ -122,7 +131,7 @@ data:
             server_name {{ include "logfire.all_hostnames_string" . }};
             listen {{ .Values.inClusterTls.httpsPort }} ssl reuseport backlog=4096;
             http2 on;
-            access_log /dev/stdout;
+            access_log /dev/stdout logfire;
 
             ssl_certificate /etc/nginx/tls/tls.crt;
             ssl_certificate_key /etc/nginx/tls/tls.key;
@@ -338,7 +347,7 @@ data:
             server_name {{ include "logfire.all_hostnames_string" . }};
             listen 8080 reuseport backlog=4096;
             http2 on;
-            access_log /dev/stdout;
+            access_log /dev/stdout logfire;
 
             root /usr/share/nginx/html; # Root directory for the static files
 
