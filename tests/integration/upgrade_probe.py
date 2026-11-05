@@ -12,7 +12,7 @@ from pathlib import Path
 import anyio
 import httpx
 from helpers.otlp import trace_payload
-from helpers.poll import wait_for
+from helpers.poll import TRANSIENT_STATUSES, wait_for
 from helpers.tokens import create_project, create_read_token, create_write_token
 
 
@@ -76,7 +76,7 @@ async def check(client: httpx.AsyncClient, seed: Seed) -> None:
             )
         except httpx.TransportError:
             return None
-        if response.status_code in (429, 502, 503, 504):
+        if response.status_code in TRANSIENT_STATUSES:
             return None
         response.raise_for_status()
         rows = response.json()["data"]
