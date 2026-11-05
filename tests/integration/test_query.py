@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from helpers.otlp import trace_payload
-from helpers.poll import wait_for
+from helpers.poll import is_transient, wait_for
 
 pytestmark = pytest.mark.anyio
 
@@ -30,6 +30,8 @@ async def _poll_v1_count(
         params={"sql": SQL},
         headers={"Authorization": f"Bearer {read_token}", "Accept": "application/json"},
     )
+    if is_transient(response):
+        return None
     response.raise_for_status()
     body = response.json()
     for column in body.get("columns", []):
@@ -53,6 +55,8 @@ async def _poll_v2_count(
         },
         headers={"Authorization": f"Bearer {read_token}", "Accept": "application/json"},
     )
+    if is_transient(response):
+        return None
     response.raise_for_status()
     body = response.json()
     rows = body.get("data") or []
