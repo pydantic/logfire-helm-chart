@@ -49,32 +49,13 @@ stringData:
       bind :{{ .Values.inClusterTls.httpsPort }} ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2,http/1.1
       {{- end }}
       log stdout local0 info
-      log-format "%ci:%cp [%tr] %ft %b/%s %TR/%Tw/%Tc/%Tr/%Ta %ST %B %CC %CS %tsc %ac/%fc/%bc/%sc/%rc %sq/%bq %hr %hs %{+Q}[var(txn.log_request)]"
+      # URLs can contain credentials, so the log has the method and not the URL. The nginx and service
+      # logs record the path.
+      log-format "%ci:%cp [%tr] %ft %b/%s %TR/%Tw/%Tc/%Tr/%Ta %ST %B %CC %CS %tsc %ac/%fc/%bc/%sc/%rc %sq/%bq %hr %hs \"%HM\""
       option http-keep-alive
       no option httpclose
       timeout http-keep-alive {{ .Values.keepAliveTimeout }}
       timeout client {{ ternary $aiGatewayProxyTimeout "120s" (get $aiGatewayValues "enabled") }}
-      # The log has no query string, and no path segment that grants access. Keep this list in step
-      # with the `$logfire_log_path` map in logfire-frontend-nginx-config. The rules match the
-      # decoded path, so that percent-encoding does not avoid them, and log a fixed value. The
-      # patterns use only POSIX syntax, because the configured HAProxy image can build without PCRE.
-      http-request set-var-fmt(txn.log_path) "%HPO"
-      http-request set-var-fmt(txn.log_path) "/auth/device/[redacted]" if { path,url_dec -m reg ^/auth/device/ }
-      http-request set-var-fmt(txn.log_path) "/v1/device-auth/wait/[redacted]" if { path,url_dec -m reg ^/v1/device-auth/wait/ }
-      http-request set-var-fmt(txn.log_path) "/ui-api/invitations/[redacted]" if { path,url_dec -m reg ^/ui-api/organizations/[^/]+/(projects/[^/]+/)?invitations/[^/]+/(claim|revoke) }
-      http-request set-var-fmt(txn.log_path) "/ui-api/public-shares/[redacted]" if { path,url_dec -m reg ^/ui-api/organizations/[^/]+/projects/[^/]+/public-(traces|conversations)/[^/]+ }
-      http-request set-var-fmt(txn.log_path) "%HPO" if { path,url_dec -m reg ^/ui-api/organizations/[^/]+/projects/[^/]+/public-(traces|conversations)/list(/|$) }
-      http-request set-var-fmt(txn.log_path) "/unsubscribe/[redacted]" if { path,url_dec -m reg ^/(ui-api/)?unsubscribe/ }
-      http-request set-var-fmt(txn.log_path) "/ui-api/short-link/[redacted]" if { path,url_dec -m reg ^/ui-api/short-link/ }
-      http-request set-var-fmt(txn.log_path) "/ui-api/auth/users/email-session-data/[redacted]/" if { path,url_dec -m reg ^/ui-api/auth/users/email-session-data/[^/]+ }
-      http-request set-var-fmt(txn.log_path) "/ui-api/auth/totp/reset/session/[redacted]/" if { path,url_dec -m reg ^/ui-api/auth/totp/reset/session/[^/]+ }
-      http-request set-var-fmt(txn.log_path) "/join/[redacted]" if { path,url_dec -m reg ^/join/ }
-      http-request set-var-fmt(txn.log_path) "/join-organization/[redacted]" if { path,url_dec -m reg ^/[^/]+/-/join-organization/ }
-      http-request set-var-fmt(txn.log_path) "/join-project/[redacted]" if { path,url_dec -m reg ^/[^/]+/[^/]+/join-project/ }
-      http-request set-var-fmt(txn.log_path) "/l/[redacted]" if { path,url_dec -m reg ^/l/ }
-      http-request set-var-fmt(txn.log_path) "/shared-trace/[redacted]" if { path,url_dec -m reg ^/shared-trace/ }
-      http-request set-var-fmt(txn.log_path) "/public-share/[redacted]" if { path,url_dec -m reg ^/(ui-api/)?public-(trace|traces|conversation|conversations)/ }
-      http-request set-var-fmt(txn.log_request) "%[capture.req.method] %[var(txn.log_path)] %[capture.req.ver]"
       http-request set-header Host %[req.hdr(Host)]
       http-request set-header X-Forwarded-Host %[req.hdr(Host)] unless { req.hdr(X-Forwarded-Host) -m found }
       http-request set-header X-Real-IP %[src]

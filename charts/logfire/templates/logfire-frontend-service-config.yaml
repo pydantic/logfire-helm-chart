@@ -92,37 +92,9 @@ data:
 
         server_names_hash_bucket_size 128;
 
-        # Keep this list in step with the `txn.log_path` rules in logfire-haproxy-config.
-        map $uri $logfire_log_path {
-            default $uri;
-            ~^/auth/device/ /auth/device/[redacted];
-            ~^/unsubscribe/ /unsubscribe/[redacted];
-            ~^/ui-api/unsubscribe/ /ui-api/unsubscribe/[redacted];
-            ~^/join/ /join/[redacted];
-            ~^/[^/]+/-/join-organization/ /join-organization/[redacted];
-            ~^/[^/]+/[^/]+/join-project/ /join-project/[redacted];
-            ~^/l/ /l/[redacted];
-            ~^/shared-trace/ /shared-trace/[redacted];
-            ~^/public-trace/ /public-trace/[redacted];
-            ~^/public-conversation/ /public-conversation/[redacted];
-            ~^/ui-api/public-traces/ /ui-api/public-traces/[redacted];
-            ~^/ui-api/public-conversations/ /ui-api/public-conversations/[redacted];
-        }
-
-        # These pages can open with a credential in the URL. Without this header, the asset and API
-        # requests of the page send that URL as their `Referer`. nginx omits a header whose value is
-        # empty. The map reads `$request_uri`, because `try_files /index.html` changes `$uri`.
-        map $request_uri $logfire_referrer_policy {
-            default "";
-            ~^(?:https?://[^/]+)?/auth/ "no-referrer";
-            ~^(?:https?://[^/]+)?/settings/emails/change-email-callback/?(?:\?|$) "no-referrer";
-        }
-
-        # Query strings and referrers can contain OAuth codes, invitation capabilities and mailed
-        # link tokens, so the log has neither. The empty referrer field keeps the field positions of
-        # the `combined` format.
-        log_format logfire '$remote_addr - $remote_user [$time_local] '
-                           '"$request_method $logfire_log_path $server_protocol" '
+        # Query strings and referrers can contain OAuth codes and mailed link tokens, so the log has
+        # neither. The empty referrer field keeps the field positions of the `combined` format.
+        log_format logfire '$remote_addr - $remote_user [$time_local] "$request_method $uri $server_protocol" '
                            '$status $body_bytes_sent "-" "$http_user_agent"';
 
         # The error log entry of a missing file has the full request line and referrer. The access
@@ -356,7 +328,6 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Referrer-Policy $logfire_referrer_policy always;
                 add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy richScreenReaderContent dompurify iconify ProseMirrorClipboard;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
@@ -569,7 +540,6 @@ data:
 
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Referrer-Policy $logfire_referrer_policy always;
                 add_header Content-Security-Policy "default-src 'self';script-src 'self' 'unsafe-inline' 'unsafe-eval';style-src 'self' 'unsafe-inline';connect-src 'self' {{ include "logfire.all_urls" . }}{{ range $hostnames }} {{ $wsProtocol }}://{{ . }}{{ end }} https://esm.sh;worker-src 'self' blob:;trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy richScreenReaderContent dompurify iconify ProseMirrorClipboard;font-src 'self';object-src 'none';frame-src 'self';img-src 'self' https://cdn.jsdelivr.net/ https://github.com https://avatars.githubusercontent.com https://*.slack-edge.com blob: data:;base-uri 'self';form-action 'self';manifest-src 'self';frame-ancestors 'self';" always;
             }
 
