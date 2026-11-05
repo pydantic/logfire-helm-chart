@@ -11,6 +11,8 @@ from helpers.poll import wait_for
 
 pytestmark = pytest.mark.anyio
 
+COMPONENTS = ("logfire-service", "logfire-frontend-service")
+
 
 def _logs(context: str, namespace: str, component: str) -> list[str]:
     result = subprocess.run(
@@ -34,22 +36,27 @@ async def test_url_credentials_stay_out_of_proxy_logs(client: httpx.AsyncClient)
     if not context or not namespace:
         pytest.skip("Access log checks need the Kind runner's explicit context and namespace")
 
-    # Each proxy writes the line of the final PATCH request after the lines of the requests before it.
-    arrival_signs = {"logfire-service": '"PATCH"', "logfire-frontend-service": '"PATCH /'}
-    before = {component: Counter(_logs(context, namespace, component)) for component in arrival_signs}
+    before = {component: Counter(_logs(context, namespace, component)) for component in COMPONENTS}
     token = f"synthetic-token-{secrets.token_hex(12)}"
+    short_code = secrets.token_hex(5)
     link = f"/auth/email-callback?token={token}"
+    marker = f"log-check-{secrets.token_hex(12)}"
 
     assert (await client.get(link)).status_code == 200
+    await client.get(f"/ui-api/auth/users/email-session-data/{token}/")
+    await client.get(f"/l/{short_code}")
     # A missing file is the case where the nginx error log records the request line and referrer.
-    await client.get(f"/log-check-missing.js?token={token}", headers={"Referer": f"http://example.test{link}"})
-    await client.patch("/log-check.js")
+    await client.get(f"/{marker}.js?token={token}", headers={"Referer": f"http://example.test{link}"})
 
-    for component, arrival_sign in arrival_signs.items():
+    logged = {}
+    for component in COMPONENTS:
 
         async def new_lines() -> list[str] | None:
             lines = list((Counter(_logs(context, namespace, component)) - before[component]).elements())
-            return lines if any(arrival_sign in line for line in lines) else None
+            return lines if any(marker in line for line in lines) else None
 
-        lines = await wait_for(new_lines, timeout=30, interval=1)
-        assert not [line for line in lines if token in line]
+        logged[component] = await wait_for(new_lines, timeout=30, interval=1)
+        assert not [line for line in logged[component] if token in line or short_code in line]
+
+    # HAProxy can be the only record of a request that does not reach a service.
+    assert any("/ui-api/auth/users/email-session-data/[redacted]/" in line for line in logged["logfire-service"])
