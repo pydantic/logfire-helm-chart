@@ -40,7 +40,8 @@ async def test_url_credentials_stay_out_of_proxy_logs(client: httpx.AsyncClient)
     token = f"synthetic-token-{secrets.token_hex(12)}"
     short_code = secrets.token_hex(5)
     link = f"/auth/email-callback?token={token}"
-    marker = f"log-check-{secrets.token_hex(12)}"
+    # With `.js`, this stays below the 20 characters at which HAProxy redacts a path segment.
+    marker = f"lc-{secrets.token_hex(6)}"
 
     assert (await client.get(link)).status_code == 200
     await client.get(f"/ui-api/auth/users/email-session-data/{token}/")
