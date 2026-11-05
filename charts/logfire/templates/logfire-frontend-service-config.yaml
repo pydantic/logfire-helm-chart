@@ -187,7 +187,7 @@ data:
                 try_files /version.json =404;
             }
 
-            location ~ "^/(?<agent_setup_org>[^/.]+)/(?<agent_setup_project>[^/.]+)/agent-setup\.md\.?$" {
+            location ~ "^/(?<agent_setup_org>[a-z0-9-]+)/(?<agent_setup_project>[a-z0-9-]+)/agent-setup\.md\.?$" {
                 access_log off;
                 proxy_pass {{ include "logfire.scheme" . }}://logfire_backend/ui-api/agent-setup/$agent_setup_org/$agent_setup_project.md$is_args$args;
                 {{- if $inClusterTlsEnabled }}
@@ -399,7 +399,7 @@ data:
                 try_files /version.json =404;
             }
 
-            location ~ "^/(?<agent_setup_org>[^/.]+)/(?<agent_setup_project>[^/.]+)/agent-setup\.md\.?$" {
+            location ~ "^/(?<agent_setup_org>[a-z0-9-]+)/(?<agent_setup_project>[a-z0-9-]+)/agent-setup\.md\.?$" {
                 access_log off;
                 proxy_pass {{ include "logfire.scheme" . }}://logfire_backend/ui-api/agent-setup/$agent_setup_org/$agent_setup_project.md$is_args$args;
                 {{- if $inClusterTlsEnabled }}
