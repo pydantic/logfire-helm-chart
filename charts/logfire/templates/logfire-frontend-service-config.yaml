@@ -92,19 +92,42 @@ data:
 
         server_names_hash_bucket_size 128;
 
-        map $request_uri $logfire_log_request {
-            default $request;
-            ~^(?:https?://[^/]+)?(/auth/[^?]*)\? "$request_method $1?[redacted] $server_protocol";
+        # Keep this list in step with the `txn.log_path` rules in logfire-haproxy-config.
+        map $uri $logfire_log_path {
+            default $uri;
+            ~^/auth/device/ /auth/device/[redacted];
+            ~^/unsubscribe/ /unsubscribe/[redacted];
+            ~^/ui-api/unsubscribe/ /ui-api/unsubscribe/[redacted];
+            ~^/join/ /join/[redacted];
+            ~^/[^/]+/-/join-organization/ /join-organization/[redacted];
+            ~^/[^/]+/[^/]+/join-project/ /join-project/[redacted];
+            ~^/l/ /l/[redacted];
+            ~^/shared-trace/ /shared-trace/[redacted];
+            ~^/public-trace/ /public-trace/[redacted];
+            ~^/public-conversation/ /public-conversation/[redacted];
+            ~^/ui-api/public-traces/ /ui-api/public-traces/[redacted];
+            ~^/ui-api/public-conversations/ /ui-api/public-conversations/[redacted];
         }
 
+        # These pages can open with a credential in the URL. Without this header, the asset and API
+        # requests of the page send that URL as their `Referer`. nginx omits a header whose value is
+        # empty. The map reads `$request_uri`, because `try_files /index.html` changes `$uri`.
         map $request_uri $logfire_referrer_policy {
             default "";
             ~^(?:https?://[^/]+)?/auth/ "no-referrer";
+            ~^(?:https?://[^/]+)?/settings/emails/change-email-callback/?(?:\?|$) "no-referrer";
         }
 
-        log_format logfire '$remote_addr - $remote_user [$time_local] "$logfire_log_request" '
-                           '$status $body_bytes_sent "$http_referer" '
-                           '"$http_user_agent"';
+        # Query strings and referrers can contain OAuth codes, invitation capabilities and mailed
+        # link tokens, so the log has neither. The empty referrer field keeps the field positions of
+        # the `combined` format.
+        log_format logfire '$remote_addr - $remote_user [$time_local] '
+                           '"$request_method $logfire_log_path $server_protocol" '
+                           '$status $body_bytes_sent "-" "$http_user_agent"';
+
+        # The error log entry of a missing file has the full request line and referrer. The access
+        # log still records each 404.
+        log_not_found off;
 
         map $http_x_forwarded_host $logfire_forwarded_host {
             ""      $host;
