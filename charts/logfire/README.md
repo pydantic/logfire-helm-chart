@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.14.6-rc.2](https://img.shields.io/badge/Version-0.14.6--rc.2-informational?style=flat-square) ![AppVersion: 54a9b858](https://img.shields.io/badge/AppVersion-54a9b858-informational?style=flat-square)
+![Version: 0.15.0-rc.4](https://img.shields.io/badge/Version-0.15.0--rc.4-informational?style=flat-square) ![AppVersion: 54a9b858](https://img.shields.io/badge/AppVersion-54a9b858-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -162,7 +162,6 @@ Each preset gives the query API these resources:
 
 Without a preset or per-workload resources, the chart sets no Kubernetes CPU or memory requests or limits.
 FusionFire uses the `tiny` resource baseline for internal execution limits.
-These defaults increase some no-preset FusionFire budgets compared with earlier chart versions.
 Select a preset or explicit workload resources for constrained clusters.
 
 Override individual workloads only after selecting a preset:
@@ -326,7 +325,7 @@ The identity needs read and write access to the bucket.
 On AWS, grant `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket`.
 On GCP, grant the `Storage Object Admin` role on the bucket.
 
-For local evaluation, `dev.deployRustfs` (or the deprecated `dev.deployMinio`) deploys RustFS.
+For local evaluation, `dev.deployRustfs` deploys RustFS.
 It fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credential environment variables, so the workloads reach the in-cluster bucket.
 An `s3://` `objectStore.uri` also sets the bucket that RustFS creates.
 
@@ -362,12 +361,23 @@ Each pod opens its own connection pool. [Connection counts](#connection-counts) 
 
 ### Redis
 
-The bundled Redis is for evaluation. For production, set `logfire-redis.enabled: false` and connect a managed Redis:
+The bundled Redis is for evaluation. For production, set `logfire-redis.enabled: false` and connect a managed Redis or Valkey:
 
-* Use one Redis endpoint: a standalone instance, or a primary with replicas behind one write endpoint. Logfire does not support Redis Cluster mode.
-* Redis 7.2 is the tested version.
+* Use one Redis or Valkey endpoint: a standalone instance, or a primary with replicas behind one write endpoint. Logfire does not support cluster mode, in Redis Cluster or in Valkey.
 * Logfire accepts `redis://` and `rediss://` DSNs. Put the password, or the ACL user and password, in the DSN, for example `rediss://USER:PASSWORD@redis.example.com:6379`.
 * With `rediss://`, Logfire verifies the Redis server certificate. If a private CA signs it, such as the CA that Memorystore creates for each instance with in-transit encryption, set `trustedCaBundle`. See [Private CA certificates](#private-ca-certificates).
+
+For Memorystore for Valkey:
+
+* Create the instance with `--mode=cluster-disabled`. The gcloud default is Cluster Mode Enabled, which Logfire does not support, and you cannot change the mode after creation.
+* Use Token Auth. Put the token of the `default` user in the DSN as the password, for example `rediss://:TOKEN@10.0.0.5:6379`. Logfire does not support IAM authentication.
+* With in-transit encryption, set `trustedCaBundle` to the CA of the instance. The server certificate names the endpoint IP addresses, so the DSN can use the IP address. Download the CA into `redis-ca.pem`:
+
+  ```sh
+  gcloud memorystore instances get-certificate-authority INSTANCE --location=REGION \
+    --flatten='managedServerCa.caCerts[].certificates[]' \
+    --format='value(managedServerCa.caCerts.certificates)' > redis-ca.pem
+  ```
 
 To keep the DSNs out of your values file, create a Secret with the `sharedDsn`, `tailDsn`, `tokenDsn`, and `usageDsn` keys, and reference it.
 All four keys can hold the same DSN:
@@ -520,7 +530,7 @@ For installations that require readiness waits or automatic rollback, install ce
 Logfire verifies the certificate of each TLS server it connects to, such as a `rediss://` Redis or an SMTP relay.
 By default, it trusts only the system trust store of its images.
 If the server certificate is signed by a private CA, put the CA certificate (PEM) in a ConfigMap or Secret and set `trustedCaBundle`.
-For example, Memorystore for Redis with in-transit encryption signs the server certificate with a CA for each instance.
+For example, Memorystore for Redis or Valkey with in-transit encryption signs the server certificate with a CA for each instance.
 Download the server CA certificates of the instance into `redis-ca.pem`, then create the ConfigMap:
 
 ```sh
@@ -561,8 +571,7 @@ FusionFire pods that start before the new Redis pod is ready exit and restart un
 
 ### Istio service mesh
 
-From chart 0.14.4, every Logfire pod can run with an Istio sidecar, under STRICT or PERMISSIVE mTLS.
-Split query mode (`logfire-ff-query-worker.enabled: true`) needs chart 0.14.5 or later in a mesh.
+Every Logfire pod can run with an Istio sidecar, under STRICT or PERMISSIVE mTLS, including split query mode (`logfire-ff-query-worker.enabled: true`).
 CI installs the chart into Istio with STRICT mTLS and runs the integration suite.
 
 Istio must inject native sidecars.
@@ -584,19 +593,14 @@ Each workload's `podAnnotations` reaches its own pods.
 
 In a namespace that enforces the `baseline` or `restricted` Pod Security level, install Istio with its CNI plugin.
 The default `istio-init` container needs the `NET_ADMIN` capability, which those levels reject.
-From chart 0.14.5, every chart pod sets a pod-level `RuntimeDefault` seccomp profile, which the injected sidecar needs to pass the `restricted` level.
-The bundled Redis and PostgreSQL keep their pod templates unchanged across upgrades, so set the profile for them yourself:
+Every chart pod sets a pod-level `RuntimeDefault` seccomp profile, which the injected sidecar needs to pass the `restricted` level.
+The bundled Redis keeps its pod template unchanged across upgrades, so set the profile for it yourself:
 
 ```yaml
 logfire-redis:
   podSecurityContext:
     seccompProfile:
       type: RuntimeDefault
-postgresql:
-  primary:
-    podSecurityContext:
-      seccompProfile:
-        type: RuntimeDefault
 ```
 
 The bundled Redis also needs its other `restricted` overrides, described in Restricted Pod Security.
@@ -610,11 +614,6 @@ Write mesh routes and authorization policies for traffic behind HAProxy against 
 With `outboundTrafficPolicy.mode: REGISTRY_ONLY`, add a `ServiceEntry` for each external dependency: PostgreSQL, Redis, object storage, SMTP, and any OTLP export target.
 
 Inside the mesh, use Istio mTLS instead of `inClusterTls`.
-
-`istio.disableSidecarOnKnownWorkloads` is deprecated.
-It removes the sidecar from HAProxy, the migration Jobs, Redis, and the collector.
-Under STRICT mTLS, those pods cannot reach meshed services, so the install stops at the migrations.
-Leave it unset.
 
 ## Configure SDKs
 
@@ -655,13 +654,13 @@ For enterprise support, contact [sales@pydantic.dev](mailto:sales@pydantic.dev).
 
 ## Optional dev dependencies
 
-These subcharts deploy only when you set `dev.deployPostgres` or `dev.deployCertManager`.
+The cert-manager subchart deploys only when you set `dev.deployCertManager`.
+The bundled dev Postgres deploys only when you set `dev.deployPostgres`; it is a chart-owned template, not a dependency.
 Production installs use external PostgreSQL, and a separately installed cert-manager when in-cluster TLS uses cert-manager.
 
 | Repository | Name | Version |
 |------------|------|---------|
-| https://charts.bitnami.com/bitnami | postgresql | 16.7.27 |
-| https://charts.jetstack.io | cert-manager | v1.19.2 |
+| oci://quay.io/jetstack/charts | cert-manager | v1.19.2 |
 
 ## Values
 
@@ -689,14 +688,25 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | aiGatewayOauth | object | `{"issuer":"","resourceUrl":""}` | AI gateway OAuth metadata configuration. If left empty, the chart derives self-hosted defaults from the primary Logfire URL:   resourceUrl = <logfire.url>/proxy   issuer      = <logfire.url> |
 | aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
 | aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
-| cert-manager | object | `{"installCRDs":true}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
+| cert-manager | object | `{"crds":{"enabled":true,"keep":true}}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
 | clusterDomain | string | `"cluster.local"` | Kubernetes cluster domain for service discovery. |
 | defaultStorageClassName | string | `""` | Default StorageClass for chart-managed PVCs. Set this when chart PVCs should use a specific class. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass. |
 | dev.deployCertManager | bool | `false` | Deploy cert-manager (NOT for production; includes cluster-scoped resources). |
 | dev.deployMaildev | bool | `false` | Deploy MailDev to test emails |
-| dev.deployMinio | bool | `false` | Deprecated alias for `dev.deployRustfs` that existing MinIO values keep working. While set, the chart keeps the `logfire-minio` Service name and uses the credentials from `minio.auth` (including `minio.auth.existingSecret`) or `objectStore.env` and the persistence from `minio.persistence`, so `objectStore.env` keeps matching the deployed object store. Remove it after moving to `dev.deployRustfs` and the `rustfs.*` values. |
 | dev.deployPostgres | bool | `false` | Deploy internal Postgres (NOT for production) |
 | dev.deployRustfs | bool | `false` | Deploy a local RustFS instance as S3-compatible object storage (NOT for production) |
+| devPostgres | object | `{"auth":{"postgresPassword":"postgres"},"fullnameOverride":"logfire-postgres","image":{"pullPolicy":"IfNotPresent","repository":"postgres","tag":"17"},"initdb":{"scripts":{"create_databases.sql":"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"}},"persistence":{"enabled":true,"mountPath":"/var/lib/postgresql/data","size":"10Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | Dev Postgres configuration (only used when `dev.deployPostgres` is true) |
+| devPostgres.auth.postgresPassword | string | `"postgres"` | Password for the `postgres` superuser. Update `postgresDsn` and `postgresFFDsn` when you change it. An existing volume keeps the old database password. |
+| devPostgres.fullnameOverride | string | `"logfire-postgres"` | Name of the dev Postgres Service and Deployment. |
+| devPostgres.image | object | `{"pullPolicy":"IfNotPresent","repository":"postgres","tag":"17"}` | Dev Postgres image configuration. The default uses the official PostgreSQL image. |
+| devPostgres.initdb.scripts | object | `{"create_databases.sql":"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"}` | SQL scripts run by the official Postgres entrypoint on first initialization. |
+| devPostgres.persistence.enabled | bool | `true` | Store data on a PersistentVolumeClaim. Set false to use an emptyDir. |
+| devPostgres.persistence.mountPath | string | `"/var/lib/postgresql/data"` | Mount path for the data volume. |
+| devPostgres.persistence.size | string | `"10Gi"` | Size of the chart-managed claim. |
+| devPostgres.persistence.storageClassName | string | `""` | Storage class for the chart-managed claim. Defaults to `defaultStorageClassName`. |
+| devPostgres.podSecurityContext | object | `{}` | Pod SecurityContext for the dev Postgres pod. Merged over the chart-wide `podSecurityContext` and a default of `fsGroup: 999`. |
+| devPostgres.resources | object | `{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}}` | Resources for the dev Postgres container. |
+| devPostgres.securityContext | object | `{}` | Container SecurityContext for the dev Postgres container. Merged over the chart-wide `securityContext` and the image defaults: uid and gid 999, all capabilities dropped, no privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root. |
 | existingGatewaySecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret for the AI Gateway with the following keys:  - key (gateway encryption key)  - internalSecret (gateway internal secret) |
 | existingGatewaySecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
@@ -753,15 +763,12 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | inClusterTls.waitImage.tag | string | `"8.12.1"` | Image tag |
 | ingress.annotations | object | `{}` | Ingress annotations. Logfire Live View requires WebSocket support, and some controllers require an explicit annotation. For example, F5 NGINX Ingress Controller uses `nginx.org/websocket-services: logfire-service`. |
 | ingress.enabled | bool | `true` | Enable the Ingress resource. If you are NOT using an ingress resource, you still need to set `tls` and `hostnames` via either `ingress.*` or `gateway.*` so the application can generate correct URLs/CORS. |
-| ingress.hostname | string | `"logfire.example.com"` | DEPRECATED (kept for backward compatibility). Use `hostnames` (list) for all new deployments. |
 | ingress.hostnames | list | `["logfire.example.com"]` | Hostname(s) for Pydantic Logfire. Preferred method. Supports one or more hostnames; put the primary domain first. |
 | ingress.ingressClassName | string | `"nginx"` | IngressClass to use (e.g., nginx) |
 | ingress.secretName | string | `"logfire-frontend-cert"` | TLS Secret name if you want to do a custom one |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS. Required for correct CORS behavior. |
 | intakeOauth | object | `{"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When `resourceUrl` is empty, the chart derives the self-hosted resource URL from the primary Logfire URL:   resourceUrl = <logfire.url>/v1 |
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
-| istio | object | `{"disableSidecarOnKnownWorkloads":false}` | Istio compatibility options |
-| istio.disableSidecarOnKnownWorkloads | bool | `false` | Deprecated. Leave unset: every Logfire pod works with a sidecar since chart 0.14.4.    When enabled, sets `sidecar.istio.io/inject: "false"` on logfire-service,    logfire-backend-migrations, logfire-ff-migrations, logfire-redis, and logfire-otel-collector.    Under STRICT mTLS those pods cannot reach meshed services, so the install stops at the migrations. |
 | keepAliveTimeout | string | `"120s"` | Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of the ingress or tunnel in front of the release; if HAProxy closes an idle connection first, the client sees a 502/520 when it reuses it. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
@@ -833,7 +840,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | objectStore.env | object | `{}` | Additional environment variables for the object store connection. String values support Helm templating. When the in-cluster RustFS store is enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. The backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint alias the Python S3 client accepts, and Azure clients read `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or `AZURE_STORAGE_CONNECTION_STRING`. |
 | objectStore.sessionReplayUri | string | `nil` | Optional override for the session-replay blob store, e.g. `s3://logfire-replays`. Defaults to `<uri>/session-replays`. The bucket or container must exist, and it must be reachable with the same endpoint and credentials as `uri`: a different account or provider needs its own `env` and credential volumes, which the per-service `env` lists under `logfire-backend` and `logfire-worker` can carry. |
 | objectStore.sseCKeyB64 | string | `nil` | Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C). Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy requests. Only used when the object store is S3, and only for FusionFire: the session-replay and visual-test objects do not use SSE-C.  IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on a bucket that already contains FusionFire data will break all reads of the pre-existing objects. losing the key means losing the data — AWS does not store it. |
-| objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`). Supports Helm templating, e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release. When `dev.deployRustfs` (or the deprecated `dev.deployMinio`) is enabled and this is empty, it defaults to `s3://<rustfs.bucket>`.  The backend and the worker keep session replay and visual-test blobs under the `session-replays/` and `visual-tests/` prefixes of the same bucket, and receive the `env` entries and `volumeMounts` below, so one object store serves FusionFire and both Python services. |
+| objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`). Supports Helm templating, e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release. When `dev.deployRustfs` is enabled and this is empty, it defaults to `s3://<rustfs.bucket>`.  The backend and the worker keep session replay and visual-test blobs under the `session-replays/` and `visual-tests/` prefixes of the same bucket, and receive the `env` entries and `volumeMounts` below, so one object store serves FusionFire and both Python services. |
 | objectStore.visualTestsUri | string | `nil` | Optional override for the visual-test blob store, e.g. `az://logfirefiles/visual-tests`. Defaults to `<uri>/visual-tests`, with the same requirements as `sessionReplayUri`. |
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials, on FusionFire, the backend and the worker. The chart reserves the mount paths `/tmp`, `/scratch`, `/fusionfire/ingest-data`, and `/var/lib/logfire` for its own volumes, adds `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled, and `/etc/logfire/smtp-ca` while the SMTP CA bundle is configured. |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials, on FusionFire, the backend and the worker. The chart reserves the volume names `tmp`, `scratch-data`, `ingest-data`, and `logfire-data` for its own volumes, adds `logfire-incluster-tls` and `logfire-incluster-ca-bundle` when in-cluster TLS is enabled, and `logfire-smtp-ca-bundle` while the SMTP CA bundle is configured. |
@@ -870,17 +877,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | postgresSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | postgresSecret.sessionDsn | bool | `false` | Set to true when the Secret also has a `postgresSessionDsn` key. See `postgresSessionDsn`. |
 | postgresSessionDsn | string | `""` | Optional session DSN for the `crud` database: a session-mode pool or a direct connection to PostgreSQL. Set it when `postgresDsn` points at a transaction-mode pool. `logfire-backend-migrations` then uses it, because migrations need session state: advisory locks, `SET`, and concurrent index DDL. See "Connection poolers" in the README. |
-| postgresql.auth.postgresPassword | string | `"postgres"` |  |
-| postgresql.fullnameOverride | string | `"logfire-postgres"` |  |
-| postgresql.image.registry | string | `"docker.io"` |  |
-| postgresql.image.repository | string | `"bitnamilegacy/postgresql"` |  |
-| postgresql.postgresqlDataDir | string | `"/var/lib/postgresql/data/pgdata"` |  |
-| postgresql.primary.initdb.scripts."create_databases.sql" | string | `"CREATE DATABASE crud;\nCREATE DATABASE dex;\nCREATE DATABASE ff;\n"` |  |
-| postgresql.primary.persistence.mountPath | string | `"/var/lib/postgresql"` |  |
-| postgresql.primary.persistence.size | string | `"10Gi"` |  |
-| postgresql.primary.resourcesPreset | string | `"small"` |  |
 | priorityClassName | string | `""` | Pod priority class See: https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#pod-priority). |
-| rateLimits | object | `{}` | Configure Rate Limiting rules for Logfire endpoints |
 | redisDsn | string | `"redis://logfire-redis:6379"` | Redis DSN for the shared role, and the live-tail DSN. Change if using an external Redis instance. |
 | redisSecret | object | `{"annotations":{},"enabled":false,"name":""}` | User-provided Secret containing the Redis DSNs, one key per role:   - `sharedDsn`  shared caches, the generic `REDIS_DSN` of every service, and                 the arq queues (`WORKER_REDIS_DSN`, `BACKEND_REDIS_DSN`)  - `tailDsn`    Fusionfire live-tail registration (`FF_REDIS_TAIL_DSN`)  - `tokenDsn`   auth token caches  - `usageDsn`   usage, autocomplete, and rate limiting data  The chart reads the DSNs only from a Secret, so a password never reaches a ConfigMap or a plain env value. When `enabled` is false the chart creates its own Secret from `redisDsn`, `tokenRedis.dsn` and `usageRedis.dsn`. |
 | redisSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
@@ -889,12 +886,12 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | releaseVersion | string | `"v2026-11-02.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
-| rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Ignored while `dev.deployMinio` is set. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
+| rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
 | rustfs.bucket | string | `"logfire"` | Bucket that RustFS creates at startup when `objectStore.uri` is not an `s3://` URI. With an `s3://` `objectStore.uri`, the bucket in the URI is used. |
 | rustfs.image.pullPolicy | string | `""` | RustFS image pull policy. Defaults to `image.pullPolicy` when unset. |
 | rustfs.image.repository | string | `"rustfs/rustfs"` | RustFS image repository |
 | rustfs.image.tag | string | `"1.0.0"` | RustFS image tag |
-| rustfs.persistence.enabled | bool | `true` | Store data on a PersistentVolumeClaim. Set false to use an emptyDir. Ignored while `dev.deployMinio` is set and `minio.persistence` is present. |
+| rustfs.persistence.enabled | bool | `true` | Store data on a PersistentVolumeClaim. Set false to use an emptyDir. |
 | rustfs.persistence.existingClaim | string | `""` | Existing PersistentVolumeClaim to use in place of a chart-managed claim |
 | rustfs.persistence.size | string | `"32Gi"` | Size of the chart-managed claim |
 | rustfs.persistence.storageClassName | string | `""` | Storage class for the chart-managed claim. Defaults to `defaultStorageClassName`. |
@@ -906,7 +903,6 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | serviceAccount.annotations | object | `{}` | Annotations to add to the ServiceAccount (e.g., for IAM roles) Example for AWS IRSA:   annotations:     eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/my-role Example for GCP Workload Identity:   annotations:     iam.gke.io/gcp-service-account: my-sa@my-project.iam.gserviceaccount.com |
 | serviceAccount.create | bool | `false` | Create a ServiceAccount |
 | serviceAccount.name | string | `""` | Name of the ServiceAccount. If not set and create is true, a name is generated using the fullname template. If create is false and this is not set, the default ServiceAccount is used. |
-| serviceAccountName | string | `"default"` | DEPRECATED: Use serviceAccount.name instead. Kept for backward compatibility. @deprecated |
 | sizingPreset | string | `""` | Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults. |
 | smtp.caBundle | object | `{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}}` | CA bundle (PEM) that verifies the SMTP server certificate, for a relay signed by an internal CA. Provide exactly one of existingConfigMap or existingSecret, in the release namespace. `logfire-task-runner` and `logfire-worker` trust these certificates in addition to the system trust store. `trustedCaBundle` does the same for these and the other workloads that connect to Redis, so prefer it for new installs. |
 | smtp.fromAddress | string | `nil` | Sender address of every email Logfire sends (`From` and SMTP envelope sender), such as `logfire@example.com`. Required when `smtp.host` is set. Use an address on a domain that your SMTP server may send for. Logfire does not send email as `pydantic.dev` from a self-hosted install. |

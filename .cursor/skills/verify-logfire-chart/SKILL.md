@@ -105,8 +105,6 @@ uv run --script "$VERIFY_SKILL/scripts/prepare-kind.py" prepare \
   --registry-config "$VERIFY_RUNTIME/pull-config.json" "${local_values[@]}"
 export VERIFY_CONTEXT="$(python3 -c \
   'import json,os; print(json.load(open(os.environ["VERIFY_RUNTIME"]+"/ownership.json"))["context"])')"
-helm repo add bitnami https://charts.bitnami.com/bitnami
-helm repo add jetstack https://charts.jetstack.io
 helm dependency build charts/logfire
 uv sync --directory tests/integration
 ```

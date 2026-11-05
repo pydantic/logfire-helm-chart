@@ -159,15 +159,13 @@ logfire-ff-bcache:
     value: 128MB
   - name: FF_BCACHE_IN_FLIGHT_BUDGET
     value: 64MB
-postgresql:
-  primary:
-    resourcesPreset: none
-    resources:
-      requests:
-        cpu: 100m
-        memory: 256Mi
-      limits:
-        memory: 512Mi
+devPostgres:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
 rustfs:
   resources:
     requests:

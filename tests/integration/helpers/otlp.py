@@ -1,7 +1,32 @@
 from __future__ import annotations
 
+import base64
+import gzip
+import json
 import os
 import time
+import uuid
+
+from opentelemetry.proto.collector.profiles.v1development.profiles_service_pb2 import (
+    ExportProfilesServiceRequest,
+)
+from opentelemetry.proto.common.v1.common_pb2 import AnyValue, KeyValue
+from opentelemetry.proto.profiles.v1development.profiles_pb2 import (
+    Function,
+    KeyValueAndUnit,
+    Line,
+    Link,
+    Location,
+    Mapping,
+    Profile,
+    ProfilesDictionary,
+    ResourceProfiles,
+    Sample,
+    ScopeProfiles,
+    Stack,
+    ValueType,
+)
+from opentelemetry.proto.resource.v1.resource_pb2 import Resource
 
 
 def _ids() -> tuple[str, str, int, int]:
@@ -158,3 +183,81 @@ def exception_log_payload(service_name: str, run_id: str) -> dict:
             },
         ],
     }
+
+
+def profiles_payload(service_name: str, values: tuple[int, ...]) -> bytes:
+    """One CPU profile with a sample per value, all on the same one-frame stack.
+
+    The pinned ingest decodes the current `v1development` schema, which keeps
+    strings, functions, locations, and stacks in a shared dictionary.
+    """
+    request = ExportProfilesServiceRequest(
+        dictionary=ProfilesDictionary(
+            mapping_table=[Mapping()],
+            location_table=[Location(), Location(lines=[Line(function_index=1, line=42)])],
+            function_table=[Function(), Function(name_strindex=3, filename_strindex=4)],
+            link_table=[Link()],
+            string_table=["", "cpu", "nanoseconds", "helm_profile_work", "helm_profile.py"],
+            attribute_table=[KeyValueAndUnit()],
+            stack_table=[Stack(), Stack(location_indices=[1])],
+        ),
+        resource_profiles=[
+            ResourceProfiles(
+                resource=Resource(
+                    attributes=[
+                        KeyValue(key="service.name", value=AnyValue(string_value=service_name)),
+                    ],
+                ),
+                scope_profiles=[
+                    ScopeProfiles(
+                        profiles=[
+                            Profile(
+                                sample_type=ValueType(type_strindex=1, unit_strindex=2),
+                                samples=[Sample(stack_index=1, values=[value]) for value in values],
+                                time_unix_nano=time.time_ns(),
+                                duration_nano=1_000_000,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    )
+    return request.SerializeToString()
+
+
+def firehose_delivery(service_name: str, message: str) -> tuple[str, bytes, dict[str, str]]:
+    """An Amazon Data Firehose delivery of one CloudWatch Logs event.
+
+    CloudWatch Logs gzips each subscription message before Firehose adds it to a
+    record, and Firehose sends endpoint parameters as common attributes.
+    Returns the request ID that the acknowledgement must echo, the gzip body,
+    and the headers without the access key.
+    """
+    now_ms = time.time_ns() // 1_000_000
+    data_message = {
+        "messageType": "DATA_MESSAGE",
+        "owner": "123456789012",
+        "logGroup": "/helm/integration",
+        "logStream": "helm-it",
+        "subscriptionFilters": ["helm-it"],
+        "logEvents": [{"id": "1", "timestamp": now_ms, "message": message}],
+    }
+    request_id = str(uuid.uuid4())
+    body = {
+        "requestId": request_id,
+        "timestamp": now_ms,
+        "records": [
+            {"data": base64.b64encode(gzip.compress(json.dumps(data_message).encode())).decode()},
+        ],
+    }
+    headers = {
+        "Content-Type": "application/json",
+        "Content-Encoding": "gzip",
+        "X-Amz-Firehose-Protocol-Version": "1.0",
+        "X-Amz-Firehose-Request-Id": request_id,
+        "X-Amz-Firehose-Common-Attributes": json.dumps(
+            {"commonAttributes": {"service.name": service_name}}
+        ),
+    }
+    return request_id, gzip.compress(json.dumps(body).encode()), headers
