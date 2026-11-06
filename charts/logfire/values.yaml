@@ -1058,6 +1058,41 @@ logfire-remote-mcp:
 #     minAvailable: 1
 
 
+# -- Autoscaling & resources for the alert runner. It evaluates the alert runs of organizations
+# whose `organizations.alert_backend` is `db` and sends the results to the Absurd task runner. An
+# organization stays on the ARQ worker until it is moved, so a deployed runner with none moved only
+# polls. Set `enabled: false` to not deploy it. Keep it on while any organization is on `db`:
+# their alerts do not run without it.
+# logfire-alert-runner:
+#   enabled: true
+#   # -- Workload labels
+#   labels: {}
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   replicas: 1
+#   resources:
+#     cpu: "500m"
+#     memory: "1Gi"
+#     ephemeralStorage: "512Mi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 4
+#     hpa:
+#       enabled: true
+#       memAverage: 70
+#       cpuAverage: 75
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
 # -- Autoscaling & resources for the proxy pods
 # logfire-service:
 #   # -- Workload labels
@@ -1652,6 +1687,8 @@ image:
   authImage: logfire-auth-prod
   # @ignored
   taskRunnerImage: logfire-task-runner-prod
+  # @ignored
+  alertRunnerImage: logfire-alert-runner-prod
   # @ignored
   remoteMcpImage: logfire-remote-mcp-prod
   # @ignored
@@ -2342,6 +2379,15 @@ sizingPresets:
           cpuAverage: 70
       pdb:
         maxUnavailable: 1
+    logfire-alert-runner:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "512Mi"
+          ephemeral-storage: "512Mi"
+        limits:
+          memory: "1Gi"
+          ephemeral-storage: "512Mi"
     logfire-worker:
       resources:
         requests:
@@ -2695,6 +2741,15 @@ sizingPresets:
           cpuAverage: 70
       pdb:
         maxUnavailable: 1
+    logfire-alert-runner:
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "768Mi"
+          ephemeral-storage: "512Mi"
+        limits:
+          memory: "1Gi"
+          ephemeral-storage: "512Mi"
     logfire-worker:
       resources:
         requests:
@@ -3177,6 +3232,15 @@ sizingPresets:
           cpuAverage: 70
       pdb:
         maxUnavailable: 1
+    logfire-alert-runner:
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
+          ephemeral-storage: "512Mi"
+        limits:
+          memory: "1Gi"
+          ephemeral-storage: "512Mi"
     logfire-worker:
       resources:
         requests:
