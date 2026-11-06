@@ -1300,6 +1300,11 @@ logfire-ff-bcache:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
+#   # -- Upper bound on queued and running Cold compaction jobs, so a backlog of old partitions
+#   # cannot delay compaction of recently written data. A low value holds back the compaction
+#   # worker autoscaler. Use at least compaction worker replicas times jobs per worker. Sizing
+#   # presets set it per preset, and the default is 8 without a preset. Set 0 to turn the bound off.
+#   # maxColdCompactionJobs: 8
 #   replicas: 1
 #   datafusionMemory: "512MB"
 #   compactionTiers:
@@ -2162,6 +2167,8 @@ sizingPresets:
     logfire-ff-maintenance-worker:
       scratchVolume:
         storage: "1Gi"
+    logfire-ff-maintenance-scheduler:
+      maxColdCompactionJobs: 4
     logfire-ff-compaction-worker:
       resources:
         requests:
@@ -2425,6 +2432,7 @@ sizingPresets:
       scratchVolume:
         storage: "16Gi"
     logfire-ff-maintenance-scheduler:
+      maxColdCompactionJobs: 32
       resources:
         requests:
           cpu: "100m"
@@ -2810,6 +2818,7 @@ sizingPresets:
       scratchVolume:
         storage: "32Gi"
     logfire-ff-maintenance-scheduler:
+      maxColdCompactionJobs: 32
       resources:
         requests:
           cpu: "250m"
@@ -3258,6 +3267,7 @@ sizingPresets:
       scratchVolume:
         storage: "64Gi"
     logfire-ff-maintenance-scheduler:
+      maxColdCompactionJobs: 48
       resources:
         requests:
           cpu: "500m"
@@ -3342,6 +3352,8 @@ sizingPresets:
         maxReplicas: 32
       scratchVolume:
         storage: "128Gi"
+    logfire-ff-maintenance-scheduler:
+      maxColdCompactionJobs: 96
     logfire-ff-compaction-worker:
       resources:
         requests:
