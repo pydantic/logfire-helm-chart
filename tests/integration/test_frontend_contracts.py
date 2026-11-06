@@ -74,3 +74,17 @@ async def test_project_setup_handoff_returns_markdown(client: httpx.AsyncClient,
     assert response.headers["cache-control"] == "no-store"
     assert "`synthetic-org/synthetic-project`" in response.text
     assert "uvx logfire-cli" in response.text
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/synthetic%0d%0aX-Injected:%20yes%0d%0aX-Pad:%20z/synthetic-project/agent-setup.md",
+        "/synthetic-org/synthetic%0d%0aX-Injected:%20yes%0d%0aX-Pad:%20z/agent-setup.md",
+    ],
+)
+async def test_project_setup_routes_encoded_request_line_breaks_to_app(client: httpx.AsyncClient, path: str) -> None:
+    response = await client.get(path)
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith("text/html")
+    assert "<html" in response.text.lower()
