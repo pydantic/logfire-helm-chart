@@ -4,6 +4,10 @@
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $ioThreads := get $effectiveServiceValues "ioThreads" | default "auto" -}}
 {{- $datafusionThreads := get $effectiveServiceValues "datafusionThreads" | default "auto" -}}
+{{- $maxColdCompactionJobs := 8 -}}
+{{- if not (kindIs "invalid" (index $effectiveServiceValues "maxColdCompactionJobs")) -}}
+{{- $maxColdCompactionJobs = index $effectiveServiceValues "maxColdCompactionJobs" -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -73,6 +77,8 @@ spec:
               value: {{ $datafusionThreads | quote }}
             - name: FF_MAX_PARTITIONS_PER_COMPACTION_SCAN
               value: "5000"
+            - name: FF_MAX_COLD_COMPACTION_JOBS
+              value: {{ $maxColdCompactionJobs | quote }}
             - name: FF_DELETION_LOOP_DELAY
               value: "10s"
             - name: FF_COMPACTION_GATHER_DELAY
