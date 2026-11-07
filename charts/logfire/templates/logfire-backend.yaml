@@ -7,12 +7,16 @@
 -}}
 {{- $oauthClients := list }}
 {{- if $oauthEnabled }}
+{{- $mcpScopes := (list "project:read" "project:write" "project:write_token" "project:read_dashboard" "project:write_dashboard" "project:read_alert" "project:write_alert" "project:read_variables" "project:write_variables" "organization:create_project" "organization:read_channel" "organization:write_channel") }}
+{{- if (.Values.agentSandboxes | default dict).enabled }}
+{{- $mcpScopes = append $mcpScopes "project:execute_agent_sandboxes" }}
+{{- end }}
   {{- $oauthClients = append $oauthClients (dict
     "client_id" "logfire-mcp"
     "client_secret" "$(MCP_OAUTH_CLIENT_SECRET)"
     "client_name" "Logfire Remote MCP Server"
     "redirect_uris" (list (printf "%s/mcp/oauth/callback" (include "logfire.url" .)))
-    "allowed_scopes" (list "project:read" "project:write" "project:write_token" "project:read_dashboard" "project:write_dashboard" "project:read_alert" "project:write_alert" "project:read_variables" "project:write_variables" "organization:create_project" "organization:read_channel" "organization:write_channel")
+    "allowed_scopes" $mcpScopes
   ) }}
   {{- if and $gatewayStaticOauthEnabled (index .Values "logfire-ai-gateway" "enabled") }}
     {{- $oauthClients = append $oauthClients (dict
@@ -66,6 +70,9 @@ spec:
   template:
     metadata:
       annotations:
+        {{- if (.Values.agentSandboxes | default dict).enabled }}
+        checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.checksum" . }}
+        {{- end }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
         {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list
           "logfire-dex-client-secret"
@@ -143,6 +150,7 @@ spec:
             failureThreshold: 3
             successThreshold: 2
           env:
+            {{- include "logfire.agentSandboxes.env" (dict "root" . "service" $serviceName) | nindent 12 }}
             - name: MATERIALIZE_DASHBOARDS
               value: "false"
             - name: APP_PORT
