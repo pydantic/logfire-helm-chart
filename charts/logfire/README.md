@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.0-rc.6](https://img.shields.io/badge/Version-0.15.0--rc.6-informational?style=flat-square) ![AppVersion: 54a9b858](https://img.shields.io/badge/AppVersion-54a9b858-informational?style=flat-square)
+![Version: 0.15.0-rc.7](https://img.shields.io/badge/Version-0.15.0--rc.7-informational?style=flat-square) ![AppVersion: 7ef8ae58](https://img.shields.io/badge/AppVersion-7ef8ae58-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -406,6 +406,15 @@ ai:
           name: logfire-ai
           key: openai-api-key
 ```
+
+### Alert runner
+
+`logfire-alert-runner` evaluates alert runs and hands the alerts that fire to `logfire-task-runner` for delivery.
+It is the only evaluator of alert runs, so the chart always deploys it, with its own `logfire-alert-runner-prod` image.
+If the runner is not available, alert runs wait and alerts do not fire.
+If you mirror images to a private registry, mirror this image before you upgrade.
+
+Set `replicas`, `resources`, and `autoscaling` under `logfire-alert-runner` as for any workload.
 
 ## Advanced configuration
 
@@ -867,7 +876,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | redisSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | redisSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
 | redisSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| releaseVersion | string | `"v2026-11-02.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
+| releaseVersion | string | `"v2026-11-07.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
 | rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
