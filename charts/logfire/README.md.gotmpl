@@ -408,6 +408,15 @@ ai:
           key: openai-api-key
 ```
 
+### Alert runner
+
+`logfire-alert-runner` evaluates alert runs and hands the alerts that fire to `logfire-task-runner` for delivery.
+It is the only evaluator of alert runs, so the chart always deploys it, with its own `logfire-alert-runner-prod` image.
+If the runner is not available, alert runs wait and alerts do not fire.
+If you mirror images to a private registry, mirror this image before you upgrade.
+
+Set `replicas`, `resources`, and `autoscaling` under `logfire-alert-runner` as for any workload.
+
 ## Advanced configuration
 
 ### External secrets and automatic reloads
