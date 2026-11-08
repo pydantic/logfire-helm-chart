@@ -57,3 +57,19 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: never runs the alert runner from the backend image
+    # The backend image has no `logfire_alert_runner` module, so the fallback that keeps the other
+    # workloads on their old image after `--reuse-values` would crash-loop this one.
+    set:
+      image:
+        backendImage: logfire-backend-prod
+        alertRunnerImage: null
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: 'logfire/logfire-alert-runner-prod:'
+        template: templates/logfire-alert-runner.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
