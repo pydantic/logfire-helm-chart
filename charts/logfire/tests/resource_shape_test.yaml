@@ -128,7 +128,7 @@ tests:
           path: spec.template.spec.containers[0].env
           content:
             name: FF_MAX_COLD_COMPACTION_JOBS
-            value: "8"
+            value: "16"
 
   - it: the large preset sets its own Cold compaction bound over the inherited standard value
     set:

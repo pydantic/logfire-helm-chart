@@ -1331,12 +1331,11 @@ logfire-ff-bcache:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
-#   # -- Upper bound on queued and running Cold compaction jobs, so a backlog of old partitions
-#   # cannot delay compaction of recently written data. A low value stops Cold work from scaling
-#   # the compaction workers to their maximum. The autoscaled sizing presets deliberately allow
-#   # half of the maximum, which is 16 workers times the jobs one worker runs. The default is 8
-#   # without a preset. Set 0 to turn the bound off.
-#   # maxColdCompactionJobs: 8
+#   # -- Upper bound on queued and running Cold compaction jobs across the installation, so a
+#   # backlog of old partitions cannot delay compaction of recently written data. A low value
+#   # slows the backlog and can stop Cold work from scaling the compaction workers. Sizing presets
+#   # set it per preset, and the default is 16 without a preset. Set 0 to turn the bound off.
+#   # maxColdCompactionJobs: 16
 #   replicas: 1
 #   datafusionMemory: "512MB"
 #   compactionTiers:
@@ -2475,7 +2474,7 @@ sizingPresets:
       scratchVolume:
         storage: "16Gi"
     logfire-ff-maintenance-scheduler:
-      maxColdCompactionJobs: 32
+      maxColdCompactionJobs: 24
       resources:
         requests:
           cpu: "100m"

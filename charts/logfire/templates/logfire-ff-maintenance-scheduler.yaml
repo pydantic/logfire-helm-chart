@@ -4,7 +4,7 @@
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
 {{- $ioThreads := get $effectiveServiceValues "ioThreads" | default "auto" -}}
 {{- $datafusionThreads := get $effectiveServiceValues "datafusionThreads" | default "auto" -}}
-{{- $maxColdCompactionJobs := 8 -}}
+{{- $maxColdCompactionJobs := 16 -}}
 {{- if not (kindIs "invalid" (index $effectiveServiceValues "maxColdCompactionJobs")) -}}
 {{- $maxColdCompactionJobs = index $effectiveServiceValues "maxColdCompactionJobs" -}}
 {{- end -}}
