@@ -67,3 +67,42 @@ async def test_email_login_code_request_is_enumeration_safe(
     )
     assert requested.status_code == 200, requested.text
     assert requested.json()["retry_after_seconds"], requested.text
+
+
+async def test_alert_reaches_an_email_channel(
+    client: httpx.AsyncClient,
+    maildev_client: httpx.AsyncClient,
+    meta_frontend_token: str,
+    project: str,
+) -> None:
+    """A firing alert crosses the scheduler, the alert runner, the task runner and SMTP."""
+    headers = {"Authorization": f"Bearer {meta_frontend_token}"}
+    base = f"/ui-api/organizations/{ORG}/projects/{project}"
+    recipient = f"helm-it-alert-{secrets.token_hex(4)}@example.com"
+    channel = await client.post(
+        f"{base}/channels/",
+        headers=headers,
+        json={"label": "helm-it alert", "config": {"type": "email", "recipients": [recipient]}},
+    )
+    assert channel.status_code == 201, channel.text
+
+    name = f"helm-it-alert-{secrets.token_hex(4)}"
+    alert = await client.post(
+        f"{base}/alerts/",
+        headers=headers,
+        json={
+            "name": name,
+            "query": "SELECT 1",
+            "time_window": "PT1M",
+            "frequency": "PT1M",
+            "watermark": "PT0S",
+            "notify_when": "has_matches",
+            "channel_ids": [channel.json()["id"]],
+        },
+    )
+    assert alert.status_code == 201, alert.text
+
+    email = await wait_for_email(
+        maildev_client, recipient=recipient, subject_contains=name, timeout=240.0
+    )
+    assert recipient in str(email.get("to")), email

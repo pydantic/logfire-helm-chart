@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.0-rc.9](https://img.shields.io/badge/Version-0.15.0--rc.9-informational?style=flat-square) ![AppVersion: 7ef8ae58](https://img.shields.io/badge/AppVersion-7ef8ae58-informational?style=flat-square)
+![Version: 0.15.0](https://img.shields.io/badge/Version-0.15.0-informational?style=flat-square) ![AppVersion: 7ef8ae58](https://img.shields.io/badge/AppVersion-7ef8ae58-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -417,9 +417,17 @@ If you mirror images to a private registry, mirror this image before you upgrade
 Set `replicas`, `resources`, and `autoscaling` under `logfire-alert-runner` as for any workload.
 
 Webhook, email, Opsgenie, and direct PagerDuty channels need no extra configuration.
-Slack App channels use the OAuth credentials of your own Slack App.
-If you set `INTEGRATION_SLACK_CLIENT_ID`, `INTEGRATION_SLACK_CLIENT_SECRET`, and `INTEGRATION_SLACK_SIGNING_SECRET` on `logfire-backend`, also set them on `logfire-task-runner`.
-Without them, `logfire-task-runner` skips Slack App channels.
+Slack App channels use the OAuth credentials of your own Slack App. Set them once:
+
+```yaml
+integrations:
+  slack:
+    clientId: <client id>
+    clientSecret: <client secret>
+    signingSecret: <signing secret>
+```
+
+Without them, Slack App channels are skipped.
 
 ## Advanced configuration
 
@@ -767,6 +775,10 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | ingress.tls | bool | `false` | Enable TLS/HTTPS. Required for correct CORS behavior. |
 | intakeOauth | object | `{"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When `resourceUrl` is empty, the chart derives the self-hosted resource URL from the primary Logfire URL:   resourceUrl = <logfire.url>/v1 |
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
+| integrations.pagerduty.appId | string | `""` | ID of a PagerDuty App with Events Integration enabled. Sets `INTEGRATION_PAGERDUTY_APP_ID` on `logfire-backend`. |
+| integrations.slack.clientId | string | `""` | Client ID of your own Slack App. Setting it turns on Slack App channels. |
+| integrations.slack.clientSecret | string | `""` | Client secret of your Slack App. With `existingSecret`, put it in that Secret under the `logfire-slack-client-secret` key instead. |
+| integrations.slack.signingSecret | string | `""` | Signing secret of your Slack App. With `existingSecret`, put it in that Secret under the `logfire-slack-signing-secret` key instead. |
 | keepAliveTimeout | string | `"120s"` | Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of the ingress or tunnel in front of the release; if HAProxy closes an idle connection first, the client sees a 502/520 when it reuses it. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
@@ -843,6 +855,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials, on FusionFire, the backend and the worker. The chart reserves the mount paths `/tmp`, `/scratch`, `/fusionfire/ingest-data`, and `/var/lib/logfire` for its own volumes, adds `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled, and `/etc/logfire/smtp-ca` while the SMTP CA bundle is configured. |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials, on FusionFire, the backend and the worker. The chart reserves the volume names `tmp`, `scratch-data`, `ingest-data`, and `logfire-data` for its own volumes, adds `logfire-incluster-tls` and `logfire-incluster-ca-bundle` when in-cluster TLS is enabled, and `logfire-smtp-ca-bundle` while the SMTP CA bundle is configured. |
 | otelResourceAttributes | object | `{}` | Additional OTEL resource attributes to stamp onto internal telemetry emitted by Logfire workloads. These are merged on top of the chart defaults and can override them. Example:   deployment.environment.name: prod   service.namespace: logfire |
+| otelTraceSampleRatio | float | `0.05` | Fraction of new traces that the high-volume workloads keep, from 0 to 1. Spans of a kept trace are all kept. Applies to `logfire-worker`, `logfire-alert-runner`, and the Fusionfire ingest and bcache workloads. |
 | otel_collector | object | `{"debug":{"enabled":false},"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}},"extraExporters":{},"extraPipelines":{},"extraProcessors":{},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.163.1@sha256:1175b03003053962012f5a231f5567f66a3e8fdb960c7835c0e48f7aa1555806"},"prometheus":{"add_metric_suffixes":false,"delta_to_cumulative":true,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","max_stale":"5m","max_streams":10000,"metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true,"translation_strategy":""},"queueStorage":{"enabled":true,"ephemeralStorageLimit":"5Gi","ephemeralStorageRequest":"512Mi","fsync":false,"maxSizeBytes":536870912,"sizeLimit":"4Gi"},"selfMetrics":{"enabled":true},"selfMetricsPort":8888,"sendingQueueBytes":67108864,"serviceAccount":{"annotations":{}}}` | otel-collector configuration |
 | otel_collector.debug.enabled | bool | `false` | Emit per-request summaries to collector logs. Enable for troubleshooting; disabled by default to avoid logging every incoming telemetry request. |
 | otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |

@@ -67,10 +67,7 @@ spec:
               path: /health
               port: 8004
           env:
-            - name: LOGFIRE_SERVICE_NAME
-              value: {{ $serviceName }}
-            - name: LOGFIRE_SERVICE_VERSION
-              value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName) | quote }}
+            {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             - name: CRUD_PG_DSN
               valueFrom:
                 secretKeyRef:
@@ -89,23 +86,12 @@ spec:
               value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
             - name: FUSIONFIRE_QUERY_PORT
               value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
-            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-            - name: LOGFIRE_CA_PATH
-              value: /etc/logfire/incluster-ca/ca.crt
-            {{- end }}
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
-            - name: OTEL_RESOURCE_ATTRIBUTES
-              value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | quote }}
-            - name: COLLECTOR_OTLP_GRPC_HOST
-              value: http://logfire-otel-collector:4317
-            - name: ON_PREM
-              value: "true"
-            - name: LOGFIRE_REGION
-              value: {{ .Values.logfireRegion | default "local" }}
+            {{- include "logfire.otelSamplerEnv" . | nindent 12 }}
             {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
               {{- . | nindent 12 }}

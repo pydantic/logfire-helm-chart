@@ -166,6 +166,9 @@ Validate existing secret configuration
     {{- if .Values.webPush.enabled -}}
       {{- $msg = printf "%s It must also hold a logfire-web-push-vapid-key key when webPush.enabled." $msg -}}
     {{- end -}}
+    {{- if include "logfire.slackApp.enabled" . -}}
+      {{- $msg = printf "%s It must also hold logfire-slack-client-secret and logfire-slack-signing-secret keys when integrations.slack.clientId is set." $msg -}}
+    {{- end -}}
     {{- fail $msg -}}
   {{- end -}}
 {{- end -}}
@@ -210,6 +213,18 @@ Validate scratch volume configuration.
 {{- end -}}
 {{- end -}}
 
+
+{{/*
+Validate the Slack App settings. The chart cannot generate these credentials.
+*/}}
+{{- define "logfire.validate.integrations" -}}
+{{- if and (include "logfire.slackApp.enabled" .) (not .Values.existingSecret.enabled) -}}
+  {{- $slack := .Values.integrations.slack -}}
+  {{- if or (not $slack.clientSecret) (not $slack.signingSecret) -}}
+    {{- fail "integrations.slack.clientSecret and integrations.slack.signingSecret are required with integrations.slack.clientId, unless existingSecret holds logfire-slack-client-secret and logfire-slack-signing-secret." -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
 
 {{/*
 Removed values that would otherwise be ignored without an error. Each guard names the move
@@ -463,6 +478,7 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.inClusterTls"
   "logfire.validate.scratchVolumes"
   "logfire.validate.removedValues"
+  "logfire.validate.integrations"
   "logfire.validate.frontendWorkerProcesses"
   "logfire.validate.frontendApplicationToken"
   -}}

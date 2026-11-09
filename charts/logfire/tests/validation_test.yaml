@@ -1135,3 +1135,12 @@ tests:
       - matchRegex:
           path: data["otel-collector-config.yaml"]
           pattern: 'limit_percentage: 75'
+
+  - it: fails when the Slack App has no client secret
+    set:
+      integrations:
+        slack:
+          clientId: client-id
+    asserts:
+      - failedTemplate:
+          errorPattern: "integrations.slack.clientSecret and integrations.slack.signingSecret are required"

@@ -391,6 +391,25 @@ webPush:
 
 
 # ==============================================================================
+# Integrations
+# ==============================================================================
+
+integrations:
+  slack:
+    # -- Client ID of your own Slack App. Setting it turns on Slack App channels.
+    clientId: ""
+    # -- Client secret of your Slack App. With `existingSecret`, put it in that Secret under the
+    # `logfire-slack-client-secret` key instead.
+    clientSecret: ""
+    # -- Signing secret of your Slack App. With `existingSecret`, put it in that Secret under the
+    # `logfire-slack-signing-secret` key instead.
+    signingSecret: ""
+  pagerduty:
+    # -- ID of a PagerDuty App with Events Integration enabled. Sets
+    # `INTEGRATION_PAGERDUTY_APP_ID` on `logfire-backend`.
+    appId: ""
+
+# ==============================================================================
 # AI configuration
 # ==============================================================================
 
@@ -1891,6 +1910,10 @@ trustedCaBundle:
 #   deployment.environment.name: prod
 #   service.namespace: logfire
 otelResourceAttributes: {}
+# -- Fraction of new traces that the high-volume workloads keep, from 0 to 1. Spans of a kept
+# trace are all kept. Applies to `logfire-worker`, `logfire-alert-runner`, and the Fusionfire
+# ingest and bcache workloads.
+otelTraceSampleRatio: 0.05
 
 # -- otel-collector configuration
 otel_collector:
