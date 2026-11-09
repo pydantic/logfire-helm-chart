@@ -3,6 +3,20 @@ entries:
   logfire:
   - apiVersion: v2
     appVersion: 7ef8ae58
+    created: "2026-11-09T12:59:36.941713954Z"
+    dependencies:
+    - condition: dev.deployCertManager
+      name: cert-manager
+      repository: oci://quay.io/jetstack/charts
+      version: v1.19.2
+    description: Helm chart for self-hosted Pydantic Logfire
+    digest: 00ec8d777f17f0c10bda05fc153e18167e0f9b7b5aec9c2d79f79db3e84501fe
+    name: logfire
+    urls:
+    - https://github.com/pydantic/logfire-helm-chart/releases/download/logfire-0.15.0-rc.9/logfire-0.15.0-rc.9.tgz
+    version: 0.15.0-rc.9
+  - apiVersion: v2
+    appVersion: 7ef8ae58
     created: "2026-11-08T17:31:55.870781734Z"
     dependencies:
     - condition: dev.deployCertManager
@@ -4385,4 +4399,4 @@ entries:
     urls:
     - https://github.com/pydantic/logfire-helm-chart/releases/download/logfire-0.1.0/logfire-0.1.0.tgz
     version: 0.1.0
-generated: "2026-11-08T17:31:55.871394807Z"
+generated: "2026-11-09T12:59:36.942409677Z"
