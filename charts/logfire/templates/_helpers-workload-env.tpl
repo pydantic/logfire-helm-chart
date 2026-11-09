@@ -1,20 +1,15 @@
 {{/*
-Identity, telemetry and in-cluster CA settings that every Python workload needs. A workload uses
-this helper, so a new Python workload cannot miss one of these settings.
-Takes `ctx`, `serviceName`, and optionally `codeWorkDir`.
+Identity, telemetry and in-cluster CA settings that every Python workload needs. Takes `ctx` and
+`serviceName`.
 */}}
 {{- define "logfire.pythonServiceEnv" -}}
 {{- $ctx := .ctx -}}
-{{- $attributes := dict "root" $ctx "serviceName" .serviceName -}}
-{{- if .codeWorkDir -}}
-  {{- $_ := set $attributes "codeWorkDir" .codeWorkDir -}}
-{{- end -}}
 - name: LOGFIRE_SERVICE_NAME
   value: {{ .serviceName }}
 - name: LOGFIRE_SERVICE_VERSION
   value: {{ include "logfire.serviceVersion" (dict "root" $ctx "serviceName" .serviceName) | quote }}
 - name: OTEL_RESOURCE_ATTRIBUTES
-  value: {{ include "logfire.otelResourceAttributes" $attributes | quote }}
+  value: {{ include "logfire.otelResourceAttributes" (dict "root" $ctx "serviceName" .serviceName "codeWorkDir" "/app") | quote }}
 - name: COLLECTOR_OTLP_GRPC_HOST
   value: http://logfire-otel-collector:4317
 - name: ON_PREM
@@ -34,70 +29,62 @@ services that these workloads call follow the same decision.
 {{- define "logfire.otelSamplerEnv" -}}
 {{- $ratio := .Values.otelTraceSampleRatio -}}
 {{- if kindIs "invalid" $ratio -}}
-  {{- $ratio = "0.05" -}}
+  {{- $ratio = 0.05 -}}
 {{- end -}}
 - name: OTEL_TRACES_SAMPLER
   value: parentbased_traceidratio
 - name: OTEL_TRACES_SAMPLER_ARG
-  value: {{ $ratio | toString | quote }}
+  value: {{ $ratio | quote }}
 {{- end -}}
 
 {{/*
-Whether a workload's own `env` already sets `name`. A chart default for a credential that customers
-could set by hand before the chart managed it checks this first, because a duplicate env name can
-fail an upgrade. Takes `Values`, `serviceName` and `name`.
+What a workload needs to handle App channels: the key that decrypts stored credentials and the
+`integrations` settings. Takes `ctx` and `serviceName`.
+
+An entry that the workload's own `env` already sets is left out. Customers could set these by hand
+before the chart managed them, and a duplicate env name can fail an upgrade.
 */}}
-{{- define "logfire.serviceEnvHas" -}}
-{{- $env := get (get .Values .serviceName | default dict) "env" -}}
-{{- $name := .name -}}
-{{- if kindIs "map" $env -}}
-  {{- if hasKey $env $name -}}true{{- end -}}
-{{- else -}}
-  {{- range ($env | default list) -}}
-    {{- if eq .name $name -}}true{{- end -}}
+{{- define "logfire.appChannelEnv" -}}
+{{- $ctx := .ctx -}}
+{{- $integrations := $ctx.Values.integrations | default dict -}}
+{{- $entries := list -}}
+{{- $secrets := dict "ENCRYPTION_KEY" "logfire-encryption-key" -}}
+{{- with dig "slack" "clientId" "" $integrations -}}
+  {{- $entries = append $entries (dict "name" "INTEGRATION_SLACK_CLIENT_ID" "value" .) -}}
+  {{- $_ := set $secrets "INTEGRATION_SLACK_CLIENT_SECRET" "logfire-slack-client-secret" -}}
+  {{- $_ := set $secrets "INTEGRATION_SLACK_SIGNING_SECRET" "logfire-slack-signing-secret" -}}
+{{- end -}}
+{{- if eq .serviceName "logfire-backend" -}}
+  {{- with dig "pagerduty" "appId" "" $integrations -}}
+    {{- $entries = append $entries (dict "name" "INTEGRATION_PAGERDUTY_APP_ID" "value" .) -}}
   {{- end -}}
 {{- end -}}
+{{- range $name, $key := $secrets -}}
+  {{- $secretName := include "logfire.externalSecretName" (dict "external" $ctx.Values.existingSecret "secretName" $key) | trim -}}
+  {{- $entries = append $entries (dict "name" $name "valueFrom" (dict "secretKeyRef" (dict "name" $secretName "key" $key))) -}}
 {{- end -}}
-
-{{/*
-The key that decrypts stored App channel credentials, for the workloads that deliver alerts.
-Takes `ctx` and `serviceName`.
-*/}}
-{{- define "logfire.encryptionKeyEnv" -}}
-{{- if not (include "logfire.serviceEnvHas" (dict "Values" .ctx.Values "serviceName" .serviceName "name" "ENCRYPTION_KEY")) -}}
-- name: ENCRYPTION_KEY
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "logfire.externalSecretName" (dict "external" .ctx.Values.existingSecret "secretName" "logfire-encryption-key") }}
-      key: logfire-encryption-key
+{{- $own := get (get $ctx.Values .serviceName | default dict) "env" -}}
+{{- $ownNames := list -}}
+{{- if kindIs "map" $own -}}
+  {{- $ownNames = keys $own -}}
+{{- else -}}
+  {{- range ($own | default list) -}}
+    {{- $ownNames = append $ownNames .name -}}
+  {{- end -}}
+{{- end -}}
+{{- $kept := list -}}
+{{- range $entries -}}
+  {{- if not (has .name $ownNames) -}}
+    {{- $kept = append $kept . -}}
+  {{- end -}}
+{{- end -}}
+{{- if $kept -}}
+  {{- toYaml $kept -}}
 {{- end -}}
 {{- end -}}
 
 {{- define "logfire.slackApp.enabled" -}}
-{{- if dig "slack" "enabled" false (.Values.integrations | default dict) -}}true{{- end -}}
-{{- end -}}
-
-{{/*
-The Slack App credentials, for `logfire-backend` and the workloads that deliver alerts.
-Takes `ctx` and `serviceName`.
-*/}}
-{{- define "logfire.slackAppEnv" -}}
-{{- if include "logfire.slackApp.enabled" .ctx -}}
-{{- $ctx := .ctx -}}
-{{- $serviceName := .serviceName -}}
-{{- $slack := $ctx.Values.integrations.slack -}}
-{{- $lines := list -}}
-{{- if not (include "logfire.serviceEnvHas" (dict "Values" $ctx.Values "serviceName" $serviceName "name" "INTEGRATION_SLACK_CLIENT_ID")) -}}
-  {{- $lines = append $lines (printf "- name: INTEGRATION_SLACK_CLIENT_ID\n  value: %s" ($slack.clientId | quote)) -}}
-{{- end -}}
-{{- range $envName, $key := dict "INTEGRATION_SLACK_CLIENT_SECRET" "logfire-slack-client-secret" "INTEGRATION_SLACK_SIGNING_SECRET" "logfire-slack-signing-secret" -}}
-  {{- if not (include "logfire.serviceEnvHas" (dict "Values" $ctx.Values "serviceName" $serviceName "name" $envName)) -}}
-    {{- $secretName := include "logfire.externalSecretName" (dict "external" $ctx.Values.existingSecret "secretName" $key) -}}
-    {{- $lines = append $lines (printf "- name: %s\n  valueFrom:\n    secretKeyRef:\n      name: %s\n      key: %s" $envName $secretName $key) -}}
-  {{- end -}}
-{{- end -}}
-{{- join "\n" $lines -}}
-{{- end -}}
+{{- if dig "slack" "clientId" "" (.Values.integrations | default dict) -}}true{{- end -}}
 {{- end -}}
 
 {{/*

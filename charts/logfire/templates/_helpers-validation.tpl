@@ -167,7 +167,7 @@ Validate existing secret configuration
       {{- $msg = printf "%s It must also hold a logfire-web-push-vapid-key key when webPush.enabled." $msg -}}
     {{- end -}}
     {{- if include "logfire.slackApp.enabled" . -}}
-      {{- $msg = printf "%s It must also hold logfire-slack-client-secret and logfire-slack-signing-secret keys when integrations.slack.enabled." $msg -}}
+      {{- $msg = printf "%s It must also hold logfire-slack-client-secret and logfire-slack-signing-secret keys when integrations.slack.clientId is set." $msg -}}
     {{- end -}}
     {{- fail $msg -}}
   {{- end -}}
@@ -218,13 +218,10 @@ Validate scratch volume configuration.
 Validate the Slack App settings. The chart cannot generate these credentials.
 */}}
 {{- define "logfire.validate.integrations" -}}
-{{- if include "logfire.slackApp.enabled" . -}}
+{{- if and (include "logfire.slackApp.enabled" .) (not .Values.existingSecret.enabled) -}}
   {{- $slack := .Values.integrations.slack -}}
-  {{- if not $slack.clientId -}}
-    {{- fail "integrations.slack.clientId is required when integrations.slack.enabled is true." -}}
-  {{- end -}}
-  {{- if and (not .Values.existingSecret.enabled) (or (not $slack.clientSecret) (not $slack.signingSecret)) -}}
-    {{- fail "integrations.slack.clientSecret and integrations.slack.signingSecret are required when integrations.slack.enabled is true, unless existingSecret holds logfire-slack-client-secret and logfire-slack-signing-secret." -}}
+  {{- if or (not $slack.clientSecret) (not $slack.signingSecret) -}}
+    {{- fail "integrations.slack.clientSecret and integrations.slack.signingSecret are required with integrations.slack.clientId, unless existingSecret holds logfire-slack-client-secret and logfire-slack-signing-secret." -}}
   {{- end -}}
 {{- end -}}
 {{- end -}}

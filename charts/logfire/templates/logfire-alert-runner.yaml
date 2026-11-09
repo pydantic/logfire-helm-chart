@@ -67,7 +67,7 @@ spec:
               path: /health
               port: 8004
           env:
-            {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
+            {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             - name: CRUD_PG_DSN
               valueFrom:
                 secretKeyRef:

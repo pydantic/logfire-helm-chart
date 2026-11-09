@@ -1136,13 +1136,11 @@ tests:
           path: data["otel-collector-config.yaml"]
           pattern: 'limit_percentage: 75'
 
-  - it: fails when the Slack App has no client ID
+  - it: fails when the Slack App has no client secret
     set:
       integrations:
         slack:
-          enabled: true
-          clientSecret: client-secret
-          signingSecret: signing-secret
+          clientId: client-id
     asserts:
       - failedTemplate:
-          errorPattern: "integrations.slack.clientId is required"
+          errorPattern: "integrations.slack.clientSecret and integrations.slack.signingSecret are required"

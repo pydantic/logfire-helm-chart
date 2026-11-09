@@ -422,7 +422,6 @@ Slack App channels use the OAuth credentials of your own Slack App. Set them onc
 ```yaml
 integrations:
   slack:
-    enabled: true
     clientId: <client id>
     clientSecret: <client secret>
     signingSecret: <signing secret>
@@ -777,9 +776,8 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | intakeOauth | object | `{"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When `resourceUrl` is empty, the chart derives the self-hosted resource URL from the primary Logfire URL:   resourceUrl = <logfire.url>/v1 |
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
 | integrations.pagerduty.appId | string | `""` | ID of a PagerDuty App with Events Integration enabled. Sets `INTEGRATION_PAGERDUTY_APP_ID` on `logfire-backend`. |
-| integrations.slack.clientId | string | `""` | Client ID of your Slack App. |
+| integrations.slack.clientId | string | `""` | Client ID of your own Slack App. Setting it turns on Slack App channels. |
 | integrations.slack.clientSecret | string | `""` | Client secret of your Slack App. With `existingSecret`, put it in that Secret under the `logfire-slack-client-secret` key instead. |
-| integrations.slack.enabled | bool | `false` | Turn on the Slack App channel type. Needs a Slack App of your own. The chart passes these settings to `logfire-backend`, `logfire-worker` and `logfire-task-runner`. |
 | integrations.slack.signingSecret | string | `""` | Signing secret of your Slack App. With `existingSecret`, put it in that Secret under the `logfire-slack-signing-secret` key instead. |
 | keepAliveTimeout | string | `"120s"` | Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of the ingress or tunnel in front of the release; if HAProxy closes an idle connection first, the client sees a 502/520 when it reuses it. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |

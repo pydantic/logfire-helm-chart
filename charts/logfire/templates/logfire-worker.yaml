@@ -70,7 +70,7 @@ spec:
           env:
             - name: MATERIALIZE_DASHBOARDS
               value: "false"
-            {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
+            {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             - name: CRUD_PG_DSN
               valueFrom:
                 secretKeyRef:
@@ -122,10 +122,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
-            {{- with (include "logfire.encryptionKeyEnv" (dict "ctx" . "serviceName" $serviceName) | trim) }}
-            {{- . | nindent 12 }}
-            {{- end }}
-            {{- with (include "logfire.slackAppEnv" (dict "ctx" . "serviceName" $serviceName) | trim) }}
+            {{- with (include "logfire.appChannelEnv" (dict "ctx" . "serviceName" $serviceName) | trim) }}
             {{- . | nindent 12 }}
             {{- end }}
             {{- with (include "logfire.webPushEnv" . | trim) }}

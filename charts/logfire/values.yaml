@@ -396,10 +396,7 @@ webPush:
 
 integrations:
   slack:
-    # -- Turn on the Slack App channel type. Needs a Slack App of your own. The chart passes these
-    # settings to `logfire-backend`, `logfire-worker` and `logfire-task-runner`.
-    enabled: false
-    # -- Client ID of your Slack App.
+    # -- Client ID of your own Slack App. Setting it turns on Slack App channels.
     clientId: ""
     # -- Client secret of your Slack App. With `existingSecret`, put it in that Secret under the
     # `logfire-slack-client-secret` key instead.

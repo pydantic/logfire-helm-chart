@@ -204,12 +204,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
-            {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
-            - name: ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-encryption-key") }}
-                  key: logfire-encryption-key
+            {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             - name: FUSIONFIRE_QUERY_HOST
               value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
             - name: FUSIONFIRE_QUERY_PORT
@@ -278,14 +273,8 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-unsubscribe-secret") }}
                   key: logfire-unsubscribe-secret
-            {{- with (include "logfire.slackAppEnv" (dict "ctx" . "serviceName" $serviceName) | trim) }}
+            {{- with (include "logfire.appChannelEnv" (dict "ctx" . "serviceName" $serviceName) | trim) }}
             {{- . | nindent 12 }}
-            {{- end }}
-            {{- with ((dig "pagerduty" "appId" "" (.Values.integrations | default dict)) | trim) }}
-            {{- if not (include "logfire.serviceEnvHas" (dict "Values" $.Values "serviceName" $serviceName "name" "INTEGRATION_PAGERDUTY_APP_ID")) }}
-            - name: INTEGRATION_PAGERDUTY_APP_ID
-              value: {{ . | quote }}
-            {{- end }}
             {{- end }}
             {{- with (include "logfire.webPushEnv" . | trim) }}
             {{- . | nindent 12 }}
