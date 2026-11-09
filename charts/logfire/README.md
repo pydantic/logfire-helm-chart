@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.0-rc.8](https://img.shields.io/badge/Version-0.15.0--rc.8-informational?style=flat-square) ![AppVersion: 7ef8ae58](https://img.shields.io/badge/AppVersion-7ef8ae58-informational?style=flat-square)
+![Version: 0.15.0-rc.9](https://img.shields.io/badge/Version-0.15.0--rc.9-informational?style=flat-square) ![AppVersion: 7ef8ae58](https://img.shields.io/badge/AppVersion-7ef8ae58-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -415,6 +415,11 @@ If the runner is not available, alert runs wait and alerts do not fire.
 If you mirror images to a private registry, mirror this image before you upgrade.
 
 Set `replicas`, `resources`, and `autoscaling` under `logfire-alert-runner` as for any workload.
+
+Webhook, email, Opsgenie, and direct PagerDuty channels need no extra configuration.
+Slack App channels use the OAuth credentials of your own Slack App.
+If you set `INTEGRATION_SLACK_CLIENT_ID`, `INTEGRATION_SLACK_CLIENT_SECRET`, and `INTEGRATION_SLACK_SIGNING_SECRET` on `logfire-backend`, also set them on `logfire-task-runner`.
+Without them, `logfire-task-runner` skips Slack App channels.
 
 ## Advanced configuration
 
