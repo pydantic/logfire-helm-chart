@@ -2411,9 +2411,12 @@ sizingPresets:
           cpu: "100m"
           memory: "512Mi"
           ephemeral-storage: "512Mi"
-        limits:
-          memory: "1Gi"
-          ephemeral-storage: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          cpuAverage: 75
     logfire-worker:
       resources:
         requests:
@@ -2774,9 +2777,12 @@ sizingPresets:
           cpu: "250m"
           memory: "768Mi"
           ephemeral-storage: "512Mi"
-        limits:
-          memory: "1Gi"
-          ephemeral-storage: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          cpuAverage: 75
     logfire-worker:
       resources:
         requests:
@@ -3266,9 +3272,12 @@ sizingPresets:
           cpu: "500m"
           memory: "1Gi"
           ephemeral-storage: "512Mi"
-        limits:
-          memory: "1Gi"
-          ephemeral-storage: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 4
+        hpa:
+          enabled: true
+          cpuAverage: 75
     logfire-worker:
       resources:
         requests:
