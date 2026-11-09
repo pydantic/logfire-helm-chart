@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.0](https://img.shields.io/badge/Version-0.15.0-informational?style=flat-square) ![AppVersion: 7ef8ae58](https://img.shields.io/badge/AppVersion-7ef8ae58-informational?style=flat-square)
+![Version: 0.15.1](https://img.shields.io/badge/Version-0.15.1-informational?style=flat-square) ![AppVersion: 7ef8ae58](https://img.shields.io/badge/AppVersion-7ef8ae58-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -486,7 +486,7 @@ Each pod opens up to its pool size. The pooler must accept the sum over all pods
 | Workload | Database | Variable | Default per pod |
 |----------|----------|----------|-----------------|
 | FusionFire workloads except `logfire-ff-ingest` | `ff` | `FF_PG_POOL_MAX_CONNECTIONS` | 32, and 4 on `logfire-ff-query-worker` |
-| `logfire-ff-query-api` and `logfire-ff-query-worker` | `crud` | `FF_EXTERNAL_TABLES_PG_MAX_CONNECTIONS` | 32 |
+| `logfire-ff-query-api`, `logfire-ff-query-worker`, and `logfire-ff-crud-api` | `crud` | `FF_EXTERNAL_TABLES_PG_MAX_CONNECTIONS` | 32 |
 | Python services | `crud` | `CRUD_PG_POOL_MAX_CONNECTIONS` | 32 |
 | `logfire-ai-gateway` | `crud` | None | 10 |
 
