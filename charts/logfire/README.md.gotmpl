@@ -418,9 +418,18 @@ If you mirror images to a private registry, mirror this image before you upgrade
 Set `replicas`, `resources`, and `autoscaling` under `logfire-alert-runner` as for any workload.
 
 Webhook, email, Opsgenie, and direct PagerDuty channels need no extra configuration.
-Slack App channels use the OAuth credentials of your own Slack App.
-If you set `INTEGRATION_SLACK_CLIENT_ID`, `INTEGRATION_SLACK_CLIENT_SECRET`, and `INTEGRATION_SLACK_SIGNING_SECRET` on `logfire-backend`, also set them on `logfire-task-runner`.
-Without them, `logfire-task-runner` skips Slack App channels.
+Slack App channels use the OAuth credentials of your own Slack App. Set them once:
+
+```yaml
+integrations:
+  slack:
+    enabled: true
+    clientId: <client id>
+    clientSecret: <client secret>
+    signingSecret: <signing secret>
+```
+
+Without them, Slack App channels are skipped.
 
 ## Advanced configuration
 

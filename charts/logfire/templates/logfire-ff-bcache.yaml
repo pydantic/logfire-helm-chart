@@ -122,10 +122,7 @@ spec:
             {{- include "logfire.ffResourceEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
             - name: FF_FORCE_CONSOLE_LOGGING
               value: {{ .Values.fusionfireForceConsoleLogging | quote }}
-            - name: OTEL_TRACES_SAMPLER
-              value: parentbased_traceidratio
-            - name: OTEL_TRACES_SAMPLER_ARG
-              value: "0.05"
+            {{- include "logfire.otelSamplerEnv" . | nindent 12 }}
             - name: FF_BCACHE_LISTEN_ADDR
               value: "0.0.0.0:9443"
             - name: FF_BCACHE_DISK_DIR

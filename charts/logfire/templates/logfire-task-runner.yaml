@@ -34,6 +34,9 @@ spec:
         {{- end }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
         {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-encryption-key" "logfire-unsubscribe-secret")) | nindent 8 }}
+        {{- with (include "logfire.slackAppChecksumAnnotation" . | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- with (include "logfire.webPushChecksumAnnotation" . | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
@@ -75,10 +78,7 @@ spec:
               path: /health
               port: 8005
           env:
-            - name: LOGFIRE_SERVICE_NAME
-              value: {{ $serviceName }}
-            - name: LOGFIRE_SERVICE_VERSION
-              value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName) | quote }}
+            {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             - name: CRUD_PG_DSN
               valueFrom:
                 secretKeyRef:
@@ -87,22 +87,13 @@ spec:
             {{- with (include "logfire.crudPgTopologyEnv" $ | trim) }}
             {{- . | nindent 12 }}
             {{- end }}
-            - name: OTEL_RESOURCE_ATTRIBUTES
-              value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | quote }}
-            - name: COLLECTOR_OTLP_GRPC_HOST
-              value: http://logfire-otel-collector:4317
-            - name: ON_PREM
-              value: "true"
             - name: UNSUBSCRIBE_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-unsubscribe-secret") }}
                   key: logfire-unsubscribe-secret
-            - name: ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-encryption-key") }}
-                  key: logfire-encryption-key
+            {{- include "logfire.encryptionKeyEnv" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
+            {{- include "logfire.slackAppEnv" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             - name: SHARED_REDIS_DSN
               {{- include "logfire.redisDsnValueFrom" (dict "root" . "key" "sharedDsn") | nindent 14 }}
             {{- with (include "logfire.webPushEnv" . | trim) }}
@@ -110,8 +101,6 @@ spec:
             {{- end }}
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
-            - name: LOGFIRE_REGION
-              value: {{ .Values.logfireRegion | default "local" }}
             {{- if (index .Values "logfire-ai-gateway" "enabled") }}
             - name: GATEWAY_BASE_URL
               value: "{{ include "logfire.scheme" . }}://logfire-ai-gateway:{{ include "logfire.port" (dict "port" 8788 "root" .) }}"
@@ -120,10 +109,6 @@ spec:
                 secretKeyRef:
                   key: internalSecret
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingGatewaySecret "secretName" "gateway-internal-secret") }}
-            {{- end }}
-            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-            - name: LOGFIRE_CA_PATH
-              value: /etc/logfire/incluster-ca/ca.crt
             {{- end }}
             {{ if .Values.dev.deployMaildev }}
             - name: SMTP_SERVER

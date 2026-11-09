@@ -27,7 +27,10 @@ spec:
         {{- . | nindent 8 }}
         {{- end }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
-        {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-unsubscribe-secret" "logfire-jwt-secret")) | nindent 8 }}
+        {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-encryption-key" "logfire-unsubscribe-secret" "logfire-jwt-secret")) | nindent 8 }}
+        {{- with (include "logfire.slackAppChecksumAnnotation" . | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- with (include "logfire.webPushChecksumAnnotation" . | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
@@ -67,10 +70,7 @@ spec:
           env:
             - name: MATERIALIZE_DASHBOARDS
               value: "false"
-            - name: LOGFIRE_SERVICE_NAME
-              value: {{ $serviceName }}
-            - name: LOGFIRE_SERVICE_VERSION
-              value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName) | quote }}
+            {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             - name: CRUD_PG_DSN
               valueFrom:
                 secretKeyRef:
@@ -89,10 +89,7 @@ spec:
               {{- include "logfire.redisDsnValueFrom" (dict "root" . "key" "sharedDsn") | nindent 14 }}
             - name: BACKEND_REDIS_DSN
               {{- include "logfire.redisDsnValueFrom" (dict "root" . "key" "sharedDsn") | nindent 14 }}
-            - name: OTEL_TRACES_SAMPLER
-              value: parentbased_traceidratio
-            - name: OTEL_TRACES_SAMPLER_ARG
-              value: "0.05"
+            {{- include "logfire.otelSamplerEnv" . | nindent 12 }}
             - name: FUSIONFIRE_QUERY_HOST
               value: "{{ include "logfire.scheme" . }}://logfire-ff-query-api"
             - name: FUSIONFIRE_QUERY_PORT
@@ -105,16 +102,6 @@ spec:
               value: "{{ include "logfire.scheme" . }}://logfire-ff-crud-api"
             - name: FUSIONFIRE_CRUD_PORT
               value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
-            {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-            - name: LOGFIRE_CA_PATH
-              value: /etc/logfire/incluster-ca/ca.crt
-            {{- end }}
-            - name: OTEL_RESOURCE_ATTRIBUTES
-              value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | quote }}
-            - name: COLLECTOR_OTLP_GRPC_HOST
-              value: http://logfire-otel-collector:4317
-            - name: ON_PREM
-              value: "true"
             - name: EMAILS_ENABLED
               value: {{ include "logfire.emailsEnabled" . | quote }}
             - name: FRONTEND_HOST
@@ -135,11 +122,15 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-jwt-secret") }}
                   key: logfire-jwt-secret
+            {{- with (include "logfire.encryptionKeyEnv" (dict "ctx" . "serviceName" $serviceName) | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
+            {{- with (include "logfire.slackAppEnv" (dict "ctx" . "serviceName" $serviceName) | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             {{- with (include "logfire.webPushEnv" . | trim) }}
             {{- . | nindent 12 }}
             {{- end }}
-            - name: LOGFIRE_REGION
-              value: {{ .Values.logfireRegion | default "local" }}
             - name: KNOWN_LOGFIRE_REGIONS
               value: '[{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}]'
             {{ if .Values.dev.deployMaildev }}

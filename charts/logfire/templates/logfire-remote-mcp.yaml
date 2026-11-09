@@ -99,21 +99,12 @@ spec:
             successThreshold: 1
             timeoutSeconds: 1
           env:
-          - name: LOGFIRE_SERVICE_NAME
-            value: {{ $serviceName }}
-          - name: LOGFIRE_SERVICE_VERSION
-            value: {{ include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName) | quote }}
+          {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName) | nindent 10 }}
           - name: HOST_IP
             valueFrom:
               fieldRef:
                 apiVersion: v1
                 fieldPath: status.hostIP
-          - name: OTEL_RESOURCE_ATTRIBUTES
-            value: {{ include "logfire.otelResourceAttributes" (dict "root" . "serviceName" $serviceName) | quote }}
-          - name: COLLECTOR_OTLP_GRPC_HOST
-            value: http://logfire-otel-collector:4317
-          - name: ON_PREM
-            value: "true"
           - name: APP_PORT
             value: {{ $servicePort | quote }}
           - name: LOGFIRE_BASE_URL
@@ -149,15 +140,11 @@ spec:
             value: "{{ include "logfire.scheme" . }}://logfire-ff-crud-api"
           - name: FUSIONFIRE_CRUD_PORT
             value: "{{ include "logfire.port" (dict "port" 8011 "root" .) }}"
-          - name: LOGFIRE_REGION
-            value: {{ .Values.logfireRegion | default "local" }}
           - name: ALLOWED_HOSTS
             value: {{ append (include "logfire.effective_hostnames" . | fromJson).hosts (include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-remote-mcp")) | toJson | quote }}
           - name: MCP_SERVER_URL
             value: {{ printf "%s/mcp" (include "logfire.url" .) | quote }}
           {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
-          - name: LOGFIRE_CA_PATH
-            value: /etc/logfire/incluster-ca/ca.crt
           - name: HTTPS_PORT
             value: "{{ .Values.inClusterTls.httpsPort }}"
           - name: TLS_CERT_PATH
