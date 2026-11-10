@@ -2065,6 +2065,22 @@ adminSecret:
   #    Per-workload `annotations` override duplicate keys.
   annotations: {}
 
+# -- API keys that the backend creates in the admin organization (`logfire-meta`) at startup.
+# Use them for automation that must run before anyone signs in. A key with `instance:*` scopes
+# can call the instance APIs for organizations, group mappings, and SCIM. Each key belongs to the
+# `logfire-meta` project, so `project:*` scopes reach only that project.
+# Each key reads its token from a Secret that you create in the release namespace. Use a long
+# random token of letters and digits, for example the output of `openssl rand -hex 32`. The
+# backend reads the token only at startup, so restart the backend after you change the Secret.
+# The backend creates a key only when no key has that token. So a changed token or a removed
+# entry leaves the old key valid until you revoke it in the UI. Change or remove the entry
+# before you revoke its key.
+adminApiKeys: []
+#  - name: automation
+#    scopes: ["instance:admin", "instance:scim"]
+#    secretName: logfire-automation
+#    secretKey: token
+
 
 # ==============================================================================
 # Development conveniences (NOT for production)

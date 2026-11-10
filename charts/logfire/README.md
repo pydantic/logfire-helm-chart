@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.1](https://img.shields.io/badge/Version-0.15.1-informational?style=flat-square) ![AppVersion: 7ef8ae58](https://img.shields.io/badge/AppVersion-7ef8ae58-informational?style=flat-square)
+![Version: 0.15.2-rc.1](https://img.shields.io/badge/Version-0.15.2--rc.1-informational?style=flat-square) ![AppVersion: 7ef8ae58](https://img.shields.io/badge/AppVersion-7ef8ae58-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -672,6 +672,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| adminApiKeys | list | `[]` | API keys that the backend creates in the admin organization (`logfire-meta`) at startup. Use them for automation that must run before anyone signs in. A key with `instance:*` scopes can call the instance APIs for organizations, group mappings, and SCIM. Each key belongs to the `logfire-meta` project, so `project:*` scopes reach only that project. Each key reads its token from a Secret that you create in the release namespace. Use a long random token of letters and digits, for example the output of `openssl rand -hex 32`. The backend reads the token only at startup, so restart the backend after you change the Secret. The backend creates a key only when no key has that token. So a changed token or a removed entry leaves the old key valid until you revoke it in the UI. Change or remove the entry before you revoke its key. |
 | adminEmail | string | `"hello@example.dev"` | Starter admin email address |
 | adminSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-admin-password  - logfire-admin-totp-secret  - logfire-admin-totp-recovery-codes (string containing a JSON list) |
 | adminSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
