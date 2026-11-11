@@ -2066,9 +2066,11 @@ adminSecret:
   annotations: {}
 
 # -- API keys that the backend creates in the admin organization (`logfire-meta`) at startup.
-# Use them for automation that must run before anyone signs in. A key with `instance:*` scopes
-# can call the instance APIs for organizations, group mappings, and SCIM. Each key belongs to the
-# `logfire-meta` project, so `project:*` scopes reach only that project.
+# Use them for automation that must run before anyone signs in. The instance APIs use three
+# scopes: `instance:admin` for organizations and group mappings, `instance:scim` for SCIM, and
+# `instance:billing` for the usage report. The API schema of your instance, at
+# `https://<your-hostname>/api/docs`, lists every scope and the scope that each endpoint needs.
+# Each key belongs to the `logfire-meta` project, so `project:*` scopes reach only that project.
 # Each key reads its token from a Secret that you create in the release namespace. Use a long
 # random token of letters and digits, for example the output of `openssl rand -hex 32`. The
 # backend reads the token only at startup, so restart the backend after you change the Secret.
