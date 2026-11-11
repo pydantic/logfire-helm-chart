@@ -64,6 +64,23 @@ groupOrganizationMapping: []
 #          - project_name: "admin-project"
 #            role: "admin"
 
+# Sign-in settings. The chart sets each one on `logfire-backend`. A variable of the same name in
+# `logfire-backend.env` takes precedence.
+auth:
+  # -- Let users sign in with an email address and a password. Set to false when users sign in only through
+  # a Dex connector. `logfire-dex.config.enablePasswordDB: false` also turns password sign-in off.
+  passwordLogin: true
+  # -- Let users sign in with a passkey, such as a fingerprint, face unlock, or security key.
+  # Existing passkeys stay listed and removable when this is false.
+  passkeys: true
+  # -- Longest time that a browser session lasts, as an ISO 8601 duration such as `PT8H`.
+  # A session ends after this time, or sooner if the user's own session setting is shorter.
+  # The limit applies to sessions created after you set it. Empty applies no limit.
+  sessionMaxLifetime: ""
+  # -- Let a person with a verified email address that has no account create one without a password.
+  # It needs email delivery through `smtp.*` or `dev.deployMaildev`.
+  passwordlessEmailSignup: false
+
 # -- Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults.
 sizingPreset: ""
 
@@ -492,10 +509,6 @@ logfire-dex:
 
   # -- Dex configuration (see https://dexidp.io/docs/)
   config:
-    # -- Enable password authentication.
-    # Set to false if undesired, but ensure another connector is configured first.
-    enablePasswordDB: true
-
     # -- Dex storage configuration (see https://dexidp.io/docs/configuration/storage/)
     storage:
       type: postgres

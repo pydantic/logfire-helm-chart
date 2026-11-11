@@ -92,7 +92,7 @@ Use the first-access step below to log in to the meta project.
 Start from [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml), a minimal production overlay, and replace its placeholder hostnames, credentials, and provider-specific settings.
 The starter uses Gateway API. The chart also supports Ingress.
 
-> **Important**: `values.prod.yaml` turns off password login, so nobody can sign in after the first access step until you add a Dex connector or turn password login back on.
+> **Important**: `values.prod.yaml` turns off password sign-in, so nobody can sign in after the first access step until you add a Dex connector or set `auth.passwordLogin: true`.
 > See [Authentication](#authentication) before you install.
 
 Before installing in production, confirm that you have:
@@ -270,7 +270,29 @@ redisSecret:
 ### Authentication
 
 Users sign in through Dex, either with an email and password or with an SSO provider that you configure as a Dex connector.
-Password login is on by default. `values.prod.yaml` turns it off with `logfire-dex.config.enablePasswordDB: false`, so an install based on that file needs at least one connector.
+Logfire's sign-in page checks passwords through Dex, so Dex's own password form stays off.
+
+Password sign-in is on by default. `values.prod.yaml` turns it off with `auth.passwordLogin: false`, so an install based on that file needs at least one connector.
+`logfire-dex.config.enablePasswordDB: false` from earlier chart versions also turns it off.
+
+The `auth` values hold the other sign-in settings:
+
+```yaml
+auth:
+  passwordLogin: true
+  passkeys: true
+  sessionMaxLifetime: PT8H
+  passwordlessEmailSignup: false
+```
+
+* `passkeys` lets users sign in with a fingerprint, face unlock, or security key.
+* `sessionMaxLifetime` limits how long a browser session lasts, as an ISO 8601 duration.
+  It applies to sessions created after you set it.
+  Without SCIM, a group-mapping change reaches a user only at their next sign-in through the identity provider, so this limit also bounds that delay.
+* `passwordlessEmailSignup` lets a person with a verified email address create an account without a password.
+  It needs email delivery through `smtp.*` or `dev.deployMaildev`.
+
+A variable of the same name in `logfire-backend.env`, such as `PASSKEYS_ENABLED`, takes precedence over the `auth` value.
 
 To add an SSO provider:
 
@@ -701,6 +723,10 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | aiGatewayOauth | object | `{"issuer":"","resourceUrl":""}` | AI gateway OAuth metadata configuration. If left empty, the chart derives self-hosted defaults from the primary Logfire URL:   resourceUrl = <logfire.url>/proxy   issuer      = <logfire.url> |
 | aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
 | aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
+| auth.passkeys | bool | `true` | Let users sign in with a passkey, such as a fingerprint, face unlock, or security key. Existing passkeys stay listed and removable when this is false. |
+| auth.passwordLogin | bool | `true` | Let users sign in with an email address and a password. Set to false when users sign in only through a Dex connector. `logfire-dex.config.enablePasswordDB: false` also turns password sign-in off. |
+| auth.passwordlessEmailSignup | bool | `false` | Let a person with a verified email address that has no account create one without a password. It needs email delivery through `smtp.*` or `dev.deployMaildev`. |
+| auth.sessionMaxLifetime | string | `""` | Longest time that a browser session lasts, as an ISO 8601 duration such as `PT8H`. A session ends after this time, or sooner if the user's own session setting is shorter. The limit applies to sessions created after you set it. Empty applies no limit. |
 | cert-manager | object | `{"crds":{"enabled":true,"keep":true}}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
 | clusterDomain | string | `"cluster.local"` | Kubernetes cluster domain for service discovery. |
 | defaultStorageClassName | string | `""` | Default StorageClass for chart-managed PVCs. Set this when chart PVCs should use a specific class. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass. |
@@ -790,11 +816,10 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
 | logfire-ai-gateway.proxyTimeout | string | `"600s"` | HAProxy inactivity timeout for public `/proxy` requests to the AI gateway. |
-| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"env":null,"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"env":null,"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
-| logfire-dex.config | object | `{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex configuration (see https://dexidp.io/docs/) |
+| logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex configuration (see https://dexidp.io/docs/) |
 | logfire-dex.config.connectors | list | `[]` | Dex auth connectors (see https://dexidp.io/docs/connectors/) The redirectURI can be omitted—it will be generated automatically. If specified, the custom value will be honored. |
-| logfire-dex.config.enablePasswordDB | bool | `true` | Enable password authentication. Set to false if undesired, but ensure another connector is configured first. |
 | logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration (see https://dexidp.io/docs/configuration/storage/) |
 | logfire-dex.env | list or map | `nil` | Extra environment variables for the Dex pod. Accepts `valueFrom`, so a credential can come from a Secret. Dex expands `$VAR` from this environment in the storage and connector config, so `DEX_EXPAND_ENV=false` keeps a literal `$` in a password or DN. |
 | logfire-dex.labels | object | `{}` | Workload labels |

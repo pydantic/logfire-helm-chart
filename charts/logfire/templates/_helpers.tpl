@@ -669,6 +669,35 @@ from a non-null default. Call with `(dict "Values" .Values "serviceName" $servic
 {{- end -}}
 
 {{/*
+Sign-in settings from `auth`, for `logfire-backend`. The helper leaves out a name that
+`logfire-backend.env` also sets, so that value takes precedence and the container has no duplicate
+name. `logfire-dex.config.enablePasswordDB: false` predates `auth.passwordLogin` and still turns
+password sign-in off.
+*/}}
+{{- define "logfire.authEnv" -}}
+{{- $auth := .Values.auth | default dict -}}
+{{- $taken := list -}}
+{{- range (include "logfire.serviceEnv" (dict "Values" .Values "serviceName" "logfire-backend") | fromYamlArray) -}}
+  {{- $taken = append $taken .name -}}
+{{- end -}}
+{{- $dexPasswordDB := dig "config" "enablePasswordDB" true (index .Values "logfire-dex" | default dict) -}}
+{{- $passwordLogin := and (dig "passwordLogin" true $auth) $dexPasswordDB -}}
+{{- $env := list (dict "name" "DEX_PASSWORD_LOGIN_ENABLED" "value" (toString $passwordLogin)) -}}
+{{- $env = append $env (dict "name" "PASSKEYS_ENABLED" "value" (dig "passkeys" true $auth | toString)) -}}
+{{- $env = append $env (dict "name" "PASSWORDLESS_EMAIL_SIGNUP_ENABLED" "value" (dig "passwordlessEmailSignup" false $auth | toString)) -}}
+{{- with (dig "sessionMaxLifetime" "" $auth) -}}
+  {{- $env = append $env (dict "name" "SESSION_MAX_LIFETIME" "value" (toString .)) -}}
+{{- end -}}
+{{- $kept := list -}}
+{{- range $env -}}
+  {{- if not (has .name $taken) -}}
+    {{- $kept = append $kept . -}}
+  {{- end -}}
+{{- end -}}
+{{- with $kept }}{{ toYaml . }}{{ end -}}
+{{- end -}}
+
+{{/*
 Values files load numbers as float64, so print whole numbers without an exponent.
 */}}
 {{- define "logfire.envString" -}}
@@ -976,7 +1005,7 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $extraVars := dict "logfire_frontend_host" (printf "%s" $logfireFrontend) -}}
 {{- $_ := set $frontend "extra" $extraVars -}}
 
-{{- $oauth2 := dict "skipApprovalScreen" true "passwordConnector" "local" -}}
+{{- $oauth2 := dict "skipApprovalScreen" true -}}
 
 {{- $web := dict "http" "0.0.0.0:5556" -}}
 {{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
@@ -1030,9 +1059,9 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $_ := set $dexConfig "oauth2" $oauth2 -}}
 {{- $_ := set $dexConfig "web" $web -}}
 {{- $_ := set $dexConfig "grpc" $grpc -}}
-{{- if not (hasKey $dexConfig "enablePasswordDB") -}}
-  {{- $_ := set $dexConfig "enablePasswordDB" true -}}
-{{- end -}}
+{{- /* Logfire's sign-in page checks passwords through the Dex gRPC API, which does not need
+Dex's own password form. `auth.passwordLogin` controls password sign-in. */ -}}
+{{- $_ := set $dexConfig "enablePasswordDB" false -}}
 {{- $_ := set $dexConfig "connectors" $connectors -}}
 
 {{ toYaml $dexConfig | b64enc | quote }}

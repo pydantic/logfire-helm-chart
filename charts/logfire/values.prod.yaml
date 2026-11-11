@@ -43,8 +43,11 @@ adminSecret:
   enabled: false
   # name: logfire-admin
 
+auth:
+  passwordLogin: false
+
 logfire-dex:
-  # Password login is disabled, so add at least one connector before inviting
+  # Password sign-in is off, so add at least one connector before inviting
   # users. Examples for GitHub, Azure AD, and Okta:
   # https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/examples/#sso-provider-examples
   # env:
@@ -59,7 +62,6 @@ logfire-dex:
   #         name: logfire-oidc
   #         key: client-secret
   config:
-    enablePasswordDB: false
     # connectors:
     #   - type: oidc
     #     id: sso

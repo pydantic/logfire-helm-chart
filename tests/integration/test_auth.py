@@ -1,13 +1,47 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import os
+import re
+import struct
 import subprocess
+import time
 
 import httpx
 import pytest
 
 pytestmark = pytest.mark.anyio
+
+
+def _kubectl_jsonpath(resource: str, jsonpath: str) -> str:
+    """Read one field of a resource in the runner's release namespace."""
+    context = os.environ.get("LOGFIRE_TEST_KUBE_CONTEXT")
+    namespace = os.environ.get("LOGFIRE_TEST_NAMESPACE")
+    if not context or not namespace:
+        pytest.skip("This check needs the Kind runner's explicit context and namespace")
+    result = subprocess.run(
+        ["kubectl", "--context", context, "get", resource, "-n", namespace, "-o", f"jsonpath={jsonpath}"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return result.stdout
+
+
+def _secret_value(name: str, key: str) -> str:
+    return base64.b64decode(_kubectl_jsonpath(f"secret/{name}", f"{{.data.{key}}}")).decode()
+
+
+def _totp_code(secret: str) -> str:
+    """Return the current RFC 6238 code with authenticator-app defaults: SHA-1, 6 digits, 30 seconds."""
+    key = base64.b32decode(secret.strip().upper() + "=" * (-len(secret.strip()) % 8))
+    digest = hmac.new(key, struct.pack(">Q", int(time.time()) // 30), hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    code = (struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF) % 1_000_000
+    return f"{code:06d}"
 
 
 async def test_oidc_discovery(client: httpx.AsyncClient) -> None:
@@ -120,30 +154,45 @@ async def test_device_flow_mints_a_working_user_token(
 
 
 async def test_chart_declared_admin_api_key_calls_the_instance_api(client: httpx.AsyncClient) -> None:
-    context = os.environ.get("LOGFIRE_TEST_KUBE_CONTEXT")
-    namespace = os.environ.get("LOGFIRE_TEST_NAMESPACE")
-    if not context or not namespace:
-        pytest.skip("The admin API key check needs the Kind runner's explicit context and namespace")
-    result = subprocess.run(
-        [
-            "kubectl",
-            "--context",
-            context,
-            "get",
-            "secret/logfire-tokens",
-            "-n",
-            namespace,
-            "-o",
-            "jsonpath={.data.logfire-admin-api-key}",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    token = base64.b64decode(result.stdout).decode()
+    token = _secret_value("logfire-tokens", "logfire-admin-api-key")
 
     response = await client.get("/api/v1/instance/organizations/", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 200, response.text
     assert "logfire-meta" in [organization["organization_name"] for organization in response.json()]
+
+
+async def test_password_sign_in_through_the_logfire_page(client: httpx.AsyncClient) -> None:
+    """Sign in as the bootstrapped admin with a password, read a project, and sign out.
+
+    Dex's own password form is off, so this proves that the Logfire sign-in page checks the
+    password through Dex and that the resulting session works.
+    """
+    bootstrap = _kubectl_jsonpath(
+        "deployment/logfire-backend",
+        '{.spec.template.spec.containers[0].env[?(@.name=="BOOTSTRAPPED_ORGANIZATIONS")].value}',
+    )
+    email_match = re.search(r'"admin_user_email": "([^"]+)"', bootstrap)
+    assert email_match, "BOOTSTRAPPED_ORGANIZATIONS names no admin user"
+    password = _secret_value("logfire-admin-password", "logfire-admin-password")
+    totp_secret = _secret_value("logfire-admin-totp-secret", "logfire-admin-totp-secret")
+
+    providers = await client.get("/ui-api/auth/providers")
+    assert providers.is_success, providers.text
+    assert "local" in [provider["id"] for provider in providers.json()], providers.text
+
+    signed_in = await client.post(
+        "/ui-api/auth/email/login/",
+        json={"email": email_match.group(1), "password": password, "totp_code": _totp_code(totp_secret)},
+    )
+    assert signed_in.status_code == 200, signed_in.text
+    session = {"Authorization": f"Bearer {signed_in.json()['access_token']}"}
+
+    projects = await client.get("/ui-api/organizations/logfire-meta/projects/", headers=session)
+    assert projects.status_code == 200, projects.text
+    assert "logfire-meta" in [project["project_name"] for project in projects.json()], projects.text
+
+    signed_out = await client.post("/ui-api/account/logout/", headers=session)
+    assert signed_out.is_success, signed_out.text
+    after = await client.get("/ui-api/organizations/logfire-meta/projects/", headers=session)
+    assert after.status_code == 401, after.text
