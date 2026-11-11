@@ -307,36 +307,6 @@ When groups grant different roles in the same scope, Logfire grants the most per
 `groupOrganizationMapping` overrides mappings that you manage with the public Group Mappings API.
 The API reports `api_mapping_status: overridden_by_environment` and rejects update requests with HTTP 409.
 
-#### Admin API keys
-
-`adminApiKeys` creates API keys in the `logfire-meta` organization at startup, for automation that runs before anyone signs in.
-Each key reads its token from a Secret in the release namespace:
-
-```bash
-kubectl create secret generic logfire-automation -n <namespace> \
-  --from-literal=token="$(openssl rand -hex 32)"
-```
-
-```yaml
-adminApiKeys:
-  - name: automation
-    scopes: ["instance:admin", "instance:scim"]
-    secretName: logfire-automation
-    secretKey: token
-```
-
-The token must be at least 32 random characters from letters, digits, `-`, and `_`, with no trailing newline.
-The chart embeds it in JSON, so other characters break startup or change the token.
-Give each key a new token, never a revoked key's.
-
-The instance APIs use `instance:admin` for organizations and group mappings, `instance:scim` for SCIM, and `instance:billing` for the usage report.
-`https://<your-hostname>/api/docs` lists every scope and the scope each endpoint needs.
-Each key belongs to the `logfire-meta` project, so `project:*` scopes reach only that project.
-
-The backend reads tokens only at startup, so restart it after you change the Secret.
-It creates a key only when no key has that token, so a changed token or a removed entry leaves the old key valid until you revoke it in the UI.
-Change or remove the entry before you revoke its key.
-
 ### Object storage
 
 Logfire requires object storage for data. Supported URI schemes are `s3://`, `gs://`, and `az://`.
@@ -651,6 +621,36 @@ Write mesh routes and authorization policies for traffic behind HAProxy against 
 With `outboundTrafficPolicy.mode: REGISTRY_ONLY`, add a `ServiceEntry` for each external dependency: PostgreSQL, Redis, object storage, SMTP, and any OTLP export target.
 
 Inside the mesh, use Istio mTLS instead of `inClusterTls`.
+
+### Admin API keys
+
+`adminApiKeys` creates API keys in the `logfire-meta` organization at startup, for automation that runs before anyone signs in.
+Each key reads its token from a Secret in the release namespace:
+
+```bash
+kubectl create secret generic logfire-automation -n <namespace> \
+  --from-literal=token="$(openssl rand -hex 32)"
+```
+
+```yaml
+adminApiKeys:
+  - name: automation
+    scopes: ["instance:admin", "instance:scim"]
+    secretName: logfire-automation
+    secretKey: token
+```
+
+The token must be at least 32 random characters from letters, digits, `-`, and `_`, with no trailing newline.
+The chart embeds it in JSON, so other characters break startup or change the token.
+Give each key a new token, never a revoked key's.
+
+The instance APIs use `instance:admin` for organizations and group mappings, `instance:scim` for SCIM, and `instance:billing` for the usage report.
+`https://<your-hostname>/api/docs` lists every scope and the scope each endpoint needs.
+Each key belongs to the `logfire-meta` project, so `project:*` scopes reach only that project.
+
+The backend reads tokens only at startup, so restart it after you change the Secret.
+It creates a key only when no key has that token, so a changed token or a removed entry leaves the old key valid until you revoke it in the UI.
+Change or remove the entry before you revoke its key.
 
 ## Configure SDKs
 
