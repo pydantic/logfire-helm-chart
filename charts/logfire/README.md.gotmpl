@@ -89,7 +89,7 @@ Use the first-access step below to log in to the meta project.
 
 ### 3b. Production starter
 
-Start from `values.prod.yaml` and replace its placeholder hostnames, credentials, and provider-specific settings.
+Start from [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml), a minimal production overlay, and replace its placeholder hostnames, credentials, and provider-specific settings.
 The starter uses Gateway API. The chart also supports Ingress.
 
 > **Important**: `values.prod.yaml` turns off password login, so nobody can sign in after the first access step until you add a Dex connector or turn password login back on.
