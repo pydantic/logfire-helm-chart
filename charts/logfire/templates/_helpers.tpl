@@ -669,6 +669,42 @@ from a non-null default. Call with `(dict "Values" .Values "serviceName" $servic
 {{- end -}}
 
 {{/*
+Whether users may sign in with an email address and a password, as "true" or "false". The Logfire
+sign-in page and Dex's password database both follow it. `logfire-dex.config.enablePasswordDB:
+false` predates `auth.passwordLogin` and still turns password sign-in off.
+*/}}
+{{- define "logfire.passwordLoginEnabled" -}}
+{{- $dexPasswordDB := dig "config" "enablePasswordDB" true (index .Values "logfire-dex" | default dict) -}}
+{{- and (dig "passwordLogin" true (.Values.auth | default dict)) $dexPasswordDB | toString -}}
+{{- end -}}
+
+{{/*
+Sign-in settings from `auth`, for `logfire-backend`. The helper leaves out a name that
+`logfire-backend.env` also sets, so that value takes precedence and the container has no duplicate
+name.
+*/}}
+{{- define "logfire.authEnv" -}}
+{{- $auth := .Values.auth | default dict -}}
+{{- $taken := list -}}
+{{- range (include "logfire.serviceEnv" (dict "Values" .Values "serviceName" "logfire-backend") | fromYamlArray) -}}
+  {{- $taken = append $taken .name -}}
+{{- end -}}
+{{- $env := list (dict "name" "DEX_PASSWORD_LOGIN_ENABLED" "value" (include "logfire.passwordLoginEnabled" .)) -}}
+{{- $env = append $env (dict "name" "PASSKEYS_ENABLED" "value" (dig "passkeys" true $auth | toString)) -}}
+{{- $env = append $env (dict "name" "PASSWORDLESS_EMAIL_SIGNUP_ENABLED" "value" (dig "passwordlessEmailSignup" false $auth | toString)) -}}
+{{- with (dig "sessionMaxLifetime" "" $auth) -}}
+  {{- $env = append $env (dict "name" "SESSION_MAX_LIFETIME" "value" (toString .)) -}}
+{{- end -}}
+{{- $kept := list -}}
+{{- range $env -}}
+  {{- if not (has .name $taken) -}}
+    {{- $kept = append $kept . -}}
+  {{- end -}}
+{{- end -}}
+{{- with $kept }}{{ toYaml . }}{{ end -}}
+{{- end -}}
+
+{{/*
 Values files load numbers as float64, so print whole numbers without an exponent.
 */}}
 {{- define "logfire.envString" -}}
@@ -1030,9 +1066,9 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $_ := set $dexConfig "oauth2" $oauth2 -}}
 {{- $_ := set $dexConfig "web" $web -}}
 {{- $_ := set $dexConfig "grpc" $grpc -}}
-{{- if not (hasKey $dexConfig "enablePasswordDB") -}}
-  {{- $_ := set $dexConfig "enablePasswordDB" true -}}
-{{- end -}}
+{{- /* Dex refuses to start without a connector, and its password database counts as one. So the
+database stays on while password sign-in is on, for installs that have no other connector. */ -}}
+{{- $_ := set $dexConfig "enablePasswordDB" (include "logfire.passwordLoginEnabled" . | eq "true") -}}
 {{- $_ := set $dexConfig "connectors" $connectors -}}
 
 {{ toYaml $dexConfig | b64enc | quote }}

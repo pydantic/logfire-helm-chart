@@ -93,7 +93,7 @@ Use the first-access step below to log in to the meta project.
 Start from [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml), a minimal production overlay, and replace its placeholder hostnames, credentials, and provider-specific settings.
 The starter uses Gateway API. The chart also supports Ingress.
 
-> **Important**: `values.prod.yaml` turns off password login, so nobody can sign in after the first access step until you add a Dex connector or turn password login back on.
+> **Important**: `values.prod.yaml` turns off password sign-in, so nobody can sign in after the first access step until you add a Dex connector or set `auth.passwordLogin: true`.
 > See [Authentication](#authentication) before you install.
 
 Before installing in production, confirm that you have:
@@ -271,7 +271,30 @@ redisSecret:
 ### Authentication
 
 Users sign in through Dex, either with an email and password or with an SSO provider that you configure as a Dex connector.
-Password login is on by default. `values.prod.yaml` turns it off with `logfire-dex.config.enablePasswordDB: false`, so an install based on that file needs at least one connector.
+
+Password sign-in is on by default. `values.prod.yaml` turns it off with `auth.passwordLogin: false`.
+`auth.passwordLogin` controls both the Logfire sign-in page and Dex's password database.
+Dex does not start without at least one connector, so an install with password sign-in off needs a connector under `logfire-dex.config.connectors`.
+`logfire-dex.config.enablePasswordDB: false` from earlier chart versions also turns password sign-in off.
+
+The `auth` values hold the other sign-in settings:
+
+```yaml
+auth:
+  passwordLogin: true
+  passkeys: true
+  sessionMaxLifetime: PT8H
+  passwordlessEmailSignup: false
+```
+
+* `passkeys` lets users sign in with a fingerprint, face unlock, or security key.
+* `sessionMaxLifetime` limits how long a browser session lasts, as an ISO 8601 duration.
+  It applies to sessions created after you set it.
+  Without SCIM, a group-mapping change reaches a user only at their next sign-in through the identity provider, so this limit also bounds that delay.
+* `passwordlessEmailSignup` lets a person with a verified email address create an account without a password.
+  It needs email delivery through `smtp.*` or `dev.deployMaildev`.
+
+A variable of the same name in `logfire-backend.env`, such as `PASSKEYS_ENABLED`, takes precedence over the `auth` value.
 
 To add an SSO provider:
 

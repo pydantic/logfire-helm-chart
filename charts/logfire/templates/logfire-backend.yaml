@@ -257,6 +257,9 @@ spec:
               value: '[{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}]'
             - name: EMAILS_ENABLED
               value: {{ include "logfire.emailsEnabled" . | quote }}
+            {{- with (include "logfire.authEnv" . | trim) }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
             - name: MCP_RESOURCE_URL
