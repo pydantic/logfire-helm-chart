@@ -669,10 +669,19 @@ from a non-null default. Call with `(dict "Values" .Values "serviceName" $servic
 {{- end -}}
 
 {{/*
+Whether users may sign in with an email address and a password, as "true" or "false". The Logfire
+sign-in page and Dex's password database both follow it. `logfire-dex.config.enablePasswordDB:
+false` predates `auth.passwordLogin` and still turns password sign-in off.
+*/}}
+{{- define "logfire.passwordLoginEnabled" -}}
+{{- $dexPasswordDB := dig "config" "enablePasswordDB" true (index .Values "logfire-dex" | default dict) -}}
+{{- and (dig "passwordLogin" true (.Values.auth | default dict)) $dexPasswordDB | toString -}}
+{{- end -}}
+
+{{/*
 Sign-in settings from `auth`, for `logfire-backend`. The helper leaves out a name that
 `logfire-backend.env` also sets, so that value takes precedence and the container has no duplicate
-name. `logfire-dex.config.enablePasswordDB: false` predates `auth.passwordLogin` and still turns
-password sign-in off.
+name.
 */}}
 {{- define "logfire.authEnv" -}}
 {{- $auth := .Values.auth | default dict -}}
@@ -680,9 +689,7 @@ password sign-in off.
 {{- range (include "logfire.serviceEnv" (dict "Values" .Values "serviceName" "logfire-backend") | fromYamlArray) -}}
   {{- $taken = append $taken .name -}}
 {{- end -}}
-{{- $dexPasswordDB := dig "config" "enablePasswordDB" true (index .Values "logfire-dex" | default dict) -}}
-{{- $passwordLogin := and (dig "passwordLogin" true $auth) $dexPasswordDB -}}
-{{- $env := list (dict "name" "DEX_PASSWORD_LOGIN_ENABLED" "value" (toString $passwordLogin)) -}}
+{{- $env := list (dict "name" "DEX_PASSWORD_LOGIN_ENABLED" "value" (include "logfire.passwordLoginEnabled" .)) -}}
 {{- $env = append $env (dict "name" "PASSKEYS_ENABLED" "value" (dig "passkeys" true $auth | toString)) -}}
 {{- $env = append $env (dict "name" "PASSWORDLESS_EMAIL_SIGNUP_ENABLED" "value" (dig "passwordlessEmailSignup" false $auth | toString)) -}}
 {{- with (dig "sessionMaxLifetime" "" $auth) -}}
@@ -1005,7 +1012,7 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $extraVars := dict "logfire_frontend_host" (printf "%s" $logfireFrontend) -}}
 {{- $_ := set $frontend "extra" $extraVars -}}
 
-{{- $oauth2 := dict "skipApprovalScreen" true -}}
+{{- $oauth2 := dict "skipApprovalScreen" true "passwordConnector" "local" -}}
 
 {{- $web := dict "http" "0.0.0.0:5556" -}}
 {{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
@@ -1059,9 +1066,9 @@ Create dex configuration secret, merging backend static clients with user provid
 {{- $_ := set $dexConfig "oauth2" $oauth2 -}}
 {{- $_ := set $dexConfig "web" $web -}}
 {{- $_ := set $dexConfig "grpc" $grpc -}}
-{{- /* Logfire's sign-in page checks passwords through the Dex gRPC API, which does not need
-Dex's own password form. `auth.passwordLogin` controls password sign-in. */ -}}
-{{- $_ := set $dexConfig "enablePasswordDB" false -}}
+{{- /* Dex refuses to start without a connector, and its password database counts as one. So the
+database stays on while password sign-in is on, for installs that have no other connector. */ -}}
+{{- $_ := set $dexConfig "enablePasswordDB" (include "logfire.passwordLoginEnabled" . | eq "true") -}}
 {{- $_ := set $dexConfig "connectors" $connectors -}}
 
 {{ toYaml $dexConfig | b64enc | quote }}

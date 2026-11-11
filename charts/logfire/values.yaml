@@ -68,7 +68,8 @@ groupOrganizationMapping: []
 # `logfire-backend.env` takes precedence.
 auth:
   # -- Let users sign in with an email address and a password. Set to false when users sign in only through
-  # a Dex connector. `logfire-dex.config.enablePasswordDB: false` also turns password sign-in off.
+  # a Dex connector, and configure at least one connector, because Dex does not start without one.
+  # `logfire-dex.config.enablePasswordDB: false` also turns password sign-in off.
   passwordLogin: true
   # -- Let users sign in with a passkey, such as a fingerprint, face unlock, or security key.
   # Existing passkeys stay listed and removable when this is false.

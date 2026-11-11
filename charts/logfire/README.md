@@ -270,10 +270,11 @@ redisSecret:
 ### Authentication
 
 Users sign in through Dex, either with an email and password or with an SSO provider that you configure as a Dex connector.
-Logfire's sign-in page checks passwords through Dex, so Dex's own password form stays off.
 
-Password sign-in is on by default. `values.prod.yaml` turns it off with `auth.passwordLogin: false`, so an install based on that file needs at least one connector.
-`logfire-dex.config.enablePasswordDB: false` from earlier chart versions also turns it off.
+Password sign-in is on by default. `values.prod.yaml` turns it off with `auth.passwordLogin: false`.
+`auth.passwordLogin` controls both the Logfire sign-in page and Dex's password database.
+Dex does not start without at least one connector, so an install with password sign-in off needs a connector under `logfire-dex.config.connectors`.
+`logfire-dex.config.enablePasswordDB: false` from earlier chart versions also turns password sign-in off.
 
 The `auth` values hold the other sign-in settings:
 
@@ -724,7 +725,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
 | aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
 | auth.passkeys | bool | `true` | Let users sign in with a passkey, such as a fingerprint, face unlock, or security key. Existing passkeys stay listed and removable when this is false. |
-| auth.passwordLogin | bool | `true` | Let users sign in with an email address and a password. Set to false when users sign in only through a Dex connector. `logfire-dex.config.enablePasswordDB: false` also turns password sign-in off. |
+| auth.passwordLogin | bool | `true` | Let users sign in with an email address and a password. Set to false when users sign in only through a Dex connector, and configure at least one connector, because Dex does not start without one. `logfire-dex.config.enablePasswordDB: false` also turns password sign-in off. |
 | auth.passwordlessEmailSignup | bool | `false` | Let a person with a verified email address that has no account create one without a password. It needs email delivery through `smtp.*` or `dev.deployMaildev`. |
 | auth.sessionMaxLifetime | string | `""` | Longest time that a browser session lasts, as an ISO 8601 duration such as `PT8H`. A session ends after this time, or sooner if the user's own session setting is shorter. The limit applies to sessions created after you set it. Empty applies no limit. |
 | cert-manager | object | `{"crds":{"enabled":true,"keep":true}}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |

@@ -163,10 +163,10 @@ async def test_chart_declared_admin_api_key_calls_the_instance_api(client: httpx
 
 
 async def test_password_sign_in_through_the_logfire_page(client: httpx.AsyncClient) -> None:
-    """Sign in as the bootstrapped admin with a password, read a project, and sign out.
+    """Sign in as the bootstrapped admin with a password on the Logfire page, then sign out.
 
-    Dex's own password form is off, so this proves that the Logfire sign-in page checks the
-    password through Dex and that the resulting session works.
+    The Logfire page checks the password through Dex. The test proves that this path and the
+    resulting session work in the installed chart.
     """
     bootstrap = _kubectl_jsonpath(
         "deployment/logfire-backend",
