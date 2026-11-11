@@ -2071,9 +2071,15 @@ adminSecret:
 # `instance:billing` for the usage report. The API schema of your instance, at
 # `https://<your-hostname>/api/docs`, lists every scope and the scope that each endpoint needs.
 # Each key belongs to the `logfire-meta` project, so `project:*` scopes reach only that project.
-# Each key reads its token from a Secret that you create in the release namespace. Use a long
-# random token of letters and digits, for example the output of `openssl rand -hex 32`. The
-# backend reads the token only at startup, so restart the backend after you change the Secret.
+# Each key reads its token from a Secret that you create in the release namespace. The token
+# needs no fixed format, but it must contain only letters, digits, `-`, and `_`, with no newline
+# at the end. The chart puts the token in a JSON value, so a quote, a backslash, or a newline
+# stops the backend at startup or changes the token. Use a random token of at least 32
+# characters. The backend accepts a shorter token, but such a key is easy to guess. Give each
+# key its own token, and do not use the token of a revoked key again. For example, create the
+# Secret with
+# `kubectl create secret generic logfire-automation --from-literal=token="$(openssl rand -hex 32)"`.
+# The backend reads the token only at startup, so restart the backend after you change the Secret.
 # The backend creates a key only when no key has that token. So a changed token or a removed
 # entry leaves the old key valid until you revoke it in the UI. Change or remove the entry
 # before you revoke its key.
