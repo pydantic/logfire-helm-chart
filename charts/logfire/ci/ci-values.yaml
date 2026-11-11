@@ -46,6 +46,12 @@ adminSecret:
   enabled: true
   name: "logfire-admin"
 
+adminApiKeys:
+  - name: ci-automation
+    scopes: ["instance:admin"]
+    secretName: logfire-tokens
+    secretKey: logfire-admin-api-key
+
 existingGatewaySecret:
   enabled: true
   name: "logfire-gateway"

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import base64
+import os
+import subprocess
+
 import httpx
 import pytest
 
@@ -113,3 +117,33 @@ async def test_device_flow_mints_a_working_user_token(
     )
     assert listed.is_success, listed.text
     assert project in [p["project_name"] for p in listed.json()], listed.text
+
+
+async def test_chart_declared_admin_api_key_calls_the_instance_api(client: httpx.AsyncClient) -> None:
+    context = os.environ.get("LOGFIRE_TEST_KUBE_CONTEXT")
+    namespace = os.environ.get("LOGFIRE_TEST_NAMESPACE")
+    if not context or not namespace:
+        pytest.skip("The admin API key check needs the Kind runner's explicit context and namespace")
+    result = subprocess.run(
+        [
+            "kubectl",
+            "--context",
+            context,
+            "get",
+            "secret/logfire-tokens",
+            "-n",
+            namespace,
+            "-o",
+            "jsonpath={.data.logfire-admin-api-key}",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    token = base64.b64decode(result.stdout).decode()
+
+    response = await client.get("/api/v1/instance/organizations/", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200, response.text
+    assert "logfire-meta" in [organization["organization_name"] for organization in response.json()]

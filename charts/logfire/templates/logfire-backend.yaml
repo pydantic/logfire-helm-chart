@@ -26,6 +26,14 @@
     ) }}
   {{- end }}
 {{- end }}
+{{- $adminApiKeys := list }}
+{{- range $index, $apiKey := .Values.adminApiKeys }}
+  {{- $adminApiKeys = append $adminApiKeys (dict
+    "name" (toString $apiKey.name)
+    "token" (printf "$(ADMIN_API_KEY_%d)" $index)
+    "scopes" $apiKey.scopes
+  ) }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -294,6 +302,13 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.adminSecret "secretName" "logfire-admin-totp-recovery-codes") }}
                   key: logfire-admin-totp-recovery-codes
+            {{- range $index, $apiKey := .Values.adminApiKeys }}
+            - name: ADMIN_API_KEY_{{ $index }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $apiKey.secretName | quote }}
+                  key: {{ $apiKey.secretKey | quote }}
+            {{- end }}
             {{- /* MCP OAuth2 is not supported without TLS for hostnames different than localhost */ -}}
             {{- if $oauthEnabled }}
             - name: MCP_OAUTH_CLIENT_SECRET
@@ -307,7 +322,7 @@ spec:
               # This will make it possible to log-in sans-credentials by visiting a URL like:
               # http://localhost:8080/logfire-meta/logfire-meta#token=U8TO1taNdD7YwgBMcfeQVU7RB6Hgtrwd
               # You'll need to get the right host and get the secret from k8s
-              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)", "frontend_application_token": "$(META_FRONTEND_APPLICATION_TOKEN)"}]{{- if $oauthClients }}, "oauth_clients": {{ $oauthClients | toJson }}{{- end }}}]'
+              value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)", "frontend_application_token": "$(META_FRONTEND_APPLICATION_TOKEN)"{{- if $adminApiKeys }}, "api_keys": {{ $adminApiKeys | toJson }}{{- end }}}]{{- if $oauthClients }}, "oauth_clients": {{ $oauthClients | toJson }}{{- end }}}]'
             {{- include "logfire.pythonObjectStoreEnv" . | nindent 12 }}
             {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}

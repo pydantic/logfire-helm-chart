@@ -702,6 +702,37 @@ tests:
       - failedTemplate:
           errorPattern: 'adminEmail is required'
 
+  - it: requires a Secret reference for each admin API key
+    set:
+      adminApiKeys:
+        - name: automation
+          scopes: ["instance:admin"]
+    asserts:
+      - failedTemplate:
+          errorPattern: 'needs secretName and secretKey'
+
+  - it: rejects an admin API key with a scope that is not a scope
+    set:
+      adminApiKeys:
+        - name: automation
+          scopes: ["instance:admin", "everything"]
+          secretName: logfire-automation
+          secretKey: token
+    asserts:
+      - failedTemplate:
+          errorPattern: 'scopes must list at least one scope'
+
+  - it: rejects an admin API key name that could break the bootstrap configuration
+    set:
+      adminApiKeys:
+        - name: "it's"
+          scopes: ["instance:admin"]
+          secretName: logfire-automation
+          secretKey: token
+    asserts:
+      - failedTemplate:
+          errorPattern: 'name is required and may contain only'
+
   - it: rejects an invalid adminEmail
     set:
       adminEmail: not-an-email

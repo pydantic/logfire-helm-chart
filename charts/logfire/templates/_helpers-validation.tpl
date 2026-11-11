@@ -324,6 +324,31 @@ Validate email/admin configuration
 {{- end -}}
 
 {{/*
+Validate the API keys that the chart creates in the admin organization
+*/}}
+{{- define "logfire.validate.adminApiKeys" -}}
+{{- range $index, $apiKey := .Values.adminApiKeys -}}
+  {{- if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9 ._-]*$" (toString (default "" $apiKey.name))) -}}
+    {{- fail (printf "adminApiKeys[%d].name is required and may contain only letters, digits, spaces, dots, underscores, and dashes." $index) -}}
+  {{- end -}}
+  {{- if or (not $apiKey.secretName) (not $apiKey.secretKey) -}}
+    {{- fail (printf "adminApiKeys[%d] needs secretName and secretKey. Provide the Kubernetes Secret and the key that hold the token." $index) -}}
+  {{- end -}}
+  {{- $badScopes := or (not (kindIs "slice" $apiKey.scopes)) (not $apiKey.scopes) -}}
+  {{- if not $badScopes -}}
+    {{- range $apiKey.scopes -}}
+      {{- if not (regexMatch "^[a-z_]+:[a-z_]+$" (toString .)) -}}
+        {{- $badScopes = true -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if $badScopes -}}
+    {{- fail (printf "adminApiKeys[%d].scopes must list at least one scope, and each scope looks like instance:admin." $index) -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Validate in-cluster TLS configuration
 */}}
 {{- define "logfire.validate.inClusterTls" -}}
@@ -472,6 +497,7 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.existingGatewaySecret"
   "logfire.validate.adminSecret"
   "logfire.validate.admin"
+  "logfire.validate.adminApiKeys"
   "logfire.validate.redis"
   "logfire.validate.smtp"
   "logfire.validate.trustedCaBundle"
