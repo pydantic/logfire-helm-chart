@@ -84,6 +84,7 @@ kubectl -n logfire port-forward svc/logfire-maildev 1080:1080
 ```
 
 Open Logfire at `http://localhost:8080` and MailDev at `http://localhost:1080`.
+MailDev is available for testing local email flows.
 Use the first-access step below to log in to the meta project.
 
 ### 3b. Production starter
@@ -187,7 +188,7 @@ ingress:
 ### PostgreSQL
 
 Logfire requires three separate PostgreSQL databases: `crud`, `ff`, and `dex`.
-They can share one PostgreSQL instance.
+They may run on the same PostgreSQL instance, but they must be separate databases to avoid schema collisions.
 Each database user needs owner permissions so migrations can run.
 
 PostgreSQL stores metadata only. Telemetry data is in object storage.
@@ -195,8 +196,9 @@ Start with 2 vCPU and 16 GB of memory, and resize from the CPU and connection us
 
 FusionFire migrations set autovacuum settings on the `ff` tables that change most often. Do not override them.
 
-To connect through a pooler, see [Connection poolers](#connection-poolers).
-[Connection counts](#connection-counts) lists the pool size of each workload.
+Connect each DSN directly to PostgreSQL, or through a connection pooler in transaction mode as [Connection poolers](#connection-poolers) describes.
+The migration jobs, `logfire-ff-maintenance-scheduler`, and Dex then need a session-mode pool or a direct connection.
+[Connection counts](#connection-counts) lists the default pool size and the variable for each workload.
 
 ### Object storage
 
@@ -317,8 +319,9 @@ Start with a sizing preset instead of hand-sizing every workload:
 sizingPreset: standard
 ```
 
-Use `standard` for general production deployments, `large` for higher throughput, `small` for lower traffic, and `tiny` for the smallest footprint without high availability.
+Use `standard` for general production deployments, `large` for higher throughput, `small` for lower traffic, and `tiny` for the smallest production footprint without high availability.
 Presets set resources, autoscaling, PodDisruptionBudgets, and best-effort topology spreading.
+Configure the [production prerequisites](#3b-production-starter) separately.
 
 Each preset gives the query API these resources:
 
@@ -329,8 +332,9 @@ Each preset gives the query API these resources:
 | `standard` | 4 | 8 GiB | 6 GiB | 3–8 |
 | `large` | 4 | 8 GiB | 6 GiB | 3–16 |
 
-Without a preset or per-workload resources, the chart sets no CPU or memory requests or limits.
-Use a preset or explicit resources on constrained clusters.
+Without a preset or per-workload resources, the chart sets no Kubernetes CPU or memory requests or limits.
+FusionFire uses the `tiny` resource baseline for internal execution limits.
+Select a preset or explicit workload resources for constrained clusters.
 
 Override individual workloads only after selecting a preset:
 
@@ -358,7 +362,8 @@ Expand the existing `bcache-data-*` PVCs if the storage class allows it, or run 
 ### Organization group mappings
 
 Use `groupOrganizationMapping` to grant Logfire organization and project roles to members of identity-provider groups.
-Each `group_id` must match a group name or group ID that your connector returns to Dex.
+Each `group_id` must match a group that your connector returns to Dex.
+Depending on the connector and its settings, that value is a group name or a group ID.
 
 ```yaml
 groupOrganizationMapping:
@@ -428,8 +433,11 @@ ai:
 ### Alert runner
 
 `logfire-alert-runner` evaluates alert runs and hands the alerts that fire to `logfire-task-runner` for delivery.
-The chart always deploys it, with its own `logfire-alert-runner-prod` image. Without it, alerts do not fire.
+It is the only evaluator of alert runs, so the chart always deploys it, with its own `logfire-alert-runner-prod` image.
+If the runner is not available, alert runs wait and alerts do not fire.
 If you mirror images to a private registry, mirror this image before you upgrade.
+
+Set `replicas`, `resources`, and `autoscaling` under `logfire-alert-runner` as for any workload.
 
 Webhook, email, Opsgenie, and direct PagerDuty channels need no extra configuration.
 Slack App channels need the OAuth credentials of your own Slack App, and are skipped without them:
@@ -528,10 +536,11 @@ bcache loads its certificate at startup. After you rotate the Secret, restart `s
 For Kind or local development, `dev.deployCertManager` deploys cert-manager as a subchart.
 From this repository, run `helm dependency build charts/logfire` first.
 
-With bundled cert-manager on a fresh install, omit `--wait`, and omit `--atomic` on Helm 3 or `--rollback-on-failure` on Helm 4.
-The chart creates its certificates in post-install hooks, which run after Helm's readiness wait, so that wait never finishes.
+With bundled cert-manager on a fresh install, omit `--wait`, and omit `--atomic` on Helm 3 or `--rollback-on-failure` on Helm 4, because those flags also wait for readiness.
+The chart creates its certificates in post-install hooks, which run after Helm waits for ordinary workloads.
+Those workloads need the certificate Secrets to become ready, so the wait cannot finish.
 Check workload readiness after the hooks finish.
-If you need readiness waits or automatic rollback, install cert-manager separately.
+If you need readiness waits or automatic rollback, install cert-manager separately and leave `dev.deployCertManager=false`.
 
 ### Private CA certificates
 
@@ -551,16 +560,19 @@ trustedCaBundle:
     key: ca.crt
 ```
 
-The bundle adds to the system trust store, so public endpoints stay trusted.
-It can hold more than one CA, so one bundle can serve Redis and SMTP.
-A trust-manager bundle built with `useDefaultCAs: true` also works.
+An init container in each Logfire workload that connects to Redis or sends email joins the system trust store and your certificates into one file.
+Python and FusionFire workloads read that file through `SSL_CERT_FILE`, and `logfire-ai-gateway` reads it through `NODE_EXTRA_CA_CERTS`.
+Public endpoints, such as object storage and model providers, stay trusted.
+The file can hold more than one CA, so one bundle can serve Redis and SMTP.
+A bundle that cert-manager's trust-manager builds with `useDefaultCAs: true` also works as it is. The duplicate public CAs do no harm.
 
-The server certificate must name the host in the DSN.
-Certificates must also follow RFC 5280 strictly. For example, the CA certificate needs a key usage extension, and the server certificate needs an authority key identifier.
+FusionFire and the AI gateway also check the host name, so the server certificate must name the host in the DSN.
+The Python workloads verify certificates strictly, as RFC 5280 requires. For example, the CA certificate needs a key usage extension, and the server certificate needs an authority key identifier.
 To check a CA that you made yourself, run `openssl verify -x509_strict -CAfile ca.crt server.crt`.
 The pods read the certificates when they start. After you change them, restart the Logfire workloads.
 
-`smtp.caBundle` still works in `logfire-task-runner` and `logfire-worker`. Use `trustedCaBundle` for new installs.
+`smtp.caBundle` still works and adds its CA to the same file in `logfire-task-runner` and `logfire-worker`.
+Use `trustedCaBundle` for new installs.
 
 ### Restricted Pod Security
 
@@ -655,6 +667,8 @@ For enterprise support, contact [sales@pydantic.dev](mailto:sales@pydantic.dev).
 ## Optional dev dependencies
 
 The cert-manager subchart deploys only when you set `dev.deployCertManager`.
+The bundled dev Postgres deploys only when you set `dev.deployPostgres`. It is a chart-owned template, not a dependency.
+Production installs use external PostgreSQL, and a separately installed cert-manager when in-cluster TLS uses cert-manager.
 
 | Repository | Name | Version |
 |------------|------|---------|
