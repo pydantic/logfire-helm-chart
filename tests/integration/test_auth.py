@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import os
 import re
 import struct
@@ -33,6 +34,16 @@ def _kubectl_jsonpath(resource: str, jsonpath: str) -> str:
 
 def _secret_value(name: str, key: str) -> str:
     return base64.b64decode(_kubectl_jsonpath(f"secret/{name}", f"{{.data.{key}}}")).decode()
+
+
+def _backend_secret_env(name: str) -> str:
+    """Read the Secret value that a `logfire-backend` variable references, wherever it lives."""
+    ref = _kubectl_jsonpath(
+        "deployment/logfire-backend",
+        f'{{.spec.template.spec.containers[0].env[?(@.name=="{name}")].valueFrom.secretKeyRef}}',
+    )
+    secret_ref = json.loads(ref)
+    return _secret_value(secret_ref["name"], secret_ref["key"])
 
 
 def _totp_code(secret: str) -> str:
@@ -174,8 +185,8 @@ async def test_password_sign_in_through_the_logfire_page(client: httpx.AsyncClie
     )
     email_match = re.search(r'"admin_user_email": "([^"]+)"', bootstrap)
     assert email_match, "BOOTSTRAPPED_ORGANIZATIONS names no admin user"
-    password = _secret_value("logfire-admin-password", "logfire-admin-password")
-    totp_secret = _secret_value("logfire-admin-totp-secret", "logfire-admin-totp-secret")
+    password = _backend_secret_env("ADMIN_PASSWORD")
+    totp_secret = _backend_secret_env("ADMIN_TOTP_SECRET")
 
     providers = await client.get("/ui-api/auth/providers")
     assert providers.is_success, providers.text
