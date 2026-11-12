@@ -99,7 +99,7 @@ Before installing in production, confirm that you have:
 
 * Image pull credentials configured through `imagePullSecrets`.
 * Public hostname and TLS values set through `ingress.*` or `gateway.*`, even if you expose the Service another way.
-* External PostgreSQL databases for `crud`, `ff`, and `dex`, created before you install. See [PostgreSQL](#postgresql).
+* External PostgreSQL 16 or later, with the `crud`, `ff`, and `dex` databases created before you install. See [PostgreSQL](#postgresql).
 * Object storage using `s3://`, `gs://`, or `az://`.
 * A managed Redis endpoint configured through `redisDsn`, or through `redisSecret.name` when the DSNs live in an externally managed Secret.
 * A Dex connector for your identity provider, or password login with `smtp.*` configured.
@@ -187,7 +187,7 @@ ingress:
 
 ### PostgreSQL
 
-Logfire requires three separate PostgreSQL databases: `crud`, `ff`, and `dex`.
+Logfire requires PostgreSQL 16 or later, with three separate databases: `crud`, `ff`, and `dex`.
 They may run on the same PostgreSQL instance, but they must be separate databases to avoid schema collisions.
 
 Create the three databases before you install the chart.
@@ -204,6 +204,12 @@ CREATE DATABASE dex OWNER logfire;
 
 You can use a different user for each database.
 The bundled development PostgreSQL (`dev.deployPostgres: true`) creates the databases on first start, so this step applies only to external PostgreSQL.
+
+The migrations create the `btree_gist` extension in the `crud` database, and the `btree_gist` and `intarray` extensions in the `ff` database.
+Both are trusted extensions, so the database owner can create them without superuser.
+Some managed services allow only the extensions on a list.
+For example, Azure Database for PostgreSQL requires both extensions in the `azure.extensions` server parameter.
+On such a service, allow both extensions before you install.
 
 PostgreSQL stores metadata only. Telemetry data is in object storage.
 Start with 2 vCPU and 16 GB of memory, and resize from the CPU and connection use that you see.
