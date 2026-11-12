@@ -260,6 +260,10 @@ spec:
             {{- with (include "logfire.authEnv" . | trim) }}
             {{- . | nindent 12 }}
             {{- end }}
+            {{- with (include "logfire.sourceMapsObjectStoreUri" . | trim) }}
+            - name: SOURCE_MAPS_OBJECT_STORE_URI
+              value: {{ . | quote }}
+            {{- end }}
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
             - name: MCP_RESOURCE_URL
