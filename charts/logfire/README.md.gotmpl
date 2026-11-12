@@ -10,8 +10,8 @@ The chart source in this repository uses the MIT License, but the Logfire contai
 
 ## Install paths
 
-Use this README for the chart-level install flow and values reference.
-Use the [Self-Hosted Production Requirements](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/installation/) for background, architecture, and provider-specific procedures.
+This README is the reference for each chart version: the install flow, the requirements of external services, and the values.
+The [self-hosted docs](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/overview/) explain how to plan an install, and give procedures such as bucket and database migrations.
 
 The chart needs Kubernetes 1.23 or later and Helm 3 or Helm 4. CI tests it with Helm 4.2.0.
 Gateway API routing also needs the Gateway API v1 CRDs in the cluster.
@@ -204,6 +204,8 @@ Some managed services allow only the extensions on a list.
 For example, Azure Database for PostgreSQL requires both extensions in the `azure.extensions` server parameter.
 On such a service, allow both extensions before you install.
 
+[values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml) shows the connection values: `postgresDsn`, `postgresFFDsn`, and the Dex storage under `logfire-dex.config.storage`.
+
 PostgreSQL stores metadata only. Telemetry data is in object storage.
 Start with 2 vCPU and 16 GB of memory, and resize from the CPU and connection use that you see.
 
@@ -232,6 +234,8 @@ The identity needs read and write access to the bucket.
 On AWS, grant `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket`.
 On GCP, grant the `Storage Object Admin` role on the bucket.
 
+Without a cloud identity, set the provider's standard credential variables in `objectStore.env`, such as `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, and read them from a Secret.
+
 For local evaluation, `dev.deployRustfs` deploys RustFS and fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credentials.
 An `s3://` `objectStore.uri` also sets the bucket that RustFS creates.
 
@@ -253,6 +257,7 @@ On Google Cloud Storage, you can turn on Autoclass to lower the cost of data tha
 The bundled Redis is for evaluation. For production, set `logfire-redis.enabled: false` and connect a managed Redis or Valkey:
 
 * Use one endpoint: a standalone instance, or a primary with replicas behind one write endpoint. Logfire does not support cluster mode.
+* Use Redis 7.2, the version that we test.
 * Use a `redis://` or `rediss://` DSN with the password, or the ACL user and password, in it. For example, `rediss://USER:PASSWORD@redis.example.com:6379`.
 * With `rediss://`, Logfire verifies the server certificate. If a private CA signs it, set `trustedCaBundle` as [Private CA certificates](#private-ca-certificates) describes.
 
