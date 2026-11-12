@@ -1497,6 +1497,7 @@ platform contract tests keep the image `USER` and these numbers in step.
 {{- $uidGid1000 := list
   "logfire-backend"
   "logfire-backend-auth"
+  "logfire-source-maps"
   "logfire-backend-migrations"
   "logfire-worker"
   "logfire-task-runner"
@@ -1884,6 +1885,7 @@ The other in-cluster TLS clients are unaffected. They trust `LOGFIRE_CA_PATH` ex
 {{- $services := list
   "logfire-backend"
   "logfire-backend-auth"
+  "logfire-source-maps"
   "logfire-worker"
   "logfire-task-runner"
   "logfire-alert-runner"
@@ -2226,6 +2228,7 @@ image reaches both.
 {{- if and $ctx.Values.dev.deployPostgres (has $serviceName (list
   "logfire-backend"
   "logfire-backend-auth"
+  "logfire-source-maps"
   "logfire-worker"
   "logfire-task-runner"
   "logfire-alert-runner"

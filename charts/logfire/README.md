@@ -873,6 +873,8 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | logfire-redis.topologySpreadConstraints | list | `[]` | Topology spread constraints for the bundled Redis pod. |
 | logfire-remote-mcp | object | `{"enabled":true}` | Autoscaling & resources for the `logfire-remote-mcp` pod |
 | logfire-remote-mcp.enabled | bool | `true` | Enable the remote MCP service. When disabled, the deployment is not rendered and the `/mcp` and `/.well-known/oauth-protected-resource/mcp` haproxy routes are removed. |
+| logfire-source-maps | object | `{"enabled":false}` | The `logfire-source-maps` service, which Fusionfire ingest calls to resolve browser stack frames. Off by default. When enabled, the ingest processor gets `FF_SOURCE_MAPS_URL`. |
+| logfire-source-maps.enabled | bool | `false` | Enable the source-maps service. |
 | maildev | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"maildev/maildev","tag":"3.0.0"},"podSecurityContext":{},"securityContext":{}}` | MailDev configuration (only used when `dev.deployMaildev` is true) |
 | maildev.podSecurityContext | object | `{}` | Pod SecurityContext for the MailDev pod. Defaults to the chart-wide `podSecurityContext` when unset. |
 | maildev.securityContext | object | `{}` | Container SecurityContext for the MailDev container. Merged over the chart-wide `securityContext` and the image defaults: uid and gid 1000, all capabilities dropped, no privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root with a writable `/tmp` emptyDir. Set a field here to override a default. |

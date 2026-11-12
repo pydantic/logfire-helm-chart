@@ -837,3 +837,26 @@ tests:
         documentSelector:
           path: metadata.name
           value: logfire-ff-ingest-config
+
+  - it: ingest resolves source maps against the source-maps Service it renders
+    set:
+      logfire-source-maps:
+        enabled: true
+    templates:
+      - templates/logfire-ff-config.yaml
+      - templates/logfire-source-maps.yaml
+    asserts:
+      - equal:
+          path: data.FF_SOURCE_MAPS_URL
+          value: http://logfire-source-maps:8003
+        template: templates/logfire-ff-config.yaml
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config
+      - equal:
+          path: spec.ports[0].port
+          value: 8003
+        template: templates/logfire-source-maps.yaml
+        documentSelector:
+          path: kind
+          value: Service

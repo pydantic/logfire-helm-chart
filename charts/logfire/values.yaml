@@ -878,6 +878,12 @@ intakeOauth:
   resourceUrl: ""
 
 
+# -- The `logfire-source-maps` service, which Fusionfire ingest calls to resolve browser stack
+# frames. Off by default. When enabled, the ingest processor gets `FF_SOURCE_MAPS_URL`.
+logfire-source-maps:
+  # -- Enable the source-maps service.
+  enabled: false
+
 # -- Autoscaling & resources for the `logfire-remote-mcp` pod
 logfire-remote-mcp:
   # -- Enable the remote MCP service. When disabled, the deployment is not
@@ -1719,6 +1725,8 @@ image:
   backendImage: logfire-backend-prod
   # @ignored
   authImage: logfire-auth-prod
+  # @ignored
+  sourceMapsImage: logfire-source-maps-prod
   # @ignored
   taskRunnerImage: logfire-task-runner-prod
   # @ignored

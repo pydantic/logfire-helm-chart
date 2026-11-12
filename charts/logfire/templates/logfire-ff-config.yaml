@@ -92,6 +92,9 @@ metadata:
 data:
   FF_BACKEND_SERVICE_URL: "{{ include "logfire.scheme" . }}://logfire-backend-auth:{{ include "logfire.port" (dict "port" 8000 "root" .) }}"
   FF_FAILOVER_OBJECT_STORE_URI: {{ printf "%s/_ingest_failover" (include "logfire.objectStoreUri" .) | quote }}
+  {{- if dig "enabled" false (index .Values "logfire-source-maps" | default dict) }}
+  FF_SOURCE_MAPS_URL: "{{ include "logfire.scheme" . }}://logfire-source-maps:{{ include "logfire.port" (dict "port" 8003 "root" .) }}"
+  {{- end }}
   FF_INGEST_MAX_TIME_SKEW: "120s"
   FF_INGEST_MAX_FUTURE_TIME_DRIFT: "1h"
   FF_INGEST_MAX_PAST_TIME_DRIFT: "24h"
