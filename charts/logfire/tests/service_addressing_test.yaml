@@ -860,3 +860,38 @@ tests:
         documentSelector:
           path: kind
           value: Service
+
+  - it: the backend, the worker and ingest share one source-maps object store
+    set:
+      logfire-source-maps:
+        enabled: true
+    templates:
+      - templates/logfire-ff-config.yaml
+      - templates/logfire-backend.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - equal:
+          path: data.FF_SOURCE_MAPS_OBJECT_STORE_URI
+          value: s3://test-bucket/_source_maps
+        template: templates/logfire-ff-config.yaml
+        documentSelector:
+          path: metadata.name
+          value: logfire-ff-ingest-config
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SOURCE_MAPS_OBJECT_STORE_URI
+            value: s3://test-bucket/_source_maps
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SOURCE_MAPS_OBJECT_STORE_URI
+            value: s3://test-bucket/_source_maps
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
