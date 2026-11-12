@@ -100,7 +100,7 @@ Before installing in production, confirm that you have:
 
 * Image pull credentials configured through `imagePullSecrets`.
 * Public hostname and TLS values set through `ingress.*` or `gateway.*`, even if you expose the Service another way.
-* External PostgreSQL databases for `crud`, `ff`, and `dex`.
+* External PostgreSQL databases for `crud`, `ff`, and `dex`, created before you install. See [PostgreSQL](#postgresql).
 * Object storage using `s3://`, `gs://`, or `az://`.
 * A managed Redis endpoint configured through `redisDsn`, or through `redisSecret.name` when the DSNs live in an externally managed Secret.
 * A Dex connector for your identity provider, or password login with `smtp.*` configured.
@@ -190,7 +190,21 @@ ingress:
 
 Logfire requires three separate PostgreSQL databases: `crud`, `ff`, and `dex`.
 They may run on the same PostgreSQL instance, but they must be separate databases to avoid schema collisions.
-Each database user needs owner permissions so migrations can run.
+
+Create the three databases before you install the chart.
+The chart does not create them, and neither do the migration jobs or Dex.
+These create tables inside a database that already exists, and they fail if the database is missing.
+Make the user in each DSN the owner of its database, so that migrations can create schemas and extensions:
+
+```sql
+CREATE USER logfire WITH PASSWORD 'CHANGE_ME';
+CREATE DATABASE crud OWNER logfire;
+CREATE DATABASE ff OWNER logfire;
+CREATE DATABASE dex OWNER logfire;
+```
+
+You can use a different user for each database.
+The bundled development PostgreSQL (`dev.deployPostgres: true`) creates the databases on first start, so this step applies only to external PostgreSQL.
 
 PostgreSQL stores metadata only. Telemetry data is in object storage.
 Start with 2 vCPU and 16 GB of memory, and resize from the CPU and connection use that you see.
