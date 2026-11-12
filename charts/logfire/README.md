@@ -193,16 +193,8 @@ They may run on the same PostgreSQL instance, but they must be separate database
 Create the three databases before you install the chart.
 The chart does not create them, and neither do the migration jobs or Dex.
 These create tables inside a database that already exists, and they fail if the database is missing.
-Make the user in each DSN the owner of its database, so that migrations can create schemas and extensions:
-
-```sql
-CREATE USER logfire WITH PASSWORD 'CHANGE_ME';
-CREATE DATABASE crud OWNER logfire;
-CREATE DATABASE ff OWNER logfire;
-CREATE DATABASE dex OWNER logfire;
-```
-
-You can use a different user for each database.
+The user in each DSN must own its database, so that the migrations can create schemas, tables, and extensions.
+You can use one user for all three databases, or a different user for each.
 The bundled development PostgreSQL (`dev.deployPostgres: true`) creates the databases on first start, so this step applies only to external PostgreSQL.
 
 The migrations create the `btree_gist` extension in the `crud` database, and the `btree_gist` and `intarray` extensions in the `ff` database.
