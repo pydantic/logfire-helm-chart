@@ -9,8 +9,8 @@ The chart source in this repository uses the MIT License, but the Logfire contai
 
 ## Install paths
 
-Use this README for the chart-level install flow and values reference.
-Use the [Self-Hosted Production Requirements](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/installation/) for background, architecture, and provider-specific procedures.
+This README is the reference for each chart version: the install flow, the requirements of external services, and the values.
+The [self-hosted docs](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/overview/) explain how to plan an install, and give procedures such as bucket and database migrations.
 
 The chart needs Kubernetes 1.23 or later and Helm 3 or Helm 4. CI tests it with Helm 4.2.0.
 Gateway API routing also needs the Gateway API v1 CRDs in the cluster.
@@ -99,7 +99,7 @@ Before installing in production, confirm that you have:
 
 * Image pull credentials configured through `imagePullSecrets`.
 * Public hostname and TLS values set through `ingress.*` or `gateway.*`, even if you expose the Service another way.
-* External PostgreSQL databases for `crud`, `ff`, and `dex`.
+* External PostgreSQL 16 or later, with the `crud`, `ff`, and `dex` databases created before you install. See [PostgreSQL](#postgresql).
 * Object storage using `s3://`, `gs://`, or `az://`.
 * A managed Redis endpoint configured through `redisDsn`, or through `redisSecret.name` when the DSNs live in an externally managed Secret.
 * A Dex connector for your identity provider, or password login with `smtp.*` configured.
@@ -187,9 +187,23 @@ ingress:
 
 ### PostgreSQL
 
-Logfire requires three separate PostgreSQL databases: `crud`, `ff`, and `dex`.
+Logfire requires PostgreSQL 16 or later, with three separate databases: `crud`, `ff`, and `dex`.
 They may run on the same PostgreSQL instance, but they must be separate databases to avoid schema collisions.
-Each database user needs owner permissions so migrations can run.
+
+Create the three databases before you install the chart.
+The chart does not create them, and neither do the migration jobs or Dex.
+These create tables inside a database that already exists, and they fail if the database is missing.
+The user in each DSN must own its database, so that the migrations can create schemas, tables, and extensions.
+You can use one user for all three databases, or a different user for each.
+The bundled development PostgreSQL (`dev.deployPostgres: true`) creates the databases on first start, so this step applies only to external PostgreSQL.
+
+The migrations create the `btree_gist` extension in the `crud` database, and the `btree_gist` and `intarray` extensions in the `ff` database.
+Both are trusted extensions, so the database owner can create them without superuser.
+Some managed services allow only the extensions on a list.
+For example, Azure Database for PostgreSQL requires both extensions in the `azure.extensions` server parameter.
+On such a service, allow both extensions before you install.
+
+[values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml) shows the connection values: `postgresDsn`, `postgresFFDsn`, and the Dex storage under `logfire-dex.config.storage`.
 
 PostgreSQL stores metadata only. Telemetry data is in object storage.
 Start with 2 vCPU and 16 GB of memory, and resize from the CPU and connection use that you see.
@@ -219,6 +233,8 @@ The identity needs read and write access to the bucket.
 On AWS, grant `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket`.
 On GCP, grant the `Storage Object Admin` role on the bucket.
 
+Without a cloud identity, set the provider's standard credential variables in `objectStore.env`, such as `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, and read them from a Secret.
+
 For local evaluation, `dev.deployRustfs` deploys RustFS and fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credentials.
 An `s3://` `objectStore.uri` also sets the bucket that RustFS creates.
 
@@ -240,6 +256,7 @@ On Google Cloud Storage, you can turn on Autoclass to lower the cost of data tha
 The bundled Redis is for evaluation. For production, set `logfire-redis.enabled: false` and connect a managed Redis or Valkey:
 
 * Use one endpoint: a standalone instance, or a primary with replicas behind one write endpoint. Logfire does not support cluster mode.
+* Use Redis 7.2, the version that we test.
 * Use a `redis://` or `rediss://` DSN with the password, or the ACL user and password, in it. For example, `rediss://USER:PASSWORD@redis.example.com:6379`.
 * With `rediss://`, Logfire verifies the server certificate. If a private CA signs it, set `trustedCaBundle` as [Private CA certificates](#private-ca-certificates) describes.
 
