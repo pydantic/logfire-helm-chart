@@ -2300,6 +2300,7 @@ sizingPresets:
         requests:
           cpu: "1"
           memory: "1Gi"
+          ephemeral-storage: "4Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 32
@@ -2648,6 +2649,7 @@ sizingPresets:
         requests:
           cpu: "1"
           memory: "1Gi"
+          ephemeral-storage: "4Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 32
@@ -3040,6 +3042,7 @@ sizingPresets:
         requests:
           cpu: "2"
           memory: "4Gi"
+          ephemeral-storage: "4Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 32
@@ -3443,6 +3446,7 @@ sizingPresets:
         requests:
           cpu: "4"
           memory: "4Gi"
+          ephemeral-storage: "4Gi"
       autoscaling:
         maxReplicas: 32
     logfire-ff-query-api:
