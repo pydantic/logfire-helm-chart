@@ -22,6 +22,7 @@ tests:
       - templates/logfire-backend-auth.yaml
       - templates/logfire-worker.yaml
       - templates/logfire-task-runner.yaml
+      - templates/logfire-alert-runner.yaml
       - templates/logfire-remote-mcp.yaml
       - templates/logfire-ff-ingest-processor.yaml
       - templates/logfire-ff-query-api.yaml
@@ -85,6 +86,7 @@ tests:
       - templates/logfire-ff-query-api.yaml
       - templates/logfire-worker.yaml
       - templates/logfire-backend.yaml
+      - templates/logfire-alert-runner.yaml
     documentSelector:
       path: kind
       value: Deployment
@@ -92,10 +94,10 @@ tests:
     asserts:
       - matchRegex:
           path: spec.template.spec.initContainers[0].image
-          pattern: '/(fusionfire|python-prod|logfire-backend-prod|logfire-worker-prod):'
+          pattern: '/(fusionfire|python-prod|logfire-backend-prod|logfire-worker-prod|logfire-alert-runner-prod):'
       - matchRegex:
           path: spec.template.spec.containers[0].image
-          pattern: '/(fusionfire|python-prod|logfire-backend-prod|logfire-worker-prod):'
+          pattern: '/(fusionfire|python-prod|logfire-backend-prod|logfire-worker-prod|logfire-alert-runner-prod):'
 
   # Node ignores SSL_CERT_FILE, and NODE_EXTRA_CA_CERTS takes one file. So the gateway file holds
   # the in-cluster CA too, and only one NODE_EXTRA_CA_CERTS entry may exist.

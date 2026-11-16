@@ -6,6 +6,11 @@ not a substitute for this integration.
 
 ## Prerequisites
 
+- Use Kubernetes 1.25 or later with CRD CEL validation enabled.
+  The upstream operator recommends Kubernetes 1.29 or later, where this validation is stable.
+  On Kubernetes 1.25 through 1.28, verify that the cluster retains the operator's CEL validation rules when it installs the CRDs.
+  The chart checks the Kubernetes version, but cannot verify this feature gate or the installed validation rules.
+  This requirement applies only when Agent Sandboxes is enabled. The base chart supports Kubernetes 1.23 or later.
 - Install the upstream [Agent Sandbox operator and extensions](https://agent-sandbox.sigs.k8s.io/docs/getting_started/install_prerequisites/).
   The controller uses the `v1beta1` APIs for `Sandbox`, `SandboxClaim`,
   `SandboxTemplate` and `SandboxWarmPool`.
@@ -61,11 +66,47 @@ Stop new execution and drain active workers before changing this identity.
 The chart enables CPU-clock execution and binds each worker to its immutable Pod UID.
 A worker without that execution identity fails at startup.
 
-The default worker namespace is `<release namespace>-sandboxes`. The operator
-must watch that namespace. A custom cluster suffix uses `clusterDomain` on the
-chart and the operator's matching cluster-domain option. Node-local DNS needs an
-additional egress rule for its DNS address. Create registry pull Secrets with the
-configured names in both the Logfire and worker namespaces.
+The default worker namespace is `<release namespace>-sandboxes`. The operator must watch that namespace.
+The chart creates and retains it by default.
+Set `agentSandboxes.createWorkerNamespace: false` to use a namespace that an administrator creates first.
+Set `agentSandboxes.workerNamespace` if its name differs from the default.
+The namespace must be separate from the Logfire namespace and enforce the restricted Pod Security Standard.
+The installer needs permission to manage the chart's resources in both namespaces.
+The operator, its CRDs and the isolated RuntimeClass still need separate cluster administrator setup.
+The chart does not adopt an externally managed namespace.
+
+A custom cluster suffix uses `clusterDomain` on the chart and the operator's matching cluster-domain option.
+Create registry pull Secrets with the configured names in both the Logfire and worker namespaces.
+
+### Worker DNS and resource metrics
+
+`agentSandboxes.workers.dnsEgress` replaces the default DNS exception with standard Kubernetes NetworkPolicy egress rules.
+The default permits TCP and UDP port 53 to `k8s-app: kube-dns` pods in `kube-system`.
+Use your cluster's actual DNS namespace, labels and destination port.
+For example, an OpenShift DNS deployment can require port 5353 in `openshift-dns`.
+Node-local DNS can instead require an IP exception:
+
+```yaml
+agentSandboxes:
+  workers:
+    dnsEgress:
+      - to:
+          - ipBlock: {cidr: 169.254.20.10/32}
+        ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+```
+
+Replace this example address with the cluster's configured resolver address.
+Set `dnsEgress: []` to remove the DNS exception.
+The controller telemetry rule remains. The chart grants no other worker egress.
+Verify DNS resolution and policy enforcement with the selected CNI.
+Kubernetes does not define how every CNI applies policy to node-local traffic.
+
+Pressure sensing is disabled by default and does not require the resource metrics API.
+Set `agentSandboxes.pressureEnabled: true` only if the cluster provides PodMetrics through `metrics.k8s.io`, usually through metrics-server.
+This setting enables `MONTY_PRESSURE_ENABLED` and grants the controller read access to PodMetrics in the worker namespace.
+It lets the controller avoid workers with high measured resource use.
+Session capacity limits remain active when pressure sensing is disabled or metrics are unavailable.
+This setting does not configure metrics for HPA or KEDA.
 
 The public SDK endpoint is `<Logfire URL>/monty-ws/`. The existing chart ingress
 and HAProxy route this endpoint to the relay. The browser workbench uses the

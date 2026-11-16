@@ -42,7 +42,8 @@ spec:
     metadata:
       annotations:
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
-        {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "annotationKey" "checksum/logfire-postgres-dsn" "key" "postgresFFDsn") | nindent 8 }}
+        {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresFFDsn") | nindent 8 }}
+        {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" . "key" "postgresDsn") | nindent 8 }}
         {{- end }}
         {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
         {{- . | nindent 8 }}
@@ -95,6 +96,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.postgresSecretName" . }}
                   key: postgresFFDsn
+            - name: FF_EXTERNAL_TABLES_PG_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "logfire.postgresSecretName" . }}
+                  key: postgresDsn
             {{- include "logfire.objectStoreEnv" . | nindent 12 }}
             {{- include "logfire.ffBcacheReaderEnv" (dict "root" . "noWarm" true) | nindent 12 }}
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}

@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.0-rc.4](https://img.shields.io/badge/Version-0.15.0--rc.4-informational?style=flat-square) ![AppVersion: 54a9b858](https://img.shields.io/badge/AppVersion-54a9b858-informational?style=flat-square)
+![Version: 0.16.0-rc.1](https://img.shields.io/badge/Version-0.16.0--rc.1-informational?style=flat-square) ![AppVersion: 6dc21200](https://img.shields.io/badge/AppVersion-6dc21200-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -9,8 +9,8 @@ The chart source in this repository uses the MIT License, but the Logfire contai
 
 ## Install paths
 
-Use this README for the chart-level install flow and values reference.
-Use the [Self-Hosted Production Requirements](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/installation/) for background, architecture, and provider-specific procedures.
+This README is the reference for each chart version: the install flow, the requirements of external services, and the values.
+The [self-hosted docs](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/overview/) explain how to plan an install, and give procedures such as bucket and database migrations.
 
 The chart needs Kubernetes 1.23 or later and Helm 3 or Helm 4. CI tests it with Helm 4.2.0.
 Gateway API routing also needs the Gateway API v1 CRDs in the cluster.
@@ -89,18 +89,17 @@ Use the first-access step below to log in to the meta project.
 
 ### 3b. Production starter
 
-A minimal production overlay is checked in at [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml). Use it as a starting point for production installs and replace the placeholder hostnames, credentials, and provider-specific settings.
-
+Start from [values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml), a minimal production overlay, and replace its placeholder hostnames, credentials, and provider-specific settings.
 The starter uses Gateway API. The chart also supports Ingress.
 
-> **Important**: `values.prod.yaml` turns off password login, so nobody can sign in after the first access step until you add a Dex connector or turn password login back on.
+> **Important**: `values.prod.yaml` turns off password sign-in, so nobody can sign in after the first access step until you add a Dex connector or set `auth.passwordLogin: true`.
 > See [Authentication](#authentication) before you install.
 
 Before installing in production, confirm that you have:
 
 * Image pull credentials configured through `imagePullSecrets`.
 * Public hostname and TLS values set through `ingress.*` or `gateway.*`, even if you expose the Service another way.
-* External PostgreSQL databases for `crud`, `ff`, and `dex`.
+* External PostgreSQL 16 or later, with the `crud`, `ff`, and `dex` databases created before you install. See [PostgreSQL](#postgresql).
 * Object storage using `s3://`, `gs://`, or `az://`.
 * A managed Redis endpoint configured through `redisDsn`, or through `redisSecret.name` when the DSNs live in an externally managed Secret.
 * A Dex connector for your identity provider, or password login with `smtp.*` configured.
@@ -138,58 +137,9 @@ If you use a connector, make sure that it works and that its redirect URI matche
 
 ## Configuration notes
 
-### Sizing
-
-Start with a sizing preset instead of hand-sizing every workload:
-
-```yaml
-sizingPreset: standard
-```
-
-Use `standard` for general production deployments, `large` for higher throughput, or `small` for lower traffic.
-Use `tiny` for the smallest production footprint without high availability.
-Presets set resources, autoscaling, PodDisruptionBudgets, and best-effort topology spreading.
-Configure the [production prerequisites](#3b-production-starter) separately.
-
-Each preset gives the query API these resources:
-
-| Preset | CPU request | Memory request | Scratch | Replicas |
-| --- | ---: | ---: | ---: | ---: |
-| `tiny` | 1 | 2 GiB | 1 GiB | 1–6 |
-| `small` | 2 | 4 GiB | 2 GiB | 1–8 |
-| `standard` | 4 | 8 GiB | 6 GiB | 3–8 |
-| `large` | 4 | 8 GiB | 6 GiB | 3–16 |
-
-Without a preset or per-workload resources, the chart sets no Kubernetes CPU or memory requests or limits.
-FusionFire uses the `tiny` resource baseline for internal execution limits.
-Select a preset or explicit workload resources for constrained clusters.
-
-Override individual workloads only after selecting a preset:
-
-```yaml
-sizingPreset: standard
-
-logfire-worker:
-  resources:
-    cpu: "500m"
-    memory: "1Gi"
-    ephemeralStorage: "1Gi"
-```
-
-Nested `resources.requests` set requests without mandatory limits.
-The flat resource shorthand sets both requests and limits.
-
-#### Resize bcache storage
-
-bcache uses one PersistentVolumeClaim per pod.
-Changing `logfire-ff-bcache.disk.storage` after installation fails `helm upgrade` because StatefulSet volume claim templates are immutable.
-Expand the existing `bcache-data-*` PVCs if the storage class allows it.
-Alternatively, run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
-
 ### Hostnames and exposure
 
 Set at least one public hostname so the chart can generate correct public URLs and CORS settings.
-The hostname and TLS values are used by the application even when you expose `logfire-service` with infrastructure outside this chart.
 
 For Gateway API, which `values.prod.yaml` uses:
 
@@ -225,11 +175,9 @@ ingress:
     - logfire.example.com
 ```
 
-Logfire Live View needs WebSockets.
-Every proxy in front of `logfire-service` must keep the WebSocket upgrade and the `Sec-WebSocket-Protocol` header.
+Logfire Live View needs WebSockets, so every proxy in front of `logfire-service` must keep the WebSocket upgrade and the `Sec-WebSocket-Protocol` header.
 A successful handshake returns `101 Switching Protocols`.
-Some controllers need extra configuration.
-For example, the [F5 NGINX Ingress Controller](https://docs.nginx.com/nginx-ingress-controller/configuration/ingress-resources/advanced-configuration-with-annotations/) needs this annotation:
+Some controllers need extra configuration. For example, the [F5 NGINX Ingress Controller](https://docs.nginx.com/nginx-ingress-controller/configuration/ingress-resources/advanced-configuration-with-annotations/) needs this annotation:
 
 ```yaml
 ingress:
@@ -237,10 +185,132 @@ ingress:
     nginx.org/websocket-services: logfire-service
 ```
 
+### PostgreSQL
+
+Logfire requires PostgreSQL 16 or later, with three separate databases: `crud`, `ff`, and `dex`.
+They may run on the same PostgreSQL instance, but they must be separate databases to avoid schema collisions.
+
+Create the three databases before you install the chart.
+The chart does not create them, and neither do the migration jobs or Dex.
+These create tables inside a database that already exists, and they fail if the database is missing.
+The user in each DSN must own its database, so that the migrations can create schemas, tables, and extensions.
+You can use one user for all three databases, or a different user for each.
+The bundled development PostgreSQL (`dev.deployPostgres: true`) creates the databases on first start, so this step applies only to external PostgreSQL.
+
+The migrations create the `btree_gist` extension in the `crud` database, and the `btree_gist` and `intarray` extensions in the `ff` database.
+Both are trusted extensions, so the database owner can create them without superuser.
+Some managed services allow only the extensions on a list.
+For example, Azure Database for PostgreSQL requires both extensions in the `azure.extensions` server parameter.
+On such a service, allow both extensions before you install.
+
+[values.prod.yaml](https://github.com/pydantic/logfire-helm-chart/blob/main/charts/logfire/values.prod.yaml) shows the connection values: `postgresDsn`, `postgresFFDsn`, and the Dex storage under `logfire-dex.config.storage`.
+
+PostgreSQL stores metadata only. Telemetry data is in object storage.
+Start with 2 vCPU and 16 GB of memory, and resize from the CPU and connection use that you see.
+
+FusionFire migrations set autovacuum settings on the `ff` tables that change most often. Do not override them.
+
+Connect each DSN directly to PostgreSQL, or through a connection pooler in transaction mode as [Connection poolers](#connection-poolers) describes.
+The migration jobs, `logfire-ff-maintenance-scheduler`, and Dex then need a session-mode pool or a direct connection.
+[Connection counts](#connection-counts) lists the default pool size and the variable for each workload.
+
+### Object storage
+
+Logfire stores telemetry data in object storage. Supported URI schemes are `s3://`, `gs://`, and `az://`.
+Provider credentials can come from `objectStore.env`, mounted secrets, or the Kubernetes ServiceAccount that Logfire runs as.
+
+To use a cloud identity, let the chart create the ServiceAccount and annotate it for your provider.
+This example uses AWS IAM roles for service accounts:
+
+```yaml
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/logfire
+```
+
+The identity needs read and write access to the bucket.
+On AWS, grant `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket`.
+On GCP, grant the `Storage Object Admin` role on the bucket.
+
+Without a cloud identity, set the provider's standard credential variables in `objectStore.env`, such as `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`, and read them from a Secret.
+
+For local evaluation, `dev.deployRustfs` deploys RustFS and fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credentials.
+An `s3://` `objectStore.uri` also sets the bucket that RustFS creates.
+
+#### Bucket settings
+
+Logfire deletes the objects it no longer needs.
+Compaction deletes replaced files a few minutes after it writes larger ones, and retention deletes data older than each project's retention period.
+Configure the bucket so that it does not keep or move these objects:
+
+* Turn off object versioning.
+* Turn off soft delete. Google Cloud Storage turns on a 7-day soft delete for new buckets, and Azure Storage can keep deleted blobs. Soft-deleted compaction files can become a large part of the storage bill.
+* On Amazon S3 and Google Cloud Storage, add a lifecycle rule that aborts incomplete multipart uploads after 1 day. A worker that stops during an upload leaves billed parts that object listings do not show.
+* Do not add lifecycle rules that delete objects or change their storage class by age. Such a rule removes files that the `ff` database still references, and queries over those files fail.
+
+On Google Cloud Storage, you can turn on Autoclass to lower the cost of data that is read less often.
+
+### Redis
+
+The bundled Redis is for evaluation. For production, set `logfire-redis.enabled: false` and connect a managed Redis or Valkey:
+
+* Use one endpoint: a standalone instance, or a primary with replicas behind one write endpoint. Logfire does not support cluster mode.
+* Use Redis 7.2, the version that we test.
+* Use a `redis://` or `rediss://` DSN with the password, or the ACL user and password, in it. For example, `rediss://USER:PASSWORD@redis.example.com:6379`.
+* With `rediss://`, Logfire verifies the server certificate. If a private CA signs it, set `trustedCaBundle` as [Private CA certificates](#private-ca-certificates) describes.
+
+For Memorystore for Valkey:
+
+* Create the instance with `--mode=cluster-disabled`. The gcloud default is cluster mode, and you cannot change the mode after creation.
+* Use Token Auth, not IAM. Put the token of the `default` user in the DSN as the password, for example `rediss://:TOKEN@10.0.0.5:6379`.
+* With in-transit encryption, set `trustedCaBundle` to the CA of the instance. The server certificate names the endpoint IP addresses, so the DSN can use an IP address. Download the CA into `redis-ca.pem`:
+
+  ```sh
+  gcloud memorystore instances get-certificate-authority INSTANCE --location=REGION \
+    --flatten='managedServerCa.caCerts[].certificates[]' \
+    --format='value(managedServerCa.caCerts.certificates)' > redis-ca.pem
+  ```
+
+To keep the DSNs out of your values file, put them in a Secret with the `sharedDsn`, `tailDsn`, `tokenDsn`, and `usageDsn` keys.
+All four keys can hold the same DSN:
+
+```yaml
+logfire-redis:
+  enabled: false
+
+redisSecret:
+  enabled: true
+  name: logfire-redis-dsn
+```
+
 ### Authentication
 
 Users sign in through Dex, either with an email and password or with an SSO provider that you configure as a Dex connector.
-Password login is on by default. `values.prod.yaml` turns it off with `logfire-dex.config.enablePasswordDB: false`, so an install based on that file needs at least one connector.
+
+Password sign-in is on by default. `values.prod.yaml` turns it off with `auth.passwordLogin: false`.
+`auth.passwordLogin` controls both the Logfire sign-in page and Dex's password database.
+Dex does not start without at least one connector, so an install with password sign-in off needs a connector under `logfire-dex.config.connectors`.
+`logfire-dex.config.enablePasswordDB: false` from earlier chart versions also turns password sign-in off.
+
+The `auth` values hold the other sign-in settings:
+
+```yaml
+auth:
+  passwordLogin: true
+  passkeys: true
+  sessionMaxLifetime: PT8H
+  passwordlessEmailSignup: false
+```
+
+* `passkeys` lets users sign in with a fingerprint, face unlock, or security key.
+* `sessionMaxLifetime` limits how long a browser session lasts, as an ISO 8601 duration.
+  It applies to sessions created after you set it.
+  Without SCIM, a group-mapping change reaches a user only at their next sign-in through the identity provider, so this limit also bounds that delay.
+* `passwordlessEmailSignup` lets a person with a verified email address create an account without a password.
+  It needs email delivery through `smtp.*` or `dev.deployMaildev`.
+
+A variable of the same name in `logfire-backend.env`, such as `PASSKEYS_ENABLED`, takes precedence over the `auth` value.
 
 To add an SSO provider:
 
@@ -281,7 +351,55 @@ Every service's `env` accepts this map or a Kubernetes `EnvVar` list.
 Use the map when you split values across files: Helm merges maps but replaces lists, and `NAME: null` removes an entry that an earlier file set.
 The chart renders map entries in name order, so a `$(NAME)` reference works only to a name that sorts earlier.
 
-#### Organization group mappings
+### Sizing
+
+Start with a sizing preset instead of hand-sizing every workload:
+
+```yaml
+sizingPreset: standard
+```
+
+Use `standard` for general production deployments, `large` for higher throughput, `small` for lower traffic, and `tiny` for the smallest production footprint without high availability.
+Presets set resources, autoscaling, PodDisruptionBudgets, and best-effort topology spreading.
+Configure the [production prerequisites](#3b-production-starter) separately.
+
+Each preset gives the query API these resources:
+
+| Preset | CPU request | Memory request | Scratch | Replicas |
+| --- | ---: | ---: | ---: | ---: |
+| `tiny` | 1 | 2 GiB | 1 GiB | 1–6 |
+| `small` | 2 | 4 GiB | 2 GiB | 1–8 |
+| `standard` | 4 | 8 GiB | 6 GiB | 3–8 |
+| `large` | 4 | 8 GiB | 6 GiB | 3–16 |
+
+Without a preset or per-workload resources, the chart sets no Kubernetes CPU or memory requests or limits.
+FusionFire uses the `tiny` resource baseline for internal execution limits.
+Select a preset or explicit workload resources for constrained clusters.
+
+Override individual workloads only after selecting a preset:
+
+```yaml
+sizingPreset: standard
+
+logfire-worker:
+  resources:
+    cpu: "500m"
+    memory: "1Gi"
+    ephemeralStorage: "1Gi"
+```
+
+Nested `resources.requests` set requests without mandatory limits.
+The flat resource shorthand sets both requests and limits.
+
+#### Resize bcache storage
+
+bcache uses one PersistentVolumeClaim per pod.
+StatefulSet volume claim templates are immutable, so changing `logfire-ff-bcache.disk.storage` after installation fails `helm upgrade`.
+Expand the existing `bcache-data-*` PVCs if the storage class allows it, or run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
+
+## Advanced configuration
+
+### Organization group mappings
 
 Use `groupOrganizationMapping` to grant Logfire organization and project roles to members of identity-provider groups.
 Each `group_id` must match a group that your connector returns to Dex.
@@ -304,92 +422,37 @@ Logfire leaves unlisted organizations, unlisted projects, and personal organizat
 When groups grant different roles in the same scope, Logfire grants the most permissive role.
 
 `groupOrganizationMapping` overrides mappings that you manage with the public Group Mappings API.
-The API reports `api_mapping_status: overridden_by_environment` and rejects update requests with HTTP 409.
+The API then reports `api_mapping_status: overridden_by_environment` and rejects update requests with HTTP 409.
 
-### Object storage
+### Admin API keys
 
-Logfire requires object storage for data. Supported URI schemes are `s3://`, `gs://`, and `az://`.
-Provider credentials can come from `objectStore.env`, mounted secrets, or the Kubernetes ServiceAccount that Logfire runs as.
+`adminApiKeys` creates API keys in the `logfire-meta` organization at startup, for automation that runs before anyone signs in.
+Each key reads its token from a Secret in the release namespace:
 
-To use a cloud identity, let the chart create the ServiceAccount and annotate it for your provider.
-This example uses AWS IAM roles for service accounts:
-
-```yaml
-serviceAccount:
-  create: true
-  annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/logfire
+```bash
+kubectl create secret generic logfire-automation -n <namespace> \
+  --from-literal=token="$(openssl rand -hex 32)"
 ```
 
-The identity needs read and write access to the bucket.
-On AWS, grant `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`, and `s3:ListBucket`.
-On GCP, grant the `Storage Object Admin` role on the bucket.
-
-For local evaluation, `dev.deployRustfs` deploys RustFS.
-It fills in any missing `objectStore.uri`, `AWS_ENDPOINT`, and AWS credential environment variables, so the workloads reach the in-cluster bucket.
-An `s3://` `objectStore.uri` also sets the bucket that RustFS creates.
-
-#### Bucket settings
-
-Logfire deletes the objects it no longer needs.
-Compaction replaces small files with larger ones and deletes the old files a few minutes later.
-Retention deletes data older than each project's retention period.
-Configure the bucket so that it does not keep or move these objects:
-
-* Turn off object versioning.
-* Turn off soft delete. Google Cloud Storage turns on a 7-day soft delete for new buckets, and Azure Storage can keep deleted blobs for a period. Compaction deletes objects all the time, so soft-deleted objects can become a large part of the storage bill.
-* On Amazon S3 and Google Cloud Storage, add a lifecycle rule that aborts incomplete multipart uploads after 1 day. A worker that stops during an upload leaves parts behind. These parts are billed, but they do not appear in object listings.
-* Do not add lifecycle rules that delete objects or change their storage class by age. An age-based delete removes files that the `ff` database still references, and queries over those files then fail.
-
-On Google Cloud Storage, you can turn on Autoclass to lower the cost of data that is read less often.
-
-### PostgreSQL
-
-Logfire requires three separate PostgreSQL databases: `crud`, `ff`, and `dex`.
-They may run on the same PostgreSQL instance, but they must be separate databases to avoid schema collisions.
-Each database user needs owner permissions so migrations can run.
-
-PostgreSQL stores metadata only. Telemetry data is in object storage.
-An instance with 2 vCPU and 16 GB of memory is a good starting size. Resize it from the CPU and connection use that you see.
-
-FusionFire migrations set autovacuum settings on the `ff` tables that change most often. Do not override them.
-
-Connect each DSN directly to PostgreSQL, or through a connection pooler in transaction mode as [Connection poolers](#connection-poolers) describes.
-The migration jobs, `logfire-ff-maintenance-scheduler`, and Dex then need a session-mode pool or a direct connection.
-
-Each pod opens its own connection pool. [Connection counts](#connection-counts) lists the default size and the variable for each workload.
-
-### Redis
-
-The bundled Redis is for evaluation. For production, set `logfire-redis.enabled: false` and connect a managed Redis or Valkey:
-
-* Use one Redis or Valkey endpoint: a standalone instance, or a primary with replicas behind one write endpoint. Logfire does not support cluster mode, in Redis Cluster or in Valkey.
-* Logfire accepts `redis://` and `rediss://` DSNs. Put the password, or the ACL user and password, in the DSN, for example `rediss://USER:PASSWORD@redis.example.com:6379`.
-* With `rediss://`, Logfire verifies the Redis server certificate. If a private CA signs it, such as the CA that Memorystore creates for each instance with in-transit encryption, set `trustedCaBundle`. See [Private CA certificates](#private-ca-certificates).
-
-For Memorystore for Valkey:
-
-* Create the instance with `--mode=cluster-disabled`. The gcloud default is Cluster Mode Enabled, which Logfire does not support, and you cannot change the mode after creation.
-* Use Token Auth. Put the token of the `default` user in the DSN as the password, for example `rediss://:TOKEN@10.0.0.5:6379`. Logfire does not support IAM authentication.
-* With in-transit encryption, set `trustedCaBundle` to the CA of the instance. The server certificate names the endpoint IP addresses, so the DSN can use the IP address. Download the CA into `redis-ca.pem`:
-
-  ```sh
-  gcloud memorystore instances get-certificate-authority INSTANCE --location=REGION \
-    --flatten='managedServerCa.caCerts[].certificates[]' \
-    --format='value(managedServerCa.caCerts.certificates)' > redis-ca.pem
-  ```
-
-To keep the DSNs out of your values file, create a Secret with the `sharedDsn`, `tailDsn`, `tokenDsn`, and `usageDsn` keys, and reference it.
-All four keys can hold the same DSN:
-
 ```yaml
-logfire-redis:
-  enabled: false
-
-redisSecret:
-  enabled: true
-  name: logfire-redis-dsn
+adminApiKeys:
+  - name: automation
+    scopes: ["instance:admin", "instance:scim"]
+    secretName: logfire-automation
+    secretKey: token
 ```
+
+The token must be at least 32 random characters from letters, digits, `-`, and `_`, with no trailing newline.
+The chart embeds it in JSON, so other characters break startup or change the token.
+Give each key a new token, never a revoked key's.
+
+The instance APIs use `instance:admin` for organizations and group mappings, `instance:scim` for SCIM, and `instance:billing` for the usage report.
+`https://<your-hostname>/api/docs` lists every scope and the scope each endpoint needs.
+Each key belongs to the `logfire-meta` project, so `project:*` scopes reach only that project.
+
+The backend reads tokens only at startup, so restart it after you change the Secret.
+It creates a key only when no key has that token, so a changed token or a removed entry leaves the old key valid until you revoke it in the UI.
+Change or remove the entry before you revoke its key.
 
 ### AI
 
@@ -407,13 +470,34 @@ ai:
           key: openai-api-key
 ```
 
-## Advanced configuration
+### Alert runner
+
+`logfire-alert-runner` evaluates alert runs and hands the alerts that fire to `logfire-task-runner` for delivery.
+It is the only evaluator of alert runs, so the chart always deploys it, with its own `logfire-alert-runner-prod` image.
+If the runner is not available, alert runs wait and alerts do not fire.
+If you mirror images to a private registry, mirror this image before you upgrade.
+
+Set `replicas`, `resources`, and `autoscaling` under `logfire-alert-runner` as for any workload.
+
+Webhook, email, Opsgenie, and direct PagerDuty channels need no extra configuration.
+Slack App channels need the OAuth credentials of your own Slack App, and are skipped without them:
+
+```yaml
+integrations:
+  slack:
+    clientId: <client id>
+    clientSecret: <client secret>
+    signingSecret: <signing secret>
+```
 
 ### External secrets and automatic reloads
 
-For Argo CD deployments, use the chart's existing-Secret options with an external secret controller. Updating a Kubernetes Secret does not restart pods that consume its values through environment variables, so configure a reload controller such as [Reloader](https://github.com/stakater/Reloader) as well.
+For Argo CD deployments, use the chart's existing-Secret options with an external secret controller.
+Updating a Secret does not restart pods that read it through environment variables, so also run a reload controller such as [Reloader](https://github.com/stakater/Reloader).
+The chart does not install one.
 
-Add the reload controller's workload annotations to the relevant Secret values. The chart copies them only to workloads that consume that Secret and omits its Helm checksum annotations, leaving rotation to the reload controller:
+Add the reload controller's workload annotations to the Secret values.
+The chart copies them only to workloads that consume that Secret, and omits its own Helm checksum annotations there:
 
 ```yaml
 postgresSecret:
@@ -423,7 +507,7 @@ postgresSecret:
     reloader.stakater.com/auto: "true"
 ```
 
-The same `annotations` pattern is supported by `existingSecret`, `adminSecret`, and `existingGatewaySecret`. The chart does not install a reload controller.
+`existingSecret`, `adminSecret`, and `existingGatewaySecret` accept the same `annotations`.
 
 ### Connection poolers
 
@@ -464,7 +548,7 @@ Each pod opens up to its pool size. The pooler must accept the sum over all pods
 | Workload | Database | Variable | Default per pod |
 |----------|----------|----------|-----------------|
 | FusionFire workloads except `logfire-ff-ingest` | `ff` | `FF_PG_POOL_MAX_CONNECTIONS` | 32, and 4 on `logfire-ff-query-worker` |
-| `logfire-ff-query-api` and `logfire-ff-query-worker` | `crud` | `FF_EXTERNAL_TABLES_PG_MAX_CONNECTIONS` | 32 |
+| `logfire-ff-query-api`, `logfire-ff-query-worker`, and `logfire-ff-crud-api` | `crud` | `FF_EXTERNAL_TABLES_PG_MAX_CONNECTIONS` | 32 |
 | Python services | `crud` | `CRUD_PG_POOL_MAX_CONNECTIONS` | 32 |
 | `logfire-ai-gateway` | `crud` | None | 10 |
 
@@ -479,43 +563,31 @@ logfire-ff-ingest-processor:
 
 ### In-cluster HTTPS
 
-`inClusterTls.enabled` switches supported in-cluster service-to-service traffic to HTTPS with certificate verification.
-This is independent from public `ingress.tls` or `gateway.tls`.
+`inClusterTls.enabled` switches supported service-to-service traffic to HTTPS with certificate verification.
+It is independent of `ingress.tls` and `gateway.tls`.
 
-Certificate verification uses `inClusterTls.caBundle.*`, or the chart-created CA Secret when using cert-manager auto-Issuer mode.
+Set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
+The exception is `inClusterTls.certs.mode=certManager` with an empty `issuerRef.name`, where the chart creates the CA and the bundle is optional.
 
-CA bundle requirements by mode:
+FusionFire readers dial the headless `logfire-ff-bcache-internal` service directly and verify that hostname.
+So the bcache certificate must include the bare `logfire-ff-bcache-internal` DNS name, plus the `logfire-ff-bcache` names and their namespace and cluster-domain variants.
+bcache loads its certificate at startup. After you rotate the Secret, restart `statefulset/logfire-ff-bcache`, or use a reload controller as [External secrets and automatic reloads](#external-secrets-and-automatic-reloads) describes.
 
-* `inClusterTls.certs.mode=certManager` with empty `issuerRef.name`: CA bundle is optional.
-* `inClusterTls.certs.mode=certManager` with custom `issuerRef.name`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
-* `inClusterTls.certs.mode=existingSecrets`: set exactly one of `inClusterTls.caBundle.existingConfigMap` or `inClusterTls.caBundle.existingSecret`.
+For Kind or local development, `dev.deployCertManager` deploys cert-manager as a subchart.
+From this repository, run `helm dependency build charts/logfire` first.
 
-FusionFire readers dial the headless `logfire-ff-bcache-internal` service directly and verify
-that hostname, so the bcache certificate must include the bare `logfire-ff-bcache-internal`
-DNS name. Include the `logfire-ff-bcache` names and the namespace and cluster-domain variants as
-well.
-
-bcache loads its certificate at startup, so after rotating the Secret restart
-`statefulset/logfire-ff-bcache` so the pods serve the new certificate, or configure a reload
-controller as described in [External secrets and automatic reloads](#external-secrets-and-automatic-reloads).
-
-For Kind or local development, you can optionally deploy cert-manager as a Helm dependency with `dev.deployCertManager`.
-When working from this repository, run `helm dependency build charts/logfire` to fetch the locked dependency charts.
-
-If you enable in-cluster TLS with bundled cert-manager on a fresh install, omit `--wait`.
-Also omit `--atomic` on Helm 3 or `--rollback-on-failure` on Helm 4, because those flags enable readiness waits.
-The chart creates its TLS certificates in post-install hooks, which run after Helm waits for ordinary workloads.
-Those workloads need the certificate Secrets to become ready, so a readiness wait cannot finish.
+With bundled cert-manager on a fresh install, omit `--wait`, and omit `--atomic` on Helm 3 or `--rollback-on-failure` on Helm 4, because those flags also wait for readiness.
+The chart creates its certificates in post-install hooks, which run after Helm waits for ordinary workloads.
+Those workloads need the certificate Secrets to become ready, so the wait cannot finish.
 Check workload readiness after the hooks finish.
-For installations that require readiness waits or automatic rollback, install cert-manager separately and leave `dev.deployCertManager=false`.
+If you need readiness waits or automatic rollback, install cert-manager separately and leave `dev.deployCertManager=false`.
 
 ### Private CA certificates
 
 Logfire verifies the certificate of each TLS server it connects to, such as a `rediss://` Redis or an SMTP relay.
 By default, it trusts only the system trust store of its images.
-If the server certificate is signed by a private CA, put the CA certificate (PEM) in a ConfigMap or Secret and set `trustedCaBundle`.
-For example, Memorystore for Redis or Valkey with in-transit encryption signs the server certificate with a CA for each instance.
-Download the server CA certificates of the instance into `redis-ca.pem`, then create the ConfigMap:
+If a private CA signs the server certificate, put the CA certificate (PEM) in a ConfigMap or Secret and set `trustedCaBundle`.
+For example, after you download a Memorystore CA into `redis-ca.pem` as [Redis](#redis) describes:
 
 ```sh
 kubectl create configmap logfire-private-ca --from-file=ca.crt=redis-ca.pem -n logfire
@@ -533,9 +605,9 @@ Python and FusionFire workloads read that file through `SSL_CERT_FILE`, and `log
 Public endpoints, such as object storage and model providers, stay trusted.
 The file can hold more than one CA, so one bundle can serve Redis and SMTP.
 A bundle that cert-manager's trust-manager builds with `useDefaultCAs: true` also works as it is. The duplicate public CAs do no harm.
+
 FusionFire and the AI gateway also check the host name, so the server certificate must name the host in the DSN.
-The Python workloads verify certificates strictly, as RFC 5280 requires.
-For example, the CA certificate needs a key usage extension, and the server certificate needs an authority key identifier.
+The Python workloads verify certificates strictly, as RFC 5280 requires. For example, the CA certificate needs a key usage extension, and the server certificate needs an authority key identifier.
 To check a CA that you made yourself, run `openssl verify -x509_strict -CAfile ca.crt server.crt`.
 The pods read the certificates when they start. After you change them, restart the Logfire workloads.
 
@@ -544,14 +616,12 @@ Use `trustedCaBundle` for new installs.
 
 ### Restricted Pod Security
 
-Containers default to a non-root identity, no privilege escalation, dropped capabilities, and `RuntimeDefault` seccomp.
-They use a read-only root with writable paths mounted.
+Containers default to a non-root identity, no privilege escalation, dropped capabilities, `RuntimeDefault` seccomp, and a read-only root with writable paths mounted.
 Override `securityContext` or `<workload>.securityContext` when your cluster requires different settings.
 
 The bundled Redis is the exception.
 A `restricted` namespace rejects it unless you set `logfire-redis.securityContext`.
-Setting it replaces the Redis pod.
-FusionFire pods that start before the new Redis pod is ready exit and restart until Redis is back.
+Setting it replaces the Redis pod, and FusionFire pods that start before the new Redis pod is ready restart until Redis is back.
 
 ### Istio service mesh
 
@@ -578,7 +648,7 @@ Each workload's `podAnnotations` reaches its own pods.
 In a namespace that enforces the `baseline` or `restricted` Pod Security level, install Istio with its CNI plugin.
 The default `istio-init` container needs the `NET_ADMIN` capability, which those levels reject.
 Every chart pod sets a pod-level `RuntimeDefault` seccomp profile, which the injected sidecar needs to pass the `restricted` level.
-The bundled Redis keeps its pod template unchanged across upgrades, so set the profile for it yourself:
+The bundled Redis keeps its pod template unchanged across upgrades, so set the profile for it yourself, along with the overrides in [Restricted Pod Security](#restricted-pod-security):
 
 ```yaml
 logfire-redis:
@@ -587,10 +657,8 @@ logfire-redis:
       type: RuntimeDefault
 ```
 
-The bundled Redis also needs its other `restricted` overrides, described in Restricted Pod Security.
-
-Each sidecar adds its own resource requests to every pod.
-Istio requests 100m CPU and 128Mi memory per sidecar by default, so plan node capacity for about 30 sidecars, or lower `values.global.proxy.resources.requests` in your Istio installation.
+Istio requests 100m CPU and 128Mi memory per sidecar by default.
+Plan node capacity for about 30 sidecars, or lower `values.global.proxy.resources.requests` in your Istio installation.
 
 HAProxy sends each backend its in-cluster service name as the `Host` header and passes the public host in `X-Forwarded-Host`.
 Write mesh routes and authorization policies for traffic behind HAProxy against the service names.
@@ -639,7 +707,7 @@ For enterprise support, contact [sales@pydantic.dev](mailto:sales@pydantic.dev).
 ## Optional dev dependencies
 
 The cert-manager subchart deploys only when you set `dev.deployCertManager`.
-The bundled dev Postgres deploys only when you set `dev.deployPostgres`; it is a chart-owned template, not a dependency.
+The bundled dev Postgres deploys only when you set `dev.deployPostgres`. It is a chart-owned template, not a dependency.
 Production installs use external PostgreSQL, and a separately installed cert-manager when in-cluster TLS uses cert-manager.
 
 | Repository | Name | Version |
@@ -650,24 +718,28 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| adminApiKeys | list | `[]` | API keys that the backend creates in the `logfire-meta` organization at startup, for automation that runs before anyone signs in. Each key reads its token from a Secret in the release namespace. See [Admin API keys](#admin-api-keys) for scopes, token rules, and rotation. |
 | adminEmail | string | `"hello@example.dev"` | Starter admin email address |
 | adminSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-admin-password  - logfire-admin-totp-secret  - logfire-admin-totp-recovery-codes (string containing a JSON list) |
 | adminSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | adminSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | adminSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | affinity | object | `{}` | Node/Pod affinity applied to all workloads |
-| agentSandboxes | object | `{"allowedOrganizations":[],"broker":{"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"250m","memory":"512Mi"}},"serviceAccountAnnotations":{}},"capacityOwnerId":"","control":{"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"250m","memory":"512Mi"}}},"enabled":false,"existingSecret":"","imageTag":"","images":{"control":"logfire-monty-control-prod","relay":"logfire-monty-relay","worker":"monty-worker"},"meteringEnabled":true,"profilesEnabled":true,"relay":{"maxSessions":256,"replicas":2,"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"250m","memory":"256Mi"}}},"snapshotQuota":{"bytes":1073741824,"objects":1000,"retentionSeconds":604800},"snapshotUri":"","volumesEnabled":false,"workerNamespace":"","workers":{"ceiling":8,"cpuLimitMillicores":1000,"cpuRequestMillicores":500,"memoryMiB":1024,"nodeSelector":{},"runtimeClassName":"","tolerations":[],"updateStrategy":"Recreate","warmReplicas":1}}` | Optional project-scoped Agent Sandboxes. Requires the upstream Agent Sandbox operator with v1beta1 core and extension CRDs, plus an isolated worker runtime. |
+| agentSandboxes | object | `{"allowedOrganizations":[],"broker":{"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"250m","memory":"512Mi"}},"serviceAccountAnnotations":{}},"capacityOwnerId":"","control":{"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"250m","memory":"512Mi"}}},"createWorkerNamespace":true,"enabled":false,"existingSecret":"","imageTag":"","images":{"control":"logfire-monty-control-prod","relay":"logfire-monty-relay","worker":"monty-worker"},"meteringEnabled":true,"pressureEnabled":false,"profilesEnabled":true,"relay":{"maxSessions":256,"replicas":2,"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"250m","memory":"256Mi"}}},"snapshotQuota":{"bytes":1073741824,"objects":1000,"retentionSeconds":604800},"snapshotUri":"","volumesEnabled":false,"workerNamespace":"","workers":{"ceiling":8,"cpuLimitMillicores":1000,"cpuRequestMillicores":500,"dnsEgress":[{"ports":[{"port":53,"protocol":"UDP"},{"port":53,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},"podSelector":{"matchLabels":{"k8s-app":"kube-dns"}}}]}],"memoryMiB":1024,"nodeSelector":{},"runtimeClassName":"","tolerations":[],"updateStrategy":"Recreate","warmReplicas":1}}` | Optional project-scoped Agent Sandboxes. Requires the upstream Agent Sandbox operator with v1beta1 core and extension CRDs, plus an isolated worker runtime. |
 | agentSandboxes.allowedOrganizations | list | `[]` | Explicit organization UUIDs permitted to use sandboxes. |
 | agentSandboxes.broker.serviceAccountAnnotations | object | `{}` | Optional cloud identity annotations. Only the broker receives storage credentials. |
 | agentSandboxes.capacityOwnerId | string | `""` | Stable installation UUID shared by admission replicas. Required when enabled. Keep this value across restarts, upgrades and rollbacks. |
+| agentSandboxes.createWorkerNamespace | bool | `true` | Create and retain the worker namespace. Disable when an administrator supplies it. |
 | agentSandboxes.existingSecret | string | `""` | Existing Secret with management, controller, state, relay, snapshot, snapshot-admin, volume, volume-admin and telemetry keys. Empty creates a Secret. |
 | agentSandboxes.imageTag | string | `""` | Compatible Platform revision for Python, frontend and Monty images. Required when enabled. FusionFire retains its chart-selected revision. |
 | agentSandboxes.images | object | `{"control":"logfire-monty-control-prod","relay":"logfire-monty-relay","worker":"monty-worker"}` | Repository names under image.repository. All use agentSandboxes.imageTag. |
 | agentSandboxes.meteringEnabled | bool | `true` | Collect execution and storage receipts in the existing Postgres database. |
+| agentSandboxes.pressureEnabled | bool | `false` | Read worker resource metrics for pressure sensing. Requires a metrics.k8s.io provider. Enables the controller's namespaced PodMetrics RBAC. Session capacity limits remain active when disabled. |
 | agentSandboxes.profilesEnabled | bool | `true` | Workbench and saved execution profiles. |
 | agentSandboxes.snapshotUri | string | `""` | Snapshot prefix. Empty uses <objectStore.uri>/monty-snapshots. |
 | agentSandboxes.volumesEnabled | bool | `false` | Opt-in file volumes. Requires profiles. |
 | agentSandboxes.workerNamespace | string | `""` | Worker namespace. Empty derives <release namespace>-sandboxes. |
+| agentSandboxes.workers.dnsEgress | list | `[{"ports":[{"port":53,"protocol":"UDP"},{"port":53,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},"podSelector":{"matchLabels":{"k8s-app":"kube-dns"}}}]}]` | DNS NetworkPolicy egress rules. Replace for custom DNS namespaces, ports or node-local IPs. An empty list removes the DNS exception. Other worker egress stays restricted. |
 | agentSandboxes.workers.runtimeClassName | string | `""` | Installed RuntimeClass for untrusted code, such as gvisor or kata. |
 | agentSandboxes.workers.updateStrategy | string | `"Recreate"` | Recreate replaces unclaimed spares only. Claimed workers need an explicit drain. |
 | ai.azureOpenAi.apiKey | string | `nil` | Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
@@ -686,6 +758,10 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | aiGatewayOauth | object | `{"issuer":"","resourceUrl":""}` | AI gateway OAuth metadata configuration. If left empty, the chart derives self-hosted defaults from the primary Logfire URL:   resourceUrl = <logfire.url>/proxy   issuer      = <logfire.url> |
 | aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
 | aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
+| auth.passkeys | bool | `true` | Let users sign in with a passkey, such as a fingerprint, face unlock, or security key. Existing passkeys stay listed and removable when this is false. |
+| auth.passwordLogin | bool | `true` | Let users sign in with an email address and a password. Set to false when users sign in only through a Dex connector, and configure at least one connector, because Dex does not start without one. `logfire-dex.config.enablePasswordDB: false` also turns password sign-in off. |
+| auth.passwordlessEmailSignup | bool | `false` | Let a person with a verified email address that has no account create one without a password. It needs email delivery through `smtp.*` or `dev.deployMaildev`. |
+| auth.sessionMaxLifetime | string | `""` | Longest time that a browser session lasts, as an ISO 8601 duration such as `PT8H`. A session ends after this time, or sooner if the user's own session setting is shorter. The limit applies to sessions created after you set it. Empty applies no limit. |
 | cert-manager | object | `{"crds":{"enabled":true,"keep":true}}` | cert-manager chart values (only used when `dev.deployCertManager` is true) |
 | clusterDomain | string | `"cluster.local"` | Kubernetes cluster domain for service discovery. |
 | defaultStorageClassName | string | `""` | Default StorageClass for chart-managed PVCs. Set this when chart PVCs should use a specific class. Per-workload `storageClassName` values take precedence. Leave empty to let Kubernetes use the cluster default StorageClass. |
@@ -767,15 +843,18 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | ingress.tls | bool | `false` | Enable TLS/HTTPS. Required for correct CORS behavior. |
 | intakeOauth | object | `{"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When `resourceUrl` is empty, the chart derives the self-hosted resource URL from the primary Logfire URL:   resourceUrl = <logfire.url>/v1 |
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
+| integrations.pagerduty.appId | string | `""` | ID of a PagerDuty App with Events Integration enabled. Sets `INTEGRATION_PAGERDUTY_APP_ID` on `logfire-backend`. |
+| integrations.slack.clientId | string | `""` | Client ID of your own Slack App. Setting it turns on Slack App channels. |
+| integrations.slack.clientSecret | string | `""` | Client secret of your Slack App. With `existingSecret`, put it in that Secret under the `logfire-slack-client-secret` key instead. |
+| integrations.slack.signingSecret | string | `""` | Signing secret of your Slack App. With `existingSecret`, put it in that Secret under the `logfire-slack-signing-secret` key instead. |
 | keepAliveTimeout | string | `"120s"` | Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of the ingress or tunnel in front of the release; if HAProxy closes an idle connection first, the client sees a 502/520 when it reuses it. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
 | logfire-ai-gateway.proxyTimeout | string | `"600s"` | HAProxy inactivity timeout for public `/proxy` requests to the AI gateway. |
-| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"env":null,"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
+| logfire-dex | object | `{"annotations":{},"config":{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}},"env":null,"labels":{},"podAnnotations":{},"podLabels":{},"service":{"annotations":{}}}` | Configuration, autoscaling & resources for `logfire-dex` deployment |
 | logfire-dex.annotations | object | `{}` | Workload annotations |
-| logfire-dex.config | object | `{"connectors":[],"enablePasswordDB":true,"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex configuration (see https://dexidp.io/docs/) |
+| logfire-dex.config | object | `{"connectors":[],"storage":{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}}` | Dex configuration (see https://dexidp.io/docs/) |
 | logfire-dex.config.connectors | list | `[]` | Dex auth connectors (see https://dexidp.io/docs/connectors/) The redirectURI can be omitted—it will be generated automatically. If specified, the custom value will be honored. |
-| logfire-dex.config.enablePasswordDB | bool | `true` | Enable password authentication. Set to false if undesired, but ensure another connector is configured first. |
 | logfire-dex.config.storage | object | `{"config":{"database":"dex","host":"logfire-postgres","password":"postgres","port":5432,"ssl":{"mode":"disable"},"user":"postgres"},"type":"postgres"}` | Dex storage configuration (see https://dexidp.io/docs/configuration/storage/) |
 | logfire-dex.env | list or map | `nil` | Extra environment variables for the Dex pod. Accepts `valueFrom`, so a credential can come from a Secret. Dex expands `$VAR` from this environment in the storage and connector config, so `DEX_EXPAND_ENV=false` keeps a literal `$` in a password or DN. |
 | logfire-dex.labels | object | `{}` | Workload labels |
@@ -843,6 +922,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials, on FusionFire, the backend and the worker. The chart reserves the mount paths `/tmp`, `/scratch`, `/fusionfire/ingest-data`, and `/var/lib/logfire` for its own volumes, adds `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled, and `/etc/logfire/smtp-ca` while the SMTP CA bundle is configured. |
 | objectStore.volumes | list | `[]` | Volumes for object store credentials, on FusionFire, the backend and the worker. The chart reserves the volume names `tmp`, `scratch-data`, `ingest-data`, and `logfire-data` for its own volumes, adds `logfire-incluster-tls` and `logfire-incluster-ca-bundle` when in-cluster TLS is enabled, and `logfire-smtp-ca-bundle` while the SMTP CA bundle is configured. |
 | otelResourceAttributes | object | `{}` | Additional OTEL resource attributes to stamp onto internal telemetry emitted by Logfire workloads. These are merged on top of the chart defaults and can override them. Example:   deployment.environment.name: prod   service.namespace: logfire |
+| otelTraceSampleRatio | float | `0.05` | Fraction of new traces that the high-volume workloads keep, from 0 to 1. Spans of a kept trace are all kept. Applies to `logfire-worker`, `logfire-alert-runner`, and the Fusionfire ingest and bcache workloads. |
 | otel_collector | object | `{"debug":{"enabled":false},"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}},"extraExporters":{},"extraPipelines":{},"extraProcessors":{},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.163.1@sha256:1175b03003053962012f5a231f5567f66a3e8fdb960c7835c0e48f7aa1555806"},"prometheus":{"add_metric_suffixes":false,"delta_to_cumulative":true,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","max_stale":"5m","max_streams":10000,"metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true,"translation_strategy":""},"queueStorage":{"enabled":true,"ephemeralStorageLimit":"5Gi","ephemeralStorageRequest":"512Mi","fsync":false,"maxSizeBytes":536870912,"sizeLimit":"4Gi"},"selfMetrics":{"enabled":true},"selfMetricsPort":8888,"sendingQueueBytes":67108864,"serviceAccount":{"annotations":{}}}` | otel-collector configuration |
 | otel_collector.debug.enabled | bool | `false` | Emit per-request summaries to collector logs. Enable for troubleshooting; disabled by default to avoid logging every incoming telemetry request. |
 | otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
@@ -881,7 +961,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | redisSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | redisSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
 | redisSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| releaseVersion | string | `"v2026-11-02.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
+| releaseVersion | string | `"v2026-11-11.03"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
 | rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
@@ -927,4 +1007,6 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 
 ## Agent Sandboxes
 
+This optional feature requires Kubernetes 1.25 or later with CRD CEL validation enabled.
+Kubernetes 1.29 or later is recommended. The base chart's minimum version stays at 1.23.
 See [Agent Sandboxes](agent-sandboxes.md) for prerequisites, configuration and verification.

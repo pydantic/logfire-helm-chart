@@ -16,9 +16,11 @@ rules:
   - apiGroups: [""]
     resources: [pods]
     verbs: [get, list]
+  {{- if .Values.agentSandboxes.pressureEnabled }}
   - apiGroups: [metrics.k8s.io]
     resources: [pods]
     verbs: [get, list]
+  {{- end }}
   - apiGroups: [agents.x-k8s.io]
     resources: [sandboxes]
     verbs: [get, list]
@@ -85,12 +87,18 @@ spec:
             podSelector:
               matchLabels: {app: monty-controller}
         ports: [{protocol: TCP, port: 8080}]
+      {{- if hasKey .Values.agentSandboxes.workers "dnsEgress" }}
+      {{- with .Values.agentSandboxes.workers.dnsEgress }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- else }}
       - to:
           - namespaceSelector:
               matchLabels: {kubernetes.io/metadata.name: kube-system}
             podSelector:
               matchLabels: {k8s-app: kube-dns}
         ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+      {{- end }}
   podTemplate:
     metadata:
       annotations:

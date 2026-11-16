@@ -119,3 +119,45 @@ tests:
         documentSelector:
           path: kind
           value: StatefulSet
+
+  - it: bounds Cold compaction jobs without a sizing preset
+    templates:
+      - templates/logfire-ff-maintenance-scheduler.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_MAX_COLD_COMPACTION_JOBS
+            value: "16"
+
+  - it: the large preset sets its own Cold compaction bound over the inherited standard value
+    set:
+      sizingPreset: large
+    templates:
+      - templates/logfire-ff-maintenance-scheduler.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_MAX_COLD_COMPACTION_JOBS
+            value: "96"
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: an explicit 0 turns the Cold compaction bound off under a sizing preset
+    set:
+      sizingPreset: standard
+      logfire-ff-maintenance-scheduler:
+        maxColdCompactionJobs: 0
+    templates:
+      - templates/logfire-ff-maintenance-scheduler.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_MAX_COLD_COMPACTION_JOBS
+            value: "0"
+        documentSelector:
+          path: kind
+          value: Deployment

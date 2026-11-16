@@ -1,4 +1,7 @@
 suite: Agent Sandbox authority and isolation contracts
+capabilities:
+  majorVersion: 1
+  minorVersion: 29
 release:
   name: lf
   namespace: customer
@@ -16,6 +19,213 @@ set:
     - 00000000-0000-0000-0000-000000000001
   agentSandboxes.workers.runtimeClassName: gvisor
 tests:
+  - it: refuses sandbox installation below the operator minimum version
+    capabilities:
+      majorVersion: 1
+      minorVersion: 24
+    asserts:
+      - failedTemplate:
+          errorPattern: requires Kubernetes 1.25 or later
+  - it: accepts the operator minimum version when sandbox configuration is valid
+    capabilities:
+      majorVersion: 1
+      minorVersion: 25
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - isKind:
+          of: SandboxTemplate
+  - it: keeps the base chart available on Kubernetes 1.23 without sandboxes
+    capabilities:
+      majorVersion: 1
+      minorVersion: 23
+    set:
+      agentSandboxes.enabled: false
+    templates: [templates/logfire-backend.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - isKind:
+          of: Deployment
+  - it: uses the external worker namespace without claiming namespace ownership
+    set:
+      agentSandboxes.createWorkerNamespace: false
+      agentSandboxes.workerNamespace: external-workers
+    asserts:
+      - hasDocuments:
+          count: 2
+        template: templates/logfire-agent-sandboxes-secrets.yaml
+      - equal:
+          path: metadata.namespace
+          value: external-workers
+        template: templates/logfire-agent-sandboxes-secrets.yaml
+        documentSelector:
+          path: metadata.name
+          value: lf-agent-sandboxes-telemetry
+      - equal:
+          path: metadata.namespace
+          value: external-workers
+        template: templates/logfire-agent-sandboxes-workers.yaml
+        documentSelector:
+          path: kind
+          value: SandboxTemplate
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_NAMESPACE, value: external-workers}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-controller
+  - it: creates no namespace or secrets with external namespace and credential management
+    set:
+      agentSandboxes.createWorkerNamespace: false
+      agentSandboxes.existingSecret: external-authority
+    templates: [templates/logfire-agent-sandboxes-secrets.yaml]
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: retains the namespace and DNS defaults for older reused values
+    set:
+      agentSandboxes.createWorkerNamespace: null
+      agentSandboxes.pressureEnabled: null
+      agentSandboxes.workers.dnsEgress: null
+    asserts:
+      - equal:
+          path: metadata.name
+          value: customer-sandboxes
+        template: templates/logfire-agent-sandboxes-secrets.yaml
+        documentSelector:
+          path: kind
+          value: Namespace
+      - contains:
+          path: spec.networkPolicy.egress
+          content:
+            to:
+              - namespaceSelector:
+                  matchLabels: {kubernetes.io/metadata.name: kube-system}
+                podSelector:
+                  matchLabels: {k8s-app: kube-dns}
+            ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+        template: templates/logfire-agent-sandboxes-workers.yaml
+        documentSelector:
+          path: kind
+          value: SandboxTemplate
+  - it: replaces the DNS exception with the cluster resolver namespace and ports
+    set:
+      agentSandboxes.workers.dnsEgress:
+        - to:
+            - namespaceSelector:
+                matchLabels: {kubernetes.io/metadata.name: openshift-dns}
+              podSelector:
+                matchLabels: {dns.operator.openshift.io/daemonset-dns: default}
+          ports: [{protocol: UDP, port: 5353}, {protocol: TCP, port: 5353}]
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - equal:
+          path: spec.networkPolicy.egress
+          value:
+            - to:
+                - namespaceSelector:
+                    matchLabels: {kubernetes.io/metadata.name: customer}
+                  podSelector:
+                    matchLabels: {app: monty-controller}
+              ports: [{protocol: TCP, port: 8080}]
+            - to:
+                - namespaceSelector:
+                    matchLabels: {kubernetes.io/metadata.name: openshift-dns}
+                  podSelector:
+                    matchLabels: {dns.operator.openshift.io/daemonset-dns: default}
+              ports: [{protocol: UDP, port: 5353}, {protocol: TCP, port: 5353}]
+  - it: supports a node-local resolver without admitting other DNS destinations
+    set:
+      agentSandboxes.workers.dnsEgress:
+        - to:
+            - ipBlock: {cidr: 169.254.20.10/32}
+          ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - lengthEqual:
+          path: spec.networkPolicy.egress
+          count: 2
+      - equal:
+          path: spec.networkPolicy.egress[1]
+          value:
+            to:
+              - ipBlock: {cidr: 169.254.20.10/32}
+            ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+  - it: removes only the DNS exception when its list is empty
+    set:
+      agentSandboxes.workers.dnsEgress: []
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - equal:
+          path: spec.networkPolicy.egress
+          value:
+            - to:
+                - namespaceSelector:
+                    matchLabels: {kubernetes.io/metadata.name: customer}
+                  podSelector:
+                    matchLabels: {app: monty-controller}
+              ports: [{protocol: TCP, port: 8080}]
+  - it: rejects a DNS rule map that would bypass the list contract
+    set:
+      agentSandboxes.workers.dnsEgress: {to: []}
+    asserts:
+      - failedTemplate:
+          errorPattern: dnsEgress must be a list of NetworkPolicy egress rules
+  - it: keeps resource metrics opt-in across controller configuration and RBAC
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PRESSURE_ENABLED, value: "false"}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-controller
+      - notContains:
+          path: rules
+          content: {apiGroups: [metrics.k8s.io], resources: [pods], verbs: [get, list]}
+        template: templates/logfire-agent-sandboxes-workers.yaml
+        documentSelector:
+          path: kind
+          value: Role
+      - contains:
+          path: rules
+          content: {apiGroups: [""], resources: [pods], verbs: [get, list]}
+        template: templates/logfire-agent-sandboxes-workers.yaml
+        documentSelector:
+          path: kind
+          value: Role
+  - it: grants PodMetrics access only when the controller consumes it
+    set:
+      agentSandboxes.pressureEnabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PRESSURE_ENABLED, value: "true"}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-controller
+      - contains:
+          path: rules
+          content: {apiGroups: [metrics.k8s.io], resources: [pods], verbs: [get, list]}
+        template: templates/logfire-agent-sandboxes-workers.yaml
+        documentSelector:
+          path: kind
+          value: Role
   - it: requires a stable capacity owner before admission starts
     set:
       agentSandboxes.capacityOwnerId: null

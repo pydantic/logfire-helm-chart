@@ -43,6 +43,9 @@
 {{- define "logfire.agentSandboxes.validate" -}}
 {{- $a := .Values.agentSandboxes | default dict -}}
 {{- if $a.enabled -}}
+{{- if not (semverCompare ">=1.25.0-0" .Capabilities.KubeVersion.Version) -}}
+{{- fail "agentSandboxes requires Kubernetes 1.25 or later with CRD CEL validation enabled; Kubernetes 1.29 or later is recommended" -}}
+{{- end -}}
 {{- if not (include "logfire.inClusterTls.enabled" . | eq "true") -}}
 {{- fail "agentSandboxes requires inClusterTls.enabled for authenticated private authority calls" -}}
 {{- end -}}
@@ -72,6 +75,9 @@
 {{- end -}}
 {{- if not $a.workers.runtimeClassName -}}
 {{- fail "agentSandboxes.workers.runtimeClassName must name an installed isolated runtime" -}}
+{{- end -}}
+{{- if and (hasKey $a.workers "dnsEgress") (not (kindIs "slice" $a.workers.dnsEgress)) -}}
+{{- fail "agentSandboxes.workers.dnsEgress must be a list of NetworkPolicy egress rules; use [] to omit the DNS exception" -}}
 {{- end -}}
 {{- if or (lt (int $a.workers.warmReplicas) 1) (le (int $a.workers.ceiling) (int $a.workers.warmReplicas)) (gt (int $a.workers.ceiling) 128) -}}
 {{- fail "agentSandboxes workers require 1 <= warmReplicas < ceiling <= 128" -}}
@@ -146,7 +152,7 @@
 - name: MONTY_WORKER_CPU_LIMIT_MILLICORES
   value: {{ .Values.agentSandboxes.workers.cpuLimitMillicores | quote }}
 - name: MONTY_PRESSURE_ENABLED
-  value: "true"
+  value: {{ .Values.agentSandboxes.pressureEnabled | default false | quote }}
 {{- end -}}
 
 {{- define "logfire.agentSandboxes.checksum" -}}

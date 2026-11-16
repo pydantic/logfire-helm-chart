@@ -38,7 +38,7 @@ variablesApiKey: ""
 frontendApplicationToken: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: "v2026-11-02.01"
+releaseVersion: "v2026-11-11.03"
 
 # -- CRUD database migration Job settings.
 migrations:
@@ -63,6 +63,24 @@ groupOrganizationMapping: []
 #        project_roles:
 #          - project_name: "admin-project"
 #            role: "admin"
+
+# Sign-in settings. The chart sets each one on `logfire-backend`. A variable of the same name in
+# `logfire-backend.env` takes precedence.
+auth:
+  # -- Let users sign in with an email address and a password. Set to false when users sign in only through
+  # a Dex connector, and configure at least one connector, because Dex does not start without one.
+  # `logfire-dex.config.enablePasswordDB: false` also turns password sign-in off.
+  passwordLogin: true
+  # -- Let users sign in with a passkey, such as a fingerprint, face unlock, or security key.
+  # Existing passkeys stay listed and removable when this is false.
+  passkeys: true
+  # -- Longest time that a browser session lasts, as an ISO 8601 duration such as `PT8H`.
+  # A session ends after this time, or sooner if the user's own session setting is shorter.
+  # The limit applies to sessions created after you set it. Empty applies no limit.
+  sessionMaxLifetime: ""
+  # -- Let a person with a verified email address that has no account create one without a password.
+  # It needs email delivery through `smtp.*` or `dev.deployMaildev`.
+  passwordlessEmailSignup: false
 
 # -- Workload sizing preset. Leave empty to skip preset sizing, or set to `large`, `standard`, `small`, or `tiny` to apply built-in customer sizing defaults.
 sizingPreset: ""
@@ -391,6 +409,25 @@ webPush:
 
 
 # ==============================================================================
+# Integrations
+# ==============================================================================
+
+integrations:
+  slack:
+    # -- Client ID of your own Slack App. Setting it turns on Slack App channels.
+    clientId: ""
+    # -- Client secret of your Slack App. With `existingSecret`, put it in that Secret under the
+    # `logfire-slack-client-secret` key instead.
+    clientSecret: ""
+    # -- Signing secret of your Slack App. With `existingSecret`, put it in that Secret under the
+    # `logfire-slack-signing-secret` key instead.
+    signingSecret: ""
+  pagerduty:
+    # -- ID of a PagerDuty App with Events Integration enabled. Sets
+    # `INTEGRATION_PAGERDUTY_APP_ID` on `logfire-backend`.
+    appId: ""
+
+# ==============================================================================
 # AI configuration
 # ==============================================================================
 
@@ -473,10 +510,6 @@ logfire-dex:
 
   # -- Dex configuration (see https://dexidp.io/docs/)
   config:
-    # -- Enable password authentication.
-    # Set to false if undesired, but ensure another connector is configured first.
-    enablePasswordDB: true
-
     # -- Dex storage configuration (see https://dexidp.io/docs/configuration/storage/)
     storage:
       type: postgres
@@ -1058,6 +1091,37 @@ logfire-remote-mcp:
 #     minAvailable: 1
 
 
+# -- Autoscaling & resources for the alert runner. It is the only evaluator of alert runs and sends
+# the alerts that fire to the Absurd task runner. Alerts do not fire while it is unavailable.
+# logfire-alert-runner:
+#   # -- Workload labels
+#   labels: {}
+#   # -- Workload annotations
+#   annotations: {}
+#   # -- Pod labels
+#   podLabels: {}
+#   # -- Pod annotations
+#   podAnnotations: {}
+#   replicas: 1
+#   resources:
+#     cpu: "500m"
+#     memory: "1Gi"
+#     ephemeralStorage: "512Mi"
+#   autoscaling:
+#     minReplicas: 1
+#     maxReplicas: 4
+#     hpa:
+#       enabled: true
+#       memAverage: 70
+#       cpuAverage: 75
+#   nodeSelector: {}
+#   affinity: {}
+#   tolerations: []
+#   pdb:
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+
 # -- Autoscaling & resources for the proxy pods
 # logfire-service:
 #   # -- Workload labels
@@ -1300,6 +1364,11 @@ logfire-ff-bcache:
 #   podLabels: {}
 #   # -- Pod annotations
 #   podAnnotations: {}
+#   # -- Upper bound on queued and running Cold compaction jobs across the installation, so a
+#   # backlog of old partitions cannot delay compaction of recently written data. A low value
+#   # slows the backlog and can stop Cold work from scaling the compaction workers. Sizing presets
+#   # set it per preset, and the default is 16 without a preset. Set 0 to turn the bound off.
+#   # maxColdCompactionJobs: 16
 #   replicas: 1
 #   datafusionMemory: "512MB"
 #   compactionTiers:
@@ -1653,6 +1722,8 @@ image:
   # @ignored
   taskRunnerImage: logfire-task-runner-prod
   # @ignored
+  alertRunnerImage: logfire-alert-runner-prod
+  # @ignored
   remoteMcpImage: logfire-remote-mcp-prod
   # @ignored
   frontendImage: frontend
@@ -1853,6 +1924,10 @@ trustedCaBundle:
 #   deployment.environment.name: prod
 #   service.namespace: logfire
 otelResourceAttributes: {}
+# -- Fraction of new traces that the high-volume workloads keep, from 0 to 1. Spans of a kept
+# trace are all kept. Applies to `logfire-worker`, `logfire-alert-runner`, and the Fusionfire
+# ingest and bcache workloads.
+otelTraceSampleRatio: 0.05
 
 # -- otel-collector configuration
 otel_collector:
@@ -2003,6 +2078,15 @@ adminSecret:
   #    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.
   #    Per-workload `annotations` override duplicate keys.
   annotations: {}
+
+# -- API keys that the backend creates in the `logfire-meta` organization at startup, for
+# automation that runs before anyone signs in. Each key reads its token from a Secret in the
+# release namespace. See [Admin API keys](#admin-api-keys) for scopes, token rules, and rotation.
+adminApiKeys: []
+#  - name: automation
+#    scopes: ["instance:admin", "instance:scim"]
+#    secretName: logfire-automation
+#    secretKey: token
 
 
 # ==============================================================================
@@ -2162,6 +2246,8 @@ sizingPresets:
     logfire-ff-maintenance-worker:
       scratchVolume:
         storage: "1Gi"
+    logfire-ff-maintenance-scheduler:
+      maxColdCompactionJobs: 4
     logfire-ff-compaction-worker:
       resources:
         requests:
@@ -2342,6 +2428,18 @@ sizingPresets:
           cpuAverage: 70
       pdb:
         maxUnavailable: 1
+    logfire-alert-runner:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "512Mi"
+          ephemeral-storage: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          cpuAverage: 75
     logfire-worker:
       resources:
         requests:
@@ -2425,6 +2523,7 @@ sizingPresets:
       scratchVolume:
         storage: "16Gi"
     logfire-ff-maintenance-scheduler:
+      maxColdCompactionJobs: 24
       resources:
         requests:
           cpu: "100m"
@@ -2695,6 +2794,18 @@ sizingPresets:
           cpuAverage: 70
       pdb:
         maxUnavailable: 1
+    logfire-alert-runner:
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "768Mi"
+          ephemeral-storage: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 3
+        hpa:
+          enabled: true
+          cpuAverage: 75
     logfire-worker:
       resources:
         requests:
@@ -2810,6 +2921,7 @@ sizingPresets:
       scratchVolume:
         storage: "32Gi"
     logfire-ff-maintenance-scheduler:
+      maxColdCompactionJobs: 32
       resources:
         requests:
           cpu: "250m"
@@ -3177,6 +3289,18 @@ sizingPresets:
           cpuAverage: 70
       pdb:
         maxUnavailable: 1
+    logfire-alert-runner:
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "1Gi"
+          ephemeral-storage: "512Mi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 4
+        hpa:
+          enabled: true
+          cpuAverage: 75
     logfire-worker:
       resources:
         requests:
@@ -3258,6 +3382,7 @@ sizingPresets:
       scratchVolume:
         storage: "64Gi"
     logfire-ff-maintenance-scheduler:
+      maxColdCompactionJobs: 48
       resources:
         requests:
           cpu: "500m"
@@ -3342,6 +3467,8 @@ sizingPresets:
         maxReplicas: 32
       scratchVolume:
         storage: "128Gi"
+    logfire-ff-maintenance-scheduler:
+      maxColdCompactionJobs: 96
     logfire-ff-compaction-worker:
       resources:
         requests:
@@ -3372,6 +3499,11 @@ agentSandboxes:
   existingSecret: ""
   # -- Worker namespace. Empty derives <release namespace>-sandboxes.
   workerNamespace: ""
+  # -- Create and retain the worker namespace. Disable when an administrator supplies it.
+  createWorkerNamespace: true
+  # -- Read worker resource metrics for pressure sensing. Requires a metrics.k8s.io provider.
+  # Enables the controller's namespaced PodMetrics RBAC. Session capacity limits remain active when disabled.
+  pressureEnabled: false
   # -- Repository names under image.repository. All use agentSandboxes.imageTag.
   images:
     control: logfire-monty-control-prod
@@ -3408,6 +3540,15 @@ agentSandboxes:
   workers:
     # -- Installed RuntimeClass for untrusted code, such as gvisor or kata.
     runtimeClassName: ""
+    # -- DNS NetworkPolicy egress rules. Replace for custom DNS namespaces, ports or node-local IPs.
+    # An empty list removes the DNS exception. Other worker egress stays restricted.
+    dnsEgress:
+      - to:
+          - namespaceSelector:
+              matchLabels: {kubernetes.io/metadata.name: kube-system}
+            podSelector:
+              matchLabels: {k8s-app: kube-dns}
+        ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
     nodeSelector: {}
     tolerations: []
     warmReplicas: 1

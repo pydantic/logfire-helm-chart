@@ -1,0 +1,48 @@
+suite: sign-in settings
+# Two contracts that one install cannot show. Installs from before `auth.passwordLogin` turn
+# password sign-in off with `logfire-dex.config.enablePasswordDB: false`. The 0.15.0 release
+# notes told operators to set `PASSKEYS_ENABLED` in `logfire-backend.env`, so that variable must
+# keep its value and must not appear twice in the container.
+release:
+  name: lf
+  namespace: default
+templates:
+  - templates/logfire-backend.yaml
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: turns password sign-in off from the earlier Dex value
+    set:
+      logfire-dex.config.enablePasswordDB: false
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DEX_PASSWORD_LOGIN_ENABLED
+            value: "false"
+
+  - it: keeps a variable from logfire-backend.env and sets it once
+    set:
+      auth.passkeys: true
+      logfire-backend.env:
+        PASSKEYS_ENABLED: false
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PASSKEYS_ENABLED
+            value: "false"
+          count: 1
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PASSKEYS_ENABLED
+            value: "true"

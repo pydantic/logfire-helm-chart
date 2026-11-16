@@ -92,10 +92,7 @@ spec:
           env:
             {{- include "logfire.ffRedisEnv" . | nindent 12 }}
             {{- include "logfire.ffRedisTailEnv" . | nindent 12 }}
-            - name: OTEL_TRACES_SAMPLER_ARG
-              value: "0.05"
-            - name: OTEL_TRACES_SAMPLER
-              value: "parentbased_traceidratio"
+            {{- include "logfire.otelSamplerEnv" . | nindent 12 }}
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             {{- include "logfire.ffResourceEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
             - name: FF_IO_THREADS
