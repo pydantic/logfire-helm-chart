@@ -77,10 +77,26 @@ tests:
           value: logfire-ff-query-config
 
   - it: the auth profile shares the token cache and JWT secret with the backend
+    set:
+      logfire-ai-gateway:
+        enabled: true
+      redisDsn: redis://shared-cache:6379/0
+      tokenRedis:
+        dsn: redis://token-cache:6379/1
+        prefix: auth-state
     templates:
+      - templates/secrets.yaml
       - templates/logfire-backend.yaml
       - templates/logfire-backend-auth.yaml
+      - templates/logfire-ai-gateway.yaml
     asserts:
+      - equal:
+          path: data.tokenDsn
+          value: cmVkaXM6Ly90b2tlbi1jYWNoZTo2Mzc5LzE=
+        template: templates/secrets.yaml
+        documentSelector:
+          path: metadata.name
+          value: lf-logfire-redis-dsns
       - contains:
           path: spec.template.spec.containers[0].env
           content:
@@ -114,6 +130,36 @@ tests:
                 name: logfire-jwt-secret
                 key: logfire-jwt-secret
         template: templates/logfire-backend-auth.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "TOKEN_REDIS_DSN")].valueFrom.secretKeyRef
+          value:
+            name: lf-logfire-redis-dsns
+            key: tokenDsn
+        template: templates/logfire-ai-gateway.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "TOKEN_REDIS_PREFIX")].value
+          value: auth-state
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "TOKEN_REDIS_PREFIX")].value
+          value: auth-state
+        template: templates/logfire-backend-auth.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - equal:
+          path: spec.template.spec.containers[0].env[?(@.name == "TOKEN_REDIS_PREFIX")].value
+          value: auth-state
+        template: templates/logfire-ai-gateway.yaml
         documentSelector:
           path: kind
           value: Deployment
