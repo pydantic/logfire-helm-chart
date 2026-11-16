@@ -110,6 +110,10 @@ spec:
             {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
             - name: APP_PORT
               value: {{ $servicePort | quote }}
+            # `logfire-opamp` keeps its connections here open between batches for up to 90 s. With
+            # the server's 5 s default, a batch sent as the server closes an idle connection fails.
+            - name: KEEP_ALIVE_TIMEOUT
+              value: "620"
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
             - name: KNOWN_LOGFIRE_REGIONS

@@ -1016,3 +1016,50 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: keeps Fleet control's idle connections open past the OpAMP server's client pool
+    set:
+      fleet:
+        enabled: true
+    templates:
+      - templates/logfire-fleet-control.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KEEP_ALIVE_TIMEOUT
+            value: "620"
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: runs two fixed OpAMP pods and autoscales Fleet control under the standard preset
+    set:
+      sizingPreset: standard
+      fleet:
+        enabled: true
+    templates:
+      - templates/logfire-opamp.yaml
+      - templates/logfire-fleet-control.yaml
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 2
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - hasDocuments:
+          count: 0
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+          skipEmptyTemplates: true
+      - equal:
+          path: spec.minReplicas
+          value: 2
+        template: templates/logfire-fleet-control.yaml
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler

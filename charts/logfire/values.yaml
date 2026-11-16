@@ -2389,6 +2389,33 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+    # Fleet (only when fleet.enabled). Each logfire-opamp pod holds its agents' WebSockets, and a
+    # scale-down closes them, so it runs a fixed count rather than an autoscaler.
+    logfire-opamp:
+      replicas: 1
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          memory: "1Gi"
+      pdb:
+        maxUnavailable: 1
+    logfire-fleet-control:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "512Mi"
+        limits:
+          memory: "1Gi"
+      autoscaling:
+        minReplicas: 1
+        maxReplicas: 2
+        hpa:
+          enabled: true
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
     logfire-ff-query-api:
       datafusionBatchSize: 4096
       resources:
@@ -2753,6 +2780,35 @@ sizingPresets:
           cpuAverage: 60
       pdb:
         maxUnavailable: 1
+    # Fleet (only when fleet.enabled). Each logfire-opamp pod holds its agents' WebSockets, and a
+    # scale-down closes them, so it runs a fixed count rather than an autoscaler.
+    logfire-opamp:
+      replicas: 2
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "256Mi"
+        limits:
+          memory: "1Gi"
+      pdb:
+        maxUnavailable: 1
+      spreadAcrossZones: true
+    logfire-fleet-control:
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "512Mi"
+        limits:
+          memory: "1Gi"
+      autoscaling:
+        minReplicas: 2
+        maxReplicas: 4
+        hpa:
+          enabled: true
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+      spreadAcrossZones: true
     logfire-ff-query-api:
       spreadAcrossZones: true
       resources:
@@ -3212,6 +3268,59 @@ sizingPresets:
           labelSelector:
             matchLabels:
               app.kubernetes.io/component: logfire-remote-mcp
+    # Fleet (only when fleet.enabled). Each logfire-opamp pod holds its agents' WebSockets, and a
+    # scale-down closes them, so it runs a fixed count rather than an autoscaler.
+    logfire-opamp:
+      replicas: 2
+      resources:
+        requests:
+          cpu: "250m"
+          memory: "256Mi"
+        limits:
+          memory: "1Gi"
+      pdb:
+        maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-opamp
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-opamp
+    logfire-fleet-control:
+      resources:
+        requests:
+          cpu: "500m"
+          memory: "512Mi"
+        limits:
+          memory: "1Gi"
+      autoscaling:
+        minReplicas: 2
+        maxReplicas: 6
+        hpa:
+          enabled: true
+          cpuAverage: 60
+      pdb:
+        maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-fleet-control
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: logfire-fleet-control
     logfire-ff-query-api:
       resources:
         requests:

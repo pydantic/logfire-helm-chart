@@ -528,6 +528,8 @@ Set `replicas`, `resources`, `autoscaling`, and scheduling under `logfire-opamp`
 One `logfire-opamp` pod holds up to 10,000 agents.
 When a pod stops, it closes its sockets over 30 seconds, and its agents reconnect to the other pods.
 Run at least two `logfire-opamp` pods so agents have somewhere to reconnect during an upgrade.
+The `small`, `standard`, and `large` sizing presets run two `logfire-opamp` pods and autoscale `logfire-fleet-control` from two; `tiny` runs one of each.
+`logfire-opamp` has a fixed replica count rather than an autoscaler, because a scale-down closes the stopped pod's sockets.
 
 ### External secrets and automatic reloads
 
