@@ -29,6 +29,10 @@
 {{- if (index .Values "logfire-ai-gateway" "enabled") }}
 {{- $certServices = append $certServices (dict "serviceName" "logfire-ai-gateway") }}
 {{- end -}}
+{{- if (include "logfire.fleet.enabled" . | eq "true") }}
+{{- $certServices = append $certServices (dict "serviceName" "logfire-opamp") }}
+{{- $certServices = append $certServices (dict "serviceName" "logfire-fleet-control") }}
+{{- end -}}
 
 {{- if $autoIssuer }}
 apiVersion: cert-manager.io/v1

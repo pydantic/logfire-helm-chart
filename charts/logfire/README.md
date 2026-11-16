@@ -490,6 +490,45 @@ integrations:
     signingSecret: <signing secret>
 ```
 
+### Fleet
+
+Fleet manages OpenTelemetry Collectors, the Logfire SDKs, and the Kubernetes Operator from Logfire over [OpAMP](https://opentelemetry.io/docs/specs/opamp/).
+It is off by default. To turn it on:
+
+```yaml
+fleet:
+  enabled: true
+```
+
+This deploys two workloads, each with its own image:
+
+| Workload | Image | Role |
+| --- | --- | --- |
+| `logfire-opamp` | `logfire-opamp` | Holds each agent's WebSocket on `/v1/opamp`. |
+| `logfire-fleet-control` | `logfire-fleet-control-prod` | Stores agent state in the `crud` database for `logfire-opamp`. It has no public route. |
+
+If you mirror images to a private registry, mirror both before you enable Fleet.
+Fleet's tables are part of the `crud` schema that `logfire-backend-migrations` already creates, so enabling Fleet needs no extra migration.
+
+`logfire-service` routes the `/v1/opamp` WebSocket to `logfire-opamp`.
+Agents connect to `wss://<primary hostname>/v1/opamp`, or `ws://` when `ingress.tls` or `gateway.tls` is off.
+The Fleet setup pages show this URL in their install commands.
+If agents reach Logfire through another hostname, set `fleet.opampUrl`. Its path must be `/v1/opamp`.
+
+Each agent keeps its WebSocket open and sends a heartbeat every 30 seconds by default.
+A proxy in front of `logfire-service` must allow WebSocket upgrades on `/v1/opamp` and keep an idle connection open for longer than that.
+The `logfire-opamp` server closes each socket within an hour, so the proxy doesn't need a longer limit than one hour.
+For example, ingress-nginx closes an idle WebSocket after 60 seconds, which works with the default heartbeat.
+
+`logfire-opamp` and `logfire-fleet-control` share a generated `logfire-fleet-transport-token` Secret.
+With `existingSecret.enabled`, add a `logfire-fleet-transport-token` key of at least 32 characters to that Secret.
+With `inClusterTls.enabled` and `inClusterTls.certs.mode=existingSecrets`, also create the `<prefix>-logfire-opamp-tls` and `<prefix>-logfire-fleet-control-tls` certificate Secrets.
+
+Set `replicas`, `resources`, `autoscaling`, and scheduling under `logfire-opamp` and `logfire-fleet-control` as for any workload.
+One `logfire-opamp` pod holds up to 10,000 agents.
+When a pod stops, it closes its sockets over 30 seconds, and its agents reconnect to the other pods.
+Run at least two `logfire-opamp` pods so agents have somewhere to reconnect during an upgrade.
+
 ### External secrets and automatic reloads
 
 For Argo CD deployments, use the chart's existing-Secret options with an external secret controller.
@@ -768,11 +807,14 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | existingGatewaySecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingGatewaySecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret  - logfire-mcp-oauth-client-secret  - logfire-web-push-vapid-key (only when webPush.enabled is true) |
+| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret  - logfire-mcp-oauth-client-secret  - logfire-web-push-vapid-key (only when webPush.enabled is true)  - logfire-fleet-transport-token (only when fleet.enabled is true; at least 32 characters) |
 | existingSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | extraObjects | list | `[]` | Additional Kubernetes objects to render with this release. Templating is supported. |
+| fleet | object | `{"enabled":false,"opampUrl":""}` | Fleet: manage OpenTelemetry Collectors, Logfire SDKs and the Kubernetes Operator from Logfire over OpAMP. Enabling it deploys `logfire-opamp` and `logfire-fleet-control`, routes the `/v1/opamp` WebSocket to `logfire-opamp`, and turns on the Fleet pages and API. Set `replicas`, `resources`, `autoscaling` and scheduling under `logfire-opamp` and `logfire-fleet-control` as for any workload. |
+| fleet.enabled | bool | `false` | Deploy Fleet. |
+| fleet.opampUrl | string | `""` | The OpAMP URL agents connect to. Defaults to `wss://<primary hostname>/v1/opamp` (`ws://` when the hostname has no TLS). Set it when agents reach Logfire through another hostname. The path must be `/v1/opamp`. |
 | frontendApplicationToken | string | `""` | Public write token (`pylf_v1_<region>_pub<random>`) for the chart's own browser telemetry. The chart serves this token in the frontend runtime configuration, so it must carry the public `pub` body marker and only the `project:write_otlp` scope. Leave empty to derive a stable token from the release. Set it to pin or rotate the value. Do not use a private token. |
 | fusionfireForceConsoleLogging | bool | `false` | Also write Fusionfire telemetry to the container console in addition to sending it through OTLP. |
 | fusionfireMaterializedViews | object | `{"derivedBaseReads":false,"derivedMembers":false,"initialBackfillWindow":"1d","minSourceBytes":"5gb"}` | Materialized-view creation policy shared by all Fusionfire services. |
@@ -988,5 +1030,3 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | webPush.privateKey | string | `""` | VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one and keep it across upgrades. Replacing it unregisters every device that had push on, which each browser recovers from by subscribing again on its next visit. |
 | webPush.subject | string | `""` | Contact the push service operator can reach you on, a `mailto:` or `https:` URL (RFC 8292). Defaults to `mailto:` and `adminEmail`. |
 
-----------------------------------------------
-Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)

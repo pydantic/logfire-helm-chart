@@ -878,6 +878,37 @@ intakeOauth:
   resourceUrl: ""
 
 
+# -- Fleet: manage OpenTelemetry Collectors, Logfire SDKs and the Kubernetes Operator from Logfire
+# over OpAMP. Enabling it deploys `logfire-opamp` and `logfire-fleet-control`, routes the
+# `/v1/opamp` WebSocket to `logfire-opamp`, and turns on the Fleet pages and API. Set `replicas`,
+# `resources`, `autoscaling` and scheduling under `logfire-opamp` and `logfire-fleet-control` as
+# for any workload.
+fleet:
+  # -- Deploy Fleet.
+  enabled: false
+  # -- The OpAMP URL agents connect to. Defaults to `wss://<primary hostname>/v1/opamp`
+  # (`ws://` when the hostname has no TLS). Set it when agents reach Logfire through another
+  # hostname. The path must be `/v1/opamp`.
+  opampUrl: ""
+# logfire-opamp:
+#   # -- Number of replicas. Each pod holds up to 10,000 agent WebSockets.
+#   replicas: 2
+#   resources:
+#     requests:
+#       cpu: "250m"
+#       memory: "256Mi"
+#     limits:
+#       memory: "1Gi"
+# logfire-fleet-control:
+#   # -- Number of replicas
+#   replicas: 2
+#   resources:
+#     requests:
+#       cpu: "500m"
+#       memory: "512Mi"
+#     limits:
+#       memory: "1Gi"
+
 # -- Autoscaling & resources for the `logfire-remote-mcp` pod
 logfire-remote-mcp:
   # -- Enable the remote MCP service. When disabled, the deployment is not
@@ -1726,6 +1757,10 @@ image:
   # @ignored
   remoteMcpImage: logfire-remote-mcp-prod
   # @ignored
+  opampImage: logfire-opamp
+  # @ignored
+  fleetControlImage: logfire-fleet-control-prod
+  # @ignored
   frontendImage: frontend
   # @ignored
   fusionfireImage: fusionfire
@@ -2042,6 +2077,7 @@ otel_collector:
 #  - logfire-unsubscribe-secret
 #  - logfire-mcp-oauth-client-secret
 #  - logfire-web-push-vapid-key (only when webPush.enabled is true)
+#  - logfire-fleet-transport-token (only when fleet.enabled is true; at least 32 characters)
 existingSecret:
   # -- Use an existing Secret (recommended for Argo CD users).
   enabled: false

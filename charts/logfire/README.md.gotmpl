@@ -491,6 +491,45 @@ integrations:
     signingSecret: <signing secret>
 ```
 
+### Fleet
+
+Fleet manages OpenTelemetry Collectors, the Logfire SDKs, and the Kubernetes Operator from Logfire over [OpAMP](https://opentelemetry.io/docs/specs/opamp/).
+It is off by default. To turn it on:
+
+```yaml
+fleet:
+  enabled: true
+```
+
+This deploys two workloads, each with its own image:
+
+| Workload | Image | Role |
+| --- | --- | --- |
+| `logfire-opamp` | `logfire-opamp` | Holds each agent's WebSocket on `/v1/opamp`. |
+| `logfire-fleet-control` | `logfire-fleet-control-prod` | Stores agent state in the `crud` database for `logfire-opamp`. It has no public route. |
+
+If you mirror images to a private registry, mirror both before you enable Fleet.
+Fleet's tables are part of the `crud` schema that `logfire-backend-migrations` already creates, so enabling Fleet needs no extra migration.
+
+`logfire-service` routes the `/v1/opamp` WebSocket to `logfire-opamp`.
+Agents connect to `wss://<primary hostname>/v1/opamp`, or `ws://` when `ingress.tls` or `gateway.tls` is off.
+The Fleet setup pages show this URL in their install commands.
+If agents reach Logfire through another hostname, set `fleet.opampUrl`. Its path must be `/v1/opamp`.
+
+Each agent keeps its WebSocket open and sends a heartbeat every 30 seconds by default.
+A proxy in front of `logfire-service` must allow WebSocket upgrades on `/v1/opamp` and keep an idle connection open for longer than that.
+The `logfire-opamp` server closes each socket within an hour, so the proxy doesn't need a longer limit than one hour.
+For example, ingress-nginx closes an idle WebSocket after 60 seconds, which works with the default heartbeat.
+
+`logfire-opamp` and `logfire-fleet-control` share a generated `logfire-fleet-transport-token` Secret.
+With `existingSecret.enabled`, add a `logfire-fleet-transport-token` key of at least 32 characters to that Secret.
+With `inClusterTls.enabled` and `inClusterTls.certs.mode=existingSecrets`, also create the `<prefix>-logfire-opamp-tls` and `<prefix>-logfire-fleet-control-tls` certificate Secrets.
+
+Set `replicas`, `resources`, `autoscaling`, and scheduling under `logfire-opamp` and `logfire-fleet-control` as for any workload.
+One `logfire-opamp` pod holds up to 10,000 agents.
+When a pod stops, it closes its sockets over 30 seconds, and its agents reconnect to the other pods.
+Run at least two `logfire-opamp` pods so agents have somewhere to reconnect during an upgrade.
+
 ### External secrets and automatic reloads
 
 For Argo CD deployments, use the chart's existing-Secret options with an external secret controller.

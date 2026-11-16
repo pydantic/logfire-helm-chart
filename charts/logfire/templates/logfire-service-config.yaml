@@ -8,6 +8,7 @@
 {{- $aiGatewayProxyTimeout := get $aiGatewayValues "proxyTimeout" | default "600s" -}}
 {{- $remoteMcpValues := index .Values "logfire-remote-mcp" | default dict -}}
 {{- $remoteMcpEnabled := dig "enabled" true $remoteMcpValues -}}
+{{- $fleetEnabled := include "logfire.fleet.enabled" . | eq "true" -}}
 apiVersion: v1
 kind: Secret
 metadata:
@@ -96,6 +97,9 @@ stringData:
       acl path_ai_gateway path /.well-known/oauth-protected-resource/proxy
       acl path_ai_gateway path_beg /.well-known/oauth-protected-resource/proxy/
       {{- end }}
+      {{- if $fleetEnabled }}
+      acl path_opamp path /v1/opamp
+      {{- end }}
       {{- if $remoteMcpEnabled }}
       acl path_remote_mcp path /mcp
       acl path_remote_mcp path_beg /mcp/
@@ -107,6 +111,9 @@ stringData:
       use_backend logfire-ingest if path_ingest
       use_backend logfire-ff-query-api if path_query_v2
       use_backend logfire-dex if path_dex
+      {{- if $fleetEnabled }}
+      use_backend logfire-opamp if path_opamp
+      {{- end }}
       {{- if (get $aiGatewayValues "enabled") }}
       use_backend logfire-ai-gateway if path_ai_gateway
       {{- end }}
@@ -193,6 +200,24 @@ stringData:
 
       http-request set-header Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-remote-mcp") }}
       {{- include "logfire.inClusterTls.haproxyUpstream" (dict "ctx" . "name" "logfire-remote-mcp" "serviceName" "logfire-remote-mcp" "cleartextPort" 8005 "options" "check resolvers kubernetes") | nindent 6 }}
+    {{- end }}
+
+    {{- if $fleetEnabled }}
+    backend logfire-opamp
+      # Each agent holds one WebSocket. New sockets go to the pod with the fewest.
+      balance leastconn
+      # The public listener serves only /v1/opamp; the health route is on the plain admin port.
+      option httpchk
+      http-check send meth GET uri /health/ready ver HTTP/1.1 hdr Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-opamp") }}
+      http-check expect status 200
+      timeout connect 3s
+      timeout server 60s
+      # An upgraded socket stays open between an agent's heartbeats (30 s by default). The server
+      # closes each socket itself before it is an hour old.
+      timeout tunnel 3600s
+
+      http-request set-header Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "logfire-opamp") }}
+      {{- include "logfire.inClusterTls.haproxyUpstream" (dict "ctx" . "name" "logfire-opamp" "serviceName" "logfire-opamp" "cleartextPort" 4320 "options" "check port 4321 resolvers kubernetes" "checkSsl" false) | nindent 6 }}
     {{- end }}
 
     backend logfire-backend

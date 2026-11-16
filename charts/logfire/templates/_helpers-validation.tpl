@@ -169,6 +169,9 @@ Validate existing secret configuration
     {{- if include "logfire.slackApp.enabled" . -}}
       {{- $msg = printf "%s It must also hold logfire-slack-client-secret and logfire-slack-signing-secret keys when integrations.slack.clientId is set." $msg -}}
     {{- end -}}
+    {{- if (include "logfire.fleet.enabled" . | eq "true") -}}
+      {{- $msg = printf "%s It must also hold a logfire-fleet-transport-token key of at least 32 characters when fleet.enabled." $msg -}}
+    {{- end -}}
     {{- fail $msg -}}
   {{- end -}}
 {{- end -}}
@@ -199,6 +202,19 @@ Validate gateway secret configuration
 {{- end -}}
 {{- end -}}
 
+
+{{/*
+Validate Fleet. The OpAMP server serves only `/v1/opamp`, so an agent sent anywhere else can't
+connect. (The default URL is built from the primary hostname, which the chart already requires.)
+*/}}
+{{- define "logfire.validate.fleet" -}}
+{{- if (include "logfire.fleet.enabled" . | eq "true") -}}
+  {{- $url := include "logfire.fleet.opampUrl" . | trim -}}
+  {{- if not (regexMatch "^wss?://[^/@#?]+/v1/opamp$" $url) -}}
+    {{- fail (printf "fleet.opampUrl must be a ws:// or wss:// URL whose path is /v1/opamp, got %q." $url) -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
 
 {{/*
 Validate scratch volume configuration.
@@ -495,6 +511,7 @@ Call this from templates that need to ensure configuration is valid.
   "logfire.validate.ai"
   "logfire.validate.existingSecret"
   "logfire.validate.existingGatewaySecret"
+  "logfire.validate.fleet"
   "logfire.validate.adminSecret"
   "logfire.validate.admin"
   "logfire.validate.adminApiKeys"

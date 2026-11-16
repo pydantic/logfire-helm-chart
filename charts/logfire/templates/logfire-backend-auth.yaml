@@ -139,6 +139,11 @@ spec:
               value: {{ include "logfire.emailsEnabled" . | quote }}
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
+            {{- if (include "logfire.fleet.enabled" . | eq "true") }}
+            # Resolves the credentials agents connect to logfire-opamp with.
+            - name: FLEET_MANAGEMENT_ENABLED
+              value: "true"
+            {{- end }}
             {{- with (include "logfire.intakeOauthResourceUrl" . | trim) }}
             - name: INTAKE_OAUTH_RESOURCE_URL
               value: {{ . | quote }}
