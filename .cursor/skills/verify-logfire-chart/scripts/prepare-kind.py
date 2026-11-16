@@ -187,6 +187,7 @@ def prepare(runtime: Path, registry_config: str, values_path: str | None) -> Non
             "logfire-unsubscribe-secret",
             "logfire-mcp-oauth-client-secret",
             "logfire-admin-api-key",
+            "logfire-fleet-transport-token",
         )
     }
     tokens["logfire-encryption-key"] = base64.b64encode(secrets.token_bytes(32)).decode()
