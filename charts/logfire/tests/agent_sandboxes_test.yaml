@@ -798,3 +798,25 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content: {name: MONTY_RESTRICT_RUNTIME_ROLES, value: "false"}
+
+  - it: keeps the Monty database credential out of services that do not open it
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PG_DSN, valueFrom: {secretKeyRef: {name: monty-postgres, key: runtimeDsn}}}
+        template: templates/logfire-remote-mcp.yaml
+        documentSelector: {path: kind, value: Deployment}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_REDIS_DSN, valueFrom: {secretKeyRef: {name: monty-redis, key: dsn}}}
+        template: templates/logfire-remote-mcp.yaml
+        documentSelector: {path: kind, value: Deployment}
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PG_DSN, valueFrom: {secretKeyRef: {name: monty-postgres, key: runtimeDsn}}}
+        template: templates/logfire-task-runner.yaml
+        documentSelector: {path: kind, value: Deployment}
+      - notExists:
+          path: spec.template.metadata.annotations["checksum/monty-stores"]
+        template: templates/logfire-task-runner.yaml
+        documentSelector: {path: kind, value: Deployment}

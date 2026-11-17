@@ -44,7 +44,7 @@ spec:
     metadata:
       annotations:
         {{- if (.Values.agentSandboxes | default dict).enabled }}
-        checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.checksum" . }}
+        checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.remoteMcpChecksum" . }}
         {{- end }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}

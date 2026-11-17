@@ -20,11 +20,20 @@
 {{- define "logfire.agentSandboxes.snapshotUri" -}}
 {{- default (printf "%s/monty-snapshots" (include "logfire.objectStoreUri" . | trimSuffix "/")) .Values.agentSandboxes.snapshotUri -}}
 {{- end -}}
-{{- define "logfire.agentSandboxes.storesEnv" -}}
+{{- define "logfire.agentSandboxes.redisEnv" -}}
 {{- include "logfire.agentSandboxes.validate" .root -}}
 {{- $a := .root.Values.agentSandboxes -}}
 - name: MONTY_STORE_MODE
   value: dedicated
+- name: MONTY_REDIS_DSN
+  valueFrom:
+    secretKeyRef:
+      name: {{ $a.stores.redisSecret.name }}
+      key: {{ $a.stores.redisSecret.key }}
+{{- end -}}
+{{- define "logfire.agentSandboxes.storesEnv" -}}
+{{- $a := .root.Values.agentSandboxes -}}
+{{ include "logfire.agentSandboxes.redisEnv" . }}
 - name: MONTY_PG_DSN
   valueFrom:
     secretKeyRef:
@@ -36,11 +45,6 @@
   value: "8"
 - name: MONTY_PG_POOL_MIN_CONNECTIONS
   value: "0"
-- name: MONTY_REDIS_DSN
-  valueFrom:
-    secretKeyRef:
-      name: {{ $a.stores.redisSecret.name }}
-      key: {{ $a.stores.redisSecret.key }}
 {{- end -}}
 {{- define "logfire.agentSandboxes.storesChecksum" -}}
 {{- include "logfire.agentSandboxes.validate" . -}}
@@ -56,7 +60,8 @@
 {{- define "logfire.agentSandboxes.env" -}}
 {{- if (.root.Values.agentSandboxes | default dict).enabled }}
 {{- $root := .root -}}
-{{ include "logfire.agentSandboxes.storesEnv" . }}
+{{- /* remote-mcp opens only the Monty Redis store. */}}
+{{ include (ternary "logfire.agentSandboxes.redisEnv" "logfire.agentSandboxes.storesEnv" (eq .service "logfire-remote-mcp")) . }}
 - name: MONTY_MANAGED_ENABLED
   value: "true"
 - name: MONTY_PROFILES_ENABLED
@@ -215,4 +220,12 @@
 {{- $hashes = append $hashes (include "utils.secretChecksum" (dict "ctx" $root "name" (include "logfire.agentSandboxes.secret" $root) "key" $key)) -}}
 {{- end -}}
 {{- join "" $hashes | sha256sum -}}
+{{- end -}}
+{{- /* Only the Secret keys remote-mcp reads: the Monty Redis DSN and the management token. */}}
+{{- define "logfire.agentSandboxes.remoteMcpChecksum" -}}
+{{- $redis := .Values.agentSandboxes.stores.redisSecret -}}
+{{- list
+  (include "utils.secretChecksum" (dict "ctx" . "name" $redis.name "key" $redis.key))
+  (include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.agentSandboxes.secret" .) "key" "management"))
+  | join "" | sha256sum -}}
 {{- end -}}
