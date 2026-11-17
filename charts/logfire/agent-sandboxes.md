@@ -106,7 +106,6 @@ The bundled development database uses a normal migration Job after database star
 That development setup still needs the database and roles to exist through its initialization scripts.
 Migrations do not require a service drain and do not transfer canonical Logfire data.
 Size the development database for both service pool sets.
-The private functional fixture uses a 2 GiB memory limit.
 The base development default can be too small with sandboxes enabled.
 
 Supply a dedicated Redis endpoint through `stores.redisSecret`.
@@ -265,15 +264,15 @@ CPU usage and storage time are separate from invocation counts. Confirm all thre
 
 The product's activity pages also need worker spans to reach the project's intake.
 An assigned worker or a nonzero metering ledger does not prove that telemetry is
-queryable. The internal SaaS operator console is not installed by this chart.
+queryable.
 
 File volumes are a separate opt-in through `volumesEnabled`. They require profiles
 and the broker's volume catalogue. Keep them off until the selected storage
-provider and image revision pass the file-volume journey.
+provider and chart release pass the file-volume journey.
 
 ## Upgrades and removal
 
-Take a database and object-store backup before an image upgrade. Keep admission,
+Take a database and object-store backup before a chart upgrade. Keep admission,
 controller, relay and worker private protocols compatible throughout the rollout.
 A chart rollback does not roll back database migrations.
 
@@ -289,12 +288,11 @@ Uninstall does not delete the external object store or Postgres data.
 
 ## Verification
 
-Require a real chart install with the selected images and upstream operator.
+Require a real chart install with the chart's images and the upstream operator.
 Exercise project activation, SDK execution, the browser workbench, cross-project
 snapshot refusal, catalogue usage and receipt collection. Restore the same saved
 snapshot after process restart, chart upgrade and rollback. Verify project spans
-through Logfire's query API. Keep runtime E2E tests in the private Platform
-repository. A rendering test or standalone Monty test cannot establish this path.
+through Logfire's query API. A rendering test or standalone Monty test cannot establish this path.
 
 A Kind test with the standard runtime verifies application behavior only. It does
 not qualify kernel isolation, NetworkPolicy enforcement, a cloud storage provider,
