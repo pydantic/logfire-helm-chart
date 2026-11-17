@@ -92,6 +92,10 @@
 {{- if not (semverCompare ">=1.25.0-0" .Capabilities.KubeVersion.Version) -}}
 {{- fail "agentSandboxes requires Kubernetes 1.25 or later with CRD CEL validation enabled; Kubernetes 1.29 or later is recommended" -}}
 {{- end -}}
+{{- $admissionTag := include "logfire.serviceTag" (dict "Values" .Values "Chart" .Chart "serviceName" $a.images.admission) -}}
+{{- if and (not (include "logfire.inClusterTls.enabled" . | eq "true")) (eq $admissionTag "6dc21200") -}}
+{{- fail "agentSandboxes requires a compatible admission image for HTTP; 6dc21200 does not support TLS_MODE=disabled. Select a compatible image.tag or enable inClusterTls." -}}
+{{- end -}}
 {{- if not (regexMatch "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" ($a.capacityOwnerId | default "" | toString)) -}}
 {{- fail "agentSandboxes.capacityOwnerId must be a stable installation UUID shared by admission replicas" -}}
 {{- end -}}

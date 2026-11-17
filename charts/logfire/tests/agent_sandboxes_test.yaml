@@ -749,7 +749,130 @@ tests:
     asserts:
       - contains:
           path: spec.rules
-          content: {matches: [{path: {type: Exact, value: /monty.v1.MontySession/Session}}], backendRefs: [{name: logfire-service, port: 8444}]}
+          content: {matches: [{path: {type: Exact, value: /monty.v1.MontySession/Session}}], backendRefs: [{name: logfire-service, port: 8444}], timeouts: {request: 0s, backendRequest: 0s}}
+
+  - it: keeps Gateway redirects terminal for both gRPC and web requests
+    templates: [templates/logfire-gateway-httproute.yaml]
+    set:
+      ingress.enabled: false
+      gateway.enabled: true
+      gateway.create: false
+      gateway.name: edge
+      gateway.sectionName: http
+      gateway.matches:
+        - path: {type: PathPrefix, value: /}
+          method: POST
+          headers: [{name: x-edge-authorized, value: "yes"}]
+          queryParams: [{name: version, value: v1}]
+      gateway.filters:
+        - type: RequestRedirect
+          requestRedirect: {scheme: https, statusCode: 301}
+      gateway.timeouts: {request: 0s, backendRequest: 0s}
+    asserts:
+      - equal:
+          path: spec.parentRefs[0].sectionName
+          value: http
+      - lengthEqual:
+          path: spec.rules
+          count: 1
+      - contains:
+          path: spec.rules
+          content:
+            matches:
+              - path: {type: PathPrefix, value: /}
+                method: POST
+                headers: [{name: x-edge-authorized, value: "yes"}]
+                queryParams: [{name: version, value: v1}]
+            filters:
+              - type: RequestRedirect
+                requestRedirect: {scheme: https, statusCode: 301}
+      - notExists:
+          path: spec.rules[0].backendRefs
+      - notExists:
+          path: spec.rules[0].timeouts
+
+  - it: preserves Gateway header method and query restrictions on gRPC forwarding
+    templates: [templates/logfire-gateway-httproute.yaml]
+    set:
+      ingress.enabled: false
+      gateway.enabled: true
+      gateway.create: false
+      gateway.name: edge
+      gateway.matches:
+        - path: {type: PathPrefix, value: /monty.v1.MontySession/}
+          method: POST
+          headers: [{name: x-edge-authorized, value: "yes"}]
+          queryParams: [{name: version, value: v1}]
+    asserts:
+      - contains:
+          path: spec.rules
+          content:
+            matches:
+              - path: {type: Exact, value: /monty.v1.MontySession/Session}
+                method: POST
+                headers: [{name: x-edge-authorized, value: "yes"}]
+                queryParams: [{name: version, value: v1}]
+            backendRefs: [{name: logfire-service, port: 8444}]
+            timeouts: {request: 0s, backendRequest: 0s}
+
+  - it: does not expose gRPC outside configured Gateway path prefixes
+    templates: [templates/logfire-gateway-httproute.yaml]
+    set:
+      ingress.enabled: false
+      gateway.enabled: true
+      gateway.create: false
+      gateway.name: edge
+      gateway.matches:
+        - path: {type: PathPrefix, value: /private}
+        - path: {type: PathPrefix, value: /monty.v1.Monty}
+    asserts:
+      - lengthEqual:
+          path: spec.rules
+          count: 1
+
+  - it: narrows allowed exact Gateway matches to the permitted gRPC method
+    templates: [templates/logfire-gateway-httproute.yaml]
+    set:
+      ingress.enabled: false
+      gateway.enabled: true
+      gateway.create: false
+      gateway.name: edge
+      gateway.matches:
+        - path: {type: Exact, value: /other}
+        - path: {type: Exact, value: /monty.v1.MontySession/Session}
+          method: POST
+    asserts:
+      - equal:
+          path: spec.rules[0].backendRefs[0].port
+          value: 8444
+      - contains:
+          path: spec.rules
+          content:
+            matches:
+              - path: {type: Exact, value: /monty.v1.MontySession/Session}
+                method: POST
+            backendRefs: [{name: logfire-service, port: 8444}]
+            timeouts: {request: 0s, backendRequest: 0s}
+
+  - it: refuses ambiguous regular-expression Gateway paths for gRPC
+    set:
+      ingress.enabled: false
+      gateway.enabled: true
+      gateway.create: false
+      gateway.name: edge
+      gateway.matches:
+        - path: {type: RegularExpression, value: ^/monty}
+    asserts:
+      - failedTemplate:
+          errorPattern: gRPC routes require Exact or PathPrefix gateway.matches
+
+  - it: refuses the known incompatible admission image without in-cluster TLS
+    set:
+      image.tag: 6dc21200
+      inClusterTls.enabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: requires a compatible admission image for HTTP
 
   - it: couples the TLS gRPC listener to the in-cluster certificate and an HTTP/2 TLS backend
     set:

@@ -3,6 +3,12 @@
 {{- $hosts := $result.hosts -}}
 {{- $hasHosts := gt (len $hosts) 0 -}}
 {{- $gatewayName := .Values.gateway.name | default "logfire-gateway" -}}
+{{- $redirect := false -}}
+{{- range .Values.gateway.filters | default list -}}
+{{- if eq .type "RequestRedirect" -}}
+{{- $redirect = true -}}
+{{- end -}}
+{{- end -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -34,6 +40,33 @@ spec:
     {{- toYaml $hosts | nindent 4 }}
   {{- end }}
   rules:
+    {{- if not $redirect }}
+    {{- $grpcMatches := include "logfire.grpc.gatewayMatches" . | fromJsonArray }}
+    {{- if $grpcMatches }}
+    {{- /*
+    Keep edge restrictions. Omit rewrites that can change the gRPC
+    method path. Put gRPC first to win ties with an exact web match.
+    */}}
+    {{- $grpcFilters := list }}
+    {{- range .Values.gateway.filters | default list }}
+    {{- if ne .type "URLRewrite" }}
+    {{- $grpcFilters = append $grpcFilters . }}
+    {{- end }}
+    {{- end }}
+    - matches:
+        {{- toYaml $grpcMatches | nindent 8 }}
+      {{- with $grpcFilters }}
+      filters:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      backendRefs:
+        - name: logfire-service
+          port: {{ include "logfire.grpc.port" . }}
+      timeouts:
+        request: 0s
+        backendRequest: 0s
+    {{- end }}
+    {{- end }}
     - matches:
         {{- if .Values.gateway.matches }}
         {{- toYaml .Values.gateway.matches | nindent 8 }}
@@ -46,6 +79,7 @@ spec:
       filters:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if not $redirect }}
       backendRefs:
         - name: logfire-service
           port: {{ $backendPort }}
@@ -53,31 +87,5 @@ spec:
       timeouts:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-    {{- $grpcRoutes := include "logfire.grpc.routes" . | fromJsonArray }}
-    {{- if $grpcRoutes }}
-    {{- /*
-    gRPC routes keep the edge filters, so access controls still apply, but drop
-    URLRewrite and RequestRedirect, which would change the method path. They take
-    no timeouts: a request timeout would end long-lived streams.
-    */}}
-    {{- $grpcFilters := list }}
-    {{- range .Values.gateway.filters | default list }}
-    {{- if not (has .type (list "URLRewrite" "RequestRedirect")) }}
-    {{- $grpcFilters = append $grpcFilters . }}
-    {{- end }}
-    {{- end }}
-    - matches:
-        {{- range $grpcRoutes }}
-        - path:
-            type: Exact
-            value: {{ .path }}
-        {{- end }}
-      {{- with $grpcFilters }}
-      filters:
-        {{- toYaml . | nindent 8 }}
       {{- end }}
-      backendRefs:
-        - name: logfire-service
-          port: {{ include "logfire.grpc.port" . }}
-    {{- end }}
 {{- end }}

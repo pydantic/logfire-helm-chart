@@ -11,6 +11,34 @@ their routes here, and every route shares the gRPC listener on logfire-service.
 {{- toJson $routes -}}
 {{- end -}}
 
+{{/* Intersect exact gRPC paths with the configured Gateway match conditions. */}}
+{{- define "logfire.grpc.gatewayMatches" -}}
+{{- $matches := list -}}
+{{- $configured := .Values.gateway.matches | default (list (dict)) -}}
+{{- range $route := include "logfire.grpc.routes" . | fromJsonArray -}}
+{{- range $configured -}}
+{{- $path := .path | default dict -}}
+{{- $type := $path.type | default "PathPrefix" -}}
+{{- $value := $path.value | default "/" -}}
+{{- $allowed := false -}}
+{{- if eq $type "Exact" -}}
+{{- $allowed = eq $route.path $value -}}
+{{- else if eq $type "PathPrefix" -}}
+{{- $prefix := trimSuffix "/" $value -}}
+{{- $allowed = or (eq $prefix "") (eq $route.path $prefix) (hasPrefix (printf "%s/" $prefix) $route.path) -}}
+{{- else -}}
+{{- fail "gRPC routes require Exact or PathPrefix gateway.matches; regular-expression path semantics depend on the Gateway controller" -}}
+{{- end -}}
+{{- if $allowed -}}
+{{- $match := deepCopy . -}}
+{{- $_ := set $match "path" (dict "type" "Exact" "value" $route.path) -}}
+{{- $matches = append $matches $match -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- toJson $matches -}}
+{{- end -}}
+
 {{/*
 Port of the gRPC listener on logfire-service. gRPC needs HTTP/2 end to end, and
 load balancers usually select one protocol per Service port, so gRPC gets its own

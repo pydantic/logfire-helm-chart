@@ -24,6 +24,9 @@ not a substitute for this integration.
 - Select the internal transport described below. The public ingress TLS setting is independent.
 - The Monty images come from the same platform release as the rest of the chart,
   under `image.repository`. Use a chart release that ships Agent Sandboxes.
+  The pinned `6dc21200` admission image does not support HTTP-only operation.
+  The chart rejects that image when `inClusterTls.enabled` is false.
+  Select compatible matching images through `image.tag` for HTTP-only operation.
 - Supply the canonical Postgres database and Redis through the chart's existing settings.
   Supply the independent Monty stores as described below.
   The broker uses the object-store provider environment and credential
@@ -213,8 +216,14 @@ Web traffic keeps its existing ports and protocols.
 
 The chart routes the path to the gRPC port from the resources it manages:
 
-- `gateway.enabled`: the HTTPRoute gets an exact-path rule for it. The rule keeps
-  `gateway.filters` except `URLRewrite` and `RequestRedirect`, and takes no `gateway.timeouts`.
+- `gateway.enabled`: the HTTPRoute gets an exact-path rule for it only when the
+  configured `gateway.matches` permit that path. The rule retains header, method
+  and query restrictions. It retains `gateway.filters` except `URLRewrite`.
+  The rule explicitly disables request and backend-request timeouts for streaming sessions.
+  Automatic gRPC forwarding requires `Exact` or `PathPrefix` path matches.
+  Regular-expression forwarding paths are rejected because their semantics depend on the controller.
+  A `RequestRedirect` filter makes the original route terminal for both web and gRPC requests.
+  Redirect routes retain their original matches and have no backend references or timeouts.
 - `ingress.enabled`: the chart adds the `logfire-ingress-grpc` Ingress with the main
   Ingress's annotations. For NGINX classes it sets `backend-protocol` to `GRPC`, or `GRPCS` with in-cluster TLS.
   ingress-nginx serves gRPC only on TLS listeners, so it needs `ingress.tls`.
