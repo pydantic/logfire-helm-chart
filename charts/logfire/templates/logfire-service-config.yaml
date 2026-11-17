@@ -48,9 +48,6 @@ stringData:
       {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
       bind :{{ .Values.inClusterTls.httpsPort }} ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2,http/1.1
       {{- end }}
-      {{- if (.Values.agentSandboxes | default dict).enabled }}
-      bind :8082{{ if (include "logfire.inClusterTls.enabled" . | eq "true") }} ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2{{ end }} proto h2
-      {{- end }}
       log stdout local0 info
       log-format "%ci:%cp [%tr] %ft %b/%s %TR/%Tw/%Tc/%Tr/%Ta %ST %B %CC %CS %tsc %ac/%fc/%bc/%sc/%rc %sq/%bq %hr %hs \"%HM %[var(txn.log_path)] %HV\""
       option http-keep-alive
@@ -107,10 +104,6 @@ stringData:
       {{- end }}
 
 
-      {{- if (.Values.agentSandboxes | default dict).enabled }}
-      acl path_monty path /monty.v1.MontySession/Session
-      use_backend monty-relay if path_monty
-      {{- end }}
       use_backend logfire-ingest if path_ingest
       use_backend logfire-ff-query-api if path_query_v2
       use_backend logfire-dex if path_dex
@@ -123,6 +116,22 @@ stringData:
       use_backend logfire-backend if path_backend
 
       default_backend logfire-frontend
+    {{- $grpcRoutes := include "logfire.grpc.routes" . | fromJsonArray }}
+    {{- if $grpcRoutes }}
+
+    # gRPC has no HTTP/1.1 form, so this listener serves HTTP/2 only.
+    frontend grpc-in
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      bind :{{ include "logfire.grpc.port" . }} ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2
+      {{- else }}
+      bind :{{ include "logfire.grpc.port" . }} proto h2
+      {{- end }}
+      log stdout local0 info
+      option httplog
+      {{- range $grpcRoutes }}
+      use_backend {{ .backend }} if { path {{ .path }} }
+      {{- end }}
+    {{- end }}
 
     {{- if (.Values.agentSandboxes | default dict).enabled }}
     backend monty-relay

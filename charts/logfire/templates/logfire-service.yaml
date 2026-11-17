@@ -15,17 +15,14 @@ spec:
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
   - name: http
-    {{- if (.Values.agentSandboxes | default dict).enabled }}
-    appProtocol: kubernetes.io/h2c
-    {{- end }}
     port: 8080
     targetPort: 8080
   {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" .Values.inClusterTls.httpsPort) | nindent 2 }}
-  {{- if (.Values.agentSandboxes | default dict).enabled }}
-  - name: monty-grpc
-    appProtocol: {{ ternary "HTTPS" "kubernetes.io/h2c" (include "logfire.inClusterTls.enabled" . | eq "true") }}
-    port: 8082
-    targetPort: monty-grpc
+  {{- if (include "logfire.grpc.routes" . | fromJsonArray) }}
+  - name: grpc
+    appProtocol: {{ include "logfire.grpc.appProtocol" . }}
+    port: {{ include "logfire.grpc.port" . }}
+    targetPort: grpc
   {{- end }}
   type: ClusterIP
 ---
@@ -98,9 +95,9 @@ spec:
                   - "5"
           ports:
             - containerPort: 8080
-            {{- if (.Values.agentSandboxes | default dict).enabled }}
-            - name: monty-grpc
-              containerPort: 8082
+            {{- if (include "logfire.grpc.routes" . | fromJsonArray) }}
+            - name: grpc
+              containerPort: {{ include "logfire.grpc.port" . }}
             {{- end }}
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
             - containerPort: 8181 # Stats port

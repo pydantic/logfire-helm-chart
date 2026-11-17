@@ -207,16 +207,24 @@ Session capacity limits remain active when pressure sensing is disabled or metri
 This setting does not configure metrics for HPA or KEDA.
 
 Use the Logfire HTTP or HTTPS origin as the SDK base URL with `pydantic-monty-client` 1.5.0.
-The SDK calls `/monty.v1.MontySession/Session` through the chart's HAProxy gRPC route.
-The outer ingress or gateway must preserve HTTP/2 gRPC streaming to the service.
-For NGINX ingress, the chart creates a separate exact-path Ingress with `GRPC` or `GRPCS` upstream transport.
-The ordinary web Ingress retains its HTTP or HTTPS upstream transport.
-The gRPC route uses port 8082 on the existing HAProxy workload. This port follows `inClusterTls.enabled`.
-A separate upstream port prevents NGINX from reusing HTTP connections for gRPC.
-The ordinary web ports and public SDK origin stay the same.
-Other ingress controllers need an equivalent gRPC rule for this exact path.
-Gateway API installations need a controller that supports HTTP/2 backend protocol selection.
-The service declares `kubernetes.io/h2c` on its cleartext port.
+The SDK calls `/monty.v1.MontySession/Session` over gRPC.
+`logfire-service` serves this path on its gRPC port, 8444, which accepts HTTP/2 only.
+The port uses TLS when `inClusterTls.enabled` is set.
+Its Service port declares `appProtocol: kubernetes.io/h2c`, or `HTTP2` with in-cluster TLS.
+Web traffic keeps its existing ports and protocols.
+
+The chart routes the path to the gRPC port from the resources it manages:
+
+- `gateway.enabled`: the HTTPRoute gets an exact-path rule for it. The rule keeps
+  `gateway.filters` except `URLRewrite` and `RequestRedirect`, and takes no `gateway.timeouts`.
+- `ingress.enabled`: the chart adds the `logfire-ingress-grpc` Ingress with the main
+  Ingress's annotations. For NGINX classes it sets `backend-protocol` to `GRPC`, or `GRPCS` with in-cluster TLS.
+  ingress-nginx serves gRPC only on TLS listeners, so it needs `ingress.tls`.
+
+The edge must reach the port over HTTP/2 and keep long-lived streams open.
+Gateway controllers that need explicit backend TLS settings, such as a `BackendTLSPolicy`, need them with in-cluster TLS.
+For other exposure, route the path to `logfire-service` port 8444 over HTTP/2.
+`inClusterTls.httpsPort` cannot be 8444 while Agent Sandboxes is enabled.
 Verify the external SDK origin with the selected ingress controller before use.
 The browser workbench uses the backend's authenticated WebSocket endpoint.
 The outer ingress must also support WebSocket upgrades and suitable interactive-session timeouts.

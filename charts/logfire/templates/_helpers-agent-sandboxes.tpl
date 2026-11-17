@@ -83,9 +83,6 @@
 {{- if not (semverCompare ">=1.25.0-0" .Capabilities.KubeVersion.Version) -}}
 {{- fail "agentSandboxes requires Kubernetes 1.25 or later with CRD CEL validation enabled; Kubernetes 1.29 or later is recommended" -}}
 {{- end -}}
-{{- if and (include "logfire.inClusterTls.enabled" . | eq "true") (eq (int .Values.inClusterTls.httpsPort) 8082) -}}
-{{- fail "agentSandboxes reserves port 8082 for gRPC; choose a different inClusterTls.httpsPort" -}}
-{{- end -}}
 {{- if not .Values.agentSandboxes.imageTag -}}
 {{- fail "agentSandboxes requires an explicit compatible agentSandboxes.imageTag for the Platform and Monty images" -}}
 {{- end -}}

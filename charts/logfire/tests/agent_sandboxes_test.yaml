@@ -667,59 +667,6 @@ tests:
       - failedTemplate:
           errorPattern: "stores require distinct"
 
-  - it: routes NGINX SDK calls with gRPC while web requests keep HTTP
-    set:
-      ingress.enabled: true
-      ingress.ingressClassName: nginx
-      ingress.hostnames: [logfire.example.test]
-      inClusterTls.enabled: false
-    asserts:
-      - equal:
-          path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
-          value: GRPC
-        template: templates/logfire-agent-sandboxes-ingress.yaml
-      - equal:
-          path: spec.rules[0].http.paths[0].path
-          value: /monty.v1.MontySession/Session
-        template: templates/logfire-agent-sandboxes-ingress.yaml
-      - equal:
-          path: spec.rules[0].http.paths[0].backend.service.port.number
-          value: 8082
-        template: templates/logfire-agent-sandboxes-ingress.yaml
-      - notExists:
-          path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
-        template: templates/logfire-api-ingress.yaml
-
-  - it: couples the NGINX gRPC TLS route to the application certificate listener
-    set:
-      ingress.enabled: true
-      ingress.ingressClassName: nginx
-      ingress.hostnames: [logfire.example.test]
-      inClusterTls.enabled: true
-      inClusterTls.httpsPort: 9443
-    asserts:
-      - equal:
-          path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
-          value: GRPCS
-        template: templates/logfire-agent-sandboxes-ingress.yaml
-      - equal:
-          path: spec.rules[0].http.paths[0].backend.service.port.number
-          value: 8082
-        template: templates/logfire-agent-sandboxes-ingress.yaml
-      - equal:
-          path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
-          value: HTTPS
-        template: templates/logfire-api-ingress.yaml
-
-  - it: leaves other ingress controller protocols under operator control
-    set:
-      ingress.enabled: true
-      ingress.ingressClassName: custom-controller
-    asserts:
-      - hasDocuments:
-          count: 0
-        template: templates/logfire-agent-sandboxes-ingress.yaml
-
   - it: permits immutable worker routing and termination evidence without broad resource access
     templates: [templates/logfire-agent-sandboxes-workers.yaml]
     documentSelector:
@@ -767,25 +714,78 @@ tests:
           path: kind
           value: SandboxTemplate
 
-  - it: couples the dedicated gRPC listener to the service and container port
+  - it: couples the cleartext gRPC listener to its Service, Ingress and HTTPRoute ports
+    set:
+      inClusterTls.enabled: false
+      ingress.enabled: true
+      ingress.ingressClassName: nginx
+      ingress.hostnames: [logfire.example.test]
     asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: 'bind :8444 proto h2\n(.*\n)*\s+use_backend monty-relay if \{ path /monty.v1.MontySession/Session \}'
+        template: templates/logfire-service-config.yaml
       - contains:
           path: spec.ports
-          content: {name: monty-grpc, appProtocol: HTTPS, port: 8082, targetPort: monty-grpc}
+          content: {name: grpc, appProtocol: kubernetes.io/h2c, port: 8444, targetPort: grpc}
         template: templates/logfire-service.yaml
         documentSelector: {path: kind, value: Service}
       - contains:
           path: spec.template.spec.containers[0].ports
-          content: {name: monty-grpc, containerPort: 8082}
+          content: {name: grpc, containerPort: 8444}
         template: templates/logfire-service.yaml
         documentSelector: {path: kind, value: Deployment}
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
+          value: GRPC
+        template: templates/logfire-api-ingress.yaml
+        documentSelector: {path: metadata.name, value: logfire-ingress-grpc}
+      - equal:
+          path: spec.rules[0].http.paths[0]
+          value: {path: /monty.v1.MontySession/Session, pathType: Exact, backend: {service: {name: logfire-service, port: {number: 8444}}}}
+        template: templates/logfire-api-ingress.yaml
+        documentSelector: {path: metadata.name, value: logfire-ingress-grpc}
+
+  - it: routes gRPC from the HTTPRoute to the gRPC listener without rewrites or request timeouts
+    set:
+      ingress.enabled: false
+      gateway.enabled: true
+      gateway.create: false
+      gateway.name: edge
+      gateway.filters:
+        - type: URLRewrite
+          urlRewrite: {hostname: rewritten.example.test}
+      gateway.timeouts: {request: 30s}
+    templates: [templates/logfire-gateway-httproute.yaml]
+    asserts:
+      - contains:
+          path: spec.rules
+          content: {matches: [{path: {type: Exact, value: /monty.v1.MontySession/Session}}], backendRefs: [{name: logfire-service, port: 8444}]}
+
+  - it: couples the TLS gRPC listener to the in-cluster certificate and an HTTP/2 TLS backend
+    set:
+      ingress.enabled: true
+      ingress.ingressClassName: nginx
+      ingress.hostnames: [logfire.example.test]
+    asserts:
       - matchRegex:
           path: stringData["haproxy.cfg"]
-          pattern: 'bind :8082 ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2 proto h2'
+          pattern: 'bind :8444 ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2\n'
         template: templates/logfire-service-config.yaml
-  - it: reserves the dedicated gRPC port independently of the configurable web TLS port
+      - contains:
+          path: spec.ports
+          content: {name: grpc, appProtocol: HTTP2, port: 8444, targetPort: grpc}
+        template: templates/logfire-service.yaml
+        documentSelector: {path: kind, value: Service}
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
+          value: GRPCS
+        template: templates/logfire-api-ingress.yaml
+        documentSelector: {path: metadata.name, value: logfire-ingress-grpc}
+
+  - it: rejects an in-cluster HTTPS port that collides with the gRPC listener
     set:
-      inClusterTls.httpsPort: 8082
+      inClusterTls.httpsPort: 8444
     asserts:
       - failedTemplate:
-          errorPattern: reserves port 8082 for gRPC
+          errorPattern: logfire-service serves gRPC on that port

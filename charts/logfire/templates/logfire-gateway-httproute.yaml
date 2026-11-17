@@ -53,4 +53,31 @@ spec:
       timeouts:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+    {{- $grpcRoutes := include "logfire.grpc.routes" . | fromJsonArray }}
+    {{- if $grpcRoutes }}
+    {{- /*
+    gRPC routes keep the edge filters, so access controls still apply, but drop
+    URLRewrite and RequestRedirect, which would change the method path. They take
+    no timeouts: a request timeout would end long-lived streams.
+    */}}
+    {{- $grpcFilters := list }}
+    {{- range .Values.gateway.filters | default list }}
+    {{- if not (has .type (list "URLRewrite" "RequestRedirect")) }}
+    {{- $grpcFilters = append $grpcFilters . }}
+    {{- end }}
+    {{- end }}
+    - matches:
+        {{- range $grpcRoutes }}
+        - path:
+            type: Exact
+            value: {{ .path }}
+        {{- end }}
+      {{- with $grpcFilters }}
+      filters:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      backendRefs:
+        - name: logfire-service
+          port: {{ include "logfire.grpc.port" . }}
+    {{- end }}
 {{- end }}

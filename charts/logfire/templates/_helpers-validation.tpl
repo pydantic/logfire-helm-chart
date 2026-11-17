@@ -485,6 +485,7 @@ Call this from templates that need to ensure configuration is valid.
 {{- $root := . -}}
 {{- $validators := list
   "logfire.agentSandboxes.validate"
+  "logfire.validate.grpc"
   "logfire.validate.sizingPreset"
   "logfire.validate.objectStore"
   "logfire.validate.objectStoreVolumes"
