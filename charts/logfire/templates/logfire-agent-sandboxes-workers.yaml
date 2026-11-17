@@ -15,7 +15,10 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: [pods]
-    verbs: [get, list]
+    verbs: [get, list, patch]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [list]
   {{- if .Values.agentSandboxes.pressureEnabled }}
   - apiGroups: [metrics.k8s.io]
     resources: [pods]
@@ -99,12 +102,17 @@ spec:
               matchLabels: {k8s-app: kube-dns}
         ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
       {{- end }}
+      {{- with .Values.agentSandboxes.workers.extraEgress }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
   podTemplate:
     metadata:
       annotations:
         checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.checksum" . }}
+        {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" "monty-worker") | nindent 8 }}
       labels:
         app: monty-worker
+        {{- include "logfire.podLabels" (dict "Values" .Values "serviceName" "monty-worker") | nindent 8 }}
     spec:
       runtimeClassName: {{ .Values.agentSandboxes.workers.runtimeClassName | quote }}
       {{- with .Values.agentSandboxes.workers.nodeSelector }}
@@ -123,9 +131,9 @@ spec:
       {{- end }}
       automountServiceAccountToken: false
       enableServiceLinks: false
-      restartPolicy: OnFailure
+      restartPolicy: Never
       terminationGracePeriodSeconds: 45
-      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532}
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
       containers:
         - name: worker
           image: {{ printf "%s%s:%s" .Values.image.repository .Values.agentSandboxes.images.worker .Values.agentSandboxes.imageTag | quote }}

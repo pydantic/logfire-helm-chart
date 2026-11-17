@@ -1,0 +1,25 @@
+{{- if and (.Values.agentSandboxes | default dict).enabled (eq ((.Values.agentSandboxes | default dict).telemetryProxy | default "none") "istio-sidecar") }}
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: monty-controller-telemetry-peer
+spec:
+  workloadSelector:
+    labels:
+      app: monty-controller
+  configPatches:
+    - applyTo: VIRTUAL_HOST
+      match:
+        context: SIDECAR_INBOUND
+        routeConfiguration:
+          name: "inbound|8080||"
+      patch:
+        operation: MERGE
+        value:
+          request_headers_to_remove: [x-monty-peer-ip]
+          request_headers_to_add:
+            - header:
+                key: x-monty-peer-ip
+                value: "%DOWNSTREAM_DIRECT_REMOTE_ADDRESS_WITHOUT_PORT%"
+              append_action: OVERWRITE_IF_EXISTS_OR_ADD
+{{- end }}

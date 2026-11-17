@@ -2235,6 +2235,7 @@ image reaches both.
   "logfire-alert-runner"
   "logfire-dex"
   "logfire-backend-migrations"
+  "logfire-monty-migrations"
   "logfire-ff-migrations"
   "logfire-ff-crud-api"
   "logfire-ff-maintenance-scheduler"

@@ -20,6 +20,9 @@ spec:
   template:
     metadata:
       annotations:
+        {{- if (.Values.agentSandboxes | default dict).enabled }}
+        checksum/monty-stores: {{ include "logfire.agentSandboxes.storesChecksum" . }}
+        {{- end }}
         {{- if (index .Values "logfire-ai-gateway" "enabled") }}
         {{- $gwEx := get .Values "existingGatewaySecret" | default dict }}
         {{- if or (not (get $gwEx "enabled")) (empty (get $gwEx "annotations")) }}
@@ -79,6 +82,9 @@ spec:
               port: 8005
           env:
             {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
+            {{- if (.Values.agentSandboxes | default dict).enabled }}
+            {{- include "logfire.agentSandboxes.storesEnv" (dict "root" . "service" $serviceName) | nindent 12 }}
+            {{- end }}
             - name: CRUD_PG_DSN
               valueFrom:
                 secretKeyRef:

@@ -15,6 +15,9 @@ spec:
     app.kubernetes.io/component: {{ $serviceName }}
   ports:
   - name: http
+    {{- if (.Values.agentSandboxes | default dict).enabled }}
+    appProtocol: kubernetes.io/h2c
+    {{- end }}
     port: 8080
     targetPort: 8080
   {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" .Values.inClusterTls.httpsPort) | nindent 2 }}

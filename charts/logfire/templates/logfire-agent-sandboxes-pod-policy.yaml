@@ -1,0 +1,47 @@
+{{- if and (.Values.agentSandboxes | default dict).enabled .Values.agentSandboxes.createPodPatchPolicy -}}
+{{- $name := printf "monty-pod-patch-%s" (printf "%s/%s" .Release.Namespace .Release.Name | sha256sum | trunc 16) -}}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [UPDATE]
+        resources: [pods]
+  matchConditions:
+    - name: monty-controller
+      expression: {{ printf "request.userInfo.username == 'system:serviceaccount:%s:monty-controller'" .Release.Namespace | quote }}
+  variables:
+    - {name: newAnnotations, expression: "object.metadata.?annotations.orValue({})"}
+    - {name: oldAnnotations, expression: "oldObject.metadata.?annotations.orValue({})"}
+    - {name: newFinalizers, expression: "object.metadata.?finalizers.orValue([])"}
+    - {name: oldFinalizers, expression: "oldObject.metadata.?finalizers.orValue([])"}
+  validations:
+    - expression: >-
+        (has(object.metadata.labels) && 'app' in object.metadata.labels && object.metadata.labels['app'] == 'monty-worker') &&
+        (object.spec == oldObject.spec) &&
+        (object.metadata.?labels.orValue({}) == oldObject.metadata.?labels.orValue({})) &&
+        (object.metadata.?ownerReferences.orValue([]) == oldObject.metadata.?ownerReferences.orValue([])) &&
+        (object.metadata.?generateName.orValue('') == oldObject.metadata.?generateName.orValue('')) &&
+        (variables.oldFinalizers.filter(v, v != 'monty.pydantic.dev/termination-proof') == variables.newFinalizers.filter(v, v != 'monty.pydantic.dev/termination-proof')) &&
+        (variables.oldAnnotations.all(k, k == 'monty.pydantic.dev/worker-binding' || (k in variables.newAnnotations && variables.newAnnotations[k] == variables.oldAnnotations[k]))) &&
+        (variables.newAnnotations.all(k, k == 'monty.pydantic.dev/worker-binding' || k in variables.oldAnnotations)) &&
+        (!('monty.pydantic.dev/worker-binding' in variables.oldAnnotations) || ('monty.pydantic.dev/worker-binding' in variables.newAnnotations && variables.newAnnotations['monty.pydantic.dev/worker-binding'] == variables.oldAnnotations['monty.pydantic.dev/worker-binding']))
+      message: The Monty controller can change only its worker Pod termination finalizer and initial binding annotation.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}
+spec:
+  policyName: {{ $name }}
+  validationActions: [Deny]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ include "logfire.agentSandboxes.namespace" . }}
+{{- end }}

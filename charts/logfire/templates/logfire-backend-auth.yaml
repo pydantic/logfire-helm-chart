@@ -43,6 +43,9 @@ spec:
   template:
     metadata:
       annotations:
+        {{- if (.Values.agentSandboxes | default dict).enabled }}
+        checksum/monty-stores: {{ include "logfire.agentSandboxes.storesChecksum" . }}
+        {{- end }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
         {{- end }}

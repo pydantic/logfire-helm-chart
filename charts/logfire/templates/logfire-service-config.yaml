@@ -105,7 +105,7 @@ stringData:
 
 
       {{- if (.Values.agentSandboxes | default dict).enabled }}
-      acl path_monty path_beg /monty-ws/
+      acl path_monty path /monty.v1.MontySession/Session
       use_backend monty-relay if path_monty
       {{- end }}
       use_backend logfire-ingest if path_ingest
@@ -125,8 +125,8 @@ stringData:
     backend monty-relay
       balance leastconn
       timeout tunnel 1h
-      http-request replace-path ^/monty-ws/(.*) /\1
-      server relay monty-relay.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:8000 check resolvers kubernetes
+      http-request set-header Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "monty-relay") }}
+      server relay monty-relay.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:8000 proto h2 check resolvers kubernetes
     {{- end }}
 
     backend logfire-ingest

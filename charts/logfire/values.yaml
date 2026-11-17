@@ -3501,17 +3501,36 @@ agentSandboxes:
   workerNamespace: ""
   # -- Create and retain the worker namespace. Disable when an administrator supplies it.
   createWorkerNamespace: true
+  # -- Create a cluster-wide policy that restricts the controller's Pod patches to
+  # termination finalizers and the initial worker binding. Requires Kubernetes 1.30+.
+  # Otherwise an administrator must supply an equivalent admission policy.
+  createPodPatchPolicy: false
   # -- Read worker resource metrics for pressure sensing. Requires a metrics.k8s.io provider.
   # Enables the controller's namespaced PodMetrics RBAC. Session capacity limits remain active when disabled.
   pressureEnabled: false
+  # -- Trusted telemetry proxy. Use istio-sidecar only with injected controller and worker proxies.
+  # Installs a controller-scoped EnvoyFilter that overwrites the physical worker peer address.
+  telemetryProxy: none
   # -- Repository names under image.repository. All use agentSandboxes.imageTag.
   images:
     control: logfire-monty-control-prod
+    admission: logfire-monty-admission
     relay: logfire-monty-relay
     worker: monty-worker
+  # -- Independent runtime stores. The PostgreSQL database must differ from the canonical database.
+  stores:
+    postgresTopology: direct
+    postgresSecret:
+      name: ""
+      runtimeKey: runtimeDsn
+      authKey: authDsn
+      migrationKey: migrationDsn
+    redisSecret:
+      name: ""
+      key: dsn
   # -- Workbench and saved execution profiles.
   profilesEnabled: true
-  # -- Collect execution and storage receipts in the existing Postgres database.
+  # -- Collect execution and storage receipts through the independent runtime database.
   meteringEnabled: true
   # -- Opt-in file volumes. Requires profiles.
   volumesEnabled: false
@@ -3549,6 +3568,8 @@ agentSandboxes:
             podSelector:
               matchLabels: {k8s-app: kube-dns}
         ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    # -- Additional worker egress rules, such as mesh control-plane access for an injected proxy.
+    extraEgress: []
     nodeSelector: {}
     tolerations: []
     warmReplicas: 1

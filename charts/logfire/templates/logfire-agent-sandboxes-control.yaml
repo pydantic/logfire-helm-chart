@@ -14,8 +14,7 @@ spec:
   ports:
     - name: http
       port: 8080
-    - name: https
-      port: {{ $root.Values.inClusterTls.httpsPort }}
+    {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" $root "targetPort" "https") | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -36,14 +35,17 @@ spec:
     metadata:
       annotations:
         checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.checksum" $root }}
+        {{- include "logfire.podAnnotations" (dict "Values" $root.Values "serviceName" $name) | nindent 8 }}
       labels:
         app: {{ $name }}
         {{- include "logfire.selectorLabels" $root | nindent 8 }}
+        {{- include "logfire.podLabels" (dict "Values" $root.Values "serviceName" $name) | nindent 8 }}
     spec:
       serviceAccountName: {{ if eq $name "monty-admission" }}{{ include "logfire.serviceAccountName" $root }}{{ else }}monty-controller{{ end }}
       automountServiceAccountToken: {{ ne $name "monty-admission" }}
       terminationGracePeriodSeconds: 120
       securityContext:
+        seccompProfile: {type: RuntimeDefault}
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
@@ -56,9 +58,13 @@ spec:
       {{- end }}
       containers:
         - name: {{ $name }}
-          image: {{ printf "%s%s:%s" $root.Values.image.repository $root.Values.agentSandboxes.images.control $root.Values.agentSandboxes.imageTag | quote }}
+          image: {{ printf "%s%s:%s" $root.Values.image.repository (ternary $root.Values.agentSandboxes.images.admission $root.Values.agentSandboxes.images.control (eq $name "monty-admission")) $root.Values.agentSandboxes.imageTag | quote }}
           imagePullPolicy: {{ $root.Values.image.pullPolicy }}
-          command: [python, -m, {{ if eq $name "monty-admission" }}logfire_monty_control.admission{{ else }}logfire_monty_control.controller{{ end }}]
+          {{- if eq $name "monty-admission" }}
+          command: [/usr/local/bin/logfire-monty-admission]
+          {{- else }}
+          command: [python, -m, logfire_monty_control.controller]
+          {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -68,7 +74,7 @@ spec:
             {{- toYaml $root.Values.agentSandboxes.control.resources | nindent 12 }}
           ports:
             - {name: http, containerPort: 8080}
-            - {name: https, containerPort: {{ $root.Values.inClusterTls.httpsPort }}}
+            {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" $root) | nindent 12 }}
           startupProbe:
             httpGet: {path: /health/live, port: http}
             periodSeconds: 5
@@ -90,10 +96,17 @@ spec:
               value: "true"
             {{- end }}
             {{- else }}
+            {{- include "logfire.agentSandboxes.storesEnv" (dict "root" $root "service" $name) | nindent 12 }}
+            - name: MONTY_WORKER_BANKS_MAX_PER_PROCESS
+              value: "128"
+            - name: MONTY_WORKER_BANKS_EXECUTION_LIMIT_MS
+              value: "50"
+            - name: MONTY_ADMISSION_PARKING_ENABLED
+              value: "true"
             - name: MONTY_CAPACITY_OWNER_ID
               value: {{ $root.Values.agentSandboxes.capacityOwnerId | quote }}
             - name: MONTY_ADMISSION_CONTROLLER_URL
-              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "https" "service" "monty-controller" "port" $root.Values.inClusterTls.httpsPort) | quote }}
+              value: {{ include "logfire.agentSandboxes.controlUrl" (dict "root" $root "service" "monty-controller" "port" 8080) | quote }}
             {{- range $item := list (dict "name" "MONTY_ADMISSION_TOKEN" "key" "relay") (dict "name" "MONTY_ADMISSION_STATE_TOKEN" "key" "state") (dict "name" "MONTY_ADMISSION_MANAGEMENT_TOKEN" "key" "management") (dict "name" "MONTY_ADMISSION_CONTROLLER_TOKEN" "key" "controller") (dict "name" "MONTY_SNAPSHOT_CATALOG_TOKEN" "key" "snapshot") (dict "name" "MONTY_SNAPSHOT_CATALOG_ADMIN_TOKEN" "key" "snapshot-admin") }}
             {{- include "logfire.agentSandboxes.tokenEnv" (dict "root" $root "name" $item.name "key" $item.key) | nindent 12 }}
             {{- end }}
@@ -111,8 +124,6 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" $root.Values.existingSecret "secretName" "logfire-encryption-key") }}
                   key: logfire-encryption-key
-            - name: MONTY_ADMISSION_REDIS_DSN
-              {{- include "logfire.redisDsnValueFrom" (dict "root" $root "key" "sharedDsn") | nindent 14 }}
             - name: MONTY_METERING_ENABLED
               value: {{ $root.Values.agentSandboxes.meteringEnabled | quote }}
             - name: MONTY_SNAPSHOT_CATALOG_ENABLED

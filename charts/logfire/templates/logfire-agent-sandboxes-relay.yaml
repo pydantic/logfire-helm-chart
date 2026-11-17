@@ -20,6 +20,9 @@ spec:
   selector: {app: {{ $name }}}
   ports:
     - name: http
+      {{- if eq $name "monty-relay" }}
+      appProtocol: kubernetes.io/h2c
+      {{- end }}
       port: {{ if eq $name "monty-relay" }}8000{{ else }}8081{{ end }}
 ---
 apiVersion: apps/v1
@@ -36,16 +39,18 @@ spec:
     metadata:
       annotations:
         checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.checksum" $root }}
+        {{- include "logfire.podAnnotations" (dict "Values" $root.Values "serviceName" $name) | nindent 8 }}
       labels:
         app: {{ $name }}
         {{- include "logfire.selectorLabels" $root | nindent 8 }}
+        {{- include "logfire.podLabels" (dict "Values" $root.Values "serviceName" $name) | nindent 8 }}
     spec:
       {{- if eq $name "monty-broker" }}
       serviceAccountName: monty-broker
       {{- end }}
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: {{ if eq $name "monty-relay" }}90{{ else }}150{{ end }}
-      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000}
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
       {{- with $root.Values.imagePullSecrets }}
       imagePullSecrets:
         {{- range . }}
