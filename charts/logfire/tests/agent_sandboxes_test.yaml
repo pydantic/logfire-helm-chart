@@ -684,7 +684,7 @@ tests:
         template: templates/logfire-agent-sandboxes-ingress.yaml
       - equal:
           path: spec.rules[0].http.paths[0].backend.service.port.number
-          value: 8080
+          value: 8082
         template: templates/logfire-agent-sandboxes-ingress.yaml
       - notExists:
           path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
@@ -704,7 +704,7 @@ tests:
         template: templates/logfire-agent-sandboxes-ingress.yaml
       - equal:
           path: spec.rules[0].http.paths[0].backend.service.port.number
-          value: 9443
+          value: 8082
         template: templates/logfire-agent-sandboxes-ingress.yaml
       - equal:
           path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
@@ -766,3 +766,26 @@ tests:
         documentSelector:
           path: kind
           value: SandboxTemplate
+
+  - it: couples the dedicated gRPC listener to the service and container port
+    asserts:
+      - contains:
+          path: spec.ports
+          content: {name: monty-grpc, appProtocol: HTTPS, port: 8082, targetPort: monty-grpc}
+        template: templates/logfire-service.yaml
+        documentSelector: {path: kind, value: Service}
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content: {name: monty-grpc, containerPort: 8082}
+        template: templates/logfire-service.yaml
+        documentSelector: {path: kind, value: Deployment}
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: 'bind :8082 ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2 proto h2'
+        template: templates/logfire-service-config.yaml
+  - it: reserves the dedicated gRPC port independently of the configurable web TLS port
+    set:
+      inClusterTls.httpsPort: 8082
+    asserts:
+      - failedTemplate:
+          errorPattern: reserves port 8082 for gRPC

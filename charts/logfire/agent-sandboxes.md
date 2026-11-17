@@ -211,6 +211,9 @@ The SDK calls `/monty.v1.MontySession/Session` through the chart's HAProxy gRPC 
 The outer ingress or gateway must preserve HTTP/2 gRPC streaming to the service.
 For NGINX ingress, the chart creates a separate exact-path Ingress with `GRPC` or `GRPCS` upstream transport.
 The ordinary web Ingress retains its HTTP or HTTPS upstream transport.
+The gRPC route uses port 8082 on the existing HAProxy workload. This port follows `inClusterTls.enabled`.
+A separate upstream port prevents NGINX from reusing HTTP connections for gRPC.
+The ordinary web ports and public SDK origin stay the same.
 Other ingress controllers need an equivalent gRPC rule for this exact path.
 Gateway API installations need a controller that supports HTTP/2 backend protocol selection.
 The service declares `kubernetes.io/h2c` on its cleartext port.

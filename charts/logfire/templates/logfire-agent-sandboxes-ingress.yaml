@@ -27,7 +27,7 @@ spec:
               service:
                 name: logfire-service
                 port:
-                  number: {{ ternary $.Values.inClusterTls.httpsPort 8080 $tls }}
+                  number: 8082
     {{- end }}
   {{- if .Values.ingress.tls }}
   tls:
