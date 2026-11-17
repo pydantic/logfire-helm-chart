@@ -59,7 +59,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ $name }}
-          image: {{ printf "%s%s:%s" $root.Values.image.repository $root.Values.agentSandboxes.images.relay $root.Values.agentSandboxes.imageTag | quote }}
+          image: {{ include "logfire.agentSandboxes.image" (dict "root" $root "name" $root.Values.agentSandboxes.images.relay) | quote }}
           imagePullPolicy: {{ $root.Values.image.pullPolicy }}
           {{- if eq $name "monty-broker" }}
           command: [/usr/local/bin/monty-store-broker]

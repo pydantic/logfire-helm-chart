@@ -1,6 +1,10 @@
 {{- define "logfire.agentSandboxes.namespace" -}}
 {{- default (printf "%s-sandboxes" .Release.Namespace) .Values.agentSandboxes.workerNamespace -}}
 {{- end -}}
+{{- /* A Monty image from the chart's platform release, like every other platform image. */}}
+{{- define "logfire.agentSandboxes.image" -}}
+{{- printf "%s%s:%s" .root.Values.image.repository .name (include "logfire.serviceTag" (dict "Values" .root.Values "Chart" .root.Chart "serviceName" .name)) -}}
+{{- end -}}
 {{- define "logfire.agentSandboxes.secret" -}}
 {{- default (printf "%s-agent-sandboxes" .Release.Name) .Values.agentSandboxes.existingSecret -}}
 {{- end -}}
@@ -88,9 +92,6 @@
 {{- if not (semverCompare ">=1.25.0-0" .Capabilities.KubeVersion.Version) -}}
 {{- fail "agentSandboxes requires Kubernetes 1.25 or later with CRD CEL validation enabled; Kubernetes 1.29 or later is recommended" -}}
 {{- end -}}
-{{- if not .Values.agentSandboxes.imageTag -}}
-{{- fail "agentSandboxes requires an explicit compatible agentSandboxes.imageTag for the Platform and Monty images" -}}
-{{- end -}}
 {{- if not (regexMatch "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" ($a.capacityOwnerId | default "" | toString)) -}}
 {{- fail "agentSandboxes.capacityOwnerId must be a stable installation UUID shared by admission replicas" -}}
 {{- end -}}
@@ -136,11 +137,6 @@
 {{- if and $a.volumesEnabled (not $a.profilesEnabled) -}}
 {{- fail "agentSandboxes.volumesEnabled requires profilesEnabled" -}}
 {{- end -}}
-{{- range $service := list "logfire-backend" "logfire-backend-auth" "logfire-backend-migrations" "logfire-worker" "logfire-task-runner" "logfire-frontend-service" "logfire-remote-mcp" -}}
-{{- if ne (include "logfire.serviceTag" (dict "Values" $.Values "Chart" $.Chart "serviceName" $service)) $.Values.agentSandboxes.imageTag -}}
-{{- fail "agentSandboxes requires matching Python and frontend image tags" -}}
-{{- end -}}
-{{- end -}}
 {{- $stores := $a.stores | default dict -}}
 {{- if or (not (($stores.postgresSecret | default dict).name)) (not (($stores.redisSecret | default dict).name)) -}}
 {{- fail "agentSandboxes requires stores.postgresSecret.name and stores.redisSecret.name for its independent runtime stores" -}}
@@ -177,7 +173,7 @@
 - name: LOGFIRE_SERVICE_NAME
   value: {{ .service }}
 - name: LOGFIRE_SERVICE_VERSION
-  value: {{ .root.Values.agentSandboxes.imageTag | quote }}
+  value: {{ include "logfire.serviceVersion" (dict "root" .root "serviceName" .service) | quote }}
 - name: FRONTEND_HOST
   value: {{ include "logfire.url" .root | quote }}
 - name: COLLECTOR_OTLP_GRPC_HOST

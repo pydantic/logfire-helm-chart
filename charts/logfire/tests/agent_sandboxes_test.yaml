@@ -1,4 +1,6 @@
 suite: Agent Sandbox authority and isolation contracts
+chart:
+  appVersion: test-release
 capabilities:
   majorVersion: 1
   minorVersion: 29
@@ -12,7 +14,6 @@ set:
   smtp.fromAddress: logfire@example.test
   agentSandboxes.stores.postgresSecret.name: monty-postgres
   agentSandboxes.stores.redisSecret.name: monty-redis
-  agentSandboxes.imageTag: compatible-test-revision
   agentSandboxes.capacityOwnerId: 00000000-0000-0000-0000-000000000002
   inClusterTls.enabled: true
   inClusterTls.caBundle.existingConfigMap.name: customer-ca
@@ -35,7 +36,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-monty-admission:compatible-test-revision
+          value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-monty-admission:test-release
       - equal:
           path: spec.template.spec.containers[0].command
           value: [/usr/local/bin/logfire-monty-admission]
@@ -331,12 +332,6 @@ tests:
                   podSelector:
                     matchLabels: {app: monty-admission}
               ports: [{protocol: TCP, port: 8000}]
-  - it: refuses the old implicit Platform image
-    set:
-      agentSandboxes.imageTag: null
-    asserts:
-      - failedTemplate:
-          errorPattern: requires an explicit compatible agentSandboxes.imageTag
   - it: couples HTTP authority URLs to their service and policy ports without a custom CA
     set:
       inClusterTls.enabled: false
@@ -516,12 +511,6 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: volumesEnabled requires profilesEnabled
-  - it: rejects a stale auth image override
-    set:
-      logfire-backend-auth.image.tag: incompatible
-    asserts:
-      - failedTemplate:
-          errorPattern: requires matching Python and frontend image tags
   - it: gives the backend only the management credential
     templates: [templates/logfire-backend.yaml]
     documentSelector:
@@ -600,7 +589,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-remote-mcp-prod:compatible-test-revision
+          value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-remote-mcp-prod:test-release
       - contains:
           path: spec.template.spec.containers[0].env
           content: {name: MONTY_WORKBENCH_ENABLED, value: "true"}

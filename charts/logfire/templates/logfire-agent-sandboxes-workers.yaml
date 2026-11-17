@@ -136,7 +136,7 @@ spec:
       securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
       containers:
         - name: worker
-          image: {{ printf "%s%s:%s" .Values.image.repository .Values.agentSandboxes.images.worker .Values.agentSandboxes.imageTag | quote }}
+          image: {{ include "logfire.agentSandboxes.image" (dict "root" . "name" .Values.agentSandboxes.images.worker) | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             allowPrivilegeEscalation: false

@@ -3486,9 +3486,6 @@ sizingPresets:
 # operator with v1beta1 core and extension CRDs, plus an isolated worker runtime.
 agentSandboxes:
   enabled: false
-  # -- Compatible Platform revision for Python, frontend and Monty images. Required
-  # when enabled. FusionFire retains its chart-selected revision.
-  imageTag: ""
   # -- Stable installation UUID shared by admission replicas. Required when enabled.
   # Keep this value across restarts, upgrades and rollbacks.
   capacityOwnerId: ""
@@ -3504,7 +3501,7 @@ agentSandboxes:
   # -- Read worker resource metrics for pressure sensing. Requires a metrics.k8s.io provider.
   # Enables the controller's namespaced PodMetrics RBAC. Session capacity limits remain active when disabled.
   pressureEnabled: false
-  # -- Repository names under image.repository. All use agentSandboxes.imageTag.
+  # -- Repository names under image.repository. Each uses the chart's platform image tag.
   images:
     control: logfire-monty-control-prod
     admission: logfire-monty-admission

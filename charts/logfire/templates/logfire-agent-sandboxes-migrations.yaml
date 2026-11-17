@@ -42,7 +42,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: {{ $name }}
-          image: {{ printf "%s%s:%s" .Values.image.repository .Values.image.backendImage .Values.agentSandboxes.imageTag | quote }}
+          image: {{ printf "%s%s:%s" .Values.image.repository .Values.image.backendImage (include "logfire.serviceTag" (dict "Values" .Values "Chart" .Chart "serviceName" "logfire-backend")) | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: [python, -m, logfire_db.migrations.monty]
           securityContext:

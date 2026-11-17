@@ -58,7 +58,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ $name }}
-          image: {{ printf "%s%s:%s" $root.Values.image.repository (ternary $root.Values.agentSandboxes.images.admission $root.Values.agentSandboxes.images.control (eq $name "monty-admission")) $root.Values.agentSandboxes.imageTag | quote }}
+          image: {{ include "logfire.agentSandboxes.image" (dict "root" $root "name" (ternary $root.Values.agentSandboxes.images.admission $root.Values.agentSandboxes.images.control (eq $name "monty-admission"))) | quote }}
           imagePullPolicy: {{ $root.Values.image.pullPolicy }}
           {{- if eq $name "monty-admission" }}
           command: [/usr/local/bin/logfire-monty-admission]

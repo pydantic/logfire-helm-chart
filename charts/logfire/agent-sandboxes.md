@@ -22,14 +22,8 @@ not a substitute for this integration.
   They export telemetry to the controller.
   They cannot reach the database, Redis or snapshot storage.
 - Select the internal transport described below. The public ingress TLS setting is independent.
-- Select a compatible image revision that contains the Rust admission and Monty control
-  images. The revision must support the independent runtime database, gRPC sessions,
-  CPU-clock execution, immutable worker identities and database-backed receipts.
-  Use matching immutable revisions for the
-  backend, auth, background worker, task runner, remote MCP, frontend, relay and
-  sandbox worker images in `image.repository`. The chart's implicit image revision
-  does not select the sandbox runtime. The sandbox image selection leaves
-  FusionFire and its migrations on their chart-selected revision.
+- The Monty images come from the same platform release as the rest of the chart,
+  under `image.repository`. Use a chart release that ships Agent Sandboxes.
 - Supply the canonical Postgres database and Redis through the chart's existing settings.
   Supply the independent Monty stores as described below.
   The broker uses the object-store provider environment and credential
@@ -41,7 +35,6 @@ not a substitute for this integration.
 ```yaml
 agentSandboxes:
   enabled: true
-  imageTag: "<compatible-platform-revision>"
   capacityOwnerId: "<installation-uuid>"
   allowedOrganizations:
     - "<organization-uuid>"
