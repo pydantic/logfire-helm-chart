@@ -102,10 +102,8 @@ spec:
             - name: MONTY_SERVER_HOSTED_BROKER_URL
               value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-broker" "port" 8081 "path" "/") | quote }}
             {{- include "logfire.agentSandboxes.tokenEnv" (dict "root" $root "name" "MONTY_SERVER_HOSTED_SERVICE_TOKEN" "key" "relay") | nindent 12 }}
-            {{- if $root.Values.agentSandboxes.meteringEnabled }}
             - name: MONTY_SERVER_HOSTED_METERING_URL
               value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-admission" "port" 8080 "path" "/metering/receipts") | quote }}
-            {{- end }}
             - name: MONTY_SERVER_HOSTED_VOLUMES_ENABLED
               value: {{ $root.Values.agentSandboxes.volumesEnabled | quote }}
             {{- if $root.Values.agentSandboxes.volumesEnabled }}

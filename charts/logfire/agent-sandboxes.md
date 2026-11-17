@@ -124,55 +124,25 @@ Existing certificate sets must also cover `monty-controller`, `monty-reconciler`
 The controller image must support an optional `LOGFIRE_CA_PATH` when in-cluster TLS is disabled.
 
 With this setting disabled, the control services use HTTP and require no application certificates.
-A service mesh can encrypt that traffic with mTLS.
-Without a mesh, this internal traffic is unencrypted, including service credentials.
-Service credentials and project authorization remain required in each configuration.
+This internal traffic is unencrypted, including service credentials.
+Service credentials, project authorization and durable metering remain required in each configuration.
+The chart always enables execution and storage accounting.
 Kubernetes API calls always use its own CA and HTTPS.
 
 The in-cluster TLS setting does not encrypt every sandbox connection.
 Native gRPC sessions, broker calls and worker telemetry use HTTP at the application layer.
-Use a mesh or another cluster transport protection if these connections require encryption.
+Use compatible cluster transport protection if these connections require encryption.
 
-### Istio
+### Service meshes
 
-Use the base chart's Istio setup with native sidecars and the Istio CNI plugin.
-Enroll both the Logfire namespace and the worker namespace in the mesh.
-For an administrator-managed worker namespace, set `createWorkerNamespace: false` and label that namespace for injection before installation.
-The operator creates worker Pods in that namespace, so namespace enrollment must cover those Pods too.
-Keep STRICT mTLS for both namespaces.
+Agent Sandboxes currently requires direct application connections for worker telemetry.
+This extension does not support injected sidecars that replace the worker's source address.
+Istio integration is deferred. The base chart's mesh support does not cover Agent Sandboxes.
+Do not enable this extension in an injected mesh until that integration is available.
 
-Set `agentSandboxes.telemetryProxy: istio-sidecar` for Istio sidecars.
-This setting requires the Istio EnvoyFilter CRD and a compatible controller image.
-The chart installs a controller-scoped EnvoyFilter that overwrites `X-Monty-Peer-IP` with the physical downstream address.
-The controller accepts that address only from the sidecar's inbound loopback peer.
-It still checks the worker Pod UID, Pod IP and current project binding before it forwards telemetry.
-Missing or malformed proxy stamps fail closed. Caller-supplied forwarding headers do not establish worker identity.
-Leave this setting as `none` for direct connections and other mesh architectures.
-
-The `monty-controller`, `monty-reconciler`, `monty-admission`, `monty-relay`, `monty-broker` and `monty-worker` top-level values accept `podAnnotations` and `podLabels`.
-Use these settings for native sidecar overrides and the mesh's proxy resource settings.
-Injected proxies consume the worker namespace's resource quota.
-Check quota headroom and the configured pool size with the selected proxy resources.
-The application worker must not receive the proxy's projected service-account token mount.
-
-Allow the worker proxies to reach the mesh control plane through `agentSandboxes.workers.extraEgress`.
-For a default Istio control plane, this rule permits its authenticated discovery endpoint:
-
-```yaml
-agentSandboxes:
-  workers:
-    extraEgress:
-      - to:
-          - namespaceSelector:
-              matchLabels: {kubernetes.io/metadata.name: istio-system}
-            podSelector:
-              matchLabels: {app: istiod}
-        ports: [{protocol: TCP, port: 15012}]
-```
-
-Replace the namespace, labels and port if the mesh uses different endpoints.
-The default additional egress list is empty.
-Verify SDK execution, snapshot recovery, telemetry, probes and cleanup under the installed STRICT policies.
+The Monty workloads accept the chart's existing `podAnnotations` and `podLabels` settings.
+Additional worker egress uses `agentSandboxes.workers.extraEgress`.
+These generic settings do not enable mesh support.
 
 ## Worker namespace and networking
 
@@ -187,13 +157,17 @@ The chart does not adopt an externally managed namespace.
 
 The controller needs namespaced Pod read and patch access for immutable worker bindings and termination evidence.
 Constrain that patch access with an admission policy.
-On Kubernetes 1.30 or later, set `agentSandboxes.createPodPatchPolicy: true` to install the chart's cluster-wide policy and binding.
-This option requires cluster administrator permissions and is disabled by default.
-Otherwise, an administrator must install an equivalent admission policy before enabling sandboxes.
+The application chart does not create cluster-wide admission policies.
+An administrator must install an equivalent admission policy before enabling sandboxes.
+On Kubernetes 1.30 or later, use the [administrator bootstrap example](examples/agent-sandboxes-pod-patch-policy.yaml).
+Set its controller namespace, worker namespace, and unique policy and binding names for this installation.
+Apply the edited file with `kubectl apply -f <edited-policy-file>` before installing the chart.
+The example requires cluster administrator permissions and remains administrator-owned across Helm upgrades and removal.
+For older Kubernetes versions, use an administrator-managed policy engine with the same restrictions.
 The policy must allow only the controller's termination finalizer and initial worker-binding annotation changes.
 It must reject changes to Pod specs, labels, owner references, other finalizers and existing binding identities.
-The chart's policy applies only to the worker namespace and its controller service account.
-The base chart and the external-policy option retain their existing Kubernetes version requirements.
+Scope it to this installation's worker namespace and controller service account.
+The base chart retains its existing Kubernetes version requirements.
 
 Workers use `restartPolicy: Never` so a stopped process remains available as termination evidence.
 The controller retains its Pod finalizer until that evidence reaches the durable ledger.

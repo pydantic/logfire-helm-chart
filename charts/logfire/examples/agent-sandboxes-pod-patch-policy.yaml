@@ -1,9 +1,7 @@
-{{- if and (.Values.agentSandboxes | default dict).enabled .Values.agentSandboxes.createPodPatchPolicy -}}
-{{- $name := printf "monty-pod-patch-%s" (printf "%s/%s" .Release.Namespace .Release.Name | sha256sum | trunc 16) -}}
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
-  name: {{ $name }}
+  name: monty-controller-pod-patch-logfire
 spec:
   failurePolicy: Fail
   matchConstraints:
@@ -14,7 +12,7 @@ spec:
         resources: [pods]
   matchConditions:
     - name: monty-controller
-      expression: {{ printf "request.userInfo.username == 'system:serviceaccount:%s:monty-controller'" .Release.Namespace | quote }}
+      expression: "request.userInfo.username == 'system:serviceaccount:logfire:monty-controller'"
   variables:
     - {name: newAnnotations, expression: "object.metadata.?annotations.orValue({})"}
     - {name: oldAnnotations, expression: "oldObject.metadata.?annotations.orValue({})"}
@@ -36,12 +34,11 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding
 metadata:
-  name: {{ $name }}
+  name: monty-controller-pod-patch-logfire
 spec:
-  policyName: {{ $name }}
+  policyName: monty-controller-pod-patch-logfire
   validationActions: [Deny]
   matchResources:
     namespaceSelector:
       matchLabels:
-        kubernetes.io/metadata.name: {{ include "logfire.agentSandboxes.namespace" . }}
-{{- end }}
+        kubernetes.io/metadata.name: logfire-sandboxes

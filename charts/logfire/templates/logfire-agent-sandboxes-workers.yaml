@@ -157,7 +157,7 @@ spec:
             - name: MONTY_WORKER_HOSTED_FEED_CEILING_MS
               value: "60000"
             - name: MONTY_WORKER_SHADOW_METERING
-              value: {{ .Values.agentSandboxes.meteringEnabled | quote }}
+              value: "true"
             - name: MONTY_WORKER_UID
               valueFrom:
                 fieldRef: {fieldPath: metadata.uid}

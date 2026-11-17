@@ -125,7 +125,7 @@ spec:
                   name: {{ include "logfire.externalSecretName" (dict "external" $root.Values.existingSecret "secretName" "logfire-encryption-key") }}
                   key: logfire-encryption-key
             - name: MONTY_METERING_ENABLED
-              value: {{ $root.Values.agentSandboxes.meteringEnabled | quote }}
+              value: "true"
             - name: MONTY_SNAPSHOT_CATALOG_ENABLED
               value: "true"
             - name: MONTY_SNAPSHOT_BYTE_LIMIT

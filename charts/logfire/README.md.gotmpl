@@ -626,8 +626,9 @@ Setting it replaces the Redis pod, and FusionFire pods that start before the new
 
 ### Istio service mesh
 
-Every Logfire pod can run with an Istio sidecar, under STRICT or PERMISSIVE mTLS, including split query mode (`logfire-ff-query-worker.enabled: true`).
+The base Logfire workloads can run with an Istio sidecar, under STRICT or PERMISSIVE mTLS, including split query mode (`logfire-ff-query-worker.enabled: true`).
 CI installs the chart into Istio with STRICT mTLS and runs the integration suite.
+The optional [Agent Sandboxes extension](agent-sandboxes.md#service-meshes) does not yet support injected sidecars.
 
 Istio must inject native sidecars.
 Istio 1.27 and later do this by default on Kubernetes 1.29 and later.

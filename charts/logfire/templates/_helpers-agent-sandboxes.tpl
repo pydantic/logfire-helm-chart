@@ -80,17 +80,8 @@
 {{- define "logfire.agentSandboxes.validate" -}}
 {{- $a := .Values.agentSandboxes | default dict -}}
 {{- if $a.enabled -}}
-{{- if not (has ($a.telemetryProxy | default "none") (list "none" "istio-sidecar")) -}}
-{{- fail "agentSandboxes.telemetryProxy must be none or istio-sidecar" -}}
-{{- end -}}
-{{- if and (eq ($a.telemetryProxy | default "none") "istio-sidecar") (not (.Capabilities.APIVersions.Has "networking.istio.io/v1alpha3/EnvoyFilter")) -}}
-{{- fail "agentSandboxes.telemetryProxy=istio-sidecar requires the installed Istio EnvoyFilter CRD" -}}
-{{- end -}}
 {{- if not (semverCompare ">=1.25.0-0" .Capabilities.KubeVersion.Version) -}}
 {{- fail "agentSandboxes requires Kubernetes 1.25 or later with CRD CEL validation enabled; Kubernetes 1.29 or later is recommended" -}}
-{{- end -}}
-{{- if and $a.createPodPatchPolicy (not (semverCompare ">=1.30.0-0" .Capabilities.KubeVersion.Version)) -}}
-{{- fail "agentSandboxes.createPodPatchPolicy requires Kubernetes 1.30 or later; otherwise supply an equivalent administrator-managed admission policy" -}}
 {{- end -}}
 {{- if not .Values.agentSandboxes.imageTag -}}
 {{- fail "agentSandboxes requires an explicit compatible agentSandboxes.imageTag for the Platform and Monty images" -}}
@@ -144,9 +135,6 @@
 {{- if ne (include "logfire.serviceTag" (dict "Values" $.Values "Chart" $.Chart "serviceName" $service)) $.Values.agentSandboxes.imageTag -}}
 {{- fail "agentSandboxes requires matching Python and frontend image tags" -}}
 {{- end -}}
-{{- end -}}
-{{- if not $a.meteringEnabled -}}
-{{- fail "agentSandboxes requires meteringEnabled for durable execution accounting" -}}
 {{- end -}}
 {{- $stores := $a.stores | default dict -}}
 {{- if or (not (($stores.postgresSecret | default dict).name)) (not (($stores.redisSecret | default dict).name)) -}}
@@ -217,8 +205,6 @@
   value: {{ .Values.agentSandboxes.workers.cpuLimitMillicores | quote }}
 - name: MONTY_PRESSURE_ENABLED
   value: {{ .Values.agentSandboxes.pressureEnabled | default false | quote }}
-- name: MONTY_CONTROLLER_TRUSTED_TELEMETRY_PROXY
-  value: {{ .Values.agentSandboxes.telemetryProxy | default "none" | quote }}
 {{- end -}}
 
 {{- define "logfire.agentSandboxes.checksum" -}}

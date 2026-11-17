@@ -27,12 +27,6 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: requires stores.postgresSecret.name and stores.redisSecret.name
-  - it: requires durable metering for managed execution
-    set:
-      agentSandboxes.meteringEnabled: false
-    asserts:
-      - failedTemplate:
-          errorPattern: requires meteringEnabled for durable execution accounting
   - it: couples admission to its Rust image and runtime database credential
     templates: [templates/logfire-agent-sandboxes-control.yaml]
     documentSelector:
@@ -73,49 +67,6 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: requires Kubernetes 1.25 or later
-  - it: requires the mesh filter before trusting a sidecar telemetry stamp
-    set:
-      agentSandboxes.telemetryProxy: istio-sidecar
-    asserts:
-      - failedTemplate:
-          errorPattern: requires the installed Istio EnvoyFilter CRD
-  - it: couples sidecar trust to a controller-scoped physical peer stamp
-    capabilities:
-      majorVersion: 1
-      minorVersion: 29
-      apiVersions: [networking.istio.io/v1alpha3/EnvoyFilter]
-    set:
-      agentSandboxes.telemetryProxy: istio-sidecar
-    asserts:
-      - contains:
-          path: spec.template.spec.containers[0].env
-          content: {name: MONTY_CONTROLLER_TRUSTED_TELEMETRY_PROXY, value: istio-sidecar}
-        template: templates/logfire-agent-sandboxes-control.yaml
-        documentSelector:
-          path: spec.template.metadata.labels.app
-          value: monty-controller
-      - equal:
-          path: spec.workloadSelector.labels
-          value: {app: monty-controller}
-        template: templates/logfire-agent-sandboxes-istio.yaml
-      - equal:
-          path: spec.configPatches[0].patch.value.request_headers_to_add
-          value:
-            - header:
-                key: x-monty-peer-ip
-                value: "%DOWNSTREAM_DIRECT_REMOTE_ADDRESS_WITHOUT_PORT%"
-              append_action: OVERWRITE_IF_EXISTS_OR_ADD
-        template: templates/logfire-agent-sandboxes-istio.yaml
-      - equal:
-          path: spec.configPatches[0].patch.value.request_headers_to_remove
-          value: [x-monty-peer-ip]
-        template: templates/logfire-agent-sandboxes-istio.yaml
-  - it: rejects an unknown telemetry proxy
-    set:
-      agentSandboxes.telemetryProxy: any-forwarded-header
-    asserts:
-      - failedTemplate:
-          errorPattern: telemetryProxy must be none or istio-sidecar
   - it: accepts the operator minimum version when sandbox configuration is valid
     capabilities:
       majorVersion: 1
@@ -486,39 +437,39 @@ tests:
         documentSelector:
           path: metadata.name
           value: monty-admission-private
-  - it: carries mesh injection settings into operator-created worker Pods
+  - it: carries administrator metadata and approved egress into operator-created worker Pods
     set:
       monty-worker.podAnnotations:
-        sidecar.istio.io/nativeSidecar: "true"
+        example.test/worker-annotation: "true"
       monty-worker.podLabels:
-        sidecar.istio.io/inject: "true"
+        example.test/worker-label: "true"
       agentSandboxes.workers.extraEgress:
         - to:
             - namespaceSelector:
-                matchLabels: {kubernetes.io/metadata.name: istio-system}
+                matchLabels: {kubernetes.io/metadata.name: approved-services}
               podSelector:
-                matchLabels: {app: istiod}
-          ports: [{protocol: TCP, port: 15012}]
+                matchLabels: {app: approved-service}
+          ports: [{protocol: TCP, port: 8443}]
     templates: [templates/logfire-agent-sandboxes-workers.yaml]
     documentSelector:
       path: kind
       value: SandboxTemplate
     asserts:
       - equal:
-          path: spec.podTemplate.metadata.annotations["sidecar.istio.io/nativeSidecar"]
+          path: spec.podTemplate.metadata.annotations["example.test/worker-annotation"]
           value: "true"
       - equal:
-          path: spec.podTemplate.metadata.labels["sidecar.istio.io/inject"]
+          path: spec.podTemplate.metadata.labels["example.test/worker-label"]
           value: "true"
       - contains:
           path: spec.networkPolicy.egress
           content:
             to:
               - namespaceSelector:
-                  matchLabels: {kubernetes.io/metadata.name: istio-system}
+                  matchLabels: {kubernetes.io/metadata.name: approved-services}
                 podSelector:
-                  matchLabels: {app: istiod}
-            ports: [{protocol: TCP, port: 15012}]
+                  matchLabels: {app: approved-service}
+            ports: [{protocol: TCP, port: 8443}]
       - equal:
           path: spec.podTemplate.spec.automountServiceAccountToken
           value: false
@@ -791,28 +742,27 @@ tests:
           path: spec.podTemplate.spec.restartPolicy
           value: Never
 
-  - it: leaves cluster-wide Pod policy ownership with the administrator by default
-    templates: [templates/logfire-agent-sandboxes-pod-policy.yaml]
+
+  - it: always couples admission and workers to durable relay accounting
     asserts:
-      - hasDocuments: {count: 0}
-  - it: refuses to install a stable Pod policy on an older Kubernetes API
-    capabilities: {majorVersion: 1, minorVersion: 29}
-    set:
-      agentSandboxes.createPodPatchPolicy: true
-    asserts:
-      - failedTemplate:
-          errorPattern: createPodPatchPolicy requires Kubernetes 1.30
-  - it: binds the opt-in Pod policy to this worker namespace and controller identity
-    capabilities: {majorVersion: 1, minorVersion: 30}
-    set:
-      agentSandboxes.createPodPatchPolicy: true
-    templates: [templates/logfire-agent-sandboxes-pod-policy.yaml]
-    asserts:
-      - equal:
-          path: spec.matchConditions[0].expression
-          value: "request.userInfo.username == 'system:serviceaccount:customer:monty-controller'"
-        documentIndex: 0
-      - equal:
-          path: spec.matchResources.namespaceSelector.matchLabels["kubernetes.io/metadata.name"]
-          value: customer-sandboxes
-        documentIndex: 1
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_METERING_ENABLED, value: "true"}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-admission
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_SERVER_HOSTED_METERING_URL, value: "http://monty-admission.customer.svc.cluster.local:8080/metering/receipts"}
+        template: templates/logfire-agent-sandboxes-relay.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-relay
+      - contains:
+          path: spec.podTemplate.spec.containers[0].env
+          content: {name: MONTY_WORKER_SHADOW_METERING, value: "true"}
+        template: templates/logfire-agent-sandboxes-workers.yaml
+        documentSelector:
+          path: kind
+          value: SandboxTemplate
