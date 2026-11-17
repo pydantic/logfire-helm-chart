@@ -120,9 +120,9 @@ Agent Sandboxes follows the chart's `inClusterTls.enabled` setting.
 With this setting enabled, the Python control services and Rust admission use HTTPS with certificate verification.
 Supply certificates through cert-manager or existing Secrets.
 Existing certificate sets must also cover `monty-controller`, `monty-reconciler` and `monty-admission`.
-The controller image must support an optional `LOGFIRE_CA_PATH` when in-cluster TLS is disabled.
 
 With this setting disabled, the control services use HTTP and require no application certificates.
+Admission runs with `TLS_MODE=disabled` and serves only HTTP.
 This internal traffic is unencrypted, including service credentials.
 Service credentials, project authorization and durable metering remain required in each configuration.
 The chart always enables execution and storage accounting.

@@ -97,6 +97,11 @@ spec:
             {{- end }}
             {{- else }}
             {{- include "logfire.agentSandboxes.storesEnv" (dict "root" $root "service" $name) | nindent 12 }}
+            {{- if not (include "logfire.inClusterTls.enabled" $root | eq "true") }}
+            {{- /* Without in-cluster TLS, admission serves plain HTTP only. */}}
+            - name: TLS_MODE
+              value: disabled
+            {{- end }}
             - name: MONTY_WORKER_BANKS_MAX_PER_PROCESS
               value: "128"
             - name: MONTY_WORKER_BANKS_EXECUTION_LIMIT_MS

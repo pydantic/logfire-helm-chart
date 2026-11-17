@@ -809,3 +809,31 @@ tests:
           path: spec.template.metadata.annotations["checksum/monty-stores"]
         template: templates/logfire-task-runner.yaml
         documentSelector: {path: kind, value: Deployment}
+
+  - it: serves admission over plain HTTP without in-cluster TLS
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.metadata.labels.app
+      value: monty-admission
+    set:
+      inClusterTls.enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: TLS_MODE, value: disabled}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_ADMISSION_CONTROLLER_URL, value: "http://monty-controller.customer.svc.cluster.local:8080"}
+
+  - it: keeps admission's HTTPS listener with in-cluster TLS
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.metadata.labels.app
+      value: monty-admission
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: TLS_MODE, value: disabled}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_ADMISSION_CONTROLLER_URL, value: "https://monty-controller.customer.svc.cluster.local:8443"}
