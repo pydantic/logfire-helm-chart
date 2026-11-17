@@ -57,7 +57,7 @@ spec:
             - name: LOGFIRE_SERVICE_NAME
               value: {{ $name }}
             - name: MONTY_RESTRICT_RUNTIME_ROLES
-              value: "true"
+              value: {{ dig "restrictRuntimeRoles" true .Values.agentSandboxes.stores | quote }}
             - name: MONTY_PG_DSN
               valueFrom:
                 secretKeyRef:

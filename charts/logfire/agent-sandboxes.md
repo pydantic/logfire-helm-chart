@@ -85,12 +85,18 @@ Do not point a Monty DSN at the canonical Logfire database.
 The runtime migrator and services verify the database identity and reject the canonical schema.
 Use PostgreSQL 17 or later for the runtime database.
 
-Create the `monty_runtime` and `monty_auth` roles as `NOLOGIN` roles before the migration job runs.
-These roles must not own objects, inherit other roles, or hold elevated privileges.
-Create separate login roles for runtime services and auth.
-Grant each login role only its corresponding `NOLOGIN` role.
-Keep the migration login separate from both application logins.
-The migration login must own the runtime schema and be able to apply grants to these roles.
+The migration login needs `CREATE` on the runtime database. It creates and owns the runtime schema.
+
+With `stores.restrictRuntimeRoles: true`, the default, the migration grants the application logins only the access they need:
+
+- Create the `monty_runtime` and `monty_auth` roles as `NOLOGIN` roles before the migration job runs.
+  These roles must not own objects, inherit other roles, or hold elevated privileges.
+- Create separate login roles for runtime services and auth.
+  Grant each login role only its corresponding `NOLOGIN` role.
+- Keep the migration login separate from both application logins.
+
+With `stores.restrictRuntimeRoles: false`, the migration applies no grants and needs no roles.
+The three DSN keys may then hold the same schema-owning login.
 
 Supply the three DSNs in the Secret keys above.
 Each DSN must select the Monty database and its corresponding login.
@@ -102,7 +108,7 @@ Configure database TLS and certificate trust in the DSNs for your deployment.
 The `inClusterTls` setting governs service HTTP transport, not database transport.
 
 The chart runs `logfire-monty-migrations` before an install or upgrade with an external database.
-It installs the independent schema and restricted runtime grants.
+It installs the independent schema, and the restricted runtime grants when `stores.restrictRuntimeRoles` is true.
 The bundled development database uses a normal migration Job after database startup.
 That development setup still needs the database and roles to exist through its initialization scripts.
 Migrations do not require a service drain and do not transfer canonical Logfire data.

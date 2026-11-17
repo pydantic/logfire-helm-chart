@@ -789,3 +789,12 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: logfire-service serves gRPC on that port
+
+  - it: passes the runtime role restriction choice to the Monty migration
+    templates: [templates/logfire-agent-sandboxes-migrations.yaml]
+    set:
+      agentSandboxes.stores.restrictRuntimeRoles: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_RESTRICT_RUNTIME_ROLES, value: "false"}

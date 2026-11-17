@@ -3521,6 +3521,10 @@ agentSandboxes:
     redisSecret:
       name: ""
       key: dsn
+    # -- Grant the runtime and auth logins only the access they need, through the
+    # pre-created `NOLOGIN` roles `monty_runtime` and `monty_auth`. When false, no
+    # roles are needed, and the three DSN keys may hold the same schema-owning login.
+    restrictRuntimeRoles: true
   # -- Workbench and saved execution profiles.
   profilesEnabled: true
   # -- Opt-in file volumes. Requires profiles.
