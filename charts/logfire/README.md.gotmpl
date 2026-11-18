@@ -395,8 +395,16 @@ The flat resource shorthand sets both requests and limits.
 #### Resize bcache storage
 
 bcache uses one PersistentVolumeClaim per pod.
-StatefulSet volume claim templates are immutable, so changing `logfire-ff-bcache.disk.storage` after installation fails `helm upgrade`.
-Expand the existing `bcache-data-*` PVCs if the storage class allows it, or run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
+A StatefulSet cannot change its volume claim templates.
+So when `sizingPreset` changes, an installed bcache keeps its claim size, and bcache uses 80% of that size.
+
+To resize the disk, set `logfire-ff-bcache.disk.storage`, run `kubectl delete statefulset logfire-ff-bcache`, and upgrade.
+The delete also removes the `bcache-data-*` claims, so the new pods start with an empty cache.
+To keep the cached data, expand the existing claims first if the storage class allows it, and delete the StatefulSet with `--cascade=orphan`.
+An upgrade that sets a size different from the installed claims fails with these steps.
+
+The chart reads the installed StatefulSet with `lookup`.
+`helm template` and other renders without cluster access cannot read it, so they render the preset size.
 
 ## Advanced configuration
 
