@@ -24,7 +24,7 @@
     {{- if not (hasKey $explicitDisk "storage") -}}
       {{- $diskStorage = $liveStorage -}}
     {{- else if ne (include "logfire.storageQuantityToMi" $liveStorage) (include "logfire.storageQuantityToMi" $diskStorage) -}}
-      {{- fail (printf "logfire-ff-bcache.disk.storage is %s, but the installed StatefulSet claims %s per pod. A StatefulSet cannot change its volumeClaimTemplates. Run `kubectl delete statefulset %s` and upgrade again. See \"Resize bcache storage\" in the chart README." $diskStorage $liveStorage $serviceName) -}}
+      {{- fail (printf "logfire-ff-bcache.disk.storage is %s, but the installed StatefulSet claims %s per pod. A StatefulSet cannot change its volumeClaimTemplates. Grow the existing claims, run `kubectl delete statefulset %s --cascade=orphan`, and upgrade again. The orphan delete keeps the pods and claims running. See \"Resize bcache storage\" in the chart README." $diskStorage $liveStorage $serviceName) -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}

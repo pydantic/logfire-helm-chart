@@ -72,4 +72,4 @@ tests:
           storage: 64Gi
     asserts:
       - failedTemplate:
-          errorPattern: "Run `kubectl delete statefulset logfire-ff-bcache` and upgrade again"
+          errorPattern: "run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan`, and upgrade again"
