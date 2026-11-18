@@ -166,4 +166,17 @@ async def test_replay_frame_is_served_under_the_strict_frame_policy(client: http
     policy = response.headers.get("content-security-policy", "")
     assert "default-src 'none'" in policy, policy
     assert "script-src 'none'" in policy, policy
-    assert "img-src 'self' https: blob: data:" in policy, policy
+    assert "img-src data: blob:;" in policy, policy
+
+
+async def test_replay_frame_loads_recorded_images_only_after_the_viewer_opts_in(client: httpx.AsyncClient) -> None:
+    """A recorded image request shows the viewer's IP address to the image host.
+
+    The player reloads the frame with `?images=remote` only after the viewer accepts that, so only
+    that URL lets the frame load images from this origin or another one.
+    """
+    response = await client.get("/replay-frame.html", params={"images": "remote"})
+    assert response.is_success, response.text
+    policy = response.headers.get("content-security-policy", "")
+    assert "img-src 'self' https: data: blob:;" in policy, policy
+    assert "script-src 'none'" in policy, policy
