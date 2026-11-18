@@ -14,6 +14,20 @@
 {{- $scheme := ternary "HTTPS" "HTTP" $tls -}}
 {{- $disk := get $effectiveServiceValues "disk" | default dict -}}
 {{- $diskStorage := get $disk "storage" | default "32Gi" -}}
+{{- /* A StatefulSet cannot change its volumeClaimTemplates, so an installed bcache keeps its claim
+       size when the sizing preset changes. Only an explicit `disk.storage` asks for a new size. */}}
+{{- $explicitDisk := get (get .Values $serviceName | default dict) "disk" | default dict -}}
+{{- $liveStatefulSet := lookup "apps/v1" "StatefulSet" .Release.Namespace $serviceName | default dict -}}
+{{- range dig "spec" "volumeClaimTemplates" list $liveStatefulSet -}}
+  {{- $liveStorage := dig "spec" "resources" "requests" "storage" "" . -}}
+  {{- if and (eq (dig "metadata" "name" "" .) "bcache-data") $liveStorage -}}
+    {{- if not (hasKey $explicitDisk "storage") -}}
+      {{- $diskStorage = $liveStorage -}}
+    {{- else if ne (include "logfire.storageQuantityToMi" $liveStorage) (include "logfire.storageQuantityToMi" $diskStorage) -}}
+      {{- fail (printf "logfire-ff-bcache.disk.storage is %s, but the installed StatefulSet claims %s per pod. A StatefulSet cannot change its volumeClaimTemplates. Grow the existing claims, run `kubectl delete statefulset %s --cascade=orphan`, and upgrade again. The orphan delete keeps the pods and claims running. See \"Resize bcache storage\" in the chart README." $diskStorage $liveStorage $serviceName) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 {{- $diskMi := int (include "logfire.storageQuantityToMi" $diskStorage) -}}
 {{- $readinessDelaySeconds := 10 -}}
 {{- $shutdownTimeoutSeconds := 25 -}}
