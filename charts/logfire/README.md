@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.3](https://img.shields.io/badge/Version-0.15.3-informational?style=flat-square) ![AppVersion: 6dc21200](https://img.shields.io/badge/AppVersion-6dc21200-informational?style=flat-square)
+![Version: 0.15.4](https://img.shields.io/badge/Version-0.15.4-informational?style=flat-square) ![AppVersion: 6dc21200](https://img.shields.io/badge/AppVersion-6dc21200-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -367,8 +367,8 @@ Each preset gives the query API these resources:
 
 | Preset | CPU request | Memory request | Scratch | Replicas |
 | --- | ---: | ---: | ---: | ---: |
-| `tiny` | 1 | 2 GiB | 1 GiB | 1–6 |
-| `small` | 2 | 4 GiB | 2 GiB | 1–8 |
+| `tiny` | 1 | 4 GiB | 1 GiB | 1–6 |
+| `small` | 2 | 8 GiB | 2 GiB | 1–8 |
 | `standard` | 4 | 8 GiB | 6 GiB | 3–8 |
 | `large` | 4 | 8 GiB | 6 GiB | 3–16 |
 

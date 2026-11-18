@@ -68,36 +68,36 @@ tests:
   - it: legacy flat override keeps the migrated preset limits for untouched dimensions
     set:
       sizingPreset: standard
-      logfire-ff-crud-api:
+      logfire-ff-bcache:
         resources:
           cpu: "250m"
     templates:
-      - templates/logfire-ff-crud-api.yaml
+      - templates/logfire-ff-bcache.yaml
     asserts:
       - equal:
           path: spec.template.spec.containers[0].resources.requests.cpu
           value: 250m
         documentSelector:
           path: kind
-          value: Deployment
+          value: StatefulSet
       - equal:
           path: spec.template.spec.containers[0].resources.limits.cpu
           value: 250m
         documentSelector:
           path: kind
-          value: Deployment
+          value: StatefulSet
       - equal:
           path: spec.template.spec.containers[0].resources.requests.memory
-          value: 512Mi
+          value: 6Gi
         documentSelector:
           path: kind
-          value: Deployment
+          value: StatefulSet
       - equal:
           path: spec.template.spec.containers[0].resources.limits.memory
-          value: 512Mi
+          value: 6Gi
         documentSelector:
           path: kind
-          value: Deployment
+          value: StatefulSet
 
   - it: a sizing preset sizes the bcache disk and its capacity
     set:
