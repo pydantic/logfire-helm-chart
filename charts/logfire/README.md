@@ -214,6 +214,33 @@ Connect each DSN directly to PostgreSQL, or through a connection pooler in trans
 The migration jobs, `logfire-ff-maintenance-scheduler`, and Dex then need a session-mode pool or a direct connection.
 [Connection counts](#connection-counts) lists the default pool size and the variable for each workload.
 
+#### Post-deploy migrations
+
+The `logfire-backend-migrations` hook applies the schema changes of a release, and the upgrade waits for it.
+A release can mark a slow migration `post_deploy`, such as a concurrent index on a large table.
+The hook skips it, and the `logfire-backend-post-deploy-migrations` Job runs it with the new version.
+The upgrade, including `helm upgrade --wait`, does not wait for that Job.
+`helm upgrade --wait-for-jobs` waits for it, up to `migrations.postDeploy.activeDeadlineSeconds`.
+The application works without a `post_deploy` migration, so the upgrade is complete before the Job finishes.
+
+The Job exits with success when a migration fails, so that a failure does not fail the upgrade.
+The `logfire-backend-post-deploy-migrations-retry` CronJob runs the same Job every day at 03:17, in the time zone of the Kubernetes controller manager, which is usually UTC.
+It retries a failed migration without an upgrade. The next upgrade also runs it again.
+Each run connects to the `crud` database even when nothing is pending, so a connection problem shows in the Job logs before a migration needs it.
+
+To see each result, query the `crud` database:
+
+```sql
+SELECT name, status, started_at, finished_at, error
+FROM migrations.post_deploy_runs
+ORDER BY started_at DESC;
+```
+
+The Job logs `Post-deploy migration <name> failed` when a migration fails.
+An upgrade that changes the image creates a new Job.
+The Job of the previous upgrade keeps its build running. The new Job then exits, and the next daily retry runs what is left.
+`migrations.postDeploy` sets the deadline, how long Kubernetes keeps a finished Job, and the retry schedule.
+
 ### Object storage
 
 Logfire stores telemetry data in object storage. Supported URI schemes are `s3://`, `gs://`, and `az://`.
@@ -536,7 +563,7 @@ postgresSessionDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/crud
 postgresFFSessionDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/ff
 ```
 
-`logfire-backend-migrations` uses `postgresSessionDsn`.
+`logfire-backend-migrations` and `logfire-backend-post-deploy-migrations` use `postgresSessionDsn`.
 `logfire-ff-migrations` and the maintenance scheduler use `postgresFFSessionDsn`.
 Each one is optional and applies only to its own database.
 With `postgresSecret`, add the same keys to the Secret, and set `postgresSecret.sessionDsn: true` and `postgresSecret.ffSessionDsn: true` for the keys that it has.
@@ -907,8 +934,12 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | maildev | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"maildev/maildev","tag":"3.0.0"},"podSecurityContext":{},"securityContext":{}}` | MailDev configuration (only used when `dev.deployMaildev` is true) |
 | maildev.podSecurityContext | object | `{}` | Pod SecurityContext for the MailDev pod. Defaults to the chart-wide `podSecurityContext` when unset. |
 | maildev.securityContext | object | `{}` | Container SecurityContext for the MailDev container. Merged over the chart-wide `securityContext` and the image defaults: uid and gid 1000, all capabilities dropped, no privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root with a writable `/tmp` emptyDir. Set a field here to override a default. |
-| migrations | object | `{"activeDeadlineSeconds":3600}` | CRUD database migration Job settings. |
+| migrations | object | `{"activeDeadlineSeconds":3600,"postDeploy":{"activeDeadlineSeconds":21600,"retrySchedule":"17 3 * * *","ttlSecondsAfterFinished":604800}}` | CRUD database migration Job settings. |
 | migrations.activeDeadlineSeconds | int | `3600` | Maximum time the backend migration Job may run, in seconds. The deadline covers all retries. Raise it for large databases where a concurrent index build takes several minutes. |
+| migrations.postDeploy | object | `{"activeDeadlineSeconds":21600,"retrySchedule":"17 3 * * *","ttlSecondsAfterFinished":604800}` | Settings of the `logfire-backend-post-deploy-migrations` Job. It runs the slow migrations that a release marks `post_deploy`, such as a concurrent index on a large table, with the new version. An upgrade does not wait for it. A failed migration runs again on the next upgrade or the daily retry. The `migrations.post_deploy_runs` table records each result. |
+| migrations.postDeploy.activeDeadlineSeconds | int | `21600` | Maximum time the post-deploy migration Job may run, in seconds. |
+| migrations.postDeploy.retrySchedule | string | `"17 3 * * *"` | Cron schedule of the `logfire-backend-post-deploy-migrations-retry` CronJob, which retries pending `post_deploy` migrations without an upgrade. Set it to `""` to not create the CronJob. A failed migration then runs again only on the next upgrade. |
+| migrations.postDeploy.ttlSecondsAfterFinished | int | `604800` | Seconds that Kubernetes keeps a finished post-deploy migration Job. Set it to `null` to keep finished Jobs. With Argo CD self-heal, Argo CD creates the Job again after Kubernetes deletes it. The new Job finds nothing to apply and exits. |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
 | objectStore | object | `{"env":{},"sessionReplayUri":null,"sseCKeyB64":null,"uri":null,"visualTestsUri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
 | objectStore.env | object | `{}` | Additional environment variables for the object store connection. String values support Helm templating. When the in-cluster RustFS store is enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. The backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint alias the Python S3 client accepts, and Azure clients read `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or `AZURE_STORAGE_CONNECTION_STRING`. |

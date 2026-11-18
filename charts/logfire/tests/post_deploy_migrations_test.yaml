@@ -1,0 +1,135 @@
+suite: backend post-deploy migrations
+templates:
+  - templates/logfire-backend-post-deploy-migrations.yaml
+release:
+  name: lf
+  namespace: default
+set:
+  adminEmail: test@example.com
+  objectStore:
+    uri: s3://test-bucket
+tests:
+  - it: runs the post-deploy migration module of the backend migration image in both jobs
+    set:
+      logfire-backend-migrations:
+        image:
+          tag: pinned-migrations
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: ["python", "-m", "logfire_db.migrations.post_deploy"]
+        documentSelector:
+          path: kind
+          value: Job
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ":pinned-migrations$"
+        documentSelector:
+          path: kind
+          value: Job
+      - equal:
+          path: spec.jobTemplate.spec.template.spec.containers[0].command
+          value: ["python", "-m", "logfire_db.migrations.post_deploy"]
+        documentSelector:
+          path: kind
+          value: CronJob
+      - matchRegex:
+          path: spec.jobTemplate.spec.template.spec.containers[0].image
+          pattern: ":pinned-migrations$"
+        documentSelector:
+          path: kind
+          value: CronJob
+
+  - it: keeps the Job of a previous upgrade running instead of waiting for it as a hook
+    documentSelector:
+      path: kind
+      value: Job
+    asserts:
+      - notExists:
+          path: metadata.annotations["helm.sh/hook"]
+      - equal:
+          path: metadata.annotations["helm.sh/resource-policy"]
+          value: keep
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-options"]
+          value: Prune=false
+
+  - it: retries no failed pod at once and bounds each Job as a whole
+    asserts:
+      - equal:
+          path: spec.backoffLimit
+          value: 0
+        documentSelector:
+          path: kind
+          value: Job
+      - equal:
+          path: spec.activeDeadlineSeconds
+          value: 21600
+        documentSelector:
+          path: kind
+          value: Job
+      - notExists:
+          path: spec.template.spec.activeDeadlineSeconds
+        documentSelector:
+          path: kind
+          value: Job
+      - equal:
+          path: spec.jobTemplate.spec.backoffLimit
+          value: 0
+        documentSelector:
+          path: kind
+          value: CronJob
+      - equal:
+          path: spec.jobTemplate.spec.activeDeadlineSeconds
+          value: 21600
+        documentSelector:
+          path: kind
+          value: CronJob
+
+  - it: retries daily, one run at a time
+    documentSelector:
+      path: kind
+      value: CronJob
+    asserts:
+      - equal:
+          path: spec.schedule
+          value: "17 3 * * *"
+      - equal:
+          path: spec.concurrencyPolicy
+          value: Forbid
+
+  - it: renders no retry CronJob when its schedule is empty
+    set:
+      migrations:
+        postDeploy:
+          retrySchedule: ""
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Job
+
+  - it: defaults when an older values set has no migrations block
+    set:
+      migrations: null
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: spec.activeDeadlineSeconds
+          value: 21600
+        documentSelector:
+          path: kind
+          value: Job
+      - equal:
+          path: spec.ttlSecondsAfterFinished
+          value: 604800
+        documentSelector:
+          path: kind
+          value: Job
+      - equal:
+          path: spec.schedule
+          value: "17 3 * * *"
+        documentSelector:
+          path: kind
+          value: CronJob
