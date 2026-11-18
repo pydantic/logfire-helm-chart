@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.4-rc.1](https://img.shields.io/badge/Version-0.15.4--rc.1-informational?style=flat-square) ![AppVersion: 6dc21200](https://img.shields.io/badge/AppVersion-6dc21200-informational?style=flat-square)
+![Version: 0.15.4-rc.3](https://img.shields.io/badge/Version-0.15.4--rc.3-informational?style=flat-square) ![AppVersion: 6dc21200](https://img.shields.io/badge/AppVersion-6dc21200-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -220,6 +220,7 @@ The `logfire-backend-migrations` hook applies the schema changes of a release, a
 A release can mark a slow migration `post_deploy`, such as a concurrent index on a large table.
 The hook skips it, and the `logfire-backend-post-deploy-migrations` Job runs it with the new version.
 The upgrade, including `helm upgrade --wait`, does not wait for that Job.
+`helm upgrade --wait-for-jobs` waits for it, up to `migrations.postDeploy.activeDeadlineSeconds`.
 The application works without a `post_deploy` migration, so the upgrade is complete before the Job finishes.
 
 The Job exits with success when a migration fails, so that a failure does not fail the upgrade.
@@ -393,8 +394,8 @@ Each preset gives the query API these resources:
 
 | Preset | CPU request | Memory request | Scratch | Replicas |
 | --- | ---: | ---: | ---: | ---: |
-| `tiny` | 1 | 2 GiB | 1 GiB | 1–6 |
-| `small` | 2 | 4 GiB | 2 GiB | 1–8 |
+| `tiny` | 1 | 4 GiB | 1 GiB | 1–6 |
+| `small` | 2 | 8 GiB | 2 GiB | 1–8 |
 | `standard` | 4 | 8 GiB | 6 GiB | 3–8 |
 | `large` | 4 | 8 GiB | 6 GiB | 3–16 |
 
@@ -420,8 +421,22 @@ The flat resource shorthand sets both requests and limits.
 #### Resize bcache storage
 
 bcache uses one PersistentVolumeClaim per pod.
-StatefulSet volume claim templates are immutable, so changing `logfire-ff-bcache.disk.storage` after installation fails `helm upgrade`.
-Expand the existing `bcache-data-*` PVCs if the storage class allows it, or run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
+A StatefulSet cannot change its volume claim templates.
+So when `sizingPreset` changes, an installed bcache keeps its claim size, and bcache uses 80% of that size.
+
+To grow the disk, follow the procedure that Kubernetes providers document for StatefulSet volumes, such as [GKE volume expansion](https://cloud.google.com/kubernetes-engine/docs/how-to/volume-expansion).
+The bcache pods keep running and keep their cached data.
+
+1. Check that the storage class of the `bcache-data-*` claims sets `allowVolumeExpansion: true`.
+1. Grow each existing claim, for example `kubectl patch pvc bcache-data-logfire-ff-bcache-0 -p '{"spec":{"resources":{"requests":{"storage":"64Gi"}}}}'`.
+1. Run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan`. This removes only the StatefulSet object. The pods and their claims keep running.
+1. Set `logfire-ff-bcache.disk.storage` to the new size and upgrade. The new StatefulSet adopts the running pods. It then rolls them, so that bcache uses the larger disk.
+
+A claim cannot shrink, so keep the installed size rather than move to a smaller disk.
+An upgrade that sets a size different from the installed claims fails and points to these steps.
+
+The chart reads the installed StatefulSet with `lookup`.
+`helm template` and other renders without cluster access cannot read it, so they render the preset size.
 
 ## Advanced configuration
 
@@ -871,7 +886,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-bcache | object | `{"disk":{},"pdb":{},"replicas":3,"topology":{"zone":"","zoneAware":false},"updateStrategy":{}}` | Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use |
-| logfire-ff-bcache.disk | object | `{}` | Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it. A StatefulSet cannot change its volumeClaimTemplates, so a later change to storage fails `helm upgrade`. To resize, expand the existing `bcache-data-*` PVCs if the storage class allows it, or delete the StatefulSet with `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade. Unset `disk.storage` takes the sizing preset's size, or 32Gi without a preset. |
+| logfire-ff-bcache.disk | object | `{}` | Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it. Unset `disk.storage` takes the sizing preset's size, or 32Gi without a preset. An installed bcache keeps its claim size when `sizingPreset` changes, because a StatefulSet cannot change its volumeClaimTemplates. To grow the disk, follow "Resize bcache storage" in the README. It keeps the pods and the cached data. |
 | logfire-ff-bcache.replicas | int | `3` | Number of bcache replicas when autoscaling is not configured. |
 | logfire-ff-bcache.topology | object | `{"zone":"","zoneAware":false}` | Topology routing for the readers that use this cache. Zone routing is off by default. |
 | logfire-ff-bcache.topology.zone | string | `""` | Static topology zone, for tests and for single-zone clusters whose nodes carry no zone label. Every pod gets this zone, so it must match the zone the pods run in. It does not serve a multi-zone cluster that refuses node-read RBAC: leave `zoneAware` off there and take global routing instead. Takes precedence over `zoneAware`, and then no cluster role is created. |
