@@ -440,6 +440,13 @@ The chart reads the installed StatefulSet with `lookup`.
 
 ## Advanced configuration
 
+### Organization creation
+
+Set `allowOrganizationCreation: false` to turn off **Allow Organization Creation** for the instance.
+An explicit value takes precedence over the setting in Platform Admin.
+Omit the value or set it to `null` to use the saved setting again.
+This value requires a backend image that supports `ALLOW_ORGANIZATION_CREATION`.
+
 ### Organization group mappings
 
 Use `groupOrganizationMapping` to grant Logfire organization and project roles to members of identity-provider groups.
@@ -782,6 +789,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | aiGatewayOauth | object | `{"issuer":"","resourceUrl":""}` | AI gateway OAuth metadata configuration. If left empty, the chart derives self-hosted defaults from the primary Logfire URL:   resourceUrl = <logfire.url>/proxy   issuer      = <logfire.url> |
 | aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
 | aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
+| allowOrganizationCreation | bool | `nil` | Override Allow Organization Creation. Leave unset to use the setting in Platform Admin. Requires a backend image that supports `ALLOW_ORGANIZATION_CREATION`. |
 | auth.passkeys | bool | `true` | Let users sign in with a passkey, such as a fingerprint, face unlock, or security key. Existing passkeys stay listed and removable when this is false. |
 | auth.passwordLogin | bool | `true` | Let users sign in with an email address and a password. Set to false when users sign in only through a Dex connector, and configure at least one connector, because Dex does not start without one. `logfire-dex.config.enablePasswordDB: false` also turns password sign-in off. |
 | auth.passwordlessEmailSignup | bool | `false` | Let a person with a verified email address that has no account create one without a password. It needs email delivery through `smtp.*` or `dev.deployMaildev`. |

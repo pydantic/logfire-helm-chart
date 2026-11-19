@@ -1,4 +1,16 @@
 {{- $serviceName := "logfire-backend" }}
+{{- $extraEnv := include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
+{{- $allowOrganizationCreation := .Values.allowOrganizationCreation }}
+{{- if not (kindIs "invalid" $allowOrganizationCreation) }}
+  {{- if not (kindIs "bool" $allowOrganizationCreation) }}
+    {{- fail "allowOrganizationCreation must be a boolean or null" }}
+  {{- end }}
+  {{- range fromYamlArray $extraEnv }}
+    {{- if eq .name "ALLOW_ORGANIZATION_CREATION" }}
+      {{- fail "Set allowOrganizationCreation or ALLOW_ORGANIZATION_CREATION in logfire-backend.env, but not both" }}
+    {{- end }}
+  {{- end }}
+{{- end }}
 {{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
 {{- $oauthEnabled := or (include "logfire.effective_tls" . | eq "true") (eq (include "logfire.primary_hostname" .) "localhost") }}
 {{- $gatewayStaticOauthEnabled := and
@@ -326,9 +338,13 @@ spec:
               value: '[{"admin_user_email": "{{ .Values.adminEmail }}", "admin_user_password": "$(ADMIN_PASSWORD)", "admin_user_totp_secret": "$(ADMIN_TOTP_SECRET)", "admin_user_totp_recovery_codes": $(ADMIN_TOTP_RECOVERY_CODES), "organization_name": "logfire-meta", "projects": [{"project_name": "logfire-meta", "write_token": "$(META_WRITE_TOKEN)", "permanent_frontend_token": "$(META_FRONTEND_TOKEN)", "frontend_application_token": "$(META_FRONTEND_APPLICATION_TOKEN)"{{- if $adminApiKeys }}, "api_keys": {{ $adminApiKeys | toJson }}{{- end }}}]{{- if $oauthClients }}, "oauth_clients": {{ $oauthClients | toJson }}{{- end }}}]'
             {{- include "logfire.pythonObjectStoreEnv" . | nindent 12 }}
             {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
-            {{- with include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) }}
+            {{- if kindIs "bool" $allowOrganizationCreation }}
+            - name: ALLOW_ORGANIZATION_CREATION
+              value: {{ $allowOrganizationCreation | toString | quote }}
+            {{- end }}
+            {{- with $extraEnv }}
               {{- . | nindent 12 }}
-            {{- end}}
+            {{- end }}
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
             {{- include "logfire.logfireDataVolumeMounts" . | nindent 12 }}
