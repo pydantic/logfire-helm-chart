@@ -24,21 +24,21 @@ tests:
     # asked for.
     set:
       image:
-        backendImage: python-prod
+        backendImage: mirrored-backend
         authImage: null
         remoteMcpImage: null
         taskRunnerImage: null
     asserts:
       - matchRegex:
           path: spec.template.spec.containers[0].image
-          pattern: 'logfire/python-prod:'
+          pattern: 'logfire/mirrored-backend:'
         template: templates/logfire-backend-auth.yaml
         documentSelector:
           path: kind
           value: Deployment
       - matchRegex:
           path: spec.template.spec.containers[0].image
-          pattern: 'logfire/python-prod:'
+          pattern: 'logfire/mirrored-backend:'
         template: templates/logfire-remote-mcp.yaml
         documentSelector:
           path: kind
@@ -47,13 +47,65 @@ tests:
   - it: prefers an explicit per-service key over the backend image
     set:
       image:
-        backendImage: python-prod
+        backendImage: mirrored-backend
         authImage: pinned-auth
     asserts:
       - matchRegex:
           path: spec.template.spec.containers[0].image
           pattern: 'logfire/pinned-auth:'
         template: templates/logfire-backend-auth.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: replaces the python-prod name from charts before 0.15.0
+    # Charts before 0.15.0 set both keys to `python-prod`, and `--reuse-values` carries that value
+    # into the upgrade. The platform no longer publishes `python-prod`, so each workload must pull
+    # its own image or the upgrade cannot pull any Python image.
+    set:
+      image:
+        backendImage: python-prod
+        workerImage: python-prod
+        authImage: null
+        remoteMcpImage: null
+        taskRunnerImage: null
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: 'logfire/logfire-backend-prod:'
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: 'logfire/logfire-backend-prod:'
+        template: templates/logfire-backend-migrations.yaml
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: 'logfire/logfire-worker-prod:'
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: 'logfire/logfire-auth-prod:'
+        template: templates/logfire-backend-auth.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: 'logfire/logfire-remote-mcp-prod:'
+        template: templates/logfire-remote-mcp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: 'logfire/logfire-task-runner-prod:'
+        template: templates/logfire-task-runner.yaml
         documentSelector:
           path: kind
           value: Deployment

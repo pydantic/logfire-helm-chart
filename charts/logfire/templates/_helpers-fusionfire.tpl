@@ -164,6 +164,19 @@ overhead. No quota is derived for emptyDir scratch storage.
 {{- end -}}
 
 {{/*
+Scratch env for a FusionFire workload that spills into its `/tmp` emptyDir: crud-api and the
+maintenance scheduler. The binary roots its DataFusion `DiskManager` at `FF_TEMP_DIR` and empties
+`{FF_TEMP_DIR}/fusionfire` at startup. Without a quota, DataFusion allows 100GiB of spill files,
+and the emptyDir has no size limit, so a large query could fill the node disk.
+*/}}
+{{- define "logfire.ffTmpSpillEnv" -}}
+- name: FF_TEMP_DIR
+  value: /tmp
+- name: FF_SPILL_TO_DISK_QUOTA
+  value: {{ include "logfire.ffSpillToDiskQuota" . | default "512MB" | quote }}
+{{- end -}}
+
+{{/*
 Expose effective Kubernetes resources to FusionFire so its auto-config formulas
 use the same resources Kubernetes enforces. Effective resources fall back to
 the tiny preset for internal calculations when no preset/resources are set,
@@ -216,8 +229,6 @@ Render the FusionFire query environment for an intake, worker, or combined role.
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" . | fromJson -}}
 {{- $queryParallelism := get $effectiveServiceValues "queryParallelism" | default "auto" -}}
 {{- $maxCostPerWorker := include "logfire.ffMaxCostPerWorker" (dict "Values" .Values) -}}
-- name: FF_ENABLE_SPILL_TO_DISK
-  value: "true"
 - name: FF_TEMP_DIR
   value: /scratch/fusionfire
 - name: FF_QUERY_PARALLELISM
@@ -295,8 +306,6 @@ Common execution env for background maintenance/compaction workers.
   value: {{ $datafusionMemory | quote }}
 - name: FF_MAINTENANCE_MAX_RECORD_BATCH_MEMORY
   value: {{ $recordBatchMemory | quote }}
-- name: FF_ENABLE_SPILL_TO_DISK
-  value: "true"
 - name: FF_TEMP_DIR
   value: /scratch/fusionfire
 {{- with $spillToDiskQuota }}

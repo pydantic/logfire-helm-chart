@@ -38,12 +38,20 @@ variablesApiKey: ""
 frontendApplicationToken: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: "v2026-11-11.03"
+releaseVersion: "v2026-11-18.01"
 
 # -- CRUD database migration Job settings.
 migrations:
   # -- Maximum time the backend migration Job may run, in seconds. The deadline covers all retries. Raise it for large databases where a concurrent index build takes several minutes.
   activeDeadlineSeconds: 3600
+  # -- Settings of the `logfire-backend-post-deploy-migrations` Job. It runs the slow migrations that a release marks `post_deploy`, such as a concurrent index on a large table, with the new version. An upgrade does not wait for it. A failed migration runs again on the next upgrade or the daily retry. The `migrations.post_deploy_runs` table records each result.
+  postDeploy:
+    # -- Maximum time the post-deploy migration Job may run, in seconds.
+    activeDeadlineSeconds: 21600
+    # -- Seconds that Kubernetes keeps a finished post-deploy migration Job. Set it to `null` to keep finished Jobs. With Argo CD self-heal, Argo CD creates the Job again after Kubernetes deletes it. The new Job finds nothing to apply and exits.
+    ttlSecondsAfterFinished: 604800
+    # -- Cron schedule of the `logfire-backend-post-deploy-migrations-retry` CronJob, which retries pending `post_deploy` migrations without an upgrade. Set it to `""` to not create the CronJob. A failed migration then runs again only on the next upgrade.
+    retrySchedule: "17 3 * * *"
 
 # -- Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of
 # the ingress or tunnel in front of the release; if HAProxy closes an idle connection first,
@@ -897,8 +905,6 @@ fleet:
 #     requests:
 #       cpu: "250m"
 #       memory: "256Mi"
-#     limits:
-#       memory: "1Gi"
 # logfire-fleet-control:
 #   # -- Number of replicas
 #   replicas: 2
@@ -906,8 +912,6 @@ fleet:
 #     requests:
 #       cpu: "500m"
 #       memory: "512Mi"
-#     limits:
-#       memory: "1Gi"
 
 # -- Autoscaling & resources for the `logfire-remote-mcp` pod
 logfire-remote-mcp:
@@ -1220,10 +1224,9 @@ logfire-ff-bcache:
 #     maxUnavailable: 1
   pdb: {}
   # -- Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it.
-  # A StatefulSet cannot change its volumeClaimTemplates, so a later change to storage fails `helm upgrade`.
-  # To resize, expand the existing `bcache-data-*` PVCs if the storage class allows it,
-  # or delete the StatefulSet with `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
   # Unset `disk.storage` takes the sizing preset's size, or 32Gi without a preset.
+  # An installed bcache keeps its claim size when `sizingPreset` changes, because a StatefulSet cannot change its volumeClaimTemplates.
+  # To grow the disk, follow "Resize bcache storage" in the README. It keeps the pods and the cached data.
   disk: {}
   #  storage: 32Gi
   #  storageClassName: my-storage-class
@@ -2304,8 +2307,6 @@ sizingPresets:
         requests:
           cpu: "50m"
           memory: "96Mi"
-        limits:
-          memory: "96Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 3
@@ -2334,10 +2335,10 @@ sizingPresets:
     logfire-ff-ingest-processor:
       resources:
         requests:
-          cpu: "1"
+          cpu: "500m"
           memory: "1Gi"
       autoscaling:
-        minReplicas: 3
+        minReplicas: 2
         maxReplicas: 32
         hpa:
           enabled: true
@@ -2349,8 +2350,6 @@ sizingPresets:
         requests:
           cpu: "100m"
           memory: "384Mi"
-        limits:
-          memory: "768Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -2362,10 +2361,8 @@ sizingPresets:
     logfire-backend:
       resources:
         requests:
-          cpu: "500m"
+          cpu: "250m"
           memory: "1Gi"
-        limits:
-          memory: "2Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -2379,8 +2376,6 @@ sizingPresets:
         requests:
           cpu: "100m"
           memory: "256Mi"
-        limits:
-          memory: "384Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 3
@@ -2397,8 +2392,6 @@ sizingPresets:
         requests:
           cpu: "100m"
           memory: "128Mi"
-        limits:
-          memory: "1Gi"
       pdb:
         maxUnavailable: 1
     logfire-fleet-control:
@@ -2406,8 +2399,6 @@ sizingPresets:
         requests:
           cpu: "100m"
           memory: "512Mi"
-        limits:
-          memory: "1Gi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 2
@@ -2421,7 +2412,7 @@ sizingPresets:
       resources:
         requests:
           cpu: "1"
-          memory: "2Gi"
+          memory: "4Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -2447,8 +2438,6 @@ sizingPresets:
         requests:
           cpu: "100m"
           memory: "192Mi"
-        limits:
-          memory: "192Mi"
       autoscaling:
         minReplicas: 1
         maxReplicas: 4
@@ -2462,8 +2451,6 @@ sizingPresets:
       resources:
         requests:
           cpu: "50m"
-          memory: "96Mi"
-        limits:
           memory: "96Mi"
       autoscaling:
         minReplicas: 1
@@ -2481,7 +2468,6 @@ sizingPresets:
           memory: "256Mi"
           ephemeral-storage: "512Mi"
         limits:
-          memory: "512Mi"
           ephemeral-storage: "512Mi"
       autoscaling:
         minReplicas: 1
@@ -2510,7 +2496,6 @@ sizingPresets:
           memory: "512Mi"
           ephemeral-storage: "1Gi"
         limits:
-          memory: "1Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -2527,7 +2512,6 @@ sizingPresets:
           memory: "256Mi"
           ephemeral-storage: "1Gi"
         limits:
-          memory: "256Mi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -2542,8 +2526,6 @@ sizingPresets:
       resources:
         requests:
           cpu: "250m"
-          memory: "256Mi"
-        limits:
           memory: "256Mi"
       autoscaling:
         minReplicas: 1
@@ -2651,7 +2633,7 @@ sizingPresets:
             periodSeconds: 60
         selectPolicy: Max
       scaleDown:
-        stabilizationWindowSeconds: 900
+        stabilizationWindowSeconds: 600
         policies:
           - type: Percent
             value: 25
@@ -2665,8 +2647,6 @@ sizingPresets:
       resources:
         requests:
           cpu: "100m"
-          memory: "128Mi"
-        limits:
           memory: "128Mi"
       autoscaling:
         minReplicas: 2
@@ -2709,10 +2689,10 @@ sizingPresets:
     logfire-ff-ingest-processor:
       resources:
         requests:
-          cpu: "1"
+          cpu: "500m"
           memory: "1Gi"
       autoscaling:
-        minReplicas: 3
+        minReplicas: 2
         maxReplicas: 32
         hpa:
           enabled: true
@@ -2738,8 +2718,6 @@ sizingPresets:
         requests:
           cpu: "100m"
           memory: "384Mi"
-        limits:
-          memory: "768Mi"
       autoscaling:
         minReplicas: 2
         maxReplicas: 4
@@ -2752,10 +2730,8 @@ sizingPresets:
       spreadAcrossZones: true
       resources:
         requests:
-          cpu: "500m"
+          cpu: "250m"
           memory: "1Gi"
-        limits:
-          memory: "2Gi"
       autoscaling:
         minReplicas: 2
         maxReplicas: 4
@@ -2770,8 +2746,6 @@ sizingPresets:
         requests:
           cpu: "150m"
           memory: "384Mi"
-        limits:
-          memory: "512Mi"
       autoscaling:
         minReplicas: 2
         maxReplicas: 3
@@ -2788,8 +2762,6 @@ sizingPresets:
         requests:
           cpu: "250m"
           memory: "256Mi"
-        limits:
-          memory: "1Gi"
       pdb:
         maxUnavailable: 1
       spreadAcrossZones: true
@@ -2798,8 +2770,6 @@ sizingPresets:
         requests:
           cpu: "250m"
           memory: "512Mi"
-        limits:
-          memory: "1Gi"
       autoscaling:
         minReplicas: 2
         maxReplicas: 4
@@ -2814,7 +2784,7 @@ sizingPresets:
       resources:
         requests:
           cpu: "2"
-          memory: "4Gi"
+          memory: "8Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 2
@@ -2841,8 +2811,6 @@ sizingPresets:
         requests:
           cpu: "125m"
           memory: "256Mi"
-        limits:
-          memory: "256Mi"
       autoscaling:
         minReplicas: 2
         maxReplicas: 6
@@ -2857,8 +2825,6 @@ sizingPresets:
       resources:
         requests:
           cpu: "100m"
-          memory: "128Mi"
-        limits:
           memory: "128Mi"
       autoscaling:
         minReplicas: 2
@@ -2876,7 +2842,6 @@ sizingPresets:
           memory: "256Mi"
           ephemeral-storage: "512Mi"
         limits:
-          memory: "512Mi"
           ephemeral-storage: "512Mi"
       autoscaling:
         minReplicas: 1
@@ -2905,7 +2870,6 @@ sizingPresets:
           memory: "512Mi"
           ephemeral-storage: "1Gi"
         limits:
-          memory: "1Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -2923,7 +2887,6 @@ sizingPresets:
           memory: "384Mi"
           ephemeral-storage: "1Gi"
         limits:
-          memory: "768Mi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 2
@@ -2939,9 +2902,7 @@ sizingPresets:
       resources:
         requests:
           cpu: "250m"
-          memory: "512Mi"
-        limits:
-          memory: "512Mi"
+          memory: "256Mi"
       autoscaling:
         minReplicas: 2
         maxReplicas: 6
@@ -2999,7 +2960,7 @@ sizingPresets:
       resources:
         requests:
           cpu: "2"
-          memory: "12Gi"
+          memory: "8Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -3069,8 +3030,6 @@ sizingPresets:
       resources:
         requests:
           cpu: "100m"
-          memory: "128Mi"
-        limits:
           memory: "128Mi"
       autoscaling:
         minReplicas: 3
@@ -3158,8 +3117,6 @@ sizingPresets:
         requests:
           cpu: "200m"
           memory: "512Mi"
-        limits:
-          memory: "1Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 6
@@ -3186,8 +3143,6 @@ sizingPresets:
         requests:
           cpu: "500m"
           memory: "1Gi"
-        limits:
-          memory: "2Gi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 6
@@ -3216,7 +3171,6 @@ sizingPresets:
           memory: "512Mi"
           ephemeral-storage: "1Gi"
         limits:
-          memory: "2Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 3
@@ -3244,8 +3198,6 @@ sizingPresets:
       resources:
         requests:
           cpu: "250m"
-          memory: "640Mi"
-        limits:
           memory: "640Mi"
       autoscaling:
         minReplicas: 3
@@ -3276,8 +3228,6 @@ sizingPresets:
         requests:
           cpu: "250m"
           memory: "256Mi"
-        limits:
-          memory: "1Gi"
       pdb:
         maxUnavailable: 1
       topologySpreadConstraints:
@@ -3298,8 +3248,6 @@ sizingPresets:
         requests:
           cpu: "500m"
           memory: "512Mi"
-        limits:
-          memory: "1Gi"
       autoscaling:
         minReplicas: 2
         maxReplicas: 6
@@ -3364,8 +3312,6 @@ sizingPresets:
         requests:
           cpu: "125m"
           memory: "512Mi"
-        limits:
-          memory: "512Mi"
       autoscaling:
         minReplicas: 3
         maxReplicas: 6
@@ -3392,8 +3338,6 @@ sizingPresets:
       resources:
         requests:
           cpu: "100m"
-          memory: "128Mi"
-        limits:
           memory: "128Mi"
       autoscaling:
         minReplicas: 3
@@ -3424,7 +3368,6 @@ sizingPresets:
           memory: "256Mi"
           ephemeral-storage: "512Mi"
         limits:
-          memory: "512Mi"
           ephemeral-storage: "512Mi"
       autoscaling:
         minReplicas: 1
@@ -3453,7 +3396,6 @@ sizingPresets:
           memory: "512Mi"
           ephemeral-storage: "1Gi"
         limits:
-          memory: "1Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1
@@ -3467,8 +3409,6 @@ sizingPresets:
       resources:
         requests:
           cpu: "250m"
-          memory: "1Gi"
-        limits:
           memory: "1Gi"
       autoscaling:
         minReplicas: 3
@@ -3513,7 +3453,7 @@ sizingPresets:
       resources:
         requests:
           cpu: "3"
-          memory: "18Gi"
+          memory: "15Gi"
           ephemeral-storage: "1Gi"
       autoscaling:
         minReplicas: 1

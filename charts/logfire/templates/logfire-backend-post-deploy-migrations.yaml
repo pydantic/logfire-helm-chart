@@ -1,0 +1,111 @@
+{{- /*
+Runs the `post_deploy` CRUD migrations, such as a concurrent index build on a large table, with the
+new application version. It is not a Helm hook, because Helm waits for a hook to finish. A running
+Job counts as ready for `helm upgrade --wait`, so a slow build does not hold the upgrade.
+
+The name ends with a hash of the pod template. So an upgrade that changes the image or the pod
+creates a new Job, and an upgrade that changes neither keeps the same Job. `helm.sh/resource-policy:
+keep` and `Prune=false` keep the Job of the previous upgrade running when the new release no longer
+renders it. If that Job still holds the post-deploy lock, the new Job exits, and the daily retry
+CronJob below runs what is left. `ttlSecondsAfterFinished` removes finished Jobs. The platform
+records each result in `migrations.post_deploy_runs`.
+
+Neither Job retries a failed pod at once (`backoffLimit: 0`), because a crash would repeat an
+expensive scan. The deadline is on the Job, so a replacement pod gets no new budget.
+
+The image is the image of `logfire-backend-migrations`, so both jobs apply the same migration list.
+*/}}
+{{- $serviceName := "logfire-backend-post-deploy-migrations" }}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
+{{- $settings := dig "postDeploy" dict (.Values.migrations | default dict) }}
+{{- $podTemplate := include "logfire.backendPostDeployMigrations.podTemplate" (dict "ctx" . "serviceName" $serviceName "containerSecurityContext" $containerSecurityContext) }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-%s" $serviceName ($podTemplate | sha256sum | trunc 10) | quote }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    {{- include "logfire.workloadLabels" (dict "Values" .Values "serviceName" $serviceName) | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+  annotations:
+    "helm.sh/resource-policy": keep
+    "argocd.argoproj.io/sync-options": Prune=false
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ dig "activeDeadlineSeconds" 21600 $settings }}
+  {{- with (dig "ttlSecondsAfterFinished" 604800 $settings) }}
+  ttlSecondsAfterFinished: {{ . }}
+  {{- end }}
+  template:
+    {{- $podTemplate | nindent 4 }}
+{{- with (dig "retrySchedule" "17 3 * * *" $settings) }}
+---
+# Retries the `post_deploy` migrations every day, without an upgrade: a recorded failure, and a run
+# that exited because another run held the lock. `Forbid` keeps one retry at a time. When nothing is
+# pending, the Job connects, reads the ledger, and exits.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ printf "%s-retry" $serviceName | quote }}
+  labels:
+    {{- include "logfire.labels" $ | nindent 4 }}
+    {{- include "logfire.workloadLabels" (dict "Values" $.Values "serviceName" $serviceName) | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  schedule: {{ . | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ dig "activeDeadlineSeconds" 21600 $settings }}
+      template:
+        {{- $podTemplate | nindent 8 }}
+{{- end }}
+{{- define "logfire.backendPostDeployMigrations.podTemplate" -}}
+{{- $ctx := .ctx -}}
+{{- $serviceName := .serviceName -}}
+metadata:
+  labels:
+    {{- include "logfire.selectorLabels" $ctx | nindent 4 }}
+    {{- include "logfire.podLabels" (dict "Values" $ctx.Values "serviceName" $serviceName) | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+spec:
+  serviceAccountName: {{ include "logfire.serviceAccountName" $ctx }}
+  {{- with $ctx.Values.imagePullSecrets }}
+  imagePullSecrets:
+  {{- range . }}
+    - name: {{ . | quote }}
+  {{- end }}
+  {{- end }}
+  restartPolicy: Never
+  {{- include "logfire.initContainers" (dict "ctx" $ctx "serviceName" $serviceName) | nindent 2 }}
+  {{- include "logfire.podScheduling" (dict "Values" $ctx.Values "serviceName" $serviceName) | nindent 2 }}
+  {{- include "logfire.securityContext" (include "logfire.podSecurityContext" $ctx | fromJson) | nindent 2 }}
+  containers:
+    - name: {{ $serviceName }}
+      image: '{{ $ctx.Values.image.repository | default "" }}{{ include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "backendImage") }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" "logfire-backend-migrations" "Chart" $ctx.Chart) }}'
+      imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
+      {{- include "logfire.securityContext" .containerSecurityContext | nindent 6 }}
+      command:
+        - "python"
+        - "-m"
+        - "logfire_db.migrations.post_deploy"
+      env:
+        - name: LOGFIRE_SEND_TO_LOGFIRE
+          value: "false"
+        {{- include "logfire.otlpExporterEnv" (dict "root" $ctx "serviceName" $serviceName "codeWorkDir" "/app") | nindent 8 }}
+        - name: ON_PREM
+          value: "true"
+        - name: CRUD_PG_DSN
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "logfire.postgresSecretName" $ctx }}
+              key: {{ include "logfire.postgresMigrationKey" (dict "ctx" $ctx "key" "postgresDsn") }}
+      volumeMounts:
+        {{- include "logfire.tmpVolumeMounts" $ctx | nindent 8 }}
+  volumes:
+    {{- include "logfire.tmpVolume" $ctx | nindent 4 }}
+{{- end -}}
