@@ -524,7 +524,9 @@ from a non-null default. Call with `(dict "Values" .Values "serviceName" $servic
   {{- end -}}
   {{- $env = $entries -}}
 {{- end -}}
-{{- with $env }}{{ toYaml . }}{{ end -}}
+{{- with $env }}
+  {{- toYaml . }}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -1639,171 +1641,137 @@ The bundled Redis reads `podSecurityContext` directly, so its pod template stays
     (deepCopy (.Values.podSecurityContext | default dict)) | toJson -}}
 {{- end -}}
 
-{{- define "logfire.trustedCa.initContainer" -}}
-{{- $ctx := .ctx -}}
-{{- $serviceName := .serviceName -}}
-{{- if include "logfire.trustedCa.enabled" . -}}
-{{- $containerSecurityContext := include "logfire.containerSecurityContext"
-    (dict "ctx" $ctx "serviceName" $serviceName) | fromJson -}}
-{{- $gateway := eq $serviceName "logfire-ai-gateway" -}}
-{{- $inClusterCa := and $gateway (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
-{{- $repository := $ctx.Values.image.repository | default "" -}}
-{{- $image := include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "backendImage") -}}
-{{- $baseFile := "/etc/ssl/certs/ca-certificates.crt" -}}
-{{- if $gateway -}}
-  {{- $repository = $ctx.Values.image.gatewayRepository | default "" -}}
-  {{- $image = $ctx.Values.image.gatewayImage -}}
-  {{- $baseFile = ternary "/etc/logfire/incluster-ca/ca.crt" "" $inClusterCa -}}
-{{- else if hasPrefix "logfire-ff-" $serviceName -}}
-  {{- $image = $ctx.Values.image.fusionfireImage -}}
-{{- else if eq $serviceName "logfire-worker" -}}
-  {{- $image = include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "workerImage") -}}
-{{- else if eq $serviceName "logfire-alert-runner" -}}
-  {{- $image = $ctx.Values.image.alertRunnerImage | default "logfire-alert-runner-prod" -}}
-{{- end -}}
-- name: trusted-ca-bundle
-  image: '{{ $repository }}{{ $image }}:{{ include "logfire.serviceTag"
-      (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
-  imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
-  command:
-    - sh
-    - -c
-    - |
-      set -eu
-      for f in {{ with $baseFile }}{{ . }} {{ end }}/etc/logfire/trusted-ca-sources/*.crt; do
-        cat "$f"
-        echo
-      done > /etc/logfire/trusted-ca/ca-bundle.crt
-  {{- include "logfire.resources" (dict "Values" $ctx.Values "serviceName" $serviceName)
-      | nindent 2 }}
-  {{- include "logfire.securityContext" $containerSecurityContext | nindent 2 }}
-  volumeMounts:
-    - name: logfire-trusted-ca-sources
-      mountPath: /etc/logfire/trusted-ca-sources
-      readOnly: true
-    - name: logfire-trusted-ca
-      mountPath: /etc/logfire/trusted-ca
-    {{- if $inClusterCa }}
-    {{- include "logfire.inClusterTls.caBundle.volumeMount"
-        (dict "ctx" $ctx "mountPath" "/etc/logfire/incluster-ca") | nindent 4 }}
-    {{- end }}
-{{- end -}}
-{{- end -}}
-
-{{- define "logfire.dev.waitForPostgres.initContainers" -}}
-{{- $ctx := .ctx -}}
-{{- $serviceName := .serviceName -}}
-{{- if and $ctx.Values.dev.deployPostgres (has $serviceName (list
-  "logfire-backend"
-  "logfire-backend-auth"
-  "logfire-worker"
-  "logfire-task-runner"
-  "logfire-alert-runner"
-  "logfire-dex"
-  "logfire-backend-migrations"
-  "logfire-backend-post-deploy-migrations"
-  "logfire-ff-migrations"
-  "logfire-ff-crud-api"
-  "logfire-ff-maintenance-scheduler"
-  "logfire-ff-maintenance-worker"
-  "logfire-ff-compaction-worker"
-  "logfire-ff-query-api"
-  "logfire-ff-query-worker"
-  "logfire-ff-ingest"
-  "logfire-ff-ingest-processor"
-  "logfire-ai-gateway"
-  "logfire-remote-mcp"
-)) -}}
-- name: check-db-ready
-  image: {{ include "logfire.devPostgres.image" $ctx }}
-  command:
-    - sh
-    - -c
-    - >-
-      until pg_isready -h {{ (include "logfire.devPostgres.values" $ctx
-          | fromJson).fullnameOverride }} -p 5432 -U postgres; do echo "Waiting for postgres..."; sleep 2; done
-  {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext"
-      (dict "ctx" $ctx "identity" "postgres" "serviceName" "postgres-wait"
-      "readOnlyRootFilesystem" true) | fromJson }}
-  {{- include "logfire.securityContext" $waitSecurityContext | nindent 2 }}
-{{- end -}}
-{{- end -}}
-
 {{/*
+Chart-owned init containers come first, then the service's own `initContainers`. A user init
+container with the same name replaces `check-db-ready` or `wait-for-absurd-schema`.
+
 `logfire-task-runner` drains the `default` Absurd queue and exits 1 at startup when that queue is
 missing. Only `absurd.create_queue` creates the per-queue tables, and `logfire-backend-migrations`
 calls it through `ensure_queues` right after it installs the `absurd` schema (see
 `logfire_db.migrations.main`). Migrations are a Helm hook only when the bundled Postgres is off
 (see the annotations on that Job), so nothing otherwise orders the two. Waiting for the runner's
-queue here makes the dependency explicit rather than leaving it to scheduling order.
+queue makes the dependency explicit rather than leaving it to scheduling order.
+
+The post-deploy migrations Job name hashes this output, so keep its whitespace stable.
 */}}
-{{- define "logfire.absurdSchemaReady.initContainer" -}}
-{{- $ctx := .ctx -}}
-{{- $serviceName := .serviceName -}}
-{{- $containerSecurityContext := include "logfire.containerSecurityContext"
-    (dict "ctx" $ctx "serviceName" $serviceName) | fromJson -}}
-- name: wait-for-absurd-schema
-  image: '{{ $ctx.Values.image.repository | default "" }}{{ include "logfire.pythonImage"
-      (dict "Values" $ctx.Values "key" "taskRunnerImage") }}:{{ include "logfire.serviceTag"
-      (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
-  imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
-  command:
-    - python
-    - -c
-    - |
-      import os, time, psycopg
-
-      dsn = os.environ["CRUD_PG_DSN"]
-      while True:
-          try:
-              with psycopg.connect(dsn) as conn:
-                  (queue_ready,) = conn.execute("SELECT to_regclass('absurd.t_default')").fetchone()
-              if queue_ready:
-                  break
-              print("Waiting for the 'default' Absurd queue...", flush=True)
-          except psycopg.OperationalError as exc:
-              print(f"Waiting for postgres: {exc}", flush=True)
-          time.sleep(2)
-  env:
-    - name: CRUD_PG_DSN
-      valueFrom:
-        secretKeyRef:
-          name: {{ include "logfire.postgresSecretName" $ctx }}
-          key: postgresDsn
-  {{- include "logfire.securityContext" $containerSecurityContext | nindent 2 }}
-  volumeMounts:
-    {{- include "logfire.tmpVolumeMounts" $ctx | nindent 4 }}
-{{- end -}}
-
 {{- define "logfire.initContainers" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := .serviceName -}}
 {{- $userInit := (index $ctx.Values $serviceName | default dict).initContainers -}}
-{{- $devInit := include "logfire.dev.waitForPostgres.initContainers"
-    (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
 {{- $userNames := list -}}
 {{- range $userInit -}}
   {{- $userNames = append $userNames .name -}}
 {{- end -}}
-{{- $absurdInit := "" -}}
-{{- if and (eq $serviceName "logfire-task-runner") (not (has
-    "wait-for-absurd-schema" $userNames)) -}}
-  {{- $absurdInit = include "logfire.absurdSchemaReady.initContainer"
-      (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
-{{- end -}}
-{{- $trustedCaInit := include "logfire.trustedCa.initContainer"
-    (dict "ctx" $ctx "serviceName" $serviceName) | trim -}}
-{{- $includeDevInit := and $devInit (not (has "check-db-ready" $userNames)) -}}
-{{- if or $trustedCaInit $includeDevInit $userInit $absurdInit -}}
+{{- $trustedCa := include "logfire.trustedCa.enabled" (dict "ctx" $ctx "serviceName" $serviceName) -}}
+{{- $devInit := and $ctx.Values.dev.deployPostgres (not (has "check-db-ready" $userNames))
+    (has $serviceName (list "logfire-backend" "logfire-backend-auth" "logfire-worker"
+        "logfire-task-runner" "logfire-alert-runner" "logfire-dex" "logfire-backend-migrations"
+        "logfire-backend-post-deploy-migrations" "logfire-ff-migrations" "logfire-ff-crud-api"
+        "logfire-ff-maintenance-scheduler" "logfire-ff-maintenance-worker"
+        "logfire-ff-compaction-worker" "logfire-ff-query-api" "logfire-ff-query-worker"
+        "logfire-ff-ingest" "logfire-ff-ingest-processor" "logfire-ai-gateway"
+        "logfire-remote-mcp")) -}}
+{{- $absurdInit := and (eq $serviceName "logfire-task-runner")
+    (not (has "wait-for-absurd-schema" $userNames)) -}}
+{{- if or $trustedCa $devInit $userInit $absurdInit -}}
 initContainers:
-{{- if $trustedCaInit }}
-{{ $trustedCaInit | nindent 2 }}
+{{- if $trustedCa }}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext"
+    (dict "ctx" $ctx "serviceName" $serviceName) | fromJson }}
+{{- $gateway := eq $serviceName "logfire-ai-gateway" }}
+{{- $inClusterCa := and $gateway (include "logfire.inClusterTls.enabled" $ctx | eq "true") }}
+{{- $repository := $ctx.Values.image.repository | default "" }}
+{{- $image := include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "backendImage") }}
+{{- $baseFile := "/etc/ssl/certs/ca-certificates.crt" }}
+{{- if $gateway }}
+  {{- $repository = $ctx.Values.image.gatewayRepository | default "" }}
+  {{- $image = $ctx.Values.image.gatewayImage }}
+  {{- $baseFile = ternary "/etc/logfire/incluster-ca/ca.crt" "" $inClusterCa }}
+{{- else if hasPrefix "logfire-ff-" $serviceName }}
+  {{- $image = $ctx.Values.image.fusionfireImage }}
+{{- else if eq $serviceName "logfire-worker" }}
+  {{- $image = include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "workerImage") }}
+{{- else if eq $serviceName "logfire-alert-runner" }}
+  {{- $image = $ctx.Values.image.alertRunnerImage | default "logfire-alert-runner-prod" }}
 {{- end }}
-{{- if $includeDevInit }}
-{{ $devInit | nindent 2 }}
+
+  - name: trusted-ca-bundle
+    image: '{{ $repository }}{{ $image }}:{{ include "logfire.serviceTag"
+        (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
+    imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        for f in {{ with $baseFile }}{{ . }} {{ end }}/etc/logfire/trusted-ca-sources/*.crt; do
+          cat "$f"
+          echo
+        done > /etc/logfire/trusted-ca/ca-bundle.crt
+    {{- include "logfire.resources" (dict "Values" $ctx.Values "serviceName" $serviceName)
+        | nindent 4 }}
+    {{- include "logfire.securityContext" $containerSecurityContext | nindent 4 }}
+    volumeMounts:
+      - name: logfire-trusted-ca-sources
+        mountPath: /etc/logfire/trusted-ca-sources
+        readOnly: true
+      - name: logfire-trusted-ca
+        mountPath: /etc/logfire/trusted-ca
+      {{- if $inClusterCa }}
+      {{- include "logfire.inClusterTls.caBundle.volumeMount"
+          (dict "ctx" $ctx "mountPath" "/etc/logfire/incluster-ca") | nindent 6 }}
+      {{- end }}
+{{- end }}
+{{- if $devInit }}
+
+  - name: check-db-ready
+    image: {{ include "logfire.devPostgres.image" $ctx }}
+    command:
+      - sh
+      - -c
+      - >-
+        until pg_isready -h {{ (include "logfire.devPostgres.values" $ctx
+            | fromJson).fullnameOverride }} -p 5432 -U postgres; do echo "Waiting for postgres..."; sleep 2; done
+    {{- $waitSecurityContext := include "logfire.thirdPartyContainerSecurityContext"
+        (dict "ctx" $ctx "identity" "postgres" "serviceName" "postgres-wait"
+        "readOnlyRootFilesystem" true) | fromJson }}
+    {{- include "logfire.securityContext" $waitSecurityContext | nindent 4 }}
 {{- end }}
 {{- if $absurdInit }}
-{{ $absurdInit | nindent 2 }}
+{{- $containerSecurityContext := include "logfire.containerSecurityContext"
+    (dict "ctx" $ctx "serviceName" $serviceName) | fromJson }}
+
+  - name: wait-for-absurd-schema
+    image: '{{ $ctx.Values.image.repository | default "" }}{{ include "logfire.pythonImage"
+        (dict "Values" $ctx.Values "key" "taskRunnerImage") }}:{{ include "logfire.serviceTag"
+        (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
+    imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
+    command:
+      - python
+      - -c
+      - |
+        import os, time, psycopg
+
+        dsn = os.environ["CRUD_PG_DSN"]
+        while True:
+            try:
+                with psycopg.connect(dsn) as conn:
+                    (queue_ready,) = conn.execute("SELECT to_regclass('absurd.t_default')").fetchone()
+                if queue_ready:
+                    break
+                print("Waiting for the 'default' Absurd queue...", flush=True)
+            except psycopg.OperationalError as exc:
+                print(f"Waiting for postgres: {exc}", flush=True)
+            time.sleep(2)
+    env:
+      - name: CRUD_PG_DSN
+        valueFrom:
+          secretKeyRef:
+            name: {{ include "logfire.postgresSecretName" $ctx }}
+            key: postgresDsn
+    {{- include "logfire.securityContext" $containerSecurityContext | nindent 4 }}
+    volumeMounts:
+      {{- include "logfire.tmpVolumeMounts" $ctx | nindent 6 }}
 {{- end }}
 {{- with $userInit }}
 {{ toYaml . | nindent 2 }}

@@ -85,7 +85,9 @@ before the chart managed them, and a duplicate env name can fail an upgrade.
 {{- end -}}
 
 {{- define "logfire.slackApp.enabled" -}}
-{{- if dig "slack" "clientId" "" (.Values.integrations | default dict) -}}true{{- end -}}
+{{- if dig "slack" "clientId" "" (.Values.integrations | default dict) -}}
+true
+{{- end -}}
 {{- end -}}
 
 {{/*

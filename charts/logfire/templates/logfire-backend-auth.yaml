@@ -2,7 +2,9 @@
 {{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson }}
 {{- $servicePort := 8000 }}
 {{- $imageTagOwner := "logfire-backend" }}
-{{- if dig "image" "tag" "" (index .Values $serviceName | default dict) }}{{- $imageTagOwner = $serviceName }}{{- end }}
+{{- if dig "image" "tag" "" (index .Values $serviceName | default dict) }}
+  {{- $imageTagOwner = $serviceName }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
