@@ -3,7 +3,7 @@ version: 0.15.4
 name: logfire
 description: Helm chart for self-hosted Pydantic Logfire
 
-appVersion: "6dc21200"
+appVersion: "04a0335e"
 
 dependencies:
   - name: cert-manager

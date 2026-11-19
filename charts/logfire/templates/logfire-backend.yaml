@@ -203,8 +203,6 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-dex-client-secret") }}
                   key: logfire-dex-client-secret
-            - name: BROWSER_TELEMETRY_COLLECTOR_OTLP_HTTP_HOST
-              value: http://logfire-otel-collector:4318
             - name: APP_VERSION
               value: {{ .Values.releaseVersion | default (include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName)) | quote }}
             - name: JWT_SECRET
