@@ -106,6 +106,15 @@ data:
             default $http_x_forwarded_host;
         }
 
+        # A replay recording is untrusted, so the replay frame loads no recorded image by default.
+        # The player strips image references, and this policy blocks any that remain. The player's
+        # own images are `data:` URLs. After the viewer accepts that the image hosts see their IP
+        # address, the player reloads the frame with `?images=remote`.
+        map $arg_images $replay_frame_img_src {
+            default "data: blob:";
+            remote  "'self' https: data: blob:";
+        }
+
         upstream logfire_backend {
             server {{ $backendHost }}:{{ include "logfire.port" (dict "root" . "port" 8000) }};
         }
@@ -222,7 +231,7 @@ data:
 
                 add_header X-Content-Type-Options "nosniff" always;
                 add_header Referrer-Policy "no-referrer" always;
-                add_header Content-Security-Policy "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' https: blob: data:; font-src 'self'; media-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src $replay_frame_img_src; font-src 'self'; media-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self';" always;
             }
 
             location /image-iframe.html {
@@ -434,7 +443,7 @@ data:
 
                 add_header X-Content-Type-Options "nosniff" always;
                 add_header Referrer-Policy "no-referrer" always;
-                add_header Content-Security-Policy "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' https: blob: data:; font-src 'self'; media-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src $replay_frame_img_src; font-src 'self'; media-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self';" always;
             }
 
             location /image-iframe.html {

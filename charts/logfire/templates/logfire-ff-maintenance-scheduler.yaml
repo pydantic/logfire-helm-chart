@@ -87,6 +87,7 @@ spec:
               value: "1"
             - name: FF_DATAFUSION_MEMORY_LIMIT
               value: {{ (get $effectiveServiceValues "datafusionMemory" | default "auto" | quote) }}
+            {{- include "logfire.ffTmpSpillEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             - name: PG_DSN
               valueFrom:

@@ -38,12 +38,20 @@ variablesApiKey: ""
 frontendApplicationToken: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: "v2026-11-11.03"
+releaseVersion: "v2026-11-18.01"
 
 # -- CRUD database migration Job settings.
 migrations:
   # -- Maximum time the backend migration Job may run, in seconds. The deadline covers all retries. Raise it for large databases where a concurrent index build takes several minutes.
   activeDeadlineSeconds: 3600
+  # -- Settings of the `logfire-backend-post-deploy-migrations` Job. It runs the slow migrations that a release marks `post_deploy`, such as a concurrent index on a large table, with the new version. An upgrade does not wait for it. A failed migration runs again on the next upgrade or the daily retry. The `migrations.post_deploy_runs` table records each result.
+  postDeploy:
+    # -- Maximum time the post-deploy migration Job may run, in seconds.
+    activeDeadlineSeconds: 21600
+    # -- Seconds that Kubernetes keeps a finished post-deploy migration Job. Set it to `null` to keep finished Jobs. With Argo CD self-heal, Argo CD creates the Job again after Kubernetes deletes it. The new Job finds nothing to apply and exits.
+    ttlSecondsAfterFinished: 604800
+    # -- Cron schedule of the `logfire-backend-post-deploy-migrations-retry` CronJob, which retries pending `post_deploy` migrations without an upgrade. Set it to `""` to not create the CronJob. A failed migration then runs again only on the next upgrade.
+    retrySchedule: "17 3 * * *"
 
 # -- Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of
 # the ingress or tunnel in front of the release; if HAProxy closes an idle connection first,
