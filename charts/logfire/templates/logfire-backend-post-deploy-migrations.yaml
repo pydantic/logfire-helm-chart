@@ -86,7 +86,7 @@ spec:
   {{- include "logfire.securityContext" (include "logfire.podSecurityContext" $ctx | fromJson) | nindent 2 }}
   containers:
     - name: {{ $serviceName }}
-      image: '{{ $ctx.Values.image.repository | default "" }}{{ $ctx.Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" "logfire-backend-migrations" "Chart" $ctx.Chart) }}'
+      image: '{{ $ctx.Values.image.repository | default "" }}{{ include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "backendImage") }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" "logfire-backend-migrations" "Chart" $ctx.Chart) }}'
       imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
       {{- include "logfire.securityContext" .containerSecurityContext | nindent 6 }}
       command:
