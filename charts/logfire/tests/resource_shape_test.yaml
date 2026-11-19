@@ -161,3 +161,93 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: null workload overrides fall back to the chart defaults
+    set:
+      image:
+        tag: pinned
+      logfire-ff-query-api:
+        image: null
+        service: null
+      logfire-backend:
+        securityContext: null
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].image
+          pattern: ":pinned$"
+        template: templates/logfire-ff-query-api.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - isNullOrEmpty:
+          path: metadata.annotations
+        template: templates/logfire-ff-query-api.yaml
+        documentIndex: 0
+      - equal:
+          path: spec.template.spec.containers[0].securityContext.runAsNonRoot
+          value: true
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: the otel_collector.prometheus false shorthand leaves the exporter off
+    set:
+      otel_collector:
+        prometheus: false
+    templates:
+      - templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Service
+    asserts:
+      - notContains:
+          path: spec.ports
+          content:
+            name: prometheus-http
+          any: true
+
+  - it: bundled RustFS takes the bucket from an explicit s3 URI when rustfs.bucket is null
+    set:
+      dev:
+        deployRustfs: true
+      objectStore:
+        uri: s3://explicit-bucket/prefix
+      rustfs:
+        bucket: null
+    templates:
+      - templates/rustfs.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].lifecycle.postStart.exec.command[2]
+          pattern: "http://127.0.0.1:9000/explicit-bucket\""
+
+  - it: Dex connectors and static clients keyed by name render as lists
+    set:
+      logfire-dex:
+        config:
+          connectors:
+            github:
+              type: github
+              id: github
+              name: GitHub
+              config:
+                clientID: a
+          staticClients:
+            extra:
+              id: extra
+              name: Extra
+    templates:
+      - templates/dex/secret.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          decodeBase64: true
+          pattern: "(?m)^connectors:\\n- config:"
+      - matchRegex:
+          path: data["config.yaml"]
+          decodeBase64: true
+          pattern: "(?m)^staticClients:\\n(- [\\s\\S]*)?- id: extra"

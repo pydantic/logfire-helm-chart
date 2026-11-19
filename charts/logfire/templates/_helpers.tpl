@@ -421,8 +421,8 @@ fall back to default.
 {{- end }}
 
 {{- define "logfire.serviceTag" -}}
-{{- dig "image" "tag" "" (index .Values .serviceName | default dict)
-    | default (default .Chart.AppVersion .Values.image.tag) -}}
+{{- $image := (index .Values .serviceName | default dict).image | default dict -}}
+{{- $image.tag | default (default .Chart.AppVersion .Values.image.tag) -}}
 {{- end -}}
 
 {{- define "logfire.serviceVersion" -}}
@@ -688,7 +688,10 @@ URI its bucket is authoritative, so RustFS creates the bucket the workloads actu
 {{- if hasPrefix "s3://" $uri -}}
 {{- $bucket = splitList "/" (trimPrefix "s3://" $uri) | first | trim -}}
 {{- end -}}
-{{- $bucket | default (.Values.rustfs.bucket | trim) | default "logfire" -}}
+{{- if not $bucket -}}
+  {{- $bucket = .Values.rustfs.bucket | trim -}}
+{{- end -}}
+{{- $bucket | default "logfire" -}}
 {{- end -}}
 
 {{/* Render objectStore.uri as configured, before in-cluster defaults. */}}
@@ -799,7 +802,11 @@ platform falls back to its own local directory otherwise.
 {{- end -}}
 
 {{- define "isPrometheusExporterEnabled" -}}
-{{- dig "prometheus" "enabled" false (.Values.otel_collector | default dict) | eq true -}}
+{{- with (.Values.otel_collector | default dict).prometheus -}}
+  {{- dig "enabled" false . | eq true -}}
+{{- else -}}
+  false
+{{- end -}}
 {{- end }}
 
 {{/*
@@ -941,7 +948,7 @@ per-workload annotations have final precedence.
 {{- end -}}
 
 {{- define "logfire.serviceAnnotations" -}}
-{{- with dig "service" "annotations" dict (index .Values .serviceName | default dict) -}}
+{{- with ((index .Values .serviceName | default dict).service | default dict).annotations -}}
 {{- toYaml . -}}
 {{- end -}}
 {{- end -}}
@@ -1120,7 +1127,7 @@ back to false. Returns JSON so callers can parse it with `fromJson`.
 {{- $values := .ctx.Values -}}
 {{- $merged := .defaults | default dict -}}
 {{- range $layer := list ($values.securityContext | default dict)
-    (dig "securityContext" dict (get $values .serviceName | default dict)) -}}
+    ((get $values .serviceName | default dict).securityContext | default dict) -}}
   {{- $merged = mergeOverwrite $merged (deepCopy $layer) -}}
   {{- range $key, $value := $layer -}}
     {{- if kindIs "invalid" $value -}}
