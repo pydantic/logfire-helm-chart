@@ -42,6 +42,10 @@ existingSecret:
   enabled: true
   name: "logfire-tokens"
 
+# Fleet's images are public from platform v2026-11-18.01. The transport token is in logfire-tokens.
+fleet:
+  enabled: true
+
 adminSecret:
   enabled: true
   name: "logfire-admin"

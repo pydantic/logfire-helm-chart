@@ -1175,3 +1175,12 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "integrations.slack.clientSecret and integrations.slack.signingSecret are required"
+
+  - it: rejects a Fleet OpAMP URL off the /v1/opamp path
+    set:
+      fleet:
+        enabled: true
+        opampUrl: wss://agents.example.com/opamp
+    asserts:
+      - failedTemplate:
+          errorPattern: "fleet.opampUrl must be a ws:// or wss:// URL whose path is /v1/opamp"

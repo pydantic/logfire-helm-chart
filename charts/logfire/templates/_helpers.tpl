@@ -1504,7 +1504,7 @@ securityContext:
 {{/*
 The numeric identity a chart-owned image runs as. The kubelet verifies `runAsNonRoot` against
 `runAsUser`, and a named image user cannot be verified. The Python, Fusionfire, bcache, and
-gateway images all run as uid/gid 1000; the frontend nginx image runs as uid/gid 33. The
+gateway images, and the Fleet OpAMP server, all run as uid/gid 1000; the frontend nginx image runs as uid/gid 33. The
 platform contract tests keep the image `USER` and these numbers in step.
 */}}
 {{- define "logfire.containerImageIdentity" -}}
@@ -1519,6 +1519,8 @@ platform contract tests keep the image `USER` and these numbers in step.
   "logfire-alert-runner"
   "logfire-remote-mcp"
   "logfire-ai-gateway"
+  "logfire-fleet-control"
+  "logfire-opamp"
   "logfire-ff-ingest"
   "logfire-ff-ingest-processor"
   "logfire-ff-query-api"
@@ -1905,6 +1907,7 @@ The other in-cluster TLS clients are unaffected. They trust `LOGFIRE_CA_PATH` ex
   "logfire-alert-runner"
   "logfire-remote-mcp"
   "logfire-ai-gateway"
+  "logfire-fleet-control"
   "logfire-ff-ingest"
   "logfire-ff-ingest-processor"
   "logfire-ff-query-api"
@@ -1952,6 +1955,8 @@ true
   {{- $image = include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "workerImage") -}}
 {{- else if eq $serviceName "logfire-alert-runner" -}}
   {{- $image = $ctx.Values.image.alertRunnerImage | default "logfire-alert-runner-prod" -}}
+{{- else if eq $serviceName "logfire-fleet-control" -}}
+  {{- $image = $ctx.Values.image.fleetControlImage | default "logfire-fleet-control-prod" -}}
 {{- end -}}
 - name: trusted-ca-bundle
   image: '{{ $repository }}{{ $image }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
@@ -2020,6 +2025,41 @@ true
 - name: logfire-trusted-ca
   emptyDir:
     sizeLimit: 16Mi
+{{- end -}}
+{{- end -}}
+
+{{/*
+Fleet: "true" when `fleet.enabled` is set. The OpAMP server and Fleet control render, `/v1/opamp`
+routes to the OpAMP server, and the backend and auth services turn their Fleet routes on.
+*/}}
+{{- define "logfire.fleet.enabled" -}}
+{{- dig "enabled" false (.Values.fleet | default dict) -}}
+{{- end -}}
+
+{{/* The OpAMP server's public listener port: the in-cluster HTTPS port with in-cluster TLS. */}}
+{{- define "logfire.fleet.opampPort" -}}
+{{- include "logfire.port" (dict "port" 4320 "root" .) -}}
+{{- end -}}
+
+{{/* Fleet control's plain HTTP port. With in-cluster TLS it also serves `inClusterTls.httpsPort`. */}}
+{{- define "logfire.fleet.controlPort" -}}
+4322
+{{- end -}}
+
+{{/*
+Where agents connect: `fleet.opampUrl`, or `/v1/opamp` on the primary hostname, `wss://` when the
+public hostname serves TLS. The backend hands this URL out in setup commands and enrollment, and
+the OpAMP server only accepts credentials issued for it.
+*/}}
+{{- define "logfire.fleet.opampUrl" -}}
+{{- $fleet := .Values.fleet | default dict -}}
+{{- if get $fleet "opampUrl" -}}
+{{- get $fleet "opampUrl" -}}
+{{- else -}}
+{{- $host := include "logfire.primary_hostname" . | trim -}}
+{{- if $host -}}
+{{- printf "%s://%s/v1/opamp" (ternary "wss" "ws" (include "logfire.effective_tls" . | eq "true")) $host -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
@@ -2259,6 +2299,7 @@ image reaches both.
   "logfire-ff-ingest-processor"
   "logfire-ai-gateway"
   "logfire-remote-mcp"
+  "logfire-fleet-control"
 )) -}}
 - name: check-db-ready
   image: {{ include "logfire.devPostgres.image" $ctx }}

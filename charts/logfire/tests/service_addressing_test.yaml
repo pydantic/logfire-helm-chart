@@ -837,3 +837,229 @@ tests:
         documentSelector:
           path: metadata.name
           value: logfire-ff-ingest-config
+
+  - it: routes /v1/opamp to the OpAMP server before the backend's /v1/ catch-all
+    set:
+      fleet:
+        enabled: true
+    templates:
+      - templates/logfire-service-config.yaml
+      - templates/logfire-opamp.yaml
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "acl path_opamp path /v1/opamp\\n(?:.*\\n)*? +use_backend logfire-opamp if path_opamp\\n(?:.*\\n)*? +use_backend logfire-backend if path_backend\\n"
+        template: templates/logfire-service-config.yaml
+      # HAProxy dials the public listener and health-checks the admin port the probes use.
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "server logfire-opamp logfire-opamp\\.default\\.svc\\.cluster\\.local\\.:4320 check port 4321 "
+        template: templates/logfire-service-config.yaml
+      - contains:
+          path: spec.ports
+          content:
+            port: 4320
+            targetPort: 4320
+            name: http
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: Service
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.port
+          value: 4321
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: leaves /v1/opamp to the backend when Fleet is off
+    templates:
+      - templates/logfire-service-config.yaml
+    asserts:
+      - notMatchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "opamp"
+
+  - it: points the OpAMP server at auth and Fleet control on the ports their Services expose
+    set:
+      fleet:
+        enabled: true
+    templates:
+      - templates/logfire-opamp.yaml
+      - templates/logfire-fleet-control.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OPAMP_AUTH_URL
+            value: http://logfire-backend-auth:8000
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OPAMP_CONTROL_URL
+            value: http://logfire-fleet-control:4322
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.ports
+          content:
+            port: 4322
+            targetPort: 4322
+            name: http
+        template: templates/logfire-fleet-control.yaml
+        documentSelector:
+          path: kind
+          value: Service
+
+  - it: keeps the OpAMP server's three URLs on HTTPS and wss with in-cluster and public TLS
+    set:
+      fleet:
+        enabled: true
+      ingress:
+        tls: true
+      inClusterTls:
+        enabled: true
+        caBundle:
+          existingConfigMap:
+            name: logfire-incluster-ca
+    templates:
+      - templates/logfire-opamp.yaml
+      - templates/logfire-fleet-control.yaml
+      - templates/logfire-service-config.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OPAMP_AUTH_URL
+            value: https://logfire-backend-auth:8443
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OPAMP_CONTROL_URL
+            value: https://logfire-fleet-control:8443
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OPAMP_PUBLIC_URL
+            value: wss://logfire.example.com/v1/opamp
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      # The server refuses plain HTTP or ws:// unless this is set, so it must be absent here.
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OPAMP_ALLOW_INSECURE_AUTH
+            value: "true"
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.ports
+          content:
+            name: https
+            port: 8443
+            targetPort: https
+            appProtocol: HTTPS
+            protocol: TCP
+        template: templates/logfire-fleet-control.yaml
+        documentSelector:
+          path: kind
+          value: Service
+      # HAProxy verifies the public listener's certificate; the admin port's check stays plain.
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "server logfire-opamp logfire-opamp\\.default\\.svc\\.cluster\\.local\\.:8443 check port 4321 resolvers kubernetes ssl verify required "
+        template: templates/logfire-service-config.yaml
+
+  - it: hands agents the same OpAMP URL the server accepts credentials for
+    set:
+      fleet:
+        enabled: true
+        opampUrl: wss://agents.example.com/v1/opamp
+    templates:
+      - templates/logfire-backend.yaml
+      - templates/logfire-opamp.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FLEET_OPAMP_URL
+            value: wss://agents.example.com/v1/opamp
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: OPAMP_PUBLIC_URL
+            value: wss://agents.example.com/v1/opamp
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: keeps Fleet control's idle connections open past the OpAMP server's client pool
+    set:
+      fleet:
+        enabled: true
+    templates:
+      - templates/logfire-fleet-control.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: KEEP_ALIVE_TIMEOUT
+            value: "620"
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: runs two fixed OpAMP pods and autoscales Fleet control under the standard preset
+    set:
+      sizingPreset: standard
+      fleet:
+        enabled: true
+    templates:
+      - templates/logfire-opamp.yaml
+      - templates/logfire-fleet-control.yaml
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 2
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - hasDocuments:
+          count: 0
+        template: templates/logfire-opamp.yaml
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler
+          skipEmptyTemplates: true
+      - equal:
+          path: spec.minReplicas
+          value: 2
+        template: templates/logfire-fleet-control.yaml
+        documentSelector:
+          path: kind
+          value: HorizontalPodAutoscaler

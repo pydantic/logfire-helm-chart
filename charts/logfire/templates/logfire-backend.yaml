@@ -288,6 +288,12 @@ spec:
             {{- with (include "logfire.webPushEnv" . | trim) }}
             {{- . | nindent 12 }}
             {{- end }}
+            {{- if (include "logfire.fleet.enabled" . | eq "true") }}
+            - name: FLEET_MANAGEMENT_ENABLED
+              value: "true"
+            - name: FLEET_OPAMP_URL
+              value: {{ include "logfire.fleet.opampUrl" . | quote }}
+            {{- end }}
             - name: ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef:

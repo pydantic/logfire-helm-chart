@@ -55,3 +55,24 @@ async def test_frontend_shell_serves_the_spa(client: httpx.AsyncClient) -> None:
     response = await client.get("/")
     assert response.is_success, response.text
     assert "text/html" in response.headers.get("content-type", ""), response.headers
+
+
+async def test_opamp_route_reaches_the_opamp_server(client: httpx.AsyncClient) -> None:
+    """`/v1/opamp` must reach logfire-opamp, not the backend's `/v1/` catch-all."""
+    response = await client.get("/v1/opamp")
+    assert response.status_code == 400, response.text
+    assert "websocket" in response.text.lower(), response.text
+
+
+async def test_opamp_upgrade_requires_a_credential(client: httpx.AsyncClient) -> None:
+    response = await client.get(
+        "/v1/opamp",
+        headers={
+            "Connection": "Upgrade",
+            "Upgrade": "websocket",
+            "Sec-WebSocket-Version": "13",
+            "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+        },
+    )
+    assert response.status_code == 401, response.text
+    assert response.headers.get("www-authenticate", "").lower().startswith("bearer"), response.headers
