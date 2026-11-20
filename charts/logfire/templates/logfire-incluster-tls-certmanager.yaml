@@ -135,7 +135,7 @@ spec:
     {{- else }}
     name: {{ include "logfire.inClusterTls.certs.certManager.issuerRef.name" $ }}
     kind: {{ include "logfire.inClusterTls.certs.certManager.issuerRef.kind" $ }}
-    group: {{ include "logfire.inClusterTls.certs.certManager.issuerRef.group" $ }}
+    group: {{ dig "certs" "certManager" "issuerRef" "group" "cert-manager.io" $.Values.inClusterTls }}
     {{- end }}
 ---
 {{ end }}

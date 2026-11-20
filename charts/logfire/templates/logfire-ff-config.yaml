@@ -77,7 +77,13 @@ data:
   {{- with (get $maintenanceValues "compactionTiers") }}
   FF_COMPACTION_TIERS: {{ . | toJson | squote }}
   {{- end }}
-  FF_MAX_COMPACTION_JOB_SIZE_BYTES: {{ include "logfire.ffMaxCompactionJobSizeBytes" . | quote }}
+  {{- $compaction := dict "Values" .Values "serviceName" "logfire-ff-compaction-worker" }}
+  {{- $compactionMemoryMi := (include "logfire.effectiveResources" $compaction | fromJson).memoryRequest
+      | include "logfire.memoryToMi" | int }}
+  FF_MAX_COMPACTION_JOB_SIZE_BYTES: {{ coalesce
+      (include "logfire.effectiveServiceValues" $compaction | fromJson).maxCompactionJobSizeBytes
+      (get $maintenanceValues "maxCompactionJobSizeBytes")
+      (printf "%dMB" (min 512 (max 32 (div $compactionMemoryMi 16)))) | quote }}
   FF_INGEST_MAX_TIME_SKEW: "120s"
 
 ---

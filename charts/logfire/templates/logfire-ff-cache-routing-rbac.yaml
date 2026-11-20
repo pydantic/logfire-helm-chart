@@ -3,7 +3,7 @@
 {{- $nameHash := sha256sum $releaseIdentity | trunc 8 -}}
 {{- $namePrefix := $identity | trunc 54 | trimSuffix "-" -}}
 {{- $name := printf "%s-%s" $namePrefix $nameHash -}}
-{{- $topology := include "logfire.bcacheTopology" (dict "ctx" .) | fromJson -}}
+{{- $topology := include "logfire.bcacheTopology" . | fromJson -}}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:

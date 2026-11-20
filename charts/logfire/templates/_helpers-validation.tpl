@@ -1,588 +1,341 @@
 {{/*
-================================================================================
-Configuration Validation Helpers
-================================================================================
-These helpers validate chart configuration and fail with clear error messages
-when required values are missing or incorrectly configured.
+Fail with a clear message when required values are missing or inconsistent. The checks run in
+order, so the first failing check names the error.
 */}}
+{{- define "logfire.validateConfig" -}}
+{{- $values := .Values -}}
 
-{{/*
-Validate that objectStore.uri resolves to a nonblank value (required for production)
-*/}}
-{{- define "logfire.validate.objectStore" -}}
-{{- if not .Values.dev.deployRustfs -}}
-  {{- if not (include "logfire.objectStoreUri" . | trim) -}}
-    {{- fail "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead." -}}
+{{- with $values.sizingPreset -}}
+  {{- $presets := $values.sizingPresets | default dict -}}
+  {{- if not (hasKey $presets .) -}}
+    {{- fail (printf "Unknown sizingPreset %q. Valid presets: %s" .
+        ((keys $presets | sortAlpha) | join ", ")) -}}
   {{- end -}}
 {{- end -}}
+
+{{- if and (not $values.dev.deployRustfs) (not (include "logfire.objectStoreUri" . | trim)) -}}
+  {{- fail
+      "objectStore.uri is required. Set objectStore.uri to your S3/Azure/GCS bucket URI (e.g., 's3://bucket-name' or 'az://container-name'). For local development, you can set dev.deployRustfs=true instead." -}}
 {{- end -}}
 
-{{/*
-Validate that objectStore.volumes and objectStore.volumeMounts entries do not collide with the
-volumes and mount paths the chart adds to the same pods. Kubernetes rejects a pod that lists the
-same volume name or mount path twice, so the chart reserves its generated names and paths here.
-The entries reach FusionFire and the Python services (backend, worker), so a name or path any of
-them mounts is reserved. The in-cluster TLS and trusted CA volumes are reserved only while enabled.
-*/}}
-{{- define "logfire.validate.objectStoreVolumes" -}}
+{{- /* Kubernetes rejects a pod that lists the same volume name or mount path twice. The entries
+reach FusionFire and the Python services (backend, worker), so a name or path any of them mounts
+is reserved. The in-cluster TLS and trusted CA volumes are reserved only while enabled. */ -}}
 {{- $reservedNames := list "tmp" "scratch-data" "ingest-data" "logfire-data" -}}
 {{- $reservedMountPaths := list "/tmp" "/scratch" "/fusionfire/ingest-data" "/var/lib/logfire" -}}
-{{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
-{{- $reservedNames = concat $reservedNames (list "logfire-incluster-tls" "logfire-incluster-ca-bundle") -}}
-{{- $reservedMountPaths = concat $reservedMountPaths (list "/etc/tls" "/etc/logfire/incluster-ca") -}}
+{{- if include "logfire.inClusterTls.enabled" . | eq "true" -}}
+  {{- $reservedNames = concat $reservedNames (list "logfire-incluster-tls"
+      "logfire-incluster-ca-bundle") -}}
+  {{- $reservedMountPaths = concat $reservedMountPaths (list "/etc/tls"
+      "/etc/logfire/incluster-ca") -}}
 {{- end -}}
 {{- if include "logfire.trustedCa.enabled" (dict "ctx" . "serviceName" "logfire-worker") -}}
-{{- $reservedNames = concat $reservedNames (list "logfire-trusted-ca-sources" "logfire-trusted-ca") -}}
-{{- $reservedMountPaths = concat $reservedMountPaths (list "/etc/logfire/trusted-ca-sources" "/etc/logfire/trusted-ca") -}}
+  {{- $reservedNames = concat $reservedNames (list "logfire-trusted-ca-sources"
+      "logfire-trusted-ca") -}}
+  {{- $reservedMountPaths = concat $reservedMountPaths (list "/etc/logfire/trusted-ca-sources"
+      "/etc/logfire/trusted-ca") -}}
 {{- end -}}
-{{- $objectStore := .Values.objectStore | default dict -}}
-{{- range $index, $volume := (get $objectStore "volumes" | default list) -}}
-  {{- $name := get $volume "name" -}}
-  {{- if has $name $reservedNames -}}
-    {{- fail (printf "objectStore.volumes[%d].name '%s' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: %s." $index $name ($reservedNames | join ", ")) -}}
+{{- $objectStore := $values.objectStore | default dict -}}
+{{- range $index, $volume := get $objectStore "volumes" | default list -}}
+  {{- if has (get $volume "name") $reservedNames -}}
+    {{- fail
+        (printf "objectStore.volumes[%d].name '%s' is reserved by the chart. Rename the volume, because chart-owned containers mount a volume with that name. Reserved names: %s."
+        $index (get $volume "name") ($reservedNames | join ", ")) -}}
   {{- end -}}
 {{- end -}}
-{{- range $index, $mount := (get $objectStore "volumeMounts" | default list) -}}
-  {{- $mountPath := get $mount "mountPath" -}}
-  {{- if has $mountPath $reservedMountPaths -}}
-    {{- fail (printf "objectStore.volumeMounts[%d].mountPath '%s' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: %s." $index $mountPath ($reservedMountPaths | join ", ")) -}}
+{{- range $index, $mount := get $objectStore "volumeMounts" | default list -}}
+  {{- if has (get $mount "mountPath") $reservedMountPaths -}}
+    {{- fail
+        (printf "objectStore.volumeMounts[%d].mountPath '%s' is reserved by the chart. Use another mount path, because chart-owned containers mount a writable volume at that path. Reserved paths: %s."
+        $index (get $mount "mountPath") ($reservedMountPaths | join ", ")) -}}
   {{- end -}}
 {{- end -}}
+
+{{- if not (include "logfire.effective_hostnames" . | fromJson).hosts -}}
+  {{- fail
+      "At least one hostname is required for Logfire. Set gateway.hostnames or ingress.hostnames so the chart can generate public URLs and CORS settings." -}}
 {{- end -}}
 
-{{/*
-Validate public hostnames configuration
-*/}}
-{{- define "logfire.validate.ingress" -}}
-{{- $result := include "logfire.effective_hostnames" . | fromJson -}}
-{{- $hosts := default (list) $result.hosts -}}
-{{- if eq (len $hosts) 0 -}}
-  {{- fail "At least one hostname is required for Logfire. Set gateway.hostnames or ingress.hostnames so the chart can generate public URLs and CORS settings." -}}
+{{- if and $values.gateway.enabled $values.gateway.create (not $values.gateway.gatewayClassName) -}}
+  {{- fail
+      "gateway.gatewayClassName is required when gateway.create is true. Specify the GatewayClass name (e.g., 'istio', 'cilium', 'nginx', 'envoy-gateway')." -}}
 {{- end -}}
+{{- if and $values.gateway.enabled (not $values.gateway.create) (not $values.gateway.name) -}}
+  {{- fail
+      "gateway.name is required when gateway.enabled is true and gateway.create is false. Provide the name of the existing Gateway resource to attach the HTTPRoute to." -}}
+{{- end -}}
+{{- if and $values.ingress.enabled $values.gateway.enabled -}}
+  {{- fail
+      "Both ingress.enabled and gateway.enabled are true. Enable only one of Ingress or Gateway API to avoid routing conflicts. Set ingress.enabled=false to use Gateway API, or gateway.enabled=false to use Ingress." -}}
 {{- end -}}
 
-{{/*
-Validate postgres configuration - either external secret or DSN must be provided
-*/}}
-{{- define "logfire.validate.postgres" -}}
-{{- if not .Values.dev.deployPostgres -}}
-  {{- if .Values.postgresSecret.enabled -}}
-    {{- if not .Values.postgresSecret.name -}}
-      {{- fail "postgresSecret.name is required when postgresSecret.enabled is true. Provide the name of your Kubernetes Secret containing 'postgresDsn' and 'postgresFFDsn' keys." -}}
+{{- if not $values.dev.deployPostgres -}}
+  {{- if $values.postgresSecret.enabled -}}
+    {{- if not $values.postgresSecret.name -}}
+      {{- fail
+          "postgresSecret.name is required when postgresSecret.enabled is true. Provide the name of your Kubernetes Secret containing 'postgresDsn' and 'postgresFFDsn' keys." -}}
     {{- end -}}
-  {{- else -}}
-    {{- if not .Values.postgresDsn -}}
-      {{- fail "postgresDsn is required when not using dev.deployPostgres or postgresSecret. Provide a PostgreSQL DSN for the crud database." -}}
-    {{- end -}}
-    {{- if not .Values.postgresFFDsn -}}
-      {{- fail "postgresFFDsn is required when not using dev.deployPostgres or postgresSecret. Provide a PostgreSQL DSN for the ff database." -}}
-    {{- end -}}
+  {{- else if not $values.postgresDsn -}}
+    {{- fail
+        "postgresDsn is required when not using dev.deployPostgres or postgresSecret. Provide a PostgreSQL DSN for the crud database." -}}
+  {{- else if not $values.postgresFFDsn -}}
+    {{- fail
+        "postgresFFDsn is required when not using dev.deployPostgres or postgresSecret. Provide a PostgreSQL DSN for the ff database." -}}
+  {{- end -}}
+  {{- $dexStorage := dig "config" "storage" dict (index $values "logfire-dex" | default dict) -}}
+  {{- if and (eq (dig "type" "" $dexStorage) "postgres")
+      (not (dig "config" dict $dexStorage).host) -}}
+    {{- fail
+        "logfire-dex.config.storage.config.host is required when using postgres storage type. Configure the Dex storage to point to your PostgreSQL instance." -}}
   {{- end -}}
 {{- end -}}
-{{- end -}}
 
-{{/*
-Validate dex storage configuration when using external postgres
-*/}}
-{{- define "logfire.validate.dexStorage" -}}
-{{- $dexConfig := dig "config" dict (index .Values "logfire-dex" | default dict) -}}
-{{- $storage := dig "storage" dict $dexConfig -}}
-{{- $storageType := dig "type" "" $storage -}}
-{{- if and (not .Values.dev.deployPostgres) (eq $storageType "postgres") -}}
-  {{- $storageConfig := dig "config" dict $storage -}}
-  {{- if not $storageConfig.host -}}
-    {{- fail "logfire-dex.config.storage.config.host is required when using postgres storage type. Configure the Dex storage to point to your PostgreSQL instance." -}}
-  {{- end -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Validate AI configuration consistency - if model is set, required provider config must exist
-*/}}
-{{- define "logfire.validate.ai" -}}
-{{- $ai := .Values.ai | default dict -}}
+{{- $ai := $values.ai | default dict -}}
 {{- $openAi := get $ai "openAi" | default dict -}}
 {{- $vertexAi := get $ai "vertexAi" | default dict -}}
 {{- $azureOpenAi := get $ai "azureOpenAi" | default dict -}}
 {{- $multiRegionLocation := get $vertexAi "multiRegionLocation" -}}
 {{- if and $multiRegionLocation (not (has $multiRegionLocation (list "us" "eu"))) -}}
-  {{- fail (printf "ai.vertexAi.multiRegionLocation must be exactly 'us' or 'eu', got '%s'. Do not use 'global' as a data-residency workaround." $multiRegionLocation) -}}
+  {{- fail
+      (printf "ai.vertexAi.multiRegionLocation must be exactly 'us' or 'eu', got '%s'. Do not use 'global' as a data-residency workaround."
+      $multiRegionLocation) -}}
 {{- end -}}
-{{- $models := list
-  (dict "name" "ai.model" "value" (get $ai "model"))
-  (dict "name" "ai.chatModel" "value" (get $ai "chatModel"))
-  (dict "name" "ai.reasoningModel" "value" (get $ai "reasoningModel"))
-  (dict "name" "ai.llmJudgeModel" "value" (get $ai "llmJudgeModel"))
--}}
-{{- range $models -}}
-{{- if .value -}}
-  {{- $model := .value -}}
-  {{- $name := .name -}}
-  {{- range $fallback := splitList "," $model -}}
+{{- range $name := list "ai.model" "ai.chatModel" "ai.reasoningModel" "ai.llmJudgeModel" -}}
+  {{- range $fallback := get $ai (trimPrefix "ai." $name) | default "" | splitList "," -}}
     {{- $fallback = trim $fallback -}}
-    {{- if hasPrefix "google-cloud:" $fallback -}}
-      {{- if eq $fallback "google-cloud:gemini-3.5-flash" -}}
-        {{- if not $multiRegionLocation -}}
-          {{- fail (printf "ai.vertexAi.multiRegionLocation is required when %s contains Google Cloud model '%s'. Set it to 'us' or 'eu'." $name $fallback) -}}
-        {{- end -}}
-      {{- else if not (get $vertexAi "region") -}}
-        {{- fail (printf "ai.vertexAi.region is required when %s contains regional Google Cloud model '%s'." $name $fallback) -}}
+    {{- if eq $fallback "google-cloud:gemini-3.5-flash" -}}
+      {{- if not $multiRegionLocation -}}
+        {{- fail
+            (printf "ai.vertexAi.multiRegionLocation is required when %s contains Google Cloud model '%s'. Set it to 'us' or 'eu'."
+            $name $fallback) -}}
       {{- end -}}
-    {{- else if or (hasPrefix "openai:" $fallback) (hasPrefix "openai-chat:" $fallback) (hasPrefix "openai-responses:" $fallback) -}}
-      {{- if not (get $openAi "apiKey") -}}
-        {{- fail (printf "ai.openAi.apiKey is required when %s uses OpenAI model '%s'. Provide your OpenAI API key." $name $fallback) -}}
-      {{- end -}}
+    {{- else if and (hasPrefix "google-cloud:" $fallback) (not (get $vertexAi "region")) -}}
+      {{- fail
+          (printf "ai.vertexAi.region is required when %s contains regional Google Cloud model '%s'."
+          $name $fallback) -}}
+    {{- else if and (regexMatch "^openai(-chat|-responses)?:" $fallback)
+        (not (get $openAi "apiKey")) -}}
+      {{- fail
+          (printf "ai.openAi.apiKey is required when %s uses OpenAI model '%s'. Provide your OpenAI API key."
+          $name $fallback) -}}
     {{- else if hasPrefix "azure:" $fallback -}}
       {{- if not (get $azureOpenAi "endpoint") -}}
-        {{- fail (printf "ai.azureOpenAi.endpoint is required when %s uses Azure OpenAI model '%s'." $name $fallback) -}}
+        {{- fail (printf "ai.azureOpenAi.endpoint is required when %s uses Azure OpenAI model '%s'."
+            $name $fallback) -}}
       {{- end -}}
       {{- if not (get $azureOpenAi "apiKey") -}}
-        {{- fail (printf "ai.azureOpenAi.apiKey is required when %s uses Azure OpenAI model '%s'." $name $fallback) -}}
+        {{- fail (printf "ai.azureOpenAi.apiKey is required when %s uses Azure OpenAI model '%s'."
+            $name $fallback) -}}
       {{- end -}}
-    {{- else if hasPrefix "google-vertex:" $fallback -}}
-      {{- if not (get $vertexAi "region") -}}
-        {{- fail (printf "ai.vertexAi.region is required when %s uses Google Vertex AI model '%s'." $name $fallback) -}}
-      {{- end -}}
+    {{- else if and (hasPrefix "google-vertex:" $fallback) (not (get $vertexAi "region")) -}}
+      {{- fail (printf "ai.vertexAi.region is required when %s uses Google Vertex AI model '%s'."
+          $name $fallback) -}}
     {{- else if hasPrefix "anthropic-vertex:" $fallback -}}
       {{- if not (get $vertexAi "region") -}}
-        {{- fail (printf "ai.vertexAi.region is required when %s uses Anthropic Vertex model '%s'." $name $fallback) -}}
+        {{- fail (printf "ai.vertexAi.region is required when %s uses Anthropic Vertex model '%s'."
+            $name $fallback) -}}
       {{- end -}}
       {{- if not (get $vertexAi "anthropicProjectId") -}}
-        {{- fail (printf "ai.vertexAi.anthropicProjectId is required when %s uses Anthropic Vertex model '%s'." $name $fallback) -}}
+        {{- fail
+            (printf "ai.vertexAi.anthropicProjectId is required when %s uses Anthropic Vertex model '%s'."
+            $name $fallback) -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
-{{- end -}}
-{{- end -}}
 
-{{/*
-Validate existing secret configuration
-*/}}
-{{- define "logfire.validate.existingSecret" -}}
-{{- if .Values.existingSecret.enabled -}}
-  {{- if not .Values.existingSecret.name -}}
-    {{- $msg := "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-encryption-key, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys." -}}
-    {{- if .Values.webPush.enabled -}}
-      {{- $msg = printf "%s It must also hold a logfire-web-push-vapid-key key when webPush.enabled." $msg -}}
-    {{- end -}}
-    {{- if include "logfire.slackApp.enabled" . -}}
-      {{- $msg = printf "%s It must also hold logfire-slack-client-secret and logfire-slack-signing-secret keys when integrations.slack.clientId is set." $msg -}}
-    {{- end -}}
-    {{- fail $msg -}}
+{{- $slackApp := include "logfire.slackApp.enabled" . -}}
+{{- if and $values.existingSecret.enabled (not $values.existingSecret.name) -}}
+  {{- $msg :=
+      "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-encryption-key, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys." -}}
+  {{- if $values.webPush.enabled -}}
+    {{- $msg = printf "%s It must also hold a logfire-web-push-vapid-key key when webPush.enabled."
+        $msg -}}
   {{- end -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Validate admin secret configuration
-*/}}
-{{- define "logfire.validate.adminSecret" -}}
-{{- if .Values.adminSecret.enabled -}}
-  {{- if not .Values.adminSecret.name -}}
-    {{- fail "adminSecret.name is required when adminSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-admin-password, logfire-admin-totp-secret, and logfire-admin-totp-recovery-codes keys." -}}
+  {{- if $slackApp -}}
+    {{- $msg = printf
+        "%s It must also hold logfire-slack-client-secret and logfire-slack-signing-secret keys when integrations.slack.clientId is set."
+        $msg -}}
   {{- end -}}
+  {{- fail $msg -}}
 {{- end -}}
+{{- $gatewaySecret := get $values "existingGatewaySecret" | default dict -}}
+{{- if and (index $values "logfire-ai-gateway" "enabled") (get $gatewaySecret "enabled")
+    (not (get $gatewaySecret "name")) -}}
+  {{- fail
+      "existingGatewaySecret.name is required when existingGatewaySecret.enabled is true. Provide the name of your Kubernetes Secret containing 'key' (gateway encryption key) and 'internalSecret' (gateway internal secret) keys." -}}
 {{- end -}}
-
-{{/*
-Validate gateway secret configuration
-*/}}
-{{- define "logfire.validate.existingGatewaySecret" -}}
-{{- if (index .Values "logfire-ai-gateway" "enabled") -}}
-{{- $ex := get .Values "existingGatewaySecret" | default dict -}}
-{{- if get $ex "enabled" -}}
-  {{- if not (get $ex "name") -}}
-    {{- fail "existingGatewaySecret.name is required when existingGatewaySecret.enabled is true. Provide the name of your Kubernetes Secret containing 'key' (gateway encryption key) and 'internalSecret' (gateway internal secret) keys." -}}
-  {{- end -}}
-{{- end -}}
-{{- end -}}
+{{- if and $values.adminSecret.enabled (not $values.adminSecret.name) -}}
+  {{- fail
+      "adminSecret.name is required when adminSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-admin-password, logfire-admin-totp-secret, and logfire-admin-totp-recovery-codes keys." -}}
 {{- end -}}
 
-
-{{/*
-Validate scratch volume configuration.
-*/}}
-{{- define "logfire.validate.scratchVolumes" -}}
-{{- range $serviceName := list "logfire-ff-compaction-worker" "logfire-ff-maintenance-worker" "logfire-ff-query-api" "logfire-ff-query-worker" -}}
-  {{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" $.Values "serviceName" $serviceName) | fromJson -}}
-  {{- $scratchVolume := get $serviceValues "scratchVolume" | default dict -}}
-  {{- if and $scratchVolume (not (get $scratchVolume "storage")) -}}
-    {{- fail (printf "%s.scratchVolume.storage is required when scratchVolume is configured. Omit %s.scratchVolume to use emptyDir scratch storage, or set scratchVolume.storage for an ephemeral PVC." $serviceName $serviceName) -}}
-  {{- end -}}
-{{- end -}}
-{{- end -}}
-
-
-{{/*
-Validate the Slack App settings. The chart cannot generate these credentials.
-*/}}
-{{- define "logfire.validate.integrations" -}}
-{{- if and (include "logfire.slackApp.enabled" .) (not .Values.existingSecret.enabled) -}}
-  {{- $slack := .Values.integrations.slack -}}
-  {{- if or (not $slack.clientSecret) (not $slack.signingSecret) -}}
-    {{- fail "integrations.slack.clientSecret and integrations.slack.signingSecret are required with integrations.slack.clientId, unless existingSecret holds logfire-slack-client-secret and logfire-slack-signing-secret." -}}
-  {{- end -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Removed values that would otherwise be ignored without an error. Each guard names the move
-instead of letting the install quietly change behaviour. A check reads a value, not a key, when
-the 0.14.0 defaults carry the key, because `--reuse-values` keeps those defaults.
-- The v1 byte cache block: its settings moved to `logfire-ff-bcache`, and ignoring it would turn
-  zone routing off.
-- `dev.deployMinio`: ignoring it would drop the in-cluster object store.
-- `serviceAccountName`: ignoring it would move the pods to another ServiceAccount and drop the
-  cloud identity bound to it. The 0.14.0 default is `default`, so only another value fails.
-*/}}
-{{- define "logfire.validate.removedValues" -}}
-{{- if .Values.dev.deployMinio -}}
-  {{- fail "dev.deployMinio was removed in chart 0.15.0. Set dev.deployRustfs=true and move minio.auth and minio.persistence to rustfs.auth and rustfs.persistence. Existing MinIO data does not carry over, and the object store Service is logfire-rustfs." -}}
-{{- end -}}
-{{- with .Values.serviceAccountName -}}
-{{- if ne (toString .) "default" -}}
-  {{- fail "serviceAccountName was removed in chart 0.15.0. Set serviceAccount.name instead." -}}
-{{- end -}}
-{{- end -}}
-{{- if hasKey .Values "logfire-ff-cache-byte" -}}
-  {{- fail "logfire-ff-cache-byte is no longer a values block. Move its settings to logfire-ff-bcache: replica, resource, autoscaling and PDB settings keep their names, scratchVolume and cacheDiskCapacity become logfire-ff-bcache.disk.storage, and clientSideRouting.zoneAware becomes logfire-ff-bcache.topology.zoneAware." -}}
-{{- end -}}
-{{- end -}}
-
-
-{{/*
-nginx accepts `auto` or a positive worker count. Reject other values at install, because nginx
-rejects them only when the frontend pod starts.
-*/}}
-{{- define "logfire.validate.frontendWorkerProcesses" -}}
-{{- $workers := dig "nginx" "workerProcesses" "auto" (index .Values "logfire-frontend-service" | default dict) | toString -}}
-{{- if not (regexMatch "^(auto|[1-9][0-9]*)$" $workers) -}}
-  {{- fail (printf "logfire-frontend-service.nginx.workerProcesses must be auto or a positive integer, got %q." $workers) -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Validate autoscaling configuration - warn if both HPA and KEDA are enabled
-*/}}
-{{- define "logfire.validate.sizingPreset" -}}
-{{- $presetName := .Values.sizingPreset | default "" -}}
-{{- if $presetName -}}
-  {{- $presets := .Values.sizingPresets | default dict -}}
-  {{- if not (hasKey $presets $presetName) -}}
-    {{- fail (printf "Unknown sizingPreset %q. Valid presets: %s" $presetName ((keys $presets | sortAlpha) | join ", ")) -}}
-  {{- end -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Validate autoscaling configuration - warn if both HPA and KEDA are enabled
-*/}}
-{{- define "logfire.validate.autoscaling" -}}
-{{- $serviceName := .serviceName -}}
-{{- $serviceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
-{{- $autoscaling := $serviceValues.autoscaling | default dict -}}
-{{- if $autoscaling -}}
-  {{- $hpaEnabled := include "logfire.hpa.enabled" $autoscaling | eq "true" -}}
-  {{- $kedaEnabled := include "logfire.keda.enabled" $autoscaling | eq "true" -}}
-  {{- range $key := list "cpuAverage" "memAverage" "extraMetrics" -}}
-    {{- if hasKey $autoscaling $key -}}
-      {{- fail (printf "%s.autoscaling.%s was removed in chart 0.15.0. Move it to %s.autoscaling.hpa.%s and set autoscaling.hpa.enabled=true." $serviceName $key $serviceName $key) -}}
-    {{- end -}}
-  {{- end -}}
-  {{- $hpa := $autoscaling.hpa | default dict -}}
-  {{- $cpuAverage := $hpa.cpuAverage -}}
-  {{- $memAverage := $hpa.memAverage -}}
-  {{- $extraMetrics := $hpa.extraMetrics -}}
-  {{- if and $hpaEnabled $kedaEnabled -}}
-    {{- fail (printf "Both HPA and KEDA are enabled for '%s'. Only one autoscaler should be enabled at a time to avoid conflicts." $serviceName) -}}
-  {{- end -}}
-  {{- if and $hpaEnabled (not (or $cpuAverage $memAverage $extraMetrics)) -}}
-    {{- fail (printf "HPA is enabled for '%s', but no metrics are configured. Set autoscaling.hpa.cpuAverage, autoscaling.hpa.memAverage, or autoscaling.hpa.extraMetrics." $serviceName) -}}
-  {{- end -}}
-  {{- if $autoscaling.minReplicas -}}
-    {{- if $autoscaling.maxReplicas -}}
-      {{- if gt (int $autoscaling.minReplicas) (int $autoscaling.maxReplicas) -}}
-        {{- fail (printf "autoscaling.minReplicas (%d) cannot be greater than autoscaling.maxReplicas (%d) for '%s'." (int $autoscaling.minReplicas) (int $autoscaling.maxReplicas) $serviceName) -}}
-      {{- end -}}
-    {{- end -}}
-  {{- end -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Validate email/admin configuration
-*/}}
-{{- define "logfire.validate.admin" -}}
-{{- if not .Values.adminEmail -}}
+{{- if not $values.adminEmail -}}
   {{- fail "adminEmail is required. Provide an email address for the initial admin user." -}}
 {{- end -}}
-{{- $emailRegex := "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$" -}}
-{{- if not (regexMatch $emailRegex .Values.adminEmail) -}}
-  {{- fail (printf "adminEmail '%s' does not appear to be a valid email address." .Values.adminEmail) -}}
+{{- if not (regexMatch "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$" $values.adminEmail) -}}
+  {{- fail (printf "adminEmail '%s' does not appear to be a valid email address."
+      $values.adminEmail) -}}
 {{- end -}}
-{{- end -}}
-
-{{/*
-Validate the API keys that the chart creates in the admin organization
-*/}}
-{{- define "logfire.validate.adminApiKeys" -}}
-{{- range $index, $apiKey := .Values.adminApiKeys -}}
+{{- range $index, $apiKey := $values.adminApiKeys -}}
   {{- if not (regexMatch "^[A-Za-z0-9][A-Za-z0-9 ._-]*$" (toString (default "" $apiKey.name))) -}}
-    {{- fail (printf "adminApiKeys[%d].name is required and may contain only letters, digits, spaces, dots, underscores, and dashes." $index) -}}
+    {{- fail
+        (printf "adminApiKeys[%d].name is required and may contain only letters, digits, spaces, dots, underscores, and dashes."
+        $index) -}}
   {{- end -}}
   {{- if or (not $apiKey.secretName) (not $apiKey.secretKey) -}}
-    {{- fail (printf "adminApiKeys[%d] needs secretName and secretKey. Provide the Kubernetes Secret and the key that hold the token." $index) -}}
+    {{- fail
+        (printf "adminApiKeys[%d] needs secretName and secretKey. Provide the Kubernetes Secret and the key that hold the token."
+        $index) -}}
   {{- end -}}
   {{- $badScopes := or (not (kindIs "slice" $apiKey.scopes)) (not $apiKey.scopes) -}}
-  {{- if not $badScopes -}}
-    {{- range $apiKey.scopes -}}
-      {{- if not (regexMatch "^[a-z_]+:[a-z_]+$" (toString .)) -}}
-        {{- $badScopes = true -}}
-      {{- end -}}
+  {{- range kindIs "slice" $apiKey.scopes | ternary $apiKey.scopes (list) -}}
+    {{- if not (regexMatch "^[a-z_]+:[a-z_]+$" (toString .)) -}}
+      {{- $badScopes = true -}}
     {{- end -}}
   {{- end -}}
   {{- if $badScopes -}}
-    {{- fail (printf "adminApiKeys[%d].scopes must list at least one scope, and each scope looks like instance:admin." $index) -}}
+    {{- fail
+        (printf "adminApiKeys[%d].scopes must list at least one scope, and each scope looks like instance:admin."
+        $index) -}}
   {{- end -}}
 {{- end -}}
+
+{{- $redisSecret := $values.redisSecret | default dict -}}
+{{- if and (get $redisSecret "enabled") (not (get $redisSecret "name")) -}}
+  {{- fail
+      "redisSecret.name is required when redisSecret.enabled is true. Set it to a Secret that holds the sharedDsn, tailDsn, tokenDsn and usageDsn keys." -}}
+{{- end -}}
+{{- if and (not (get $redisSecret "enabled")) (not (dig "enabled" true
+    (index $values "logfire-redis" | default dict))) (not $values.redisDsn) -}}
+  {{- fail
+      "redisDsn is required when logfire-redis.enabled is false and redisSecret is not in use. Provide a Redis DSN for your external Redis instance, or set redisSecret.name to a Secret that holds the Redis DSNs." -}}
 {{- end -}}
 
-{{/*
-Validate in-cluster TLS configuration
-*/}}
-{{- define "logfire.validate.inClusterTls" -}}
-{{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
-  {{- $mode := include "logfire.inClusterTls.certs.mode" . -}}
-  {{- if not (or (eq $mode "existingSecrets") (eq $mode "certManager")) -}}
-    {{- fail (printf "inClusterTls.certs.mode must be one of 'existingSecrets' or 'certManager' (got %q)" $mode) -}}
-  {{- end -}}
-
-  {{- $cm := .Values.inClusterTls.caBundle.existingConfigMap.name -}}
-  {{- $secret := dig "existingSecret" "name" "" .Values.inClusterTls.caBundle -}}
-  {{- if and $cm $secret -}}
-    {{- fail "inClusterTls.caBundle: specify only one of existingConfigMap.name or existingSecret.name" -}}
-  {{- end -}}
-
-  {{- if eq $mode "certManager" -}}
-    {{- $issuerKind := include "logfire.inClusterTls.certs.certManager.issuerRef.kind" . -}}
-    {{- $issuerName := include "logfire.inClusterTls.certs.certManager.issuerRef.name" . -}}
-    {{- if not (or (eq $issuerKind "Issuer") (eq $issuerKind "ClusterIssuer")) -}}
-      {{- fail (printf "inClusterTls.certs.certManager.issuerRef.kind must be 'Issuer' or 'ClusterIssuer' (got %q)" $issuerKind) -}}
-    {{- end -}}
-
-    {{- /* Auto-Issuer only supports creating a namespaced Issuer */ -}}
-    {{- if and (not $issuerName) (ne $issuerKind "Issuer") -}}
-      {{- fail "inClusterTls.certs.mode=certManager with an empty issuerRef.name uses the chart-managed *namespaced* Issuer. Set issuerRef.kind=Issuer, or provide a non-empty issuerRef.name (Issuer/ClusterIssuer)." -}}
-    {{- end -}}
-
-    {{- $autoIssuer := include "logfire.inClusterTls.certs.certManager.autoIssuer" . | eq "true" -}}
-    {{- if and (not $cm) (not $secret) (not $autoIssuer) -}}
-      {{- fail "inClusterTls.enabled is true and certs.mode=certManager, but no CA bundle was provided. Set inClusterTls.caBundle.existingConfigMap.name (recommended) or inClusterTls.caBundle.existingSecret.name, or leave issuerRef.name empty to use the chart-managed CA." -}}
-    {{- end -}}
-
-    {{- if and (not (dig "deployCertManager" false .Values.dev)) (not (.Capabilities.APIVersions.Has "cert-manager.io/v1")) -}}
-      {{- fail "inClusterTls.certs.mode=certManager requires cert-manager CRDs (cert-manager.io/v1). Either install cert-manager separately, or set dev.deployCertManager=true for Kind/dev." -}}
-    {{- end -}}
-
-  {{- else -}}
-    {{- /* existingSecrets */ -}}
-    {{- if and (not $cm) (not $secret) -}}
-      {{- fail "inClusterTls.enabled is true and certs.mode=existingSecrets, but no CA bundle was provided. Set inClusterTls.caBundle.existingConfigMap.name (recommended) or inClusterTls.caBundle.existingSecret.name." -}}
-    {{- end -}}
-  {{- end -}}
+{{- /* The platform does not send email as pydantic.dev from a self-hosted install, and the task
+runner and the worker refuse to start without EMAIL_FROM_ADDRESS, so this stops the install
+before any workload rolls out. With dev.deployMaildev the workloads get a placeholder sender. */ -}}
+{{- $smtp := $values.smtp | default dict -}}
+{{- if and (get $smtp "host") (not (get $smtp "fromAddress")) (not $values.dev.deployMaildev) -}}
+  {{- fail
+      "smtp.fromAddress is required when smtp.host is set. Set it to the sender address of Logfire email, such as logfire@example.com, on a domain that your SMTP server may send for. Logfire does not send email as pydantic.dev from a self-hosted install." -}}
 {{- end -}}
-{{- end -}}
-
-{{/*
-Validate Redis configuration
-*/}}
-{{- define "logfire.validate.redis" -}}
-{{- $redisEnabled := dig "enabled" true (index .Values "logfire-redis" | default dict) -}}
-{{- $redisSecret := .Values.redisSecret | default dict -}}
-{{- if get $redisSecret "enabled" -}}
-  {{- if not (get $redisSecret "name") -}}
-    {{- fail "redisSecret.name is required when redisSecret.enabled is true. Set it to a Secret that holds the sharedDsn, tailDsn, tokenDsn and usageDsn keys." -}}
-  {{- end -}}
-{{- else if not $redisEnabled -}}
-  {{- if not .Values.redisDsn -}}
-    {{- fail "redisDsn is required when logfire-redis.enabled is false and redisSecret is not in use. Provide a Redis DSN for your external Redis instance, or set redisSecret.name to a Secret that holds the Redis DSNs." -}}
-  {{- end -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Validate Gateway API configuration
-*/}}
-{{- define "logfire.validate.gateway" -}}
-{{- if .Values.gateway.enabled -}}
-  {{- if .Values.gateway.create -}}
-    {{- if not .Values.gateway.gatewayClassName -}}
-      {{- fail "gateway.gatewayClassName is required when gateway.create is true. Specify the GatewayClass name (e.g., 'istio', 'cilium', 'nginx', 'envoy-gateway')." -}}
-    {{- end -}}
-  {{- else -}}
-    {{- if not .Values.gateway.name -}}
-      {{- fail "gateway.name is required when gateway.enabled is true and gateway.create is false. Provide the name of the existing Gateway resource to attach the HTTPRoute to." -}}
-    {{- end -}}
-  {{- end -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Validate that both Ingress and Gateway are not enabled simultaneously
-*/}}
-{{- define "logfire.validate.ingressGatewayConflict" -}}
-{{- if and .Values.ingress.enabled .Values.gateway.enabled -}}
-  {{- fail "Both ingress.enabled and gateway.enabled are true. Enable only one of Ingress or Gateway API to avoid routing conflicts. Set ingress.enabled=false to use Gateway API, or gateway.enabled=false to use Ingress." -}}
-{{- end -}}
-{{- end -}}
-
-{{/*
-Validate that an install with an SMTP server names its own email sender.
-The platform does not send email as pydantic.dev from a self-hosted install, and the task
-runner and the worker refuse to start without EMAIL_FROM_ADDRESS. This check stops the
-install or upgrade before any workload rolls out. With dev.deployMaildev, the workloads send
-through maildev instead of smtp.host and get a placeholder sender.
-*/}}
-{{- define "logfire.validate.smtp" -}}
-{{- $smtp := .Values.smtp | default dict -}}
-{{- if and (get $smtp "host") (not (get $smtp "fromAddress")) (not .Values.dev.deployMaildev) -}}
-  {{- fail "smtp.fromAddress is required when smtp.host is set. Set it to the sender address of Logfire email, such as logfire@example.com, on a domain that your SMTP server may send for. Logfire does not send email as pydantic.dev from a self-hosted install." -}}
-{{- end -}}
-{{- $domain := (get $smtp "fromAddress" | default "" | toString | splitList "@" | last | trim | trimSuffix "." | lower) -}}
+{{- $domain := get $smtp "fromAddress" | default "" | toString | splitList "@" | last | trim
+    | trimSuffix "." | lower -}}
 {{- if or (eq $domain "pydantic.dev") (hasSuffix ".pydantic.dev" $domain) -}}
-  {{- fail "smtp.fromAddress must not be a pydantic.dev address. Set it to an address on a domain that your SMTP server may send for." -}}
+  {{- fail
+      "smtp.fromAddress must not be a pydantic.dev address. Set it to an address on a domain that your SMTP server may send for." -}}
 {{- end -}}
-{{- $caBundle := get $smtp "caBundle" | default dict -}}
-{{- if and (dig "existingConfigMap" "name" "" $caBundle) (dig "existingSecret" "name" "" $caBundle) -}}
+{{- $smtpCaBundle := get $smtp "caBundle" | default dict -}}
+{{- if and (dig "existingConfigMap" "name" "" $smtpCaBundle)
+    (dig "existingSecret" "name" "" $smtpCaBundle) -}}
   {{- fail "smtp.caBundle: specify only one of existingConfigMap.name or existingSecret.name" -}}
 {{- end -}}
-{{- if and (include "logfire.smtp.caBundle.source" .) (eq (toString (get $smtp "validate_certs")) "false") -}}
-  {{- fail "smtp.caBundle is set but smtp.validate_certs is false, so the bundle would never be used. Remove smtp.validate_certs to verify the SMTP server against the bundle." -}}
+{{- if and (include "logfire.smtp.caBundle.source" .) (eq (toString (get $smtp "validate_certs"))
+    "false") -}}
+  {{- fail
+      "smtp.caBundle is set but smtp.validate_certs is false, so the bundle would never be used. Remove smtp.validate_certs to verify the SMTP server against the bundle." -}}
 {{- end -}}
-{{- end -}}
-
-{{- define "logfire.validate.trustedCaBundle" -}}
-{{- $bundle := .Values.trustedCaBundle | default dict -}}
-{{- if and (dig "existingConfigMap" "name" "" $bundle) (dig "existingSecret" "name" "" $bundle) -}}
+{{- $trustedCaBundle := $values.trustedCaBundle | default dict -}}
+{{- if and (dig "existingConfigMap" "name" "" $trustedCaBundle)
+    (dig "existingSecret" "name" "" $trustedCaBundle) -}}
   {{- fail "trustedCaBundle: specify only one of existingConfigMap.name or existingSecret.name" -}}
 {{- end -}}
-{{- end -}}
 
-{{/*
-Master validation template - runs all validations
-Call this from templates that need to ensure configuration is valid.
-*/}}
-{{/* The chart serves this token to browsers. Only a public token is safe. */}}
-{{- define "logfire.validate.frontendApplicationToken" -}}
-{{- $token := .Values.frontendApplicationToken | default "" -}}
-{{- if and $token (not (regexMatch "^pylf_v1_[a-z]+_pub[a-zA-Z0-9]+$" $token)) -}}
-  {{- fail (printf "frontendApplicationToken must match pylf_v1_<region>_pub<random>, got %q. The chart serves this token to browsers, so a private token would expose more than telemetry writes." $token) -}}
-{{- end -}}
-{{- end -}}
-
-{{- define "logfire.validateConfig" -}}
-{{- $root := . -}}
-{{- $validators := list
-  "logfire.validate.sizingPreset"
-  "logfire.validate.objectStore"
-  "logfire.validate.objectStoreVolumes"
-  "logfire.validate.ingress"
-  "logfire.validate.gateway"
-  "logfire.validate.ingressGatewayConflict"
-  "logfire.validate.postgres"
-  "logfire.validate.dexStorage"
-  "logfire.validate.ai"
-  "logfire.validate.existingSecret"
-  "logfire.validate.existingGatewaySecret"
-  "logfire.validate.adminSecret"
-  "logfire.validate.admin"
-  "logfire.validate.adminApiKeys"
-  "logfire.validate.redis"
-  "logfire.validate.smtp"
-  "logfire.validate.trustedCaBundle"
-  "logfire.validate.inClusterTls"
-  "logfire.validate.scratchVolumes"
-  "logfire.validate.removedValues"
-  "logfire.validate.integrations"
-  "logfire.validate.frontendWorkerProcesses"
-  "logfire.validate.frontendApplicationToken"
-  -}}
-{{- range $validator := $validators -}}
-{{- include $validator $root -}}
-{{- end -}}
-{{- end -}}
-
-{{/* Extra collector components must not replace the chart's telemetry path. */}}
-{{- define "logfire.validate.otelExtraComponents" -}}
-{{- $otel := .Values.otel_collector -}}
-{{- $reserved := dict
-  "extraExporters" (list "otlp_http" "debug" "prometheus")
-  "extraProcessors" (list "memory_limiter" "k8s_attributes" "delta_to_cumulative")
-  "extraPipelines" (list "traces" "metrics" "logs" "metrics/prometheus")
-  -}}
-{{- if dig "enabled" true ($otel.selfMetrics | default dict) -}}
-  {{- $_ := set $reserved "extraProcessors" (concat (get $reserved "extraProcessors") (list "filter/self" "resourcedetection/self" "resource/self")) -}}
-  {{- $_ := set $reserved "extraPipelines" (append (get $reserved "extraPipelines") "metrics/self") -}}
-{{- end -}}
-{{- range $key, $names := $reserved -}}
-  {{- $components := get $otel $key | default dict -}}
-  {{- if not (kindIs "map" $components) -}}
-    {{- fail (printf "otel_collector.%s must be a map of collector component names to configuration." $key) -}}
+{{- if include "logfire.inClusterTls.enabled" . | eq "true" -}}
+  {{- $mode := include "logfire.inClusterTls.certs.mode" . -}}
+  {{- if not (has $mode (list "existingSecrets" "certManager")) -}}
+    {{- fail
+        (printf "inClusterTls.certs.mode must be one of 'existingSecrets' or 'certManager' (got %q)"
+        $mode) -}}
   {{- end -}}
-  {{- range $name, $_ := $components -}}
-    {{- if has $name $names -}}
-      {{- fail (printf "otel_collector.%s cannot replace chart-owned component %q. Use a different component name." $key $name) -}}
+  {{- $caConfigMap := $values.inClusterTls.caBundle.existingConfigMap.name -}}
+  {{- $caSecret := dig "existingSecret" "name" "" $values.inClusterTls.caBundle -}}
+  {{- if and $caConfigMap $caSecret -}}
+    {{- fail
+        "inClusterTls.caBundle: specify only one of existingConfigMap.name or existingSecret.name" -}}
+  {{- end -}}
+  {{- if eq $mode "certManager" -}}
+    {{- $issuerKind := include "logfire.inClusterTls.certs.certManager.issuerRef.kind" . -}}
+    {{- if not (has $issuerKind (list "Issuer" "ClusterIssuer")) -}}
+      {{- fail
+          (printf "inClusterTls.certs.certManager.issuerRef.kind must be 'Issuer' or 'ClusterIssuer' (got %q)"
+          $issuerKind) -}}
     {{- end -}}
+    {{- /* The auto-Issuer can only be a namespaced Issuer. */ -}}
+    {{- if and (not (include "logfire.inClusterTls.certs.certManager.issuerRef.name" .))
+        (ne $issuerKind "Issuer") -}}
+      {{- fail
+          "inClusterTls.certs.mode=certManager with an empty issuerRef.name uses the chart-managed *namespaced* Issuer. Set issuerRef.kind=Issuer, or provide a non-empty issuerRef.name (Issuer/ClusterIssuer)." -}}
+    {{- end -}}
+    {{- if and (not $caConfigMap) (not $caSecret) (not (include
+        "logfire.inClusterTls.certs.certManager.autoIssuer" . | eq "true")) -}}
+      {{- fail
+          "inClusterTls.enabled is true and certs.mode=certManager, but no CA bundle was provided. Set inClusterTls.caBundle.existingConfigMap.name (recommended) or inClusterTls.caBundle.existingSecret.name, or leave issuerRef.name empty to use the chart-managed CA." -}}
+    {{- end -}}
+    {{- if and (not (dig "deployCertManager" false $values.dev))
+        (not (.Capabilities.APIVersions.Has "cert-manager.io/v1")) -}}
+      {{- fail
+          "inClusterTls.certs.mode=certManager requires cert-manager CRDs (cert-manager.io/v1). Either install cert-manager separately, or set dev.deployCertManager=true for Kind/dev." -}}
+    {{- end -}}
+  {{- else if and (not $caConfigMap) (not $caSecret) -}}
+    {{- fail
+        "inClusterTls.enabled is true and certs.mode=existingSecrets, but no CA bundle was provided. Set inClusterTls.caBundle.existingConfigMap.name (recommended) or inClusterTls.caBundle.existingSecret.name." -}}
   {{- end -}}
 {{- end -}}
+
+{{- range $serviceName := list "logfire-ff-compaction-worker" "logfire-ff-maintenance-worker"
+    "logfire-ff-query-api" "logfire-ff-query-worker" -}}
+  {{- $scratchVolume := include "logfire.effectiveServiceValues"
+      (dict "Values" $values "serviceName" $serviceName) | fromJson | dig "scratchVolume" dict -}}
+  {{- if and $scratchVolume (not (get $scratchVolume "storage")) -}}
+    {{- fail
+        (printf "%s.scratchVolume.storage is required when scratchVolume is configured. Omit %s.scratchVolume to use emptyDir scratch storage, or set scratchVolume.storage for an ephemeral PVC."
+        $serviceName $serviceName) -}}
+  {{- end -}}
 {{- end -}}
 
-{{/* Each of the three signal databases needs room for its compaction copy. */}}
-{{- define "logfire.validate.otelQueueStorage" -}}
-{{- $storage := .Values.otel_collector.queueStorage -}}
-{{- if $storage.enabled -}}
-{{- $maximum := $storage.maxSizeBytes | int64 -}}
-{{- if lt $maximum 1048576 -}}
-{{- fail "otel_collector.queueStorage.maxSizeBytes must be at least 1048576 (1MiB)." -}}
+{{- /* Removed values would otherwise be ignored without an error, so each guard names the move.
+A check reads a value, not a key, when the 0.14.0 defaults carry the key, because
+`--reuse-values` keeps those defaults. Ignoring the v1 byte cache block would turn zone routing
+off, ignoring `dev.deployMinio` would drop the in-cluster object store, and ignoring
+`serviceAccountName` would move the pods to another ServiceAccount and drop the cloud identity
+bound to it. The 0.14.0 `serviceAccountName` default is `default`, so only another value
+fails. */ -}}
+{{- if $values.dev.deployMinio -}}
+  {{- fail
+      "dev.deployMinio was removed in chart 0.15.0. Set dev.deployRustfs=true and move minio.auth and minio.persistence to rustfs.auth and rustfs.persistence. Existing MinIO data does not carry over, and the object store Service is logfire-rustfs." -}}
 {{- end -}}
-{{- $volumeMi := include "logfire.memoryToMi" $storage.sizeLimit | int64 -}}
-{{- if lt (mul $volumeMi 1048576) (mul $maximum 6) -}}
-{{- fail "otel_collector.queueStorage.sizeLimit must allow at least 6x maxSizeBytes for three databases and their compaction copies." -}}
+{{- if and $values.serviceAccountName (ne (toString $values.serviceAccountName) "default") -}}
+  {{- fail "serviceAccountName was removed in chart 0.15.0. Set serviceAccount.name instead." -}}
 {{- end -}}
-{{- $resources := include "logfire.otelCollectorResources" . | fromYaml -}}
-{{- $limitMiPrecise := include "logfire.memoryToMiFloat" (dig "resources" "limits" "ephemeral-storage" "0" $resources) | float64 -}}
-{{- $volumeMiPrecise := include "logfire.memoryToMiFloat" $storage.sizeLimit | float64 -}}
-{{- if lt $limitMiPrecise $volumeMiPrecise -}}
-{{- fail "The collector ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit; allow extra space for container logs." -}}
-{{- end -}}
-{{- $collector := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" "logfire-otel-collector") | fromJson -}}
-{{- $queueBytes := $collector.sendingQueueBytes | default .Values.otel_collector.sendingQueueBytes | default 67108864 -}}
-{{- $queue := .Values.otel_collector.exporter.sending_queue | default dict -}}
-{{- if hasKey $queue "queue_size" -}}
-{{- $queueBytes = $queue.queue_size -}}
-{{- end -}}
-{{- if and (eq ($queue.sizer | default "bytes") "bytes") (ne (dig "enabled" true $queue) false) -}}
-{{/* Small requests need bbolt page/index headroom; this minimum is not a storage-loss guarantee. */}}
-{{- if lt $maximum (mul ($queueBytes | int64) 4) -}}
-{{- fail "otel_collector.queueStorage.maxSizeBytes must allow at least 4x the effective byte queue_size for database overhead; increase the disk budgets when increasing the queue." -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
+{{- if hasKey $values "logfire-ff-cache-byte" -}}
+  {{- fail
+      "logfire-ff-cache-byte is no longer a values block. Move its settings to logfire-ff-bcache: replica, resource, autoscaling and PDB settings keep their names, scratchVolume and cacheDiskCapacity become logfire-ff-bcache.disk.storage, and clientSideRouting.zoneAware becomes logfire-ff-bcache.topology.zoneAware." -}}
 {{- end -}}
 
-{{/* The collector's self-metrics, OTLP receivers, health check, and application Prometheus exporter
-each bind a port, so the self-metrics port must differ from all of them or the collector cannot
-start. */}}
-{{- define "logfire.validate.otelSelfMetricsPort" -}}
-{{- $selfPort := int (.Values.otel_collector.selfMetricsPort | default 8888) -}}
-{{- if has $selfPort (list 4317 4318 13133) -}}
-{{- fail (printf "otel_collector.selfMetricsPort (%d) collides with a fixed collector port (4317 OTLP gRPC, 4318 OTLP HTTP, or 13133 health check)." $selfPort) -}}
+{{- /* The chart cannot generate the Slack App credentials. */ -}}
+{{- if and $slackApp (not $values.existingSecret.enabled)
+    (or (not $values.integrations.slack.clientSecret) (not
+    $values.integrations.slack.signingSecret)) -}}
+  {{- fail
+      "integrations.slack.clientSecret and integrations.slack.signingSecret are required with integrations.slack.clientId, unless existingSecret holds logfire-slack-client-secret and logfire-slack-signing-secret." -}}
 {{- end -}}
-{{- if include "isPrometheusExporterEnabled" . | trim | eq "true" -}}
-{{- $promPort := int ((get (.Values.otel_collector.prometheus | default dict) "port") | default 9090) -}}
-{{- if eq $selfPort $promPort -}}
-{{- fail (printf "otel_collector.selfMetricsPort (%d) must differ from otel_collector.prometheus.port (%d); the collector binds both and cannot start when they match." $selfPort $promPort) -}}
+
+{{- /* nginx rejects other worker counts only when the frontend pod starts. */ -}}
+{{- $workers := dig "nginx" "workerProcesses" "auto" (index $values "logfire-frontend-service"
+    | default dict) | toString -}}
+{{- if not (regexMatch "^(auto|[1-9][0-9]*)$" $workers) -}}
+  {{- fail
+      (printf "logfire-frontend-service.nginx.workerProcesses must be auto or a positive integer, got %q."
+      $workers) -}}
 {{- end -}}
+
+{{- /* The chart serves this token to browsers. Only a public token is safe. */ -}}
+{{- $token := $values.frontendApplicationToken | default "" -}}
+{{- if and $token (not (regexMatch "^pylf_v1_[a-z]+_pub[a-zA-Z0-9]+$" $token)) -}}
+  {{- fail
+      (printf "frontendApplicationToken must match pylf_v1_<region>_pub<random>, got %q. The chart serves this token to browsers, so a private token would expose more than telemetry writes."
+      $token) -}}
 {{- end -}}
 {{- end -}}

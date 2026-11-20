@@ -7,9 +7,11 @@ Identity, telemetry and in-cluster CA settings that every Python workload needs.
 - name: LOGFIRE_SERVICE_NAME
   value: {{ .serviceName }}
 - name: LOGFIRE_SERVICE_VERSION
-  value: {{ include "logfire.serviceVersion" (dict "root" $ctx "serviceName" .serviceName) | quote }}
+  value: {{ include "logfire.serviceVersion" (dict "root" $ctx "serviceName" .serviceName)
+      | quote }}
 - name: OTEL_RESOURCE_ATTRIBUTES
-  value: {{ include "logfire.otelResourceAttributes" (dict "root" $ctx "serviceName" .serviceName "codeWorkDir" "/app") | quote }}
+  value: {{ include "logfire.otelResourceAttributes" (dict "root" $ctx "serviceName" .serviceName
+      "codeWorkDir" "/app") | quote }}
 - name: COLLECTOR_OTLP_GRPC_HOST
   value: http://logfire-otel-collector:4317
 - name: ON_PREM
@@ -28,13 +30,10 @@ services that these workloads call follow the same decision.
 */}}
 {{- define "logfire.otelSamplerEnv" -}}
 {{- $ratio := .Values.otelTraceSampleRatio -}}
-{{- if kindIs "invalid" $ratio -}}
-  {{- $ratio = 0.05 -}}
-{{- end -}}
 - name: OTEL_TRACES_SAMPLER
   value: parentbased_traceidratio
 - name: OTEL_TRACES_SAMPLER_ARG
-  value: {{ $ratio | quote }}
+  value: {{ kindIs "invalid" $ratio | ternary 0.05 $ratio | quote }}
 {{- end -}}
 
 {{/*
@@ -60,8 +59,10 @@ before the chart managed them, and a duplicate env name can fail an upgrade.
   {{- end -}}
 {{- end -}}
 {{- range $name, $key := $secrets -}}
-  {{- $secretName := include "logfire.externalSecretName" (dict "external" $ctx.Values.existingSecret "secretName" $key) | trim -}}
-  {{- $entries = append $entries (dict "name" $name "valueFrom" (dict "secretKeyRef" (dict "name" $secretName "key" $key))) -}}
+  {{- $secretName := include "logfire.externalSecretName"
+      (dict "external" $ctx.Values.existingSecret "secretName" $key) | trim -}}
+  {{- $entries = append $entries (dict "name" $name "valueFrom"
+      (dict "secretKeyRef" (dict "name" $secretName "key" $key))) -}}
 {{- end -}}
 {{- $own := get (get $ctx.Values .serviceName | default dict) "env" -}}
 {{- $ownNames := list -}}
@@ -84,7 +85,9 @@ before the chart managed them, and a duplicate env name can fail an upgrade.
 {{- end -}}
 
 {{- define "logfire.slackApp.enabled" -}}
-{{- if dig "slack" "clientId" "" (.Values.integrations | default dict) -}}true{{- end -}}
+{{- if dig "slack" "clientId" "" (.Values.integrations | default dict) -}}
+true
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -93,10 +96,12 @@ Rolls the workloads that hold the Slack App credentials when they change.
 {{- define "logfire.slackAppChecksumAnnotation" -}}
 {{- if include "logfire.slackApp.enabled" . -}}
 {{- if .Values.existingSecret.enabled -}}
-{{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-slack-client-secret" "logfire-slack-signing-secret")) -}}
+{{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets"
+    (list "logfire-slack-client-secret" "logfire-slack-signing-secret")) -}}
 {{- else -}}
 {{- $slack := .Values.integrations.slack -}}
-{{- printf "checksum/logfire-slack-app: %s" (printf "%s\x00%s\x00%s" $slack.clientId $slack.clientSecret $slack.signingSecret | sha256sum) -}}
+{{- printf "checksum/logfire-slack-app: %s" (printf "%s\x00%s\x00%s" $slack.clientId
+    $slack.clientSecret $slack.signingSecret | sha256sum) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
