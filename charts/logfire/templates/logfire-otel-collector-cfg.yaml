@@ -1,15 +1,62 @@
 {{- $serviceName := "logfire-otel-collector" }}
+{{- $otel := .Values.otel_collector }}
 {{- $collectorValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson }}
 {{- $memoryLimitMi := include "logfire.otelCollectorMemoryLimitMi" . | trim }}
-{{- $queueSizeBytes := $collectorValues.sendingQueueBytes | default .Values.otel_collector.sendingQueueBytes | default 67108864 }}
-{{- $queueStorage := .Values.otel_collector.queueStorage }}
-{{- include "logfire.validate.otelQueueStorage" . }}
-{{- include "logfire.validate.otelSelfMetricsPort" . }}
-{{- include "logfire.validate.otelExtraComponents" . }}
-{{- $prometheusEnabled := include "isPrometheusExporterEnabled" . | trim | eq "true" }}
-{{- $promValues := .Values.otel_collector.prometheus | default dict }}
-{{- $selfMetrics := .Values.otel_collector.selfMetrics | default dict }}
-{{- $selfMetricsEnabled := dig "enabled" true $selfMetrics }}
+{{- $queueSizeBytes := $collectorValues.sendingQueueBytes | default $otel.sendingQueueBytes | default 67108864 }}
+{{- $queueStorage := $otel.queueStorage }}
+{{- $prometheusEnabled := include "isPrometheusExporterEnabled" . | eq "true" }}
+{{- $promValues := $otel.prometheus | default dict }}
+{{- $selfMetricsEnabled := dig "enabled" true ($otel.selfMetrics | default dict) }}
+{{- if $queueStorage.enabled }}
+  {{- /* Each of the three signal databases needs room for its compaction copy. */}}
+  {{- $maximum := $queueStorage.maxSizeBytes | int64 }}
+  {{- if lt $maximum 1048576 }}
+    {{- fail "otel_collector.queueStorage.maxSizeBytes must be at least 1048576 (1MiB)." }}
+  {{- end }}
+  {{- if lt (mul (include "logfire.memoryToMi" $queueStorage.sizeLimit | int64) 1048576) (mul $maximum 6) }}
+    {{- fail "otel_collector.queueStorage.sizeLimit must allow at least 6x maxSizeBytes for three databases and their compaction copies." }}
+  {{- end }}
+  {{- $resources := include "logfire.otelCollectorResources" . | fromYaml }}
+  {{- $limitMi := include "logfire.memoryToMiFloat" (dig "resources" "limits" "ephemeral-storage" "0" $resources) | float64 }}
+  {{- if lt $limitMi (include "logfire.memoryToMiFloat" $queueStorage.sizeLimit | float64) }}
+    {{- fail "The collector ephemeral-storage limit must be at least otel_collector.queueStorage.sizeLimit; allow extra space for container logs." }}
+  {{- end }}
+  {{- $queue := $otel.exporter.sending_queue | default dict }}
+  {{- $queueBytes := hasKey $queue "queue_size" | ternary $queue.queue_size $queueSizeBytes }}
+  {{- /* Small requests need bbolt page/index headroom; this minimum is not a storage-loss guarantee. */}}
+  {{- if and (eq ($queue.sizer | default "bytes") "bytes") (ne (dig "enabled" true $queue) false) (lt $maximum (mul ($queueBytes | int64) 4)) }}
+    {{- fail "otel_collector.queueStorage.maxSizeBytes must allow at least 4x the effective byte queue_size for database overhead; increase the disk budgets when increasing the queue." }}
+  {{- end }}
+{{- end }}
+{{- /* The self-metrics, OTLP receivers, health check, and Prometheus exporter each bind a port. */}}
+{{- $selfPort := int ($otel.selfMetricsPort | default 8888) }}
+{{- if has $selfPort (list 4317 4318 13133) }}
+  {{- fail (printf "otel_collector.selfMetricsPort (%d) collides with a fixed collector port (4317 OTLP gRPC, 4318 OTLP HTTP, or 13133 health check)." $selfPort) }}
+{{- end }}
+{{- $promPort := int ((get $promValues "port") | default 9090) }}
+{{- if and $prometheusEnabled (eq $selfPort $promPort) }}
+  {{- fail (printf "otel_collector.selfMetricsPort (%d) must differ from otel_collector.prometheus.port (%d); the collector binds both and cannot start when they match." $selfPort $promPort) }}
+{{- end }}
+{{- /* Extra collector components must not replace the chart's telemetry path. */}}
+{{- $reserved := dict
+    "extraExporters" (list "otlp_http" "debug" "prometheus")
+    "extraProcessors" (list "memory_limiter" "k8s_attributes" "delta_to_cumulative")
+    "extraPipelines" (list "traces" "metrics" "logs" "metrics/prometheus") }}
+{{- if $selfMetricsEnabled }}
+  {{- $_ := set $reserved "extraProcessors" (concat $reserved.extraProcessors (list "filter/self" "resourcedetection/self" "resource/self")) }}
+  {{- $_ := set $reserved "extraPipelines" (append $reserved.extraPipelines "metrics/self") }}
+{{- end }}
+{{- range $key, $names := $reserved }}
+  {{- $components := get $otel $key | default dict }}
+  {{- if not (kindIs "map" $components) }}
+    {{- fail (printf "otel_collector.%s must be a map of collector component names to configuration." $key) }}
+  {{- end }}
+  {{- range $name, $_ := $components }}
+    {{- if has $name $names }}
+      {{- fail (printf "otel_collector.%s cannot replace chart-owned component %q. Use a different component name." $key $name) }}
+    {{- end }}
+  {{- end }}
+{{- end }}
 {{- /* receiver_failed_* stays zero with receiverhelper.newReceiverMetrics disabled. Reassess when the image or gate changes. */ -}}
 {{- $selfMetricNames := "otelcol_(exporter_(queue_(size|capacity)|(enqueue_failed|send_failed|sent)_(spans|log_records|metric_points))|receiver_(accepted|refused)_(spans|log_records|metric_points))" }}
 {{- $delta_to_cumulative := true }}
@@ -78,7 +125,7 @@ data:
           {{- $_ := set $queueDefaults "storage" "file_storage/queue" }}
           {{- end }}
           {{- mergeOverwrite $queueDefaults (deepCopy ($exporter.sending_queue | default dict)) | toYaml | nindent 10 }}
-      {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
+      {{- if include "isPrometheusExporterEnabled" . | eq "true" }}
       {{- with .Values.otel_collector.prometheus }}
       {{- $translationStrategy := .translation_strategy | default (ternary "UnderscoreEscapingWithSuffixes" "UnderscoreEscapingWithoutSuffixes" .add_metric_suffixes) }}
       prometheus:
