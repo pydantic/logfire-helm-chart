@@ -23,8 +23,9 @@ not a substitute for this integration.
   They cannot reach the database, Redis or snapshot storage.
 - Select the internal transport described below. The public ingress TLS setting is independent.
 - The Monty images come from the same platform release as the rest of the chart,
-  under `image.repository`. Use a chart release that ships Agent Sandboxes.
-  The pinned `6dc21200` admission image does not support HTTP-only operation.
+  under `image.repository`. The selected registry must contain all four Monty images.
+  Verify their availability before enabling Agent Sandboxes.
+  The older `6dc21200` admission image does not support HTTP-only operation.
   The chart rejects that image when `inClusterTls.enabled` is false.
   Select compatible matching images through `image.tag` for HTTP-only operation.
 - Supply the canonical Postgres database and Redis through the chart's existing settings.
@@ -121,7 +122,7 @@ Back up the canonical database, runtime database and snapshot objects together.
 Agent Sandboxes follows the chart's `inClusterTls.enabled` setting.
 With this setting enabled, the Python control services and Rust admission use HTTPS with certificate verification.
 Supply certificates through cert-manager or existing Secrets.
-Existing certificate sets must also cover `monty-controller`, `monty-reconciler` and `monty-admission`.
+Existing certificate sets must cover `monty-controller`, `monty-reconciler`, `monty-admission`, `monty-relay` and `monty-broker`.
 
 With this setting disabled, the control services use HTTP and require no application certificates.
 Admission runs with `TLS_MODE=disabled` and serves only HTTP.
@@ -131,8 +132,82 @@ The chart always enables execution and storage accounting.
 Kubernetes API calls always use its own CA and HTTPS.
 
 The in-cluster TLS setting does not encrypt every sandbox connection.
-Native gRPC sessions, broker calls and worker telemetry use HTTP at the application layer.
+Native gRPC sessions, relay-to-broker storage traffic and worker telemetry use HTTP at the application layer.
 Use compatible cluster transport protection if these connections require encryption.
+
+### External CA trust
+
+`trustedCaBundle` also reaches admission, controller, reconciler, relay, broker and the Monty migration Job.
+The chart combines the supplied CA with the system roots.
+Runtime services also include the in-cluster CA when enabled.
+Rust TLS Redis clients use that bundle through `SSL_CERT_FILE`.
+The migration Job and admission use it as the `PGSSLROOTCERT` fallback.
+A DSN's `sslrootcert` takes precedence. Its path must exist in that container.
+Admission can also use its in-cluster CA mount as the PostgreSQL fallback.
+The migration Job uses `trustedCaBundle` for private database CAs.
+It does not depend on service certificates that Helm creates after the migration hooks.
+The DSN still selects `sslmode`. The chart does not disable certificate verification.
+
+Controller, reconciler, relay and broker present their own client certificate on internal HTTPS calls.
+Chart-managed certificates include the client-auth usage.
+Externally supplied certificates for these services must permit client authentication too.
+
+### Prepared checkouts and worker-managed capacity
+
+The relay uses the execution journal for assignment and receipt delivery.
+Admission can prepare ordinary checkouts in batches without another chart setting.
+
+Worker-managed sessions are a separate opt-in:
+
+```yaml
+agentSandboxes:
+  workerManagedSessions:
+    enabled: true
+    bankTarget: 1
+    issuerSecret:
+      name: monty-worker-issuer
+      key: seed
+    publicKey: "<64 hexadecimal characters>"
+```
+
+Create the Secret in the Logfire namespace before installation.
+Its `seed` contains a 32-byte Ed25519 private seed encoded as 64 hexadecimal characters.
+Set `publicKey` to the matching 32-byte public key in the same encoding.
+For example, create the pair locally with OpenSSL and protect the files:
+
+```sh
+umask 077
+openssl genpkey -algorithm ED25519 -out monty-issuer.pem
+openssl pkey -in monty-issuer.pem -outform DER | tail -c 32 | od -An -tx1 | tr -d ' \n' > monty-seed
+openssl pkey -in monty-issuer.pem -pubout -outform DER | tail -c 32 | od -An -tx1 | tr -d ' \n' > monty-public-key
+kubectl -n <logfire-namespace> create secret generic monty-worker-issuer --from-file=seed=monty-seed
+```
+
+Copy only the contents of `monty-public-key` into `publicKey`.
+Store the private key and seed with the installation's credential backups.
+Do not put them in Helm values or source control.
+Only admission receives the private seed. Worker templates receive only the public key.
+The chart does not generate or rotate this key pair.
+Keep both values and the installation UUID stable across upgrades and backups.
+An incorrect pair prevents workers from accepting delegated grants.
+
+The runtime migration Job installs the grant ledger before application pods roll.
+First upgrade the installation with worker-managed sessions disabled.
+Then configure the key pair and enable the feature with matching admission, relay and worker images.
+The warm pool replaces only unclaimed workers. Existing workers retain their original execution identities.
+Existing ordinary sessions can continue while compatible workers become available.
+Worker concurrency remains 32 sessions; this setting does not raise resource or tenant limits.
+
+A grant remains charged until the matching worker proves zero active sessions or the controller proves Pod termination.
+Disconnect, expiry and chart rollback do not return that capacity by themselves.
+Keep a compatible admission process with the original issuer key available until outstanding grants have retired.
+Disabling this setting removes the issuer from this chart's admission pods.
+An application downgrade must retain a compatible proof collector or restore one to retire the remaining grants.
+Do not rotate the key or remove the additive database fences while such grants remain.
+
+Ready-spare pools are not enabled by this chart.
+The current runtime requires unrestricted distributed reconciliation for their maintenance.
+The chart keeps its explicit organization allowlist and single reconciler.
 
 ### Service meshes
 

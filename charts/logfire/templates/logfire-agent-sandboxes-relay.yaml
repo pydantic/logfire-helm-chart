@@ -57,6 +57,7 @@ spec:
         - name: {{ . }}
         {{- end }}
       {{- end }}
+      {{- include "logfire.initContainers" (dict "ctx" $root "serviceName" $name) | nindent 6 }}
       containers:
         - name: {{ $name }}
           image: {{ include "logfire.agentSandboxes.image" (dict "root" $root "name" $root.Values.agentSandboxes.images.relay) | quote }}
@@ -86,6 +87,15 @@ spec:
             failureThreshold: 60
             periodSeconds: 5
           env:
+            {{- include "logfire.trustedCa.env" (dict "ctx" $root "serviceName" $name) | nindent 12 }}
+            {{- if (include "logfire.inClusterTls.enabled" $root | eq "true") }}
+            - name: LOGFIRE_CA_PATH
+              value: /etc/logfire/incluster-ca/ca.crt
+            - name: TLS_CLIENT_CERT_PATH
+              value: /etc/tls/tls.crt
+            - name: TLS_CLIENT_KEY_PATH
+              value: /etc/tls/tls.key
+            {{- end }}
             - name: MONTY_NAMESPACE
               value: {{ include "logfire.agentSandboxes.namespace" $root | quote }}
             - name: MONTY_KUBERNETES_CLUSTER_DOMAIN
@@ -94,16 +104,16 @@ spec:
             - name: MONTY_SERVER_HOST
               value: 0.0.0.0
             - name: MONTY_SERVER_HOSTED_RESOLVER_URL
-              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-controller" "port" 8080 "path" "/resolve") | quote }}
+              value: {{ include "logfire.agentSandboxes.controlUrl" (dict "root" $root "service" "monty-controller" "port" 8080 "path" "/resolve") | quote }}
             - name: MONTY_SERVER_HOSTED_ASSIGNMENT_URL
-              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-admission" "port" 8080 "path" "/assign") | quote }}
+              value: {{ include "logfire.agentSandboxes.controlUrl" (dict "root" $root "service" "monty-admission" "port" 8080 "path" "/execution-journal/v1/assign") | quote }}
             - name: MONTY_SERVER_HOSTED_PROFILE_URL
-              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "logfire-backend-auth" "port" 8000 "path" "/internal/monty/profiles/") | quote }}
+              value: {{ include "logfire.agentSandboxes.controlUrl" (dict "root" $root "service" "logfire-backend-auth" "port" 8000 "path" "/internal/monty/profiles/") | quote }}
             - name: MONTY_SERVER_HOSTED_BROKER_URL
               value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-broker" "port" 8081 "path" "/") | quote }}
             {{- include "logfire.agentSandboxes.tokenEnv" (dict "root" $root "name" "MONTY_SERVER_HOSTED_SERVICE_TOKEN" "key" "relay") | nindent 12 }}
             - name: MONTY_SERVER_HOSTED_METERING_URL
-              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-admission" "port" 8080 "path" "/metering/receipts") | quote }}
+              value: {{ include "logfire.agentSandboxes.controlUrl" (dict "root" $root "service" "monty-admission" "port" 8080 "path" "/execution-journal/v1/metering/receipts") | quote }}
             - name: MONTY_SERVER_HOSTED_VOLUMES_ENABLED
               value: {{ $root.Values.agentSandboxes.volumesEnabled | quote }}
             {{- if $root.Values.agentSandboxes.volumesEnabled }}
@@ -122,13 +132,13 @@ spec:
             - name: MONTY_BROKER_DRAIN_SECONDS
               value: "90"
             - name: MONTY_BROKER_RESOLVER_URL
-              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-controller" "port" 8080 "path" "/resolve") | quote }}
+              value: {{ include "logfire.agentSandboxes.controlUrl" (dict "root" $root "service" "monty-controller" "port" 8080 "path" "/resolve") | quote }}
             - name: MONTY_BROKER_OBJECT_STORE_URI
               value: {{ include "logfire.agentSandboxes.snapshotUri" $root | quote }}
             - name: MONTY_BROKER_SNAPSHOT_QUOTAS
               value: "true"
             - name: MONTY_BROKER_CATALOG_URL
-              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-admission" "port" 8080 "path" "/v1/snapshot-catalog") | quote }}
+              value: {{ include "logfire.agentSandboxes.controlUrl" (dict "root" $root "service" "monty-admission" "port" 8080 "path" "/v1/snapshot-catalog") | quote }}
             {{- range $item := list (dict "name" "MONTY_BROKER_SERVICE_TOKEN" "key" "relay") (dict "name" "MONTY_BROKER_CATALOG_TOKEN" "key" "snapshot") }}
             {{- include "logfire.agentSandboxes.tokenEnv" (dict "root" $root "name" $item.name "key" $item.key) | nindent 12 }}
             {{- end }}
@@ -136,7 +146,7 @@ spec:
             - name: MONTY_BROKER_VOLUMES_ENABLED
               value: "true"
             - name: MONTY_BROKER_VOLUME_CATALOG_URL
-              value: {{ include "logfire.agentSandboxes.url" (dict "root" $root "scheme" "http" "service" "monty-admission" "port" 8080 "path" "/v1/volume-catalog") | quote }}
+              value: {{ include "logfire.agentSandboxes.controlUrl" (dict "root" $root "service" "monty-admission" "port" 8080 "path" "/v1/volume-catalog") | quote }}
             {{- range $item := list (dict "name" "MONTY_BROKER_VOLUME_CATALOG_TOKEN" "key" "volume") (dict "name" "MONTY_BROKER_VOLUME_ADMIN_TOKEN" "key" "volume-admin") }}
             {{- include "logfire.agentSandboxes.tokenEnv" (dict "root" $root "name" $item.name "key" $item.key) | nindent 12 }}
             {{- end }}
@@ -145,10 +155,16 @@ spec:
             {{- end }}
           volumeMounts:
             - {name: tmp, mountPath: /tmp}
+            {{- include "logfire.trustedCa.volumeMount" (dict "ctx" $root "serviceName" $name) | nindent 12 }}
+            {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" $root "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
+            {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" $root) | nindent 12 }}
             {{- if eq $name "monty-broker" }}
             {{- include "logfire.objectStoreVolumeMounts" $root | nindent 12 }}
             {{- end }}
       volumes:
+        {{- include "logfire.trustedCa.volumes" (dict "ctx" $root "serviceName" $name) | nindent 8 }}
+        {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" $root) | nindent 8 }}
+        {{- include "logfire.inClusterTls.server.volume" (dict "ctx" $root "serviceName" $name) | nindent 8 }}
         - name: tmp
           emptyDir: {sizeLimit: 1Gi}
         {{- if eq $name "monty-broker" }}

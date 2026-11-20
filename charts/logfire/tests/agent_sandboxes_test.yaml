@@ -690,7 +690,7 @@ tests:
           value: monty-admission
       - contains:
           path: spec.template.spec.containers[0].env
-          content: {name: MONTY_SERVER_HOSTED_METERING_URL, value: "http://monty-admission.customer.svc.cluster.local:8080/metering/receipts"}
+          content: {name: MONTY_SERVER_HOSTED_METERING_URL, value: "https://monty-admission.customer.svc.cluster.local:8443/execution-journal/v1/metering/receipts"}
         template: templates/logfire-agent-sandboxes-relay.yaml
         documentSelector:
           path: spec.template.metadata.labels.app
@@ -960,3 +960,148 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content: {name: MONTY_ADMISSION_CONTROLLER_URL, value: "https://monty-controller.customer.svc.cluster.local:8443"}
+
+  - it: gives the migration Job the same private CA trust as admission
+    templates: [templates/logfire-agent-sandboxes-migrations.yaml]
+    set:
+      trustedCaBundle.existingConfigMap.name: private-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: PGSSLROOTCERT, value: /etc/logfire/trusted-ca/ca-bundle.crt}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SSL_CERT_FILE, value: /etc/logfire/trusted-ca/ca-bundle.crt}
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: logfire-trusted-ca, mountPath: /etc/logfire/trusted-ca, readOnly: true}
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-backend-prod:test-release
+
+  - it: gives admission private Redis CA trust without application TLS
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.spec.containers[0].name
+      value: monty-admission
+    set:
+      inClusterTls.enabled: false
+      trustedCaBundle.existingConfigMap.name: private-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SSL_CERT_FILE, value: /etc/logfire/trusted-ca/ca-bundle.crt}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: TLS_MODE, value: disabled}
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: logfire-trusted-ca, mountPath: /etc/logfire/trusted-ca, readOnly: true}
+
+  - it: gives only admission the delegated signing seed
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.spec.containers[0].name
+      value: monty-admission
+    set:
+      agentSandboxes.workerManagedSessions.enabled: true
+      agentSandboxes.workerManagedSessions.issuerSecret.name: worker-issuer
+      agentSandboxes.workerManagedSessions.publicKey: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_WORKER_ALLOCATION_BANKS, value: "1"}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_WORKER_ALLOCATION_ISSUER_SEED, valueFrom: {secretKeyRef: {name: worker-issuer, key: seed}}}
+
+  - it: gives workers the verification key for delegated grants
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    set:
+      agentSandboxes.workerManagedSessions.enabled: true
+      agentSandboxes.workerManagedSessions.issuerSecret.name: worker-issuer
+      agentSandboxes.workerManagedSessions.publicKey: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    asserts:
+      - contains:
+          path: spec.podTemplate.spec.containers[0].env
+          content: {name: MONTY_WORKER_SHARED_POOL_PUBLIC_KEY, value: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+
+  - it: refuses delegated grants without an explicit signing Secret
+    set:
+      agentSandboxes.workerManagedSessions.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: requires issuerSecret.name and issuerSecret.key
+
+  - it: refuses delegated grants without a valid verification key
+    set:
+      agentSandboxes.workerManagedSessions.enabled: true
+      agentSandboxes.workerManagedSessions.issuerSecret.name: worker-issuer
+    asserts:
+      - failedTemplate:
+          errorPattern: publicKey must be a 32-byte Ed25519 public key
+
+  - it: refuses an out-of-range delegated bank target
+    set:
+      agentSandboxes.workerManagedSessions.enabled: true
+      agentSandboxes.workerManagedSessions.issuerSecret.name: worker-issuer
+      agentSandboxes.workerManagedSessions.publicKey: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      agentSandboxes.workerManagedSessions.bankTarget: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: bankTarget must be between 1 and 128
+
+  - it: keeps the journal route on plain HTTP without application TLS
+    templates: [templates/logfire-agent-sandboxes-relay.yaml]
+    documentSelector:
+      path: spec.template.spec.containers[0].name
+      value: monty-relay
+    set:
+      inClusterTls.enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_SERVER_HOSTED_ASSIGNMENT_URL, value: "http://monty-admission.customer.svc.cluster.local:8080/execution-journal/v1/assign"}
+
+  - it: gives controller clients their paired TLS identity
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.spec.containers[0].name
+      value: monty-controller
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: TLS_CLIENT_CERT_PATH, value: /etc/tls/tls.crt}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: TLS_CLIENT_KEY_PATH, value: /etc/tls/tls.key}
+
+  - it: lets migration hooks verify private databases before automatic service certificates exist
+    set:
+      inClusterTls.certs.mode: certManager
+      inClusterTls.caBundle.existingConfigMap.name: ""
+      dev.deployPostgres: false
+      dev.deployCertManager: true
+      trustedCaBundle.existingConfigMap.name: external-db-ca
+    templates: [templates/logfire-agent-sandboxes-migrations.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: PGSSLROOTCERT, value: /etc/logfire/trusted-ca/ca-bundle.crt}
+      - notContains:
+          path: spec.template.spec.volumes
+          content: {name: logfire-incluster-ca-bundle, secret: {secretName: lf-incluster-ca, items: [{key: ca.crt, path: ca.crt}]}}
+      - notMatchRegex:
+          path: spec.template.spec.initContainers[0].command[2]
+          pattern: /etc/logfire/incluster-ca/
+  - it: uses the upgraded backend migration image with legacy reused values
+    set:
+      image.backendImage: python-prod
+    templates: [templates/logfire-agent-sandboxes-migrations.yaml]
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-backend-prod:test-release

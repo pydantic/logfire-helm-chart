@@ -42,7 +42,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: {{ $name }}
-          image: {{ printf "%s%s:%s" .Values.image.repository .Values.image.backendImage (include "logfire.serviceTag" (dict "Values" .Values "Chart" .Chart "serviceName" "logfire-backend")) | quote }}
+          image: {{ printf "%s%s:%s" .Values.image.repository (include "logfire.pythonImage" (dict "Values" .Values "key" "backendImage")) (include "logfire.serviceTag" (dict "Values" .Values "Chart" .Chart "serviceName" "logfire-backend")) | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: [python, -m, logfire_db.migrations.monty]
           securityContext:
@@ -50,6 +50,8 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           env:
+            {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $name) | nindent 12 }}
+            {{- include "logfire.agentSandboxes.postgresCaEnv" (dict "ctx" . "serviceName" $name) | nindent 12 }}
             - name: ON_PREM
               value: "true"
             - name: LOGFIRE_SEND_TO_LOGFIRE
@@ -65,7 +67,9 @@ spec:
                   key: {{ .Values.agentSandboxes.stores.postgresSecret.migrationKey }}
           volumeMounts:
             - {name: tmp, mountPath: /tmp}
+            {{- include "logfire.trustedCa.volumeMount" (dict "ctx" . "serviceName" $name) | nindent 12 }}
       volumes:
+        {{- include "logfire.trustedCa.volumes" (dict "ctx" . "serviceName" $name) | nindent 8 }}
         - name: tmp
           emptyDir: {sizeLimit: 1Gi}
 {{- end }}

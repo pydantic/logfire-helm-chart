@@ -113,6 +113,18 @@
 {{- fail "agentSandboxes.allowedOrganizations must contain organization UUIDs" -}}
 {{- end -}}
 {{- end -}}
+{{- $managed := $a.workerManagedSessions | default dict -}}
+{{- if $managed.enabled -}}
+{{- if or (empty $managed.issuerSecret.name) (empty $managed.issuerSecret.key) -}}
+{{- fail "agentSandboxes.workerManagedSessions requires issuerSecret.name and issuerSecret.key" -}}
+{{- end -}}
+{{- if not (regexMatch "^[0-9a-fA-F]{64}$" ($managed.publicKey | default "")) -}}
+{{- fail "agentSandboxes.workerManagedSessions.publicKey must be a 32-byte Ed25519 public key encoded as 64 hexadecimal characters" -}}
+{{- end -}}
+{{- if or (lt (int $managed.bankTarget) 1) (gt (int $managed.bankTarget) 128) -}}
+{{- fail "agentSandboxes.workerManagedSessions.bankTarget must be between 1 and 128" -}}
+{{- end -}}
+{{- end -}}
 {{- $namespace := include "logfire.agentSandboxes.namespace" . -}}
 {{- if or (eq $namespace .Release.Namespace) (gt (len $namespace) 63) (not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $namespace)) -}}
 {{- fail "agentSandboxes.workerNamespace must be a separate valid namespace of at most 63 characters" -}}
@@ -169,6 +181,12 @@
   value: /etc/tls/tls.key
 - name: LOGFIRE_CA_PATH
   value: /etc/logfire/incluster-ca/ca.crt
+{{- if ne .service "monty-admission" }}
+- name: TLS_CLIENT_CERT_PATH
+  value: /etc/tls/tls.crt
+- name: TLS_CLIENT_KEY_PATH
+  value: /etc/tls/tls.key
+{{- end }}
 {{- end }}
 - name: ON_PREM
   value: "true"
@@ -228,4 +246,15 @@
   (include "utils.secretChecksum" (dict "ctx" . "name" $redis.name "key" $redis.key))
   (include "utils.secretChecksum" (dict "ctx" . "name" (include "logfire.agentSandboxes.secret" .) "key" "management"))
   | join "" | sha256sum -}}
+{{- end -}}
+
+{{/* DSN sslrootcert takes precedence over this libpq-compatible fallback. */}}
+{{- define "logfire.agentSandboxes.postgresCaEnv" -}}
+{{- if include "logfire.trustedCa.enabled" . }}
+- name: PGSSLROOTCERT
+  value: /etc/logfire/trusted-ca/ca-bundle.crt
+{{- else if and (ne .serviceName "logfire-monty-migrations") (include "logfire.inClusterTls.enabled" .ctx | eq "true") }}
+- name: PGSSLROOTCERT
+  value: /etc/logfire/incluster-ca/ca.crt
+{{- end }}
 {{- end -}}

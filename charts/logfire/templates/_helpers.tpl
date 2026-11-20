@@ -1096,14 +1096,29 @@ Resolve the image name for a Python service.
 Falls back to `image.backendImage` when the per-service key is unset. An install created before
 these keys existed upgrades with `--reuse-values`, which carries `image.backendImage` forward and
 knows nothing of the newer keys. Without the fallback such an upgrade would move three workloads
-onto per-service images that the install never asked for, and change what it pulls on an upgrade it
-expected to be a no-op. Setting the per-service key, or taking the chart's own defaults on a fresh
-install, opts in.
+onto per-service images that the install never asked for. Setting the per-service key, or taking
+the chart's own defaults on a fresh install, opts in.
+
+Charts before 0.15.0 set `backendImage` and `workerImage` to `python-prod`, and `--reuse-values`
+carries that value forward. The platform no longer publishes `python-prod`, so the chart replaces
+that name with the image of the workload. Otherwise the upgrade pulls a tag that does not exist.
 */}}
 {{- define "logfire.pythonImage" -}}
 {{- $image := .Values.image -}}
 {{- $key := .key -}}
-{{- (index $image $key) | default $image.backendImage -}}
+{{- $name := index $image $key -}}
+{{- if and (not $name) (has $key (list "authImage" "taskRunnerImage" "remoteMcpImage")) -}}
+  {{- $name = $image.backendImage -}}
+{{- end -}}
+{{- if eq $name "python-prod" -}}
+  {{- $name = get (dict
+      "backendImage" "logfire-backend-prod"
+      "workerImage" "logfire-worker-prod"
+      "authImage" "logfire-auth-prod"
+      "taskRunnerImage" "logfire-task-runner-prod"
+      "remoteMcpImage" "logfire-remote-mcp-prod") $key -}}
+{{- end -}}
+{{- $name -}}
 {{- end }}
 
 {{- define "logfire.imageRef" -}}
@@ -1495,9 +1510,16 @@ platform contract tests keep the image `USER` and these numbers in step.
 {{- define "logfire.containerImageIdentity" -}}
 {{- $serviceName := required "logfire.containerImageIdentity: need .serviceName" .serviceName -}}
 {{- $uidGid1000 := list
+  "monty-admission"
+  "monty-controller"
+  "monty-reconciler"
+  "monty-relay"
+  "monty-broker"
+  "logfire-monty-migrations"
   "logfire-backend"
   "logfire-backend-auth"
   "logfire-backend-migrations"
+  "logfire-backend-post-deploy-migrations"
   "logfire-worker"
   "logfire-task-runner"
   "logfire-alert-runner"
@@ -1882,6 +1904,12 @@ The other in-cluster TLS clients are unaffected. They trust `LOGFIRE_CA_PATH` ex
 {{- $ctx := required "logfire.trustedCa.sources: need .ctx" .ctx -}}
 {{- $serviceName := required "logfire.trustedCa.sources: need .serviceName" .serviceName -}}
 {{- $services := list
+  "monty-admission"
+  "monty-controller"
+  "monty-reconciler"
+  "monty-relay"
+  "monty-broker"
+  "logfire-monty-migrations"
   "logfire-backend"
   "logfire-backend-auth"
   "logfire-worker"
@@ -1922,9 +1950,11 @@ true
 {{- if include "logfire.trustedCa.enabled" . -}}
 {{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName) | fromJson -}}
 {{- $gateway := eq $serviceName "logfire-ai-gateway" -}}
-{{- $inClusterCa := and $gateway (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+{{- $monty := or (hasPrefix "monty-" $serviceName) (eq $serviceName "logfire-monty-migrations") -}}
+{{- $inClusterCa := and (or $gateway (and $monty (ne $serviceName "logfire-monty-migrations"))) (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
 {{- $repository := $ctx.Values.image.repository | default "" -}}
-{{- $image := $ctx.Values.image.backendImage -}}
+{{- $image := include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "backendImage") -}}
+{{- $tagService := ternary "logfire-backend" $serviceName $monty -}}
 {{- $baseFile := "/etc/ssl/certs/ca-certificates.crt" -}}
 {{- if $gateway -}}
   {{- $repository = $ctx.Values.image.gatewayRepository | default "" -}}
@@ -1933,19 +1963,19 @@ true
 {{- else if hasPrefix "logfire-ff-" $serviceName -}}
   {{- $image = $ctx.Values.image.fusionfireImage -}}
 {{- else if eq $serviceName "logfire-worker" -}}
-  {{- $image = $ctx.Values.image.workerImage -}}
+  {{- $image = include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "workerImage") -}}
 {{- else if eq $serviceName "logfire-alert-runner" -}}
   {{- $image = $ctx.Values.image.alertRunnerImage | default "logfire-alert-runner-prod" -}}
 {{- end -}}
 - name: trusted-ca-bundle
-  image: '{{ $repository }}{{ $image }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
+  image: '{{ $repository }}{{ $image }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $tagService "Chart" $ctx.Chart) }}'
   imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
   command:
     - sh
     - -c
     - |
       set -eu
-      for f in {{ with $baseFile }}{{ . }} {{ end }}/etc/logfire/trusted-ca-sources/*.crt; do
+      for f in {{ with $baseFile }}{{ . }} {{ end }}{{ if and $monty $inClusterCa }}/etc/logfire/incluster-ca/ca.crt {{ end }}/etc/logfire/trusted-ca-sources/*.crt; do
         cat "$f"
         echo
       done > /etc/logfire/trusted-ca/ca-bundle.crt
@@ -2232,6 +2262,7 @@ image reaches both.
   "logfire-dex"
   "logfire-backend-migrations"
   "logfire-monty-migrations"
+  "logfire-backend-post-deploy-migrations"
   "logfire-ff-migrations"
   "logfire-ff-crud-api"
   "logfire-ff-maintenance-scheduler"

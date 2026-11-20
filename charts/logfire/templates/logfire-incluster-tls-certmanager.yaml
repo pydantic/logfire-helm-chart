@@ -31,7 +31,7 @@
 {{- end -}}
 
 {{- if (.Values.agentSandboxes | default dict).enabled }}
-{{- $certServices = concat $certServices (list (dict "serviceName" "monty-controller") (dict "serviceName" "monty-reconciler") (dict "serviceName" "monty-admission")) }}
+{{- $certServices = concat $certServices (list (dict "serviceName" "monty-controller") (dict "serviceName" "monty-reconciler") (dict "serviceName" "monty-admission") (dict "serviceName" "monty-relay") (dict "serviceName" "monty-broker")) }}
 {{- end }}
 
 {{- if $autoIssuer }}
@@ -117,6 +117,9 @@ spec:
     algorithm: RSA
     size: 2048
     rotationPolicy: Never
+  {{- if has $serviceName (list "monty-controller" "monty-reconciler" "monty-relay" "monty-broker") }}
+  usages: [digital signature, key encipherment, server auth, client auth]
+  {{- end }}
   dnsNames:
     - {{ $serviceName }}
     - {{ printf "%s.%s" $serviceName $namespace }}

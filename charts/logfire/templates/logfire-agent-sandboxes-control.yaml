@@ -35,6 +35,9 @@ spec:
     metadata:
       annotations:
         checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.checksum" $root }}
+        {{- if and (eq $name "monty-admission") $root.Values.agentSandboxes.workerManagedSessions.enabled }}
+        checksum/worker-allocation-issuer: {{ include "utils.secretChecksum" (dict "ctx" $root "name" $root.Values.agentSandboxes.workerManagedSessions.issuerSecret.name "key" $root.Values.agentSandboxes.workerManagedSessions.issuerSecret.key) }}
+        {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" $root.Values "serviceName" $name) | nindent 8 }}
       labels:
         app: {{ $name }}
@@ -56,6 +59,7 @@ spec:
         - name: {{ . }}
         {{- end }}
       {{- end }}
+      {{- include "logfire.initContainers" (dict "ctx" $root "serviceName" $name) | nindent 6 }}
       containers:
         - name: {{ $name }}
           image: {{ include "logfire.agentSandboxes.image" (dict "root" $root "name" (ternary $root.Values.agentSandboxes.images.admission $root.Values.agentSandboxes.images.control (eq $name "monty-admission"))) | quote }}
@@ -86,6 +90,10 @@ spec:
             httpGet: {path: /health/live, port: http}
             timeoutSeconds: 3
           env:
+            {{- include "logfire.trustedCa.env" (dict "ctx" $root "serviceName" $name) | nindent 12 }}
+            {{- if eq $name "monty-admission" }}
+            {{- include "logfire.agentSandboxes.postgresCaEnv" (dict "ctx" $root "serviceName" $name) | nindent 12 }}
+            {{- end }}
             - name: MONTY_SHUTDOWN_GRACE_SECONDS
               value: "100"
             {{- include "logfire.agentSandboxes.pythonEnv" (dict "root" $root "service" $name) | nindent 12 }}
@@ -101,6 +109,15 @@ spec:
             {{- /* Without in-cluster TLS, admission serves plain HTTP only. */}}
             - name: TLS_MODE
               value: disabled
+            {{- end }}
+            {{- if $root.Values.agentSandboxes.workerManagedSessions.enabled }}
+            - name: MONTY_WORKER_ALLOCATION_BANKS
+              value: {{ $root.Values.agentSandboxes.workerManagedSessions.bankTarget | quote }}
+            - name: MONTY_WORKER_ALLOCATION_ISSUER_SEED
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $root.Values.agentSandboxes.workerManagedSessions.issuerSecret.name }}
+                  key: {{ $root.Values.agentSandboxes.workerManagedSessions.issuerSecret.key }}
             {{- end }}
             - name: MONTY_WORKER_BANKS_MAX_PER_PROCESS
               value: "128"
@@ -149,9 +166,11 @@ spec:
             {{- end }}
           volumeMounts:
             - {name: tmp, mountPath: /tmp}
+            {{- include "logfire.trustedCa.volumeMount" (dict "ctx" $root "serviceName" $name) | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" $root "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
             {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" $root) | nindent 12 }}
       volumes:
+        {{- include "logfire.trustedCa.volumes" (dict "ctx" $root "serviceName" $name) | nindent 8 }}
         - name: tmp
           emptyDir: {sizeLimit: 1Gi}
         {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" $root) | nindent 8 }}

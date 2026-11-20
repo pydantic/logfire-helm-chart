@@ -48,7 +48,7 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
         - name: {{ $serviceName }}
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.workerImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
+          image: '{{ .Values.image.repository | default "" }}{{ include "logfire.pythonImage" (dict "Values" .Values "key" "workerImage") }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}

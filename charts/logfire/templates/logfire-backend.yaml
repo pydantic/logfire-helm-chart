@@ -122,7 +122,7 @@ spec:
       {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName) | nindent 6 }}
       containers:
         - name: {{ $serviceName }}
-          image: '{{ .Values.image.repository | default "" }}{{ .Values.image.backendImage }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
+          image: '{{ .Values.image.repository | default "" }}{{ include "logfire.pythonImage" (dict "Values" .Values "key" "backendImage") }}:{{ include "logfire.serviceTag" (dict "Values" .Values "serviceName" $serviceName "Chart" .Chart) }}'
           imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
@@ -211,8 +211,6 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-dex-client-secret") }}
                   key: logfire-dex-client-secret
-            - name: BROWSER_TELEMETRY_COLLECTOR_OTLP_HTTP_HOST
-              value: http://logfire-otel-collector:4318
             - name: APP_VERSION
               value: {{ .Values.releaseVersion | default (include "logfire.serviceVersion" (dict "root" . "serviceName" $serviceName)) | quote }}
             - name: JWT_SECRET
