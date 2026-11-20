@@ -141,7 +141,7 @@ Use compatible cluster transport protection if these connections require encrypt
 The chart combines the supplied CA with the system roots.
 Runtime services also include the in-cluster CA when enabled.
 Rust TLS Redis clients use that bundle through `SSL_CERT_FILE`.
-The migration Job and admission use it as the `PGSSLROOTCERT` fallback.
+The migration Job, admission and Python runtime database consumers use it as the `PGSSLROOTCERT` fallback.
 A DSN's `sslrootcert` takes precedence. Its path must exist in that container.
 Admission can also use its in-cluster CA mount as the PostgreSQL fallback.
 The migration Job uses `trustedCaBundle` for private database CAs.

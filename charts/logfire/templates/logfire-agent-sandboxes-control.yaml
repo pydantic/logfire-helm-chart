@@ -91,9 +91,6 @@ spec:
             timeoutSeconds: 3
           env:
             {{- include "logfire.trustedCa.env" (dict "ctx" $root "serviceName" $name) | nindent 12 }}
-            {{- if eq $name "monty-admission" }}
-            {{- include "logfire.agentSandboxes.postgresCaEnv" (dict "ctx" $root "serviceName" $name) | nindent 12 }}
-            {{- end }}
             - name: MONTY_SHUTDOWN_GRACE_SECONDS
               value: "100"
             {{- include "logfire.agentSandboxes.pythonEnv" (dict "root" $root "service" $name) | nindent 12 }}

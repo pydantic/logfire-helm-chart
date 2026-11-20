@@ -1116,6 +1116,28 @@ tests:
     asserts:
       - isKind:
           of: Deployment
+  - it: lets Workbench verify the dedicated private database
+    templates: [templates/logfire-backend.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    set:
+      trustedCaBundle.existingConfigMap.name: external-db-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: PGSSLROOTCERT, value: /etc/logfire/trusted-ca/ca-bundle.crt}
+  - it: lets the auth service verify the dedicated private database
+    templates: [templates/logfire-backend-auth.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    set:
+      trustedCaBundle.existingConfigMap.name: external-db-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: PGSSLROOTCERT, value: /etc/logfire/trusted-ca/ca-bundle.crt}
   - it: upgrades legacy worker values without worker-managed settings
     set:
       agentSandboxes.workerManagedSessions: null

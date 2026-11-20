@@ -49,6 +49,7 @@
   value: "8"
 - name: MONTY_PG_POOL_MIN_CONNECTIONS
   value: "0"
+{{ include "logfire.agentSandboxes.postgresCaEnv" (dict "ctx" .root "serviceName" .service) }}
 {{- end -}}
 {{- define "logfire.agentSandboxes.storesChecksum" -}}
 {{- include "logfire.agentSandboxes.validate" . -}}
