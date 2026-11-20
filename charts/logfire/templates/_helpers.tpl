@@ -1510,6 +1510,12 @@ platform contract tests keep the image `USER` and these numbers in step.
 {{- define "logfire.containerImageIdentity" -}}
 {{- $serviceName := required "logfire.containerImageIdentity: need .serviceName" .serviceName -}}
 {{- $uidGid1000 := list
+  "monty-admission"
+  "monty-controller"
+  "monty-reconciler"
+  "monty-relay"
+  "monty-broker"
+  "logfire-monty-migrations"
   "logfire-backend"
   "logfire-backend-auth"
   "logfire-backend-migrations"
@@ -1898,6 +1904,12 @@ The other in-cluster TLS clients are unaffected. They trust `LOGFIRE_CA_PATH` ex
 {{- $ctx := required "logfire.trustedCa.sources: need .ctx" .ctx -}}
 {{- $serviceName := required "logfire.trustedCa.sources: need .serviceName" .serviceName -}}
 {{- $services := list
+  "monty-admission"
+  "monty-controller"
+  "monty-reconciler"
+  "monty-relay"
+  "monty-broker"
+  "logfire-monty-migrations"
   "logfire-backend"
   "logfire-backend-auth"
   "logfire-worker"
@@ -1938,9 +1950,11 @@ true
 {{- if include "logfire.trustedCa.enabled" . -}}
 {{- $containerSecurityContext := include "logfire.containerSecurityContext" (dict "ctx" $ctx "serviceName" $serviceName) | fromJson -}}
 {{- $gateway := eq $serviceName "logfire-ai-gateway" -}}
-{{- $inClusterCa := and $gateway (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
+{{- $monty := or (hasPrefix "monty-" $serviceName) (eq $serviceName "logfire-monty-migrations") -}}
+{{- $inClusterCa := and (or $gateway (and $monty (ne $serviceName "logfire-monty-migrations"))) (include "logfire.inClusterTls.enabled" $ctx | eq "true") -}}
 {{- $repository := $ctx.Values.image.repository | default "" -}}
 {{- $image := include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "backendImage") -}}
+{{- $tagService := ternary "logfire-backend" $serviceName $monty -}}
 {{- $baseFile := "/etc/ssl/certs/ca-certificates.crt" -}}
 {{- if $gateway -}}
   {{- $repository = $ctx.Values.image.gatewayRepository | default "" -}}
@@ -1954,14 +1968,14 @@ true
   {{- $image = $ctx.Values.image.alertRunnerImage | default "logfire-alert-runner-prod" -}}
 {{- end -}}
 - name: trusted-ca-bundle
-  image: '{{ $repository }}{{ $image }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
+  image: '{{ $repository }}{{ $image }}:{{ include "logfire.serviceTag" (dict "Values" $ctx.Values "serviceName" $tagService "Chart" $ctx.Chart) }}'
   imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
   command:
     - sh
     - -c
     - |
       set -eu
-      for f in {{ with $baseFile }}{{ . }} {{ end }}/etc/logfire/trusted-ca-sources/*.crt; do
+      for f in {{ with $baseFile }}{{ . }} {{ end }}{{ if and $monty $inClusterCa }}/etc/logfire/incluster-ca/ca.crt {{ end }}/etc/logfire/trusted-ca-sources/*.crt; do
         cat "$f"
         echo
       done > /etc/logfire/trusted-ca/ca-bundle.crt
@@ -2247,6 +2261,7 @@ image reaches both.
   "logfire-alert-runner"
   "logfire-dex"
   "logfire-backend-migrations"
+  "logfire-monty-migrations"
   "logfire-backend-post-deploy-migrations"
   "logfire-ff-migrations"
   "logfire-ff-crud-api"

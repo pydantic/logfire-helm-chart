@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.4-rc.4](https://img.shields.io/badge/Version-0.15.4--rc.4-informational?style=flat-square) ![AppVersion: 04a0335e](https://img.shields.io/badge/AppVersion-04a0335e-informational?style=flat-square)
+![Version: 0.16.0-rc.1](https://img.shields.io/badge/Version-0.16.0--rc.1-informational?style=flat-square) ![AppVersion: 7b681aad](https://img.shields.io/badge/AppVersion-7b681aad-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -666,8 +666,9 @@ Setting it replaces the Redis pod, and FusionFire pods that start before the new
 
 ### Istio service mesh
 
-Every Logfire pod can run with an Istio sidecar, under STRICT or PERMISSIVE mTLS, including split query mode (`logfire-ff-query-worker.enabled: true`).
+The base Logfire workloads can run with an Istio sidecar, under STRICT or PERMISSIVE mTLS, including split query mode (`logfire-ff-query-worker.enabled: true`).
 CI installs the chart into Istio with STRICT mTLS and runs the integration suite.
+The optional [Agent Sandboxes extension](agent-sandboxes.md#service-meshes) does not yet support injected sidecars.
 
 Istio must inject native sidecars.
 Istio 1.27 and later do this by default on Kubernetes 1.29 and later.
@@ -766,6 +767,29 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | adminSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | adminSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | affinity | object | `{}` | Node/Pod affinity applied to all workloads |
+| agentSandboxes | object | `{"allowedOrganizations":[],"broker":{"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"250m","memory":"512Mi"}},"serviceAccountAnnotations":{}},"capacityOwnerId":"","control":{"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"250m","memory":"512Mi"}}},"createWorkerNamespace":true,"enabled":false,"existingSecret":"","images":{"admission":"logfire-monty-admission","control":"logfire-monty-control-prod","relay":"logfire-monty-relay","worker":"monty-worker"},"pressureEnabled":false,"profilesEnabled":true,"relay":{"maxSessions":256,"replicas":2,"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"250m","memory":"256Mi"}}},"snapshotQuota":{"bytes":1073741824,"objects":1000,"retentionSeconds":604800},"snapshotUri":"","stores":{"postgresSecret":{"authKey":"authDsn","migrationKey":"migrationDsn","name":"","runtimeKey":"runtimeDsn"},"postgresTopology":"direct","redisSecret":{"key":"dsn","name":""},"restrictRuntimeRoles":true},"volumesEnabled":false,"workerManagedSessions":{"bankTarget":1,"enabled":false,"issuerSecret":{"key":"seed","name":""},"publicKey":""},"workerNamespace":"","workers":{"ceiling":8,"cpuLimitMillicores":1000,"cpuRequestMillicores":500,"dnsEgress":[{"ports":[{"port":53,"protocol":"UDP"},{"port":53,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},"podSelector":{"matchLabels":{"k8s-app":"kube-dns"}}}]}],"extraEgress":[],"memoryMiB":1024,"nodeSelector":{},"runtimeClassName":"","tolerations":[],"updateStrategy":"Recreate","warmReplicas":1}}` | Optional project-scoped Agent Sandboxes. Requires the upstream Agent Sandbox operator with v1beta1 core and extension CRDs, plus an isolated worker runtime. |
+| agentSandboxes.allowedOrganizations | list | `[]` | Explicit organization UUIDs permitted to use sandboxes. |
+| agentSandboxes.broker.serviceAccountAnnotations | object | `{}` | Optional cloud identity annotations. Only the broker receives storage credentials. |
+| agentSandboxes.capacityOwnerId | string | `""` | Stable installation UUID shared by admission replicas. Required when enabled. Keep this value across restarts, upgrades and rollbacks. |
+| agentSandboxes.createWorkerNamespace | bool | `true` | Create and retain the worker namespace. Disable when an administrator supplies it. |
+| agentSandboxes.existingSecret | string | `""` | Existing Secret with management, controller, state, relay, snapshot, snapshot-admin, volume, volume-admin and telemetry keys. Empty creates a Secret. |
+| agentSandboxes.images | object | `{"admission":"logfire-monty-admission","control":"logfire-monty-control-prod","relay":"logfire-monty-relay","worker":"monty-worker"}` | Repository names under image.repository. Each uses the chart's platform image tag. |
+| agentSandboxes.pressureEnabled | bool | `false` | Read worker resource metrics for pressure sensing. Requires a metrics.k8s.io provider. Enables the controller's namespaced PodMetrics RBAC. Session capacity limits remain active when disabled. |
+| agentSandboxes.profilesEnabled | bool | `true` | Workbench and saved execution profiles. |
+| agentSandboxes.snapshotUri | string | `""` | Snapshot prefix. Empty uses <objectStore.uri>/monty-snapshots. |
+| agentSandboxes.stores | object | `{"postgresSecret":{"authKey":"authDsn","migrationKey":"migrationDsn","name":"","runtimeKey":"runtimeDsn"},"postgresTopology":"direct","redisSecret":{"key":"dsn","name":""},"restrictRuntimeRoles":true}` | Independent runtime stores. The PostgreSQL database must differ from the canonical database. |
+| agentSandboxes.stores.restrictRuntimeRoles | bool | `true` | Grant the runtime and auth logins only the access they need, through the pre-created `NOLOGIN` roles `monty_runtime` and `monty_auth`. When false, no roles are needed, and the three DSN keys may hold the same schema-owning login. |
+| agentSandboxes.volumesEnabled | bool | `false` | Opt-in file volumes. Requires profiles. |
+| agentSandboxes.workerManagedSessions.bankTarget | int | `1` | Initial delegated bank target per project, between 1 and 128. |
+| agentSandboxes.workerManagedSessions.enabled | bool | `false` | Reserve session capacity in batches and let each worker enforce its grant. Keep the signing key stable across upgrades. Requires the matching public key below. |
+| agentSandboxes.workerManagedSessions.issuerSecret.key | string | `"seed"` | Secret key with a 32-byte Ed25519 signing seed encoded as 64 hexadecimal characters. |
+| agentSandboxes.workerManagedSessions.issuerSecret.name | string | `""` | Pre-created Secret in the chart namespace. Only admission reads this key. |
+| agentSandboxes.workerManagedSessions.publicKey | string | `""` | Matching 32-byte Ed25519 public key, encoded as 64 hexadecimal characters. Workers receive only this value. |
+| agentSandboxes.workerNamespace | string | `""` | Worker namespace. Empty derives <release namespace>-sandboxes. |
+| agentSandboxes.workers.dnsEgress | list | `[{"ports":[{"port":53,"protocol":"UDP"},{"port":53,"protocol":"TCP"}],"to":[{"namespaceSelector":{"matchLabels":{"kubernetes.io/metadata.name":"kube-system"}},"podSelector":{"matchLabels":{"k8s-app":"kube-dns"}}}]}]` | DNS NetworkPolicy egress rules. Replace for custom DNS namespaces, ports or node-local IPs. An empty list removes the DNS exception. Other worker egress stays restricted. |
+| agentSandboxes.workers.extraEgress | list | `[]` | Additional worker egress rules for administrator-approved destinations. |
+| agentSandboxes.workers.runtimeClassName | string | `""` | Installed RuntimeClass for untrusted code, such as gvisor or kata. |
+| agentSandboxes.workers.updateStrategy | string | `"Recreate"` | Recreate replaces unclaimed spares only. Claimed workers need an explicit drain. |
 | ai.azureOpenAi.apiKey | string | `nil` | Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
 | ai.azureOpenAi.apiVersion | string | `nil` | Azure OpenAI API version |
 | ai.azureOpenAi.endpoint | string | `nil` | Azure OpenAI endpoint |
@@ -989,7 +1013,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | redisSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | redisSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
 | redisSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| releaseVersion | string | `"v2026-11-18.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
+| releaseVersion | string | `"v2026-11-19.02"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
 | rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
@@ -1033,5 +1057,8 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | webPush.privateKey | string | `""` | VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one and keep it across upgrades. Replacing it unregisters every device that had push on, which each browser recovers from by subscribing again on its next visit. |
 | webPush.subject | string | `""` | Contact the push service operator can reach you on, a `mailto:` or `https:` URL (RFC 8292). Defaults to `mailto:` and `adminEmail`. |
 
-----------------------------------------------
-Autogenerated from chart metadata using [helm-docs v1.14.2](https://github.com/norwoodj/helm-docs/releases/v1.14.2)
+## Agent Sandboxes
+
+This optional feature requires Kubernetes 1.25 or later with CRD CEL validation enabled.
+Kubernetes 1.29 or later is recommended. The base chart's minimum version stays at 1.23.
+See [Agent Sandboxes](agent-sandboxes.md) for prerequisites, configuration and verification.

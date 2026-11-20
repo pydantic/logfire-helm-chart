@@ -38,7 +38,7 @@ variablesApiKey: ""
 frontendApplicationToken: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: "v2026-11-18.01"
+releaseVersion: "v2026-11-19.02"
 
 # -- CRUD database migration Job settings.
 migrations:
@@ -3437,3 +3437,106 @@ sizingPresets:
           cpuAverage: 80
       scratchVolume:
         storage: "128Gi"
+
+# -- Optional project-scoped Agent Sandboxes. Requires the upstream Agent Sandbox
+# operator with v1beta1 core and extension CRDs, plus an isolated worker runtime.
+agentSandboxes:
+  enabled: false
+  # -- Stable installation UUID shared by admission replicas. Required when enabled.
+  # Keep this value across restarts, upgrades and rollbacks.
+  capacityOwnerId: ""
+  # -- Explicit organization UUIDs permitted to use sandboxes.
+  allowedOrganizations: []
+  # -- Existing Secret with management, controller, state, relay, snapshot,
+  # snapshot-admin, volume, volume-admin and telemetry keys. Empty creates a Secret.
+  existingSecret: ""
+  # -- Worker namespace. Empty derives <release namespace>-sandboxes.
+  workerNamespace: ""
+  # -- Create and retain the worker namespace. Disable when an administrator supplies it.
+  createWorkerNamespace: true
+  # -- Read worker resource metrics for pressure sensing. Requires a metrics.k8s.io provider.
+  # Enables the controller's namespaced PodMetrics RBAC. Session capacity limits remain active when disabled.
+  pressureEnabled: false
+  # -- Repository names under image.repository. Each uses the chart's platform image tag.
+  images:
+    control: logfire-monty-control-prod
+    admission: logfire-monty-admission
+    relay: logfire-monty-relay
+    worker: monty-worker
+  # -- Independent runtime stores. The PostgreSQL database must differ from the canonical database.
+  stores:
+    postgresTopology: direct
+    postgresSecret:
+      name: ""
+      runtimeKey: runtimeDsn
+      authKey: authDsn
+      migrationKey: migrationDsn
+    redisSecret:
+      name: ""
+      key: dsn
+    # -- Grant the runtime and auth logins only the access they need, through the
+    # pre-created `NOLOGIN` roles `monty_runtime` and `monty_auth`. When false, no
+    # roles are needed, and the three DSN keys may hold the same schema-owning login.
+    restrictRuntimeRoles: true
+  workerManagedSessions:
+    # -- Reserve session capacity in batches and let each worker enforce its grant.
+    # Keep the signing key stable across upgrades. Requires the matching public key below.
+    enabled: false
+    # -- Initial delegated bank target per project, between 1 and 128.
+    bankTarget: 1
+    issuerSecret:
+      # -- Pre-created Secret in the chart namespace. Only admission reads this key.
+      name: ""
+      # -- Secret key with a 32-byte Ed25519 signing seed encoded as 64 hexadecimal characters.
+      key: seed
+    # -- Matching 32-byte Ed25519 public key, encoded as 64 hexadecimal characters. Workers receive only this value.
+    publicKey: ""
+  # -- Workbench and saved execution profiles.
+  profilesEnabled: true
+  # -- Opt-in file volumes. Requires profiles.
+  volumesEnabled: false
+  # -- Snapshot prefix. Empty uses <objectStore.uri>/monty-snapshots.
+  snapshotUri: ""
+  snapshotQuota:
+    bytes: 1073741824
+    objects: 1000
+    retentionSeconds: 604800
+  relay:
+    replicas: 2
+    maxSessions: 256
+    resources:
+      requests: {cpu: 250m, memory: 256Mi}
+      limits: {memory: 1Gi}
+  control:
+    resources:
+      requests: {cpu: 250m, memory: 512Mi}
+      limits: {memory: 1Gi}
+  broker:
+    # -- Optional cloud identity annotations. Only the broker receives storage credentials.
+    serviceAccountAnnotations: {}
+    resources:
+      requests: {cpu: 250m, memory: 512Mi}
+      limits: {memory: 1Gi}
+  workers:
+    # -- Installed RuntimeClass for untrusted code, such as gvisor or kata.
+    runtimeClassName: ""
+    # -- DNS NetworkPolicy egress rules. Replace for custom DNS namespaces, ports or node-local IPs.
+    # An empty list removes the DNS exception. Other worker egress stays restricted.
+    dnsEgress:
+      - to:
+          - namespaceSelector:
+              matchLabels: {kubernetes.io/metadata.name: kube-system}
+            podSelector:
+              matchLabels: {k8s-app: kube-dns}
+        ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    # -- Additional worker egress rules for administrator-approved destinations.
+    extraEgress: []
+    nodeSelector: {}
+    tolerations: []
+    warmReplicas: 1
+    ceiling: 8
+    # -- Recreate replaces unclaimed spares only. Claimed workers need an explicit drain.
+    updateStrategy: Recreate
+    memoryMiB: 1024
+    cpuRequestMillicores: 500
+    cpuLimitMillicores: 1000

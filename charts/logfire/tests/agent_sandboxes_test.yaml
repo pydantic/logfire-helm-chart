@@ -1,0 +1,1150 @@
+suite: Agent Sandbox authority and isolation contracts
+chart:
+  appVersion: test-release
+capabilities:
+  majorVersion: 1
+  minorVersion: 29
+release:
+  name: lf
+  namespace: customer
+set:
+  objectStore.uri: s3://customer-data
+  adminEmail: admin@example.test
+  smtp.host: mail.example.test
+  smtp.fromAddress: logfire@example.test
+  agentSandboxes.stores.postgresSecret.name: monty-postgres
+  agentSandboxes.stores.redisSecret.name: monty-redis
+  agentSandboxes.capacityOwnerId: 00000000-0000-0000-0000-000000000002
+  inClusterTls.enabled: true
+  inClusterTls.caBundle.existingConfigMap.name: customer-ca
+  agentSandboxes.enabled: true
+  agentSandboxes.allowedOrganizations:
+    - 00000000-0000-0000-0000-000000000001
+  agentSandboxes.workers.runtimeClassName: gvisor
+tests:
+  - it: requires independent runtime store credentials
+    set:
+      agentSandboxes.stores.postgresSecret.name: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: requires stores.postgresSecret.name and stores.redisSecret.name
+  - it: couples admission to its Rust image and runtime database credential
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.spec.containers[0].name
+      value: monty-admission
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-monty-admission:test-release
+      - equal:
+          path: spec.template.spec.containers[0].command
+          value: [/usr/local/bin/logfire-monty-admission]
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PG_DSN, valueFrom: {secretKeyRef: {name: monty-postgres, key: runtimeDsn}}}
+  - it: keeps migration credentials out of runtime and auth workloads
+    templates: [templates/logfire-agent-sandboxes-migrations.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PG_DSN, valueFrom: {secretKeyRef: {name: monty-postgres, key: migrationDsn}}}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_RESTRICT_RUNTIME_ROLES, value: "true"}
+  - it: gives the auth workload its restricted runtime credential
+    templates: [templates/logfire-backend-auth.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PG_DSN, valueFrom: {secretKeyRef: {name: monty-postgres, key: authDsn}}}
+  - it: refuses sandbox installation below the operator minimum version
+    capabilities:
+      majorVersion: 1
+      minorVersion: 24
+    asserts:
+      - failedTemplate:
+          errorPattern: requires Kubernetes 1.25 or later
+  - it: accepts the operator minimum version when sandbox configuration is valid
+    capabilities:
+      majorVersion: 1
+      minorVersion: 25
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - isKind:
+          of: SandboxTemplate
+  - it: keeps the base chart available on Kubernetes 1.23 without sandboxes
+    capabilities:
+      majorVersion: 1
+      minorVersion: 23
+    set:
+      agentSandboxes.enabled: false
+    templates: [templates/logfire-backend.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - isKind:
+          of: Deployment
+  - it: uses the external worker namespace without claiming namespace ownership
+    set:
+      agentSandboxes.createWorkerNamespace: false
+      agentSandboxes.workerNamespace: external-workers
+    asserts:
+      - hasDocuments:
+          count: 2
+        template: templates/logfire-agent-sandboxes-secrets.yaml
+      - equal:
+          path: metadata.namespace
+          value: external-workers
+        template: templates/logfire-agent-sandboxes-secrets.yaml
+        documentSelector:
+          path: metadata.name
+          value: lf-agent-sandboxes-telemetry
+      - equal:
+          path: metadata.namespace
+          value: external-workers
+        template: templates/logfire-agent-sandboxes-workers.yaml
+        documentSelector:
+          path: kind
+          value: SandboxTemplate
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_NAMESPACE, value: external-workers}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-controller
+  - it: creates no namespace or secrets with external namespace and credential management
+    set:
+      agentSandboxes.createWorkerNamespace: false
+      agentSandboxes.existingSecret: external-authority
+    templates: [templates/logfire-agent-sandboxes-secrets.yaml]
+    asserts:
+      - hasDocuments:
+          count: 0
+  - it: retains the namespace and DNS defaults for older reused values
+    set:
+      agentSandboxes.createWorkerNamespace: null
+      agentSandboxes.pressureEnabled: null
+      agentSandboxes.workers.dnsEgress: null
+    asserts:
+      - equal:
+          path: metadata.name
+          value: customer-sandboxes
+        template: templates/logfire-agent-sandboxes-secrets.yaml
+        documentSelector:
+          path: kind
+          value: Namespace
+      - contains:
+          path: spec.networkPolicy.egress
+          content:
+            to:
+              - namespaceSelector:
+                  matchLabels: {kubernetes.io/metadata.name: kube-system}
+                podSelector:
+                  matchLabels: {k8s-app: kube-dns}
+            ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+        template: templates/logfire-agent-sandboxes-workers.yaml
+        documentSelector:
+          path: kind
+          value: SandboxTemplate
+  - it: replaces the DNS exception with the cluster resolver namespace and ports
+    set:
+      agentSandboxes.workers.dnsEgress:
+        - to:
+            - namespaceSelector:
+                matchLabels: {kubernetes.io/metadata.name: openshift-dns}
+              podSelector:
+                matchLabels: {dns.operator.openshift.io/daemonset-dns: default}
+          ports: [{protocol: UDP, port: 5353}, {protocol: TCP, port: 5353}]
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - equal:
+          path: spec.networkPolicy.egress
+          value:
+            - to:
+                - namespaceSelector:
+                    matchLabels: {kubernetes.io/metadata.name: customer}
+                  podSelector:
+                    matchLabels: {app: monty-controller}
+              ports: [{protocol: TCP, port: 8080}]
+            - to:
+                - namespaceSelector:
+                    matchLabels: {kubernetes.io/metadata.name: openshift-dns}
+                  podSelector:
+                    matchLabels: {dns.operator.openshift.io/daemonset-dns: default}
+              ports: [{protocol: UDP, port: 5353}, {protocol: TCP, port: 5353}]
+  - it: supports a node-local resolver without admitting other DNS destinations
+    set:
+      agentSandboxes.workers.dnsEgress:
+        - to:
+            - ipBlock: {cidr: 169.254.20.10/32}
+          ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - lengthEqual:
+          path: spec.networkPolicy.egress
+          count: 2
+      - equal:
+          path: spec.networkPolicy.egress[1]
+          value:
+            to:
+              - ipBlock: {cidr: 169.254.20.10/32}
+            ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]
+  - it: removes only the DNS exception when its list is empty
+    set:
+      agentSandboxes.workers.dnsEgress: []
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - equal:
+          path: spec.networkPolicy.egress
+          value:
+            - to:
+                - namespaceSelector:
+                    matchLabels: {kubernetes.io/metadata.name: customer}
+                  podSelector:
+                    matchLabels: {app: monty-controller}
+              ports: [{protocol: TCP, port: 8080}]
+  - it: rejects a DNS rule map that would bypass the list contract
+    set:
+      agentSandboxes.workers.dnsEgress: {to: []}
+    asserts:
+      - failedTemplate:
+          errorPattern: dnsEgress must be a list of NetworkPolicy egress rules
+  - it: keeps resource metrics opt-in across controller configuration and RBAC
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PRESSURE_ENABLED, value: "false"}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-controller
+      - notContains:
+          path: rules
+          content: {apiGroups: [metrics.k8s.io], resources: [pods], verbs: [get, list]}
+        template: templates/logfire-agent-sandboxes-workers.yaml
+        documentSelector:
+          path: kind
+          value: Role
+      - contains:
+          path: rules
+          content: {apiGroups: [""], resources: [pods], verbs: [get, list, patch]}
+        template: templates/logfire-agent-sandboxes-workers.yaml
+        documentSelector:
+          path: kind
+          value: Role
+  - it: grants PodMetrics access only when the controller consumes it
+    set:
+      agentSandboxes.pressureEnabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PRESSURE_ENABLED, value: "true"}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-controller
+      - contains:
+          path: rules
+          content: {apiGroups: [metrics.k8s.io], resources: [pods], verbs: [get, list]}
+        template: templates/logfire-agent-sandboxes-workers.yaml
+        documentSelector:
+          path: kind
+          value: Role
+  - it: requires a stable capacity owner before admission starts
+    set:
+      agentSandboxes.capacityOwnerId: null
+    asserts:
+      - failedTemplate:
+          errorPattern: capacityOwnerId must be a stable installation UUID
+  - it: rejects a capacity owner that is not a UUID
+    set:
+      agentSandboxes.capacityOwnerId: temporary-owner
+    asserts:
+      - failedTemplate:
+          errorPattern: capacityOwnerId must be a stable installation UUID
+  - it: supplies the shared capacity owner required by admission
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.metadata.labels.app
+      value: monty-admission
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MONTY_CAPACITY_OWNER_ID
+            value: 00000000-0000-0000-0000-000000000002
+  - it: requires CPU-clock execution bound to the immutable worker Pod identity
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - contains:
+          path: spec.podTemplate.spec.containers[0].env
+          content:
+            name: MONTY_WORKER_EXECUTION_CLOCK
+            value: cpu
+      - contains:
+          path: spec.podTemplate.spec.containers[0].env
+          content:
+            name: MONTY_WORKER_EXECUTION_POD_UID
+            valueFrom:
+              fieldRef: {fieldPath: metadata.uid}
+      - contains:
+          path: spec.podTemplate.spec.containers[0].env
+          content:
+            name: MONTY_WORKER_REQUIRE_EXECUTION_BINDING
+            value: "true"
+  - it: permits only the relay and admission to contact worker execution endpoints
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - equal:
+          path: spec.networkPolicy.ingress
+          value:
+            - from:
+                - namespaceSelector:
+                    matchLabels: {kubernetes.io/metadata.name: customer}
+                  podSelector:
+                    matchLabels: {app: monty-relay}
+                - namespaceSelector:
+                    matchLabels: {kubernetes.io/metadata.name: customer}
+                  podSelector:
+                    matchLabels: {app: monty-admission}
+              ports: [{protocol: TCP, port: 8000}]
+  - it: couples HTTP authority URLs to their service and policy ports without a custom CA
+    set:
+      inClusterTls.enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_CONTROLLER_STATE_URL, value: "http://monty-admission.customer.svc.cluster.local:8080/state"}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-controller
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_CONTROLLER_AUTH_URL, value: "http://logfire-backend-auth.customer.svc.cluster.local:8000/internal/monty/get-state"}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-controller
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_WORKER_INTAKE_URL, value: "http://logfire-service.customer.svc.cluster.local:8080"}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-controller
+      - notExists:
+          path: spec.template.spec.containers[0].env[?(@.name == "LOGFIRE_CA_PATH")]
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-controller
+      - contains:
+          path: spec.ports
+          content: {name: http, port: 8080}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: kind
+          value: Service
+          matchMany: true
+      - contains:
+          path: spec.ingress
+          content:
+            from:
+              - podSelector:
+                  matchLabels: {app.kubernetes.io/component: logfire-backend}
+            ports: [{protocol: TCP, port: 8080}]
+        template: templates/logfire-agent-sandboxes-network.yaml
+        documentSelector:
+          path: metadata.name
+          value: monty-admission-private
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_CONTROL_URL, value: "http://monty-admission.customer.svc.cluster.local:8080"}
+        template: templates/logfire-backend.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+  - it: requires an explicit organization allowlist
+    set:
+      agentSandboxes.allowedOrganizations: []
+    asserts:
+      - failedTemplate:
+          errorPattern: must contain at least one organization UUID
+  - it: keeps custom HTTPS ports aligned across the controller and ingress policy
+    set:
+      inClusterTls.httpsPort: 9443
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_CONTROLLER_STATE_URL, value: "https://monty-admission.customer.svc.cluster.local:9443/state"}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-controller
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: LOGFIRE_CA_PATH, value: /etc/logfire/incluster-ca/ca.crt}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-controller
+      - contains:
+          path: spec.ports
+          content: {name: https, port: 9443, targetPort: https, appProtocol: HTTPS, protocol: TCP}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: kind
+          value: Service
+          matchMany: true
+      - contains:
+          path: spec.ingress
+          content:
+            from:
+              - podSelector:
+                  matchLabels: {app: monty-controller}
+            ports: [{protocol: TCP, port: 9443}]
+        template: templates/logfire-agent-sandboxes-network.yaml
+        documentSelector:
+          path: metadata.name
+          value: monty-admission-private
+  - it: carries administrator metadata and approved egress into operator-created worker Pods
+    set:
+      monty-worker.podAnnotations:
+        example.test/worker-annotation: "true"
+      monty-worker.podLabels:
+        example.test/worker-label: "true"
+      agentSandboxes.workers.extraEgress:
+        - to:
+            - namespaceSelector:
+                matchLabels: {kubernetes.io/metadata.name: approved-services}
+              podSelector:
+                matchLabels: {app: approved-service}
+          ports: [{protocol: TCP, port: 8443}]
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - equal:
+          path: spec.podTemplate.metadata.annotations["example.test/worker-annotation"]
+          value: "true"
+      - equal:
+          path: spec.podTemplate.metadata.labels["example.test/worker-label"]
+          value: "true"
+      - contains:
+          path: spec.networkPolicy.egress
+          content:
+            to:
+              - namespaceSelector:
+                  matchLabels: {kubernetes.io/metadata.name: approved-services}
+                podSelector:
+                  matchLabels: {app: approved-service}
+            ports: [{protocol: TCP, port: 8443}]
+      - equal:
+          path: spec.podTemplate.spec.automountServiceAccountToken
+          value: false
+  - it: rejects malformed additional worker egress
+    set:
+      agentSandboxes.workers.extraEgress: {ports: []}
+    asserts:
+      - failedTemplate:
+          errorPattern: extraEgress must be a list of NetworkPolicy egress rules
+  - it: rejects organization names in place of UUIDs
+    set:
+      agentSandboxes.allowedOrganizations: [customer]
+    asserts:
+      - failedTemplate:
+          errorPattern: must contain organization UUIDs
+  - it: does not put untrusted workers beside the control plane
+    set:
+      agentSandboxes.workerNamespace: customer
+    asserts:
+      - failedTemplate:
+          errorPattern: must be a separate valid namespace
+  - it: requires an installed worker isolation runtime
+    set:
+      agentSandboxes.workers.runtimeClassName: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: must name an installed isolated runtime
+  - it: reserves room to allocate beyond the warm pool
+    set:
+      agentSandboxes.workers.warmReplicas: 8
+    asserts:
+      - failedTemplate:
+          errorPattern: warmReplicas < ceiling
+  - it: rejects an unsupported snapshot retention policy
+    set:
+      agentSandboxes.snapshotQuota.retentionSeconds: 604801
+    asserts:
+      - failedTemplate:
+          errorPattern: retentionSeconds between 1 and 604800
+  - it: requires profiles before enabling file volumes
+    set:
+      agentSandboxes.volumesEnabled: true
+      agentSandboxes.profilesEnabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: volumesEnabled requires profilesEnabled
+  - it: gives the backend only the management credential
+    templates: [templates/logfire-backend.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MONTY_CONTROL_TOKEN
+            valueFrom:
+              secretKeyRef: {name: lf-agent-sandboxes, key: management}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MONTY_CONTROL_URL
+            value: https://monty-admission.customer.svc.cluster.local:8443
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_WORKBENCH_RELAY_URL, value: "http://monty-relay.customer.svc.cluster.local:8000/"}
+  - it: enables execution-key and profile resolution in auth
+    templates: [templates/logfire-backend-auth.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_MANAGED_ENABLED, value: "true"}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PROFILES_ENABLED, value: "true"}
+  - it: propagates custom DNS to controller and relay
+    set:
+      clusterDomain: corp.internal
+      agentSandboxes.workerNamespace: customer-execution
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.metadata.labels.app
+      value: monty-controller
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_KUBERNETES_CLUSTER_DOMAIN, value: corp.internal}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_NAMESPACE, value: customer-execution}
+  - it: resolves the SDK relay in the configured namespace and cluster domain
+    set:
+      clusterDomain: corp.internal
+    templates: [templates/logfire-service-config.yaml]
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: server relay monty-relay.customer.svc.corp.internal:8000 proto h2
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: http-request set-header Host monty-relay.customer.svc.corp.internal
+
+  - it: accepts reused values from before Agent Sandboxes existed
+    set:
+      agentSandboxes: null
+    templates: [templates/logfire-backend.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - isKind:
+          of: Deployment
+
+  - it: binds remote MCP to matching images and private execution credentials
+    templates: [templates/logfire-remote-mcp.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-remote-mcp-prod:test-release
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_WORKBENCH_ENABLED, value: "true"}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MONTY_CONTROL_TOKEN
+            valueFrom:
+              secretKeyRef: {name: lf-agent-sandboxes, key: management}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_CONTROL_URL, value: "https://monty-admission.customer.svc.cluster.local:8443"}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_WORKBENCH_RELAY_URL, value: "http://monty-relay.customer.svc.cluster.local:8000/"}
+  - it: permits the MCP caller on the private admission TLS endpoint
+    templates: [templates/logfire-agent-sandboxes-network.yaml]
+    documentSelector:
+      path: metadata.name
+      value: monty-admission-private
+    asserts:
+      - contains:
+          path: spec.ingress
+          content:
+            from:
+              - podSelector:
+                  matchLabels: {app.kubernetes.io/component: logfire-remote-mcp}
+            ports: [{protocol: TCP, port: 8443}]
+  - it: includes sandbox execution in the configured MCP OAuth consent
+    set:
+      gateway.tls: true
+    templates: [templates/logfire-backend.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.containers[0].env[?(@.name == "BOOTSTRAPPED_ORGANIZATIONS")].value
+          pattern: 'project:execute_agent_sandboxes'
+  - it: keeps execution out of MCP OAuth consent when sandboxes are disabled
+    set:
+      agentSandboxes.enabled: false
+      gateway.tls: true
+    templates: [templates/logfire-backend.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notMatchRegex:
+          path: spec.template.spec.containers[0].env[?(@.name == "BOOTSTRAPPED_ORGANIZATIONS")].value
+          pattern: 'project:execute_agent_sandboxes'
+
+  - it: rejects missing runtime store keys
+    set:
+      agentSandboxes.stores.postgresSecret.runtimeKey: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: "stores require nonempty"
+
+  - it: refuses application credentials wired to the migration key
+    set:
+      agentSandboxes.stores.postgresSecret.runtimeKey: migrationDsn
+    asserts:
+      - failedTemplate:
+          errorPattern: "stores require distinct"
+
+  - it: permits immutable worker routing and termination evidence without broad resource access
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: Role
+    asserts:
+      - contains:
+          path: rules
+          content: {apiGroups: [discovery.k8s.io], resources: [endpointslices], verbs: [list]}
+      - contains:
+          path: rules
+          content: {apiGroups: [""], resources: [pods], verbs: [get, list, patch]}
+  - it: leaves a failed worker terminated for durable termination evidence
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - equal:
+          path: spec.podTemplate.spec.restartPolicy
+          value: Never
+
+
+  - it: always couples admission and workers to durable relay accounting
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_METERING_ENABLED, value: "true"}
+        template: templates/logfire-agent-sandboxes-control.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-admission
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_SERVER_HOSTED_METERING_URL, value: "https://monty-admission.customer.svc.cluster.local:8443/execution-journal/v1/metering/receipts"}
+        template: templates/logfire-agent-sandboxes-relay.yaml
+        documentSelector:
+          path: spec.template.metadata.labels.app
+          value: monty-relay
+      - contains:
+          path: spec.podTemplate.spec.containers[0].env
+          content: {name: MONTY_WORKER_SHADOW_METERING, value: "true"}
+        template: templates/logfire-agent-sandboxes-workers.yaml
+        documentSelector:
+          path: kind
+          value: SandboxTemplate
+
+  - it: couples the cleartext gRPC listener to its Service, Ingress and HTTPRoute ports
+    set:
+      inClusterTls.enabled: false
+      ingress.enabled: true
+      ingress.ingressClassName: nginx
+      ingress.hostnames: [logfire.example.test]
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: 'bind :8444 proto h2\n(.*\n)*\s+use_backend monty-relay if \{ path /monty.v1.MontySession/Session \}'
+        template: templates/logfire-service-config.yaml
+      - contains:
+          path: spec.ports
+          content: {name: grpc, appProtocol: kubernetes.io/h2c, port: 8444, targetPort: grpc}
+        template: templates/logfire-service.yaml
+        documentSelector: {path: kind, value: Service}
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content: {name: grpc, containerPort: 8444}
+        template: templates/logfire-service.yaml
+        documentSelector: {path: kind, value: Deployment}
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
+          value: GRPC
+        template: templates/logfire-api-ingress.yaml
+        documentSelector: {path: metadata.name, value: logfire-ingress-grpc}
+      - equal:
+          path: spec.rules[0].http.paths[0]
+          value: {path: /monty.v1.MontySession/Session, pathType: Exact, backend: {service: {name: logfire-service, port: {number: 8444}}}}
+        template: templates/logfire-api-ingress.yaml
+        documentSelector: {path: metadata.name, value: logfire-ingress-grpc}
+
+  - it: routes gRPC from the HTTPRoute to the gRPC listener without rewrites or request timeouts
+    set:
+      ingress.enabled: false
+      gateway.enabled: true
+      gateway.create: false
+      gateway.name: edge
+      gateway.filters:
+        - type: URLRewrite
+          urlRewrite: {hostname: rewritten.example.test}
+      gateway.timeouts: {request: 30s}
+    templates: [templates/logfire-gateway-httproute.yaml]
+    asserts:
+      - contains:
+          path: spec.rules
+          content: {matches: [{path: {type: Exact, value: /monty.v1.MontySession/Session}}], backendRefs: [{name: logfire-service, port: 8444}], timeouts: {request: 0s, backendRequest: 0s}}
+
+  - it: keeps Gateway redirects terminal for both gRPC and web requests
+    templates: [templates/logfire-gateway-httproute.yaml]
+    set:
+      ingress.enabled: false
+      gateway.enabled: true
+      gateway.create: false
+      gateway.name: edge
+      gateway.sectionName: http
+      gateway.matches:
+        - path: {type: PathPrefix, value: /}
+          method: POST
+          headers: [{name: x-edge-authorized, value: "yes"}]
+          queryParams: [{name: version, value: v1}]
+      gateway.filters:
+        - type: RequestRedirect
+          requestRedirect: {scheme: https, statusCode: 301}
+      gateway.timeouts: {request: 0s, backendRequest: 0s}
+    asserts:
+      - equal:
+          path: spec.parentRefs[0].sectionName
+          value: http
+      - lengthEqual:
+          path: spec.rules
+          count: 1
+      - contains:
+          path: spec.rules
+          content:
+            matches:
+              - path: {type: PathPrefix, value: /}
+                method: POST
+                headers: [{name: x-edge-authorized, value: "yes"}]
+                queryParams: [{name: version, value: v1}]
+            filters:
+              - type: RequestRedirect
+                requestRedirect: {scheme: https, statusCode: 301}
+      - notExists:
+          path: spec.rules[0].backendRefs
+      - notExists:
+          path: spec.rules[0].timeouts
+
+  - it: preserves Gateway header method and query restrictions on gRPC forwarding
+    templates: [templates/logfire-gateway-httproute.yaml]
+    set:
+      ingress.enabled: false
+      gateway.enabled: true
+      gateway.create: false
+      gateway.name: edge
+      gateway.matches:
+        - path: {type: PathPrefix, value: /monty.v1.MontySession/}
+          method: POST
+          headers: [{name: x-edge-authorized, value: "yes"}]
+          queryParams: [{name: version, value: v1}]
+    asserts:
+      - contains:
+          path: spec.rules
+          content:
+            matches:
+              - path: {type: Exact, value: /monty.v1.MontySession/Session}
+                method: POST
+                headers: [{name: x-edge-authorized, value: "yes"}]
+                queryParams: [{name: version, value: v1}]
+            backendRefs: [{name: logfire-service, port: 8444}]
+            timeouts: {request: 0s, backendRequest: 0s}
+
+  - it: does not expose gRPC outside configured Gateway path prefixes
+    templates: [templates/logfire-gateway-httproute.yaml]
+    set:
+      ingress.enabled: false
+      gateway.enabled: true
+      gateway.create: false
+      gateway.name: edge
+      gateway.matches:
+        - path: {type: PathPrefix, value: /private}
+        - path: {type: PathPrefix, value: /monty.v1.Monty}
+    asserts:
+      - lengthEqual:
+          path: spec.rules
+          count: 1
+
+  - it: narrows allowed exact Gateway matches to the permitted gRPC method
+    templates: [templates/logfire-gateway-httproute.yaml]
+    set:
+      ingress.enabled: false
+      gateway.enabled: true
+      gateway.create: false
+      gateway.name: edge
+      gateway.matches:
+        - path: {type: Exact, value: /other}
+        - path: {type: Exact, value: /monty.v1.MontySession/Session}
+          method: POST
+    asserts:
+      - equal:
+          path: spec.rules[0].backendRefs[0].port
+          value: 8444
+      - contains:
+          path: spec.rules
+          content:
+            matches:
+              - path: {type: Exact, value: /monty.v1.MontySession/Session}
+                method: POST
+            backendRefs: [{name: logfire-service, port: 8444}]
+            timeouts: {request: 0s, backendRequest: 0s}
+
+  - it: refuses ambiguous regular-expression Gateway paths for gRPC
+    set:
+      ingress.enabled: false
+      gateway.enabled: true
+      gateway.create: false
+      gateway.name: edge
+      gateway.matches:
+        - path: {type: RegularExpression, value: ^/monty}
+    asserts:
+      - failedTemplate:
+          errorPattern: gRPC routes require Exact or PathPrefix gateway.matches
+
+  - it: refuses the known incompatible admission image without in-cluster TLS
+    set:
+      image.tag: 6dc21200
+      inClusterTls.enabled: false
+    asserts:
+      - failedTemplate:
+          errorPattern: requires a compatible admission image for HTTP
+
+  - it: couples the TLS gRPC listener to the in-cluster certificate and an HTTP/2 TLS backend
+    set:
+      ingress.enabled: true
+      ingress.ingressClassName: nginx
+      ingress.hostnames: [logfire.example.test]
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: 'bind :8444 ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2\n'
+        template: templates/logfire-service-config.yaml
+      - contains:
+          path: spec.ports
+          content: {name: grpc, appProtocol: HTTP2, port: 8444, targetPort: grpc}
+        template: templates/logfire-service.yaml
+        documentSelector: {path: kind, value: Service}
+      - equal:
+          path: metadata.annotations["nginx.ingress.kubernetes.io/backend-protocol"]
+          value: GRPCS
+        template: templates/logfire-api-ingress.yaml
+        documentSelector: {path: metadata.name, value: logfire-ingress-grpc}
+
+  - it: rejects an in-cluster HTTPS port that collides with the gRPC listener
+    set:
+      inClusterTls.httpsPort: 8444
+    asserts:
+      - failedTemplate:
+          errorPattern: logfire-service serves gRPC on that port
+
+  - it: passes the runtime role restriction choice to the Monty migration
+    templates: [templates/logfire-agent-sandboxes-migrations.yaml]
+    set:
+      agentSandboxes.stores.restrictRuntimeRoles: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_RESTRICT_RUNTIME_ROLES, value: "false"}
+
+  - it: keeps the Monty database credential out of services that do not open it
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PG_DSN, valueFrom: {secretKeyRef: {name: monty-postgres, key: runtimeDsn}}}
+        template: templates/logfire-remote-mcp.yaml
+        documentSelector: {path: kind, value: Deployment}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_REDIS_DSN, valueFrom: {secretKeyRef: {name: monty-redis, key: dsn}}}
+        template: templates/logfire-remote-mcp.yaml
+        documentSelector: {path: kind, value: Deployment}
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_PG_DSN, valueFrom: {secretKeyRef: {name: monty-postgres, key: runtimeDsn}}}
+        template: templates/logfire-task-runner.yaml
+        documentSelector: {path: kind, value: Deployment}
+      - notExists:
+          path: spec.template.metadata.annotations["checksum/monty-stores"]
+        template: templates/logfire-task-runner.yaml
+        documentSelector: {path: kind, value: Deployment}
+
+  - it: serves admission over plain HTTP without in-cluster TLS
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.metadata.labels.app
+      value: monty-admission
+    set:
+      inClusterTls.enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: TLS_MODE, value: disabled}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_ADMISSION_CONTROLLER_URL, value: "http://monty-controller.customer.svc.cluster.local:8080"}
+
+  - it: keeps admission's HTTPS listener with in-cluster TLS
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.metadata.labels.app
+      value: monty-admission
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content: {name: TLS_MODE, value: disabled}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_ADMISSION_CONTROLLER_URL, value: "https://monty-controller.customer.svc.cluster.local:8443"}
+
+  - it: gives the migration Job the same private CA trust as admission
+    templates: [templates/logfire-agent-sandboxes-migrations.yaml]
+    set:
+      trustedCaBundle.existingConfigMap.name: private-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: PGSSLROOTCERT, value: /etc/logfire/trusted-ca/ca-bundle.crt}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SSL_CERT_FILE, value: /etc/logfire/trusted-ca/ca-bundle.crt}
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: logfire-trusted-ca, mountPath: /etc/logfire/trusted-ca, readOnly: true}
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-backend-prod:test-release
+
+  - it: gives admission private Redis CA trust without application TLS
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.spec.containers[0].name
+      value: monty-admission
+    set:
+      inClusterTls.enabled: false
+      trustedCaBundle.existingConfigMap.name: private-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: SSL_CERT_FILE, value: /etc/logfire/trusted-ca/ca-bundle.crt}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: TLS_MODE, value: disabled}
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: {name: logfire-trusted-ca, mountPath: /etc/logfire/trusted-ca, readOnly: true}
+
+  - it: gives only admission the delegated signing seed
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.spec.containers[0].name
+      value: monty-admission
+    set:
+      agentSandboxes.workerManagedSessions.enabled: true
+      agentSandboxes.workerManagedSessions.issuerSecret.name: worker-issuer
+      agentSandboxes.workerManagedSessions.publicKey: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_WORKER_ALLOCATION_BANKS, value: "1"}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_WORKER_ALLOCATION_ISSUER_SEED, valueFrom: {secretKeyRef: {name: worker-issuer, key: seed}}}
+
+  - it: gives workers the verification key for delegated grants
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    set:
+      agentSandboxes.workerManagedSessions.enabled: true
+      agentSandboxes.workerManagedSessions.issuerSecret.name: worker-issuer
+      agentSandboxes.workerManagedSessions.publicKey: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    asserts:
+      - contains:
+          path: spec.podTemplate.spec.containers[0].env
+          content: {name: MONTY_WORKER_SHARED_POOL_PUBLIC_KEY, value: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+
+  - it: refuses delegated grants without an explicit signing Secret
+    set:
+      agentSandboxes.workerManagedSessions.enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: requires issuerSecret.name and issuerSecret.key
+
+  - it: refuses delegated grants without a valid verification key
+    set:
+      agentSandboxes.workerManagedSessions.enabled: true
+      agentSandboxes.workerManagedSessions.issuerSecret.name: worker-issuer
+    asserts:
+      - failedTemplate:
+          errorPattern: publicKey must be a 32-byte Ed25519 public key
+
+  - it: refuses an out-of-range delegated bank target
+    set:
+      agentSandboxes.workerManagedSessions.enabled: true
+      agentSandboxes.workerManagedSessions.issuerSecret.name: worker-issuer
+      agentSandboxes.workerManagedSessions.publicKey: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+      agentSandboxes.workerManagedSessions.bankTarget: 0
+    asserts:
+      - failedTemplate:
+          errorPattern: bankTarget must be between 1 and 128
+
+  - it: keeps the journal route on plain HTTP without application TLS
+    templates: [templates/logfire-agent-sandboxes-relay.yaml]
+    documentSelector:
+      path: spec.template.spec.containers[0].name
+      value: monty-relay
+    set:
+      inClusterTls.enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: MONTY_SERVER_HOSTED_ASSIGNMENT_URL, value: "http://monty-admission.customer.svc.cluster.local:8080/execution-journal/v1/assign"}
+
+  - it: gives controller clients their paired TLS identity
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.spec.containers[0].name
+      value: monty-controller
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: TLS_CLIENT_CERT_PATH, value: /etc/tls/tls.crt}
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: TLS_CLIENT_KEY_PATH, value: /etc/tls/tls.key}
+
+  - it: lets migration hooks verify private databases before automatic service certificates exist
+    set:
+      inClusterTls.certs.mode: certManager
+      inClusterTls.caBundle.existingConfigMap.name: ""
+      dev.deployPostgres: false
+      dev.deployCertManager: true
+      trustedCaBundle.existingConfigMap.name: external-db-ca
+    templates: [templates/logfire-agent-sandboxes-migrations.yaml]
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: PGSSLROOTCERT, value: /etc/logfire/trusted-ca/ca-bundle.crt}
+      - notContains:
+          path: spec.template.spec.volumes
+          content: {name: logfire-incluster-ca-bundle, secret: {secretName: lf-incluster-ca, items: [{key: ca.crt, path: ca.crt}]}}
+      - notMatchRegex:
+          path: spec.template.spec.initContainers[0].command[2]
+          pattern: /etc/logfire/incluster-ca/
+  - it: uses the upgraded backend migration image with legacy reused values
+    set:
+      image.backendImage: python-prod
+    templates: [templates/logfire-agent-sandboxes-migrations.yaml]
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-backend-prod:test-release
+
+  - it: upgrades legacy control values without worker-managed settings
+    set:
+      agentSandboxes.workerManagedSessions: null
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.spec.containers[0].name
+      value: monty-admission
+    asserts:
+      - isKind:
+          of: Deployment
+  - it: lets Workbench verify the dedicated private database
+    templates: [templates/logfire-backend.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    set:
+      trustedCaBundle.existingConfigMap.name: external-db-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: PGSSLROOTCERT, value: /etc/logfire/trusted-ca/ca-bundle.crt}
+  - it: lets the auth service verify the dedicated private database
+    templates: [templates/logfire-backend-auth.yaml]
+    documentSelector:
+      path: kind
+      value: Deployment
+    set:
+      trustedCaBundle.existingConfigMap.name: external-db-ca
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: {name: PGSSLROOTCERT, value: /etc/logfire/trusted-ca/ca-bundle.crt}
+  - it: upgrades legacy worker values without worker-managed settings
+    set:
+      agentSandboxes.workerManagedSessions: null
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - isKind:
+          of: SandboxTemplate
