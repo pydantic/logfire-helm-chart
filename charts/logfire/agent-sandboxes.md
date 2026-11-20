@@ -70,8 +70,7 @@ Keep it unchanged across restarts, upgrades and rollbacks.
 Use a different UUID for another installation that shares the database.
 Stop new execution and drain active workers before changing this identity.
 
-Self-hosted assignment requests can wait up to 20 seconds for a cold worker bank.
-The routing wait covers the controller's bounded preparation window.
+Cold-worker preparation can return a temporary service-unavailable response.
 The chart enables CPU-clock execution and binds each worker to its immutable Pod UID.
 A worker without that execution identity fails at startup.
 
