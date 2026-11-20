@@ -1105,3 +1105,24 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].image
           value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-backend-prod:test-release
+
+  - it: upgrades legacy control values without worker-managed settings
+    set:
+      agentSandboxes.workerManagedSessions: null
+    templates: [templates/logfire-agent-sandboxes-control.yaml]
+    documentSelector:
+      path: spec.template.spec.containers[0].name
+      value: monty-admission
+    asserts:
+      - isKind:
+          of: Deployment
+  - it: upgrades legacy worker values without worker-managed settings
+    set:
+      agentSandboxes.workerManagedSessions: null
+    templates: [templates/logfire-agent-sandboxes-workers.yaml]
+    documentSelector:
+      path: kind
+      value: SandboxTemplate
+    asserts:
+      - isKind:
+          of: SandboxTemplate

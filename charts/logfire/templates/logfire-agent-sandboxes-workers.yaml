@@ -148,7 +148,7 @@ spec:
               value: "cpu"
             - name: MONTY_WORKER_DRAIN_GRACE
               value: "30"
-            {{- if .Values.agentSandboxes.workerManagedSessions.enabled }}
+            {{- if (dig "workerManagedSessions" "enabled" false .Values.agentSandboxes) }}
             - name: MONTY_WORKER_SHARED_POOL_PUBLIC_KEY
               value: {{ .Values.agentSandboxes.workerManagedSessions.publicKey | quote }}
             {{- end }}

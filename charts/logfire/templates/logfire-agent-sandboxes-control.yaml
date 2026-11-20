@@ -35,7 +35,7 @@ spec:
     metadata:
       annotations:
         checksum/agent-sandboxes: {{ include "logfire.agentSandboxes.checksum" $root }}
-        {{- if and (eq $name "monty-admission") $root.Values.agentSandboxes.workerManagedSessions.enabled }}
+        {{- if and (eq $name "monty-admission") (dig "workerManagedSessions" "enabled" false $root.Values.agentSandboxes) }}
         checksum/worker-allocation-issuer: {{ include "utils.secretChecksum" (dict "ctx" $root "name" $root.Values.agentSandboxes.workerManagedSessions.issuerSecret.name "key" $root.Values.agentSandboxes.workerManagedSessions.issuerSecret.key) }}
         {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" $root.Values "serviceName" $name) | nindent 8 }}
@@ -110,7 +110,7 @@ spec:
             - name: TLS_MODE
               value: disabled
             {{- end }}
-            {{- if $root.Values.agentSandboxes.workerManagedSessions.enabled }}
+            {{- if (dig "workerManagedSessions" "enabled" false $root.Values.agentSandboxes) }}
             - name: MONTY_WORKER_ALLOCATION_BANKS
               value: {{ $root.Values.agentSandboxes.workerManagedSessions.bankTarget | quote }}
             - name: MONTY_WORKER_ALLOCATION_ISSUER_SEED
