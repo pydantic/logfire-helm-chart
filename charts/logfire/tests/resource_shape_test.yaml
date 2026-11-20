@@ -251,3 +251,56 @@ tests:
           path: data["config.yaml"]
           decodeBase64: true
           pattern: "(?m)^staticClients:\\n(- [\\s\\S]*)?- id: extra"
+
+  - it: false Dex lists render as empty lists
+    set:
+      logfire-dex:
+        config:
+          connectors: false
+          staticClients: false
+    templates:
+      - templates/dex/secret.yaml
+    asserts:
+      - matchRegex:
+          path: data["config.yaml"]
+          decodeBase64: true
+          pattern: "(?m)^connectors: \\[\\]$"
+      - matchRegex:
+          path: data["config.yaml"]
+          decodeBase64: true
+          pattern: "(?m)^staticClients:\\n- "
+
+  - it: a false group mapping is left out
+    set:
+      groupOrganizationMapping: false
+    templates:
+      - templates/logfire-backend.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GROUP_ORGANIZATION_MAPPING
+          any: true
+
+  - it: false project roles keep the organization role
+    set:
+      groupOrganizationMapping:
+        - group_id: admins
+          organization_roles:
+            - organization_name: acme
+              role: admin
+              project_roles: false
+    templates:
+      - templates/logfire-backend.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: GROUP_ORGANIZATION_MAPPING
+            value: '[{"group_id":"admins","organization_roles":[{"organization_name":"acme","role":"admin"}]}]'

@@ -609,7 +609,7 @@ Create dex config secret name
 {{- end -}}
 
 {{- define "logfire.hooksAnnotations" -}}
-{{- range $key, $value := .Values.hooksAnnotations }}
+{{- range $key, $value := .Values.hooksAnnotations | default dict }}
 {{ $key }}: {{ $value | quote }}
 {{- end }}
 {{- end -}}
@@ -1445,7 +1445,7 @@ true
       - {{ $kind }}:
           name: {{ $source.name }}
           items:
-            - key: {{ $source.key | default "ca.crt" }}
+            - key: {{ dig "key" "ca.crt" $source }}
               path: {{ .path }}
       {{- end }}
 - name: logfire-trusted-ca

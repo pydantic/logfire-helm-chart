@@ -46,12 +46,12 @@
     "PASSKEYS_ENABLED" (dig "passkeys" true $auth | toString)
     "PASSWORDLESS_EMAIL_SIGNUP_ENABLED" (dig "passwordlessEmailSignup" false $auth | toString)
     "SESSION_MAX_LIFETIME" (dig "sessionMaxLifetime" "" $auth | default "" | toString) }}
-  {{- if and $value (not (has $name $taken)) }}
+  {{- if and (or $value (ne $name "SESSION_MAX_LIFETIME")) (not (has $name $taken)) }}
     {{- $authEnv = append $authEnv (dict "name" $name "value" $value) }}
   {{- end }}
 {{- end }}
 {{- $groupMappings := list }}
-{{- range $idx, $group := .Values.groupOrganizationMapping }}
+{{- range $idx, $group := .Values.groupOrganizationMapping | default list }}
   {{- if not $group.group_id }}
     {{- fail (printf "groupOrganizationMapping[%d]: 'group_id' is required" $idx) }}
   {{- end }}
@@ -74,7 +74,7 @@
       {{- fail (printf "%s: 'project_roles' must be a list for organization '%s'" $at $org.organization_name) }}
     {{- end }}
     {{- $projectRoles := list }}
-    {{- range $projIdx, $proj := $org.project_roles }}
+    {{- range $projIdx, $proj := $org.project_roles | default list }}
       {{- if not $proj.project_name }}
         {{- fail (printf "%s.project_roles[%d]: 'project_name' is required" $at $projIdx) }}
       {{- end }}
