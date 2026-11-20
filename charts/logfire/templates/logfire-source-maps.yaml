@@ -145,5 +145,4 @@ spec:
         {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
       terminationGracePeriodSeconds: 30
 {{- template "logfire.autoscaler" (dict "root" $ "serviceName" $serviceName) }}
-{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
 {{- end }}
