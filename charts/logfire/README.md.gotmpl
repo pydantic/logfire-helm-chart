@@ -441,6 +441,13 @@ The chart reads the installed StatefulSet with `lookup`.
 
 ## Advanced configuration
 
+### Organization creation
+
+Set `allowOrganizationCreation: false` to turn off **Allow Organization Creation** for the instance.
+An explicit value takes precedence over the setting in Platform Admin.
+Omit the value or set it to `null` to use the saved setting again.
+This value requires a backend image that supports `ALLOW_ORGANIZATION_CREATION`.
+
 ### Organization group mappings
 
 Use `groupOrganizationMapping` to grant Logfire organization and project roles to members of identity-provider groups.
