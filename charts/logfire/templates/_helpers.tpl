@@ -1992,3 +1992,23 @@ initContainers:
 {{- end }}
 {{- end -}}
 {{- end -}}
+
+{{/*
+The preStop hook that delays container shutdown, so endpoint removal reaches the load balancers
+before the process stops. Kubernetes 1.30 and later run the native `sleep` action, which needs no
+`sleep` binary in the image. Older clusters run `sleep` from the image.
+
+Pass (dict "ctx" $ "seconds" N).
+*/}}
+{{- define "logfire.preStopSleep" -}}
+preStop:
+{{- if semverCompare ">=1.30-0" .ctx.Capabilities.KubeVersion.Version }}
+  sleep:
+    seconds: {{ .seconds }}
+{{- else }}
+  exec:
+    command:
+      - "sleep"
+      - {{ .seconds | quote }}
+{{- end }}
+{{- end -}}

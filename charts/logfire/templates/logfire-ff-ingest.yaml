@@ -91,11 +91,7 @@ spec:
               containerPort: 8012
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
           lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "15"
+            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 15) | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: logfire-ff-base-config

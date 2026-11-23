@@ -184,11 +184,7 @@ spec:
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command: ["python", "-m", "logfire_backend"]
           lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "5"
+            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 5) | nindent 12 }}
           ports:
             - containerPort: 8000
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}

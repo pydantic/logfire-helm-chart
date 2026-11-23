@@ -78,11 +78,7 @@ spec:
             {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "volumeName" "logfire-frontend-tls" "mountPath" "/etc/nginx/tls") | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "volumeName" "logfire-frontend-ca" "mountPath" "/etc/nginx/ca") | nindent 12 }}
           lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "5"
+            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 5) | nindent 12 }}
           ports:
             - name: http
               containerPort: 8080
