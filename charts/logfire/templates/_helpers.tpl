@@ -1379,10 +1379,11 @@ Trusted CA bundle: extra CA certificates for outbound TLS, such as a `rediss://`
 SMTP relay signed by a private CA. `trustedCaBundle` reaches every service in the list below.
 `smtp.caBundle` reaches only the two services that send email.
 
-The `trusted-ca-bundle` init container joins the certificates into one file in an emptyDir.
-Python (OpenSSL, httpx) and Rust (`rustls-native-certs`) read it through `SSL_CERT_FILE`, which
-replaces their default trust store. So the file starts with the system bundle of the image, and
-public endpoints such as object storage and model providers stay trusted.
+The `trusted-ca-bundle` init container joins the certificates into one file in an emptyDir. It runs
+Python in the backend image for every service, so no service image needs a shell for it.
+Python (OpenSSL, httpx) and Rust (`rustls-native-certs`) read the file through `SSL_CERT_FILE`,
+which replaces their default trust store. So the file starts with the system bundle of the backend
+image, and public endpoints such as object storage and model providers stay trusted.
 
 The AI gateway runs on Node, which ignores `SSL_CERT_FILE`. It reads the file through
 `NODE_EXTRA_CA_CERTS`, which adds to the built-in roots of Node. That variable takes one file, so
@@ -1687,34 +1688,26 @@ initContainers:
     (dict "ctx" $ctx "serviceName" $serviceName) | fromJson }}
 {{- $gateway := eq $serviceName "logfire-ai-gateway" }}
 {{- $inClusterCa := and $gateway (include "logfire.inClusterTls.enabled" $ctx | eq "true") }}
-{{- $repository := $ctx.Values.image.repository | default "" }}
-{{- $image := include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "backendImage") }}
 {{- $baseFile := "/etc/ssl/certs/ca-certificates.crt" }}
 {{- if $gateway }}
-  {{- $repository = $ctx.Values.image.gatewayRepository | default "" }}
-  {{- $image = $ctx.Values.image.gatewayImage }}
   {{- $baseFile = ternary "/etc/logfire/incluster-ca/ca.crt" "" $inClusterCa }}
-{{- else if hasPrefix "logfire-ff-" $serviceName }}
-  {{- $image = $ctx.Values.image.fusionfireImage }}
-{{- else if eq $serviceName "logfire-worker" }}
-  {{- $image = include "logfire.pythonImage" (dict "Values" $ctx.Values "key" "workerImage") }}
-{{- else if eq $serviceName "logfire-alert-runner" }}
-  {{- $image = $ctx.Values.image.alertRunnerImage | default "logfire-alert-runner-prod" }}
 {{- end }}
 
   - name: trusted-ca-bundle
-    image: '{{ $repository }}{{ $image }}:{{ include "logfire.serviceTag"
-        (dict "Values" $ctx.Values "serviceName" $serviceName "Chart" $ctx.Chart) }}'
+    image: '{{ $ctx.Values.image.repository | default "" }}{{ include "logfire.pythonImage"
+        (dict "Values" $ctx.Values "key" "backendImage") }}:{{ include "logfire.serviceTag"
+        (dict "Values" $ctx.Values "serviceName" "logfire-backend" "Chart" $ctx.Chart) }}'
     imagePullPolicy: "{{ $ctx.Values.image.pullPolicy }}"
     command:
-      - sh
+      - python
       - -c
       - |
-        set -eu
-        for f in {{ with $baseFile }}{{ . }} {{ end }}/etc/logfire/trusted-ca-sources/*.crt; do
-          cat "$f"
-          echo
-        done > /etc/logfire/trusted-ca/ca-bundle.crt
+        import glob
+        paths = [{{ with $baseFile }}{{ . | quote }}, {{ end }}*sorted(glob.glob("/etc/logfire/trusted-ca-sources/*.crt"))]
+        with open("/etc/logfire/trusted-ca/ca-bundle.crt", "w") as bundle:
+            for path in paths:
+                with open(path) as source:
+                    bundle.write(source.read() + "\n")
     {{- include "logfire.resources" (dict "Values" $ctx.Values "serviceName" $serviceName)
         | nindent 4 }}
     {{- include "logfire.securityContext" $containerSecurityContext | nindent 4 }}

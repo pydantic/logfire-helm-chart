@@ -53,7 +53,7 @@ tests:
       # The system bundle comes first, so public endpoints stay trusted under SSL_CERT_FILE.
       - matchRegex:
           path: spec.template.spec.initContainers[0].command[2]
-          pattern: 'for f in /etc/ssl/certs/ca-certificates\.crt /etc/logfire/trusted-ca-sources/\*\.crt; do[\s\S]*done > /etc/logfire/trusted-ca/ca-bundle\.crt'
+          pattern: 'paths = \["/etc/ssl/certs/ca-certificates\.crt", \*sorted\(glob\.glob\("/etc/logfire/trusted-ca-sources/\*\.crt"\)\)\][\s\S]*open\("/etc/logfire/trusted-ca/ca-bundle\.crt", "w"\)'
       - contains:
           path: spec.template.spec.initContainers[0].volumeMounts
           content:
@@ -79,9 +79,9 @@ tests:
       value: StatefulSet
     asserts: *consumerAsserts
 
-  # Contract with the images: the init container reads the system bundle of the image that the
-  # main container runs, so it must run that same image.
-  - it: the init container runs the image of its workload
+  # Contract with the images: the init container runs Python, so it runs the backend image for
+  # every workload. The service images need no shell or interpreter for it.
+  - it: the init container runs the backend image for every workload
     templates:
       - templates/logfire-ff-query-api.yaml
       - templates/logfire-worker.yaml
@@ -94,10 +94,10 @@ tests:
     asserts:
       - matchRegex:
           path: spec.template.spec.initContainers[0].image
-          pattern: '/(fusionfire|logfire-backend-prod|logfire-worker-prod|logfire-alert-runner-prod):'
-      - matchRegex:
-          path: spec.template.spec.containers[0].image
-          pattern: '/(fusionfire|logfire-backend-prod|logfire-worker-prod|logfire-alert-runner-prod):'
+          pattern: '/logfire-backend-prod:'
+      - equal:
+          path: spec.template.spec.initContainers[0].command[0]
+          value: python
 
   # Node ignores SSL_CERT_FILE, and NODE_EXTRA_CA_CERTS takes one file. So the gateway file holds
   # the in-cluster CA too, and only one NODE_EXTRA_CA_CERTS entry may exist.
@@ -131,7 +131,7 @@ tests:
             name: SSL_CERT_FILE
       - matchRegex:
           path: spec.template.spec.initContainers[0].command[2]
-          pattern: 'for f in /etc/logfire/incluster-ca/ca\.crt /etc/logfire/trusted-ca-sources/\*\.crt; do'
+          pattern: 'paths = \["/etc/logfire/incluster-ca/ca\.crt", \*sorted\(glob\.glob\("/etc/logfire/trusted-ca-sources/\*\.crt"\)\)\]'
       - contains:
           path: spec.template.spec.initContainers[0].volumeMounts
           content:
@@ -140,4 +140,4 @@ tests:
             readOnly: true
       - matchRegex:
           path: spec.template.spec.initContainers[0].image
-          pattern: '/paig/gateway:'
+          pattern: '/logfire-backend-prod:'
