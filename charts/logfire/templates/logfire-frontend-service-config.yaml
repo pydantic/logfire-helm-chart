@@ -234,6 +234,12 @@ data:
                 add_header Content-Security-Policy "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src $replay_frame_img_src; font-src 'self'; media-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self';" always;
             }
 
+            # Media frames for remote images and audio. Each page runs only its own two inline scripts,
+
+            # so `script-src` lists their hashes. The response sandbox matches the `sandbox` attribute of
+
+            # the app's iframe, so a direct navigation also runs in an opaque origin.
+
             location /image-iframe.html {
                 add_header "Cache-Control" "no-store";
                 try_files /image-iframe.html =404;
@@ -241,7 +247,7 @@ data:
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
 
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'none'; script-src 'sha256-ekqYBqRU7u9FG58Nji5aLDxY5WxiCnQyw6wZ2uwmHzk=' 'sha256-TvL4+zs/VYEyFvX5mv/ieqIK4fmgC1wMMQOJJIulOyQ='; style-src 'unsafe-inline'; img-src *; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox allow-scripts;" always;
             }
 
             location /audio-iframe.html {
@@ -251,7 +257,7 @@ data:
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
 
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; media-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'none'; script-src 'sha256-4/hkgbu73IVXUMkGTDc0zVsjwf4W+3UwwFYJf8p3mwE=' 'sha256-JChnu3FZ+vuRqeURwiDEAxEh9+wRnh8CjNBsiWaQ77w='; style-src 'unsafe-inline'; media-src *; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox allow-scripts allow-downloads;" always;
             }
 
             # custom panels iframe
@@ -446,6 +452,12 @@ data:
                 add_header Content-Security-Policy "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src $replay_frame_img_src; font-src 'self'; media-src 'self' blob:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self';" always;
             }
 
+            # Media frames for remote images and audio. Each page runs only its own two inline scripts,
+
+            # so `script-src` lists their hashes. The response sandbox matches the `sandbox` attribute of
+
+            # the app's iframe, so a direct navigation also runs in an opaque origin.
+
             location /image-iframe.html {
                 add_header "Cache-Control" "no-store";
                 try_files /image-iframe.html =404;
@@ -453,7 +465,7 @@ data:
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
 
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; img-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'none'; script-src 'sha256-ekqYBqRU7u9FG58Nji5aLDxY5WxiCnQyw6wZ2uwmHzk=' 'sha256-TvL4+zs/VYEyFvX5mv/ieqIK4fmgC1wMMQOJJIulOyQ='; style-src 'unsafe-inline'; img-src *; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox allow-scripts;" always;
             }
 
             location /audio-iframe.html {
@@ -463,7 +475,7 @@ data:
                 add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload;" always;
 
                 add_header X-Content-Type-Options "nosniff" always;
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self' blob: 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src *; worker-src 'self' blob:; trusted-types default logfirePolicy 'allow-duplicates' tokenizeToString standaloneColorizer editorViewLayer domLineBreaksComputer diffReview  diffEditorWidget  editorGhostText stickyScrollViewLayer defaultWorkerFactory LanguageTool_Executor_Policy; font-src 'self'; object-src 'self' blob:; frame-src 'self'; media-src *; base-uri 'self'; form-action 'self'; manifest-src 'self'; frame-ancestors 'self';" always;
+                add_header Content-Security-Policy "default-src 'none'; script-src 'sha256-4/hkgbu73IVXUMkGTDc0zVsjwf4W+3UwwFYJf8p3mwE=' 'sha256-JChnu3FZ+vuRqeURwiDEAxEh9+wRnh8CjNBsiWaQ77w='; style-src 'unsafe-inline'; media-src *; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox allow-scripts allow-downloads;" always;
             }
 
             # custom panels iframe
