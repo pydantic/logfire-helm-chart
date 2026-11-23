@@ -551,21 +551,19 @@ postgresSecret:
 
 `existingSecret`, `adminSecret`, and `existingGatewaySecret` accept the same `annotations`.
 
-To keep a collector exporter header out of the values, reference an environment variable from your own Secret.
-The chart keeps a value that contains `$` in the collector config, and the collector expands it there:
+To keep a collector exporter header out of the values, give it a `valueFrom` that reads your own Secret.
+The chart then passes the value to the collector as an environment variable:
 
 ```yaml
 otel_collector:
   exporter:
     headers:
-      Authorization: ${env:EXPORTER_AUTHORIZATION}
+      Authorization:
+        valueFrom:
+          secretKeyRef:
+            name: logfire-exporter-headers
+            key: authorization
 logfire-otel-collector:
-  env:
-    EXPORTER_AUTHORIZATION:
-      valueFrom:
-        secretKeyRef:
-          name: logfire-exporter-headers
-          key: authorization
   annotations:
     reloader.stakater.com/auto: "true"
 ```

@@ -290,3 +290,32 @@ tests:
       - matchRegex:
           path: data["otel-collector-config.yaml"]
           pattern: 'value: Bearer sentinel-0123456789'
+
+  - it: reads a valueFrom header from the user's Secret without a chart Secret
+    set:
+      otel_collector.exporter.headers:
+        Authorization:
+          valueFrom:
+            secretKeyRef:
+              name: my-headers
+              key: authorization
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'Authorization: \$\{env:LOGFIRE_EXPORTER_HEADER_AUTHORIZATION_ca5839e3\}'
+        template: templates/logfire-otel-collector-cfg.yaml
+      - hasDocuments:
+          count: 1
+        template: templates/logfire-otel-collector-cfg.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOGFIRE_EXPORTER_HEADER_AUTHORIZATION_ca5839e3
+            valueFrom:
+              secretKeyRef:
+                name: my-headers
+                key: authorization
+        template: templates/logfire-otel-collector.yaml
+        documentSelector:
+          path: kind
+          value: Deployment

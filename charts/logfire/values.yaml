@@ -1991,8 +1991,9 @@ otel_collector:
     # -- Exporter headers. The chart moves each string value to the Secret
     # `logfire-otel-collector-exporter-headers`, and the config reads it from an environment
     # variable. Values that are not strings, and values that contain `$`, stay in the collector
-    # ConfigMap: quote numeric credentials, and use `${env:...}` with your own Secret for a value
-    # that contains `$`.
+    # ConfigMap, so quote numeric credentials. To keep a value out of the chart values, give the
+    # header a Kubernetes `valueFrom`, for example
+    # `Authorization: {valueFrom: {secretKeyRef: {name: my-secret, key: authorization}}}`.
     headers: {}
     # -- Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP
     # ingestion, so senders can retry refused data. Queue limits measure serialized bytes.

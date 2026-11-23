@@ -390,12 +390,14 @@ ConfigMap holds no credential. The config reads each one from an environment var
 the header, with a hash of the exact name so that distinct names never share a variable. A value
 stays in the config as written when it is not a non-empty string, contains `$` (the collector
 expands it there), or is an integer the collector cannot read from an environment variable. A list
-of headers passes through unchanged. Returns {"moved": header to variable, "secret": variable to
-value}.
+of headers passes through unchanged. A header given as {valueFrom: ...} reads the user's own Secret
+or ConfigMap, so its value is never in the chart values. Returns {"moved": header to variable,
+"secret": variable to value, "valueFrom": variable to valueFrom}.
 */}}
 {{- define "logfire.otelCollectorExporterHeaders" -}}
 {{- $moved := dict -}}
 {{- $secret := dict -}}
+{{- $valueFrom := dict -}}
 {{- $headers := dig "exporter" "headers" dict (.Values.otel_collector | default dict) -}}
 {{- if kindIs "map" $headers -}}
   {{- $userEnv := list -}}
@@ -403,17 +405,22 @@ value}.
     {{- $userEnv = append $userEnv .name -}}
   {{- end -}}
   {{- range $name, $value := $headers -}}
-    {{- if and (kindIs "string" $value) $value (not (contains "$" $value)) (not (regexMatch "^[-+]?[0-9]{19,}$" $value)) -}}
+    {{- $literal := and (kindIs "string" $value) $value (not (contains "$" $value)) (not (regexMatch "^[-+]?[0-9]{19,}$" $value)) -}}
+    {{- $reference := and (kindIs "map" $value) (hasKey $value "valueFrom") -}}
+    {{- if and $reference (ne (len $value) 1) -}}
+      {{- fail (printf "otel_collector.exporter.headers %q: set only valueFrom." $name) -}}
+    {{- end -}}
+    {{- if or $literal $reference -}}
       {{- $env := printf "LOGFIRE_EXPORTER_HEADER_%s_%s" (regexReplaceAll "[^A-Z0-9]" (upper $name) "_" | trunc 64) (sha256sum $name | trunc 8) -}}
       {{- if has $env $userEnv -}}
         {{- fail (printf "logfire-otel-collector.env sets %s, which the chart sets for otel_collector.exporter.headers %q. Remove it from logfire-otel-collector.env." $env $name) -}}
       {{- end -}}
       {{- $_ := set $moved $name $env -}}
-      {{- $_ := set $secret $env $value -}}
+      {{- if $literal }}{{ $_ := set $secret $env $value }}{{ else }}{{ $_ := set $valueFrom $env $value.valueFrom }}{{ end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
-{{- dict "moved" $moved "secret" $secret | toJson -}}
+{{- dict "moved" $moved "secret" $secret "valueFrom" $valueFrom | toJson -}}
 {{- end }}
 
 {{/*

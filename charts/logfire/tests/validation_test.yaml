@@ -16,6 +16,16 @@ set:
   dev:
     deployPostgres: true
 tests:
+  - it: rejects a valueFrom exporter header with other keys
+    set:
+      otel_collector.exporter.headers.Authorization:
+        value: Bearer x
+        valueFrom:
+          secretKeyRef: {name: my-headers, key: authorization}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'set only valueFrom'
+
   - it: rejects a collector env entry that the chart sets for an exporter header
     set:
       otel_collector.exporter.headers.X-Tenant: acme
