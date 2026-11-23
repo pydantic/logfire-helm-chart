@@ -149,12 +149,12 @@ is reserved. The in-cluster TLS and trusted CA volumes are reserved only while e
   {{- $msg :=
       "existingSecret.name is required when existingSecret.enabled is true. Provide the name of your Kubernetes Secret containing logfire-dex-client-secret, logfire-encryption-key, logfire-meta-write-token, logfire-meta-frontend-token, logfire-jwt-secret and logfire-unsubscribe-secret keys." -}}
   {{- if $values.webPush.enabled -}}
-    {{- $msg = printf "%s It must also hold a logfire-web-push-vapid-key key when webPush.enabled."
+    {{- $msg = printf "%s It must also hold a logfire-web-push-vapid-key key when webPush.enabled, unless webPush.privateKey sets valueFrom."
         $msg -}}
   {{- end -}}
   {{- if $slackApp -}}
     {{- $msg = printf
-        "%s It must also hold logfire-slack-client-secret and logfire-slack-signing-secret keys when integrations.slack.clientId is set."
+        "%s It must also hold logfire-slack-client-secret and logfire-slack-signing-secret keys when integrations.slack.clientId is set, unless those values set valueFrom."
         $msg -}}
   {{- end -}}
   {{- fail $msg -}}
