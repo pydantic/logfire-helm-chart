@@ -10,8 +10,9 @@ renders it. If that Job still holds the post-deploy lock, the new Job exits, and
 CronJob below runs what is left. `ttlSecondsAfterFinished` removes finished Jobs. The platform
 records each result in `migrations.post_deploy_runs`.
 
-Neither Job retries a failed pod at once (`backoffLimit: 0`), because a crash would repeat an
-expensive scan. The deadline is on the Job, so a replacement pod gets no new budget.
+Each Job replaces a failed pod at most twice (`backoffLimit: 2`). So a node scale-down or another
+eviction does not fail the Job. A crash repeats at most twice. The deadline is on the Job, so a
+replacement pod gets no new budget.
 
 The image is the image of `logfire-backend-migrations`, so both jobs apply the same migration list.
 */}}
@@ -31,7 +32,7 @@ metadata:
     "helm.sh/resource-policy": keep
     "argocd.argoproj.io/sync-options": Prune=false
 spec:
-  backoffLimit: 0
+  backoffLimit: 2
   activeDeadlineSeconds: {{ dig "activeDeadlineSeconds" 21600 $settings }}
   {{- with (dig "ttlSecondsAfterFinished" 604800 $settings) }}
   ttlSecondsAfterFinished: {{ . }}
@@ -59,7 +60,7 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: 0
+      backoffLimit: 2
       activeDeadlineSeconds: {{ dig "activeDeadlineSeconds" 21600 $settings }}
       template:
         {{- $podTemplate | nindent 8 }}

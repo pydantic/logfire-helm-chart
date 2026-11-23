@@ -54,11 +54,11 @@ tests:
           path: metadata.annotations["argocd.argoproj.io/sync-options"]
           value: Prune=false
 
-  - it: retries no failed pod at once and bounds each Job as a whole
+  - it: replaces a failed or evicted pod at most twice and bounds each Job as a whole
     asserts:
       - equal:
           path: spec.backoffLimit
-          value: 0
+          value: 2
         documentSelector:
           path: kind
           value: Job
@@ -75,7 +75,7 @@ tests:
           value: Job
       - equal:
           path: spec.jobTemplate.spec.backoffLimit
-          value: 0
+          value: 2
         documentSelector:
           path: kind
           value: CronJob
