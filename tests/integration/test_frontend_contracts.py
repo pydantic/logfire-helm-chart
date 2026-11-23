@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import re
 
 import httpx
@@ -54,6 +56,36 @@ async def test_built_enhanced_view_worker_receives_its_network_restrictions(clie
     assert policy["connect-src"] == ["'none'"]
     assert policy["worker-src"] == ["'none'"]
 
+
+
+@pytest.mark.parametrize(
+    ("path", "media_directive", "sandbox"),
+    [
+        ("/image-iframe.html", "img-src", ["allow-scripts"]),
+        ("/audio-iframe.html", "media-src", ["allow-scripts", "allow-downloads"]),
+    ],
+)
+async def test_media_frames_run_only_their_own_inline_scripts_in_a_sandbox(
+    client: httpx.AsyncClient, path: str, media_directive: str, sandbox: list[str]
+) -> None:
+    """The chart pins the hashes of the inline scripts that the frontend image serves.
+
+    A hash that differs from the served page blocks the script, and image previews and audio
+    playback stop working. The `sandbox` directive isolates a direct visit to the page.
+    """
+    response = await client.get(path)
+    assert response.status_code == 200, response.text
+    policy = _policy(response)
+    inline_scripts = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", response.text, re.S)
+    assert inline_scripts
+    hashes = [
+        "'sha256-" + base64.b64encode(hashlib.sha256(script.encode()).digest()).decode() + "'"
+        for script in inline_scripts
+    ]
+    assert sorted(policy["script-src"]) == sorted(hashes), policy
+    assert policy["default-src"] == ["'none'"]
+    assert policy[media_directive] == ["*"]
+    assert policy["sandbox"] == sandbox
 
 async def test_custom_panel_frame_enforces_its_nested_document_boundary(client: httpx.AsyncClient) -> None:
     response = await client.get("/custom-components-iframe.html")
