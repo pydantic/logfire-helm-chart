@@ -266,6 +266,33 @@ Common execution env for background maintenance/compaction workers.
   value: {{ get $values "parquetSpoolThresholdBytes" | default "1MB" | quote }}
 - name: FF_COMPACTION_JOB_PARALLELISM
   value: {{ get $values "jobParallelism" | default "auto" | quote }}
+{{- include "logfire.ffMaintenanceRetryEnv" (dict "Values" .Values "serviceName" .serviceName "ladder" true) }}
+{{- end -}}
+
+{{/*
+Retry env for maintenance jobs. A job that fails on memory retries in the same process with
+fewer lanes and smaller batches (the resource ladder). The scheduler deletes a job when it
+reaches the maximum attempts, so the workers and the scheduler must use the same maximum.
+
+The service `env` overrides these defaults. A name that it sets is left out here, so the pod
+spec has no duplicate entry. Args: Values, serviceName, ladder (true for the workers).
+*/}}
+{{- define "logfire.ffMaintenanceRetryEnv" -}}
+{{- $env := get (get .Values .serviceName | default dict) "env" | default list -}}
+{{- $names := list -}}
+{{- if kindIs "map" $env -}}
+  {{- $names = keys $env -}}
+{{- else -}}
+  {{- range $env }}{{ $names = append $names .name }}{{ end -}}
+{{- end -}}
+{{- if and .ladder (not (has "FF_MAINTENANCE_RESOURCE_LADDER" $names)) }}
+- name: FF_MAINTENANCE_RESOURCE_LADDER
+  value: "true"
+{{- end }}
+{{- if not (has "FF_MAINTENANCE_JOB_MAX_ATTEMPTS" $names) }}
+- name: FF_MAINTENANCE_JOB_MAX_ATTEMPTS
+  value: "5"
+{{- end }}
 {{- end -}}
 
 {{/*
