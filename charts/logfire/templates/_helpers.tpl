@@ -385,6 +385,57 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
+Collector exporter headers that move to the Secret logfire-otel-collector-exporter-headers, so the
+ConfigMap holds no credential. The config reads each one from an environment variable named after
+the header plus a hash of the exact name; the render fails if two names still share one. A value
+stays in the config as written when it is not a non-empty string, contains `$` (the collector
+expands it there), or reads as an integer that may not fit in int64, which the collector cannot
+read from an environment variable. A list
+of headers passes through unchanged. A header given as {valueFrom: ...} reads the user's own Secret
+or ConfigMap, so its value is never in the chart values. Returns {"moved": header to variable,
+"secret": variable to value, "valueFrom": variable to valueFrom}.
+*/}}
+{{- define "logfire.otelCollectorExporterHeaders" -}}
+{{- $moved := dict -}}
+{{- $secret := dict -}}
+{{- $valueFrom := dict -}}
+{{- $exporter := (.Values.otel_collector | default dict).exporter | default dict -}}
+{{- $headers := dict -}}
+{{- if kindIs "map" $exporter }}{{ $headers = $exporter.headers }}{{ end -}}
+{{- if kindIs "map" $headers -}}
+  {{- $userEnv := list -}}
+  {{- range include "logfire.serviceEnv" (dict "Values" .Values "serviceName" "logfire-otel-collector") | fromYamlArray -}}
+    {{- $userEnv = append $userEnv .name -}}
+  {{- end -}}
+  {{- range $name, $value := $headers -}}
+    {{- $literal := and (kindIs "string" $value) $value (not (contains "$" $value)) (not (regexMatch "^[-+]?([0-9]{19,}|0[xX][0-9a-fA-F]{16,}|0[oO][0-7]{21,}|0[bB][01]{63,})$" (replace "_" "" $value))) -}}
+    {{- $reference := and (kindIs "map" $value) (hasKey $value "valueFrom") -}}
+    {{- if and $reference (or (ne (len $value) 1) (not (kindIs "map" $value.valueFrom)) (ne (len $value.valueFrom) 1)) -}}
+      {{- fail (printf "otel_collector.exporter.headers %q: set only valueFrom, with exactly one source such as secretKeyRef." $name) -}}
+    {{- end -}}
+    {{- if $reference -}}
+      {{- $source := $value.valueFrom.secretKeyRef | default $value.valueFrom.configMapKeyRef -}}
+      {{- if not (and (kindIs "map" $source) $source.name $source.key) -}}
+        {{- fail (printf "otel_collector.exporter.headers %q: valueFrom must be a secretKeyRef or configMapKeyRef with a name and a key." $name) -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if or $literal $reference -}}
+      {{- $env := printf "LOGFIRE_EXPORTER_HEADER_%s_%s" (regexReplaceAll "[^A-Z0-9]" (upper $name) "_" | trunc 64) (sha256sum $name | trunc 8) -}}
+      {{- if has $env $userEnv -}}
+        {{- fail (printf "logfire-otel-collector.env sets %s, which the chart sets for otel_collector.exporter.headers %q. Remove it from logfire-otel-collector.env." $env $name) -}}
+      {{- end -}}
+      {{- if has $env (values $moved) -}}
+        {{- fail (printf "otel_collector.exporter.headers %q maps to the same environment variable as another header. Rename one of them." $name) -}}
+      {{- end -}}
+      {{- $_ := set $moved $name $env -}}
+      {{- if $literal }}{{ $_ := set $secret $env $value }}{{ else }}{{ $_ := set $valueFrom $env $value.valueFrom }}{{ end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- dict "moved" $moved "secret" $secret "valueFrom" $valueFrom | toJson -}}
+{{- end }}
+
+{{/*
 Hash rendered configuration without the chart-version label. The label is
 resource metadata and must not restart workloads during a version-only chart
 promotion.

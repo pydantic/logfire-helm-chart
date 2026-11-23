@@ -16,6 +16,67 @@ set:
   dev:
     deployPostgres: true
 tests:
+  - it: rejects a valueFrom exporter header with other keys
+    set:
+      otel_collector.exporter.headers.Authorization:
+        value: Bearer x
+        valueFrom:
+          secretKeyRef: {name: my-headers, key: authorization}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'set only valueFrom'
+
+  - it: rejects a valueFrom exporter header that is not a single source
+    set:
+      otel_collector.exporter.headers.Authorization.valueFrom:
+        secretKeyRef: {name: old, key: auth}
+        configMapKeyRef: {name: new, key: auth}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'exactly one source'
+
+  - it: rejects a valueFrom exporter header that is not a map
+    set:
+      otel_collector.exporter.headers.Authorization.valueFrom: plain
+    asserts:
+      - failedTemplate:
+          errorPattern: 'exactly one source'
+
+  - it: rejects a valueFrom exporter header with an incomplete secretKeyRef
+    set:
+      otel_collector.exporter.headers.Authorization.valueFrom:
+        secretKeyRef: {name: my-headers}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'valueFrom must be a secretKeyRef or configMapKeyRef with a name and a key'
+
+  - it: rejects exporter headers that map to the same environment variable
+    set:
+      otel_collector.exporter.headers:
+        "X-Meta.---__----_Key": demo-one
+        "X-Meta.-_-..-_.._Key": demo-two
+    asserts:
+      - failedTemplate:
+          errorPattern: 'same environment variable as another header'
+
+  - it: rejects a collector env list entry that the chart sets for an exporter header
+    set:
+      otel_collector.exporter.headers.X-Tenant: acme
+      logfire-otel-collector.env:
+        - name: LOGFIRE_EXPORTER_HEADER_X_TENANT_8ca2ee3d
+          value: other
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Remove it from logfire-otel-collector.env'
+
+  - it: rejects a collector env entry that the chart sets for an exporter header
+    set:
+      otel_collector.exporter.headers.X-Tenant: acme
+      logfire-otel-collector.env.LOGFIRE_EXPORTER_HEADER_X_TENANT_8ca2ee3d: other
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Remove it from logfire-otel-collector.env'
+
   - it: rejects extra exporters that replace the backend exporter
     set:
       otel_collector.extraExporters:

@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.4](https://img.shields.io/badge/Version-0.15.4-informational?style=flat-square) ![AppVersion: 9f15587a](https://img.shields.io/badge/AppVersion-9f15587a-informational?style=flat-square)
+![Version: 0.15.5-rc.1](https://img.shields.io/badge/Version-0.15.5--rc.1-informational?style=flat-square) ![AppVersion: 9f15587a](https://img.shields.io/badge/AppVersion-9f15587a-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -550,6 +550,23 @@ postgresSecret:
 
 `existingSecret`, `adminSecret`, and `existingGatewaySecret` accept the same `annotations`.
 
+To keep a collector exporter header out of the values, give it a `valueFrom` that reads your own Secret.
+The chart then passes the value to the collector as an environment variable:
+
+```yaml
+otel_collector:
+  exporter:
+    headers:
+      Authorization:
+        valueFrom:
+          secretKeyRef:
+            name: logfire-exporter-headers
+            key: authorization
+logfire-otel-collector:
+  annotations:
+    reloader.stakater.com/auto: "true"
+```
+
 ### Connection poolers
 
 `postgresDsn` and `postgresFFDsn` can point at a connection pooler in transaction mode.
@@ -954,6 +971,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | otel_collector | object | `{"debug":{"enabled":false},"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}},"extraExporters":{},"extraPipelines":{},"extraProcessors":{},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.163.1@sha256:1175b03003053962012f5a231f5567f66a3e8fdb960c7835c0e48f7aa1555806"},"prometheus":{"add_metric_suffixes":false,"delta_to_cumulative":true,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","max_stale":"5m","max_streams":10000,"metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true,"translation_strategy":""},"queueStorage":{"enabled":true,"ephemeralStorageLimit":"5Gi","ephemeralStorageRequest":"512Mi","fsync":false,"maxSizeBytes":536870912,"sizeLimit":"4Gi"},"selfMetrics":{"enabled":true},"selfMetricsPort":8888,"sendingQueueBytes":67108864,"serviceAccount":{"annotations":{}}}` | otel-collector configuration |
 | otel_collector.debug.enabled | bool | `false` | Emit per-request summaries to collector logs. Enable for troubleshooting; disabled by default to avoid logging every incoming telemetry request. |
 | otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
+| otel_collector.exporter.headers | object | `{}` | Exporter headers. The chart moves each string value to the Secret `logfire-otel-collector-exporter-headers`, and the config reads it from an environment variable. These stay in the collector ConfigMap as written: a list of headers, values that are not strings, values that contain `$`, and integers too large for int64. Quote numeric credentials. To keep a value out of the chart values, give the header a Kubernetes `valueFrom`, for example `Authorization: {valueFrom: {secretKeyRef: {name: my-secret, key: authorization}}}`. |
 | otel_collector.exporter.sending_queue | object | `{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}}` | Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP ingestion, so senders can retry refused data. Queue limits measure serialized bytes. The queue capacity still comes from the sizing preset or sendingQueueBytes unless queue_size is explicitly overridden here. Each signal has its own queue and consumers. |
 | otel_collector.extraExporters | object | `{}` | Additional collector exporters. Chart-owned component names are reserved. |
 | otel_collector.extraPipelines | object | `{}` | Additional collector pipelines. The chart's existing telemetry pipelines stay unchanged. |

@@ -7,6 +7,7 @@
 {{- $prometheusEnabled := include "isPrometheusExporterEnabled" . | eq "true" }}
 {{- $promValues := $otel.prometheus | default dict }}
 {{- $selfMetricsEnabled := dig "enabled" true ($otel.selfMetrics | default dict) }}
+{{- $headers := include "logfire.otelCollectorExporterHeaders" . | fromJson }}
 {{- if $queueStorage.enabled }}
   {{- /* Each of the three signal databases needs room for its compaction copy. */}}
   {{- $maximum := $queueStorage.maxSizeBytes | int64 }}
@@ -111,7 +112,14 @@ data:
           {{- ($exporter.tls | default (dict "insecure" true)) | toYaml | nindent 10 }}
         {{- if $exporter.headers }}
         headers:
-          {{- $exporter.headers | toYaml | nindent 10 }}
+          {{- $config := $exporter.headers }}
+          {{- if $headers.moved }}
+          {{- $config = dict }}
+          {{- range $name, $value := $exporter.headers }}
+          {{- $_ := set $config $name (hasKey $headers.moved $name | ternary (printf "${env:%s}" (get $headers.moved $name)) $value) }}
+          {{- end }}
+          {{- end }}
+          {{- $config | toYaml | nindent 10 }}
         {{- else }}
         headers:
           Authorization: "Bearer ${LOGFIRE_META_WRITE_TOKEN}"
@@ -300,3 +308,18 @@ data:
         {{- with .Values.otel_collector.extraPipelines }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
+{{- with $headers.secret }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: logfire-otel-collector-exporter-headers
+  labels:
+    {{- include "logfire.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+type: Opaque
+data:
+  {{- range $env, $value := . }}
+  {{ $env }}: {{ $value | b64enc | quote }}
+  {{- end }}
+{{- end }}
