@@ -1167,6 +1167,29 @@ tests:
           path: data["otel-collector-config.yaml"]
           pattern: 'limit_percentage: 75'
 
+  - it: rejects a Slack App credential map without valueFrom
+    set:
+      integrations:
+        slack:
+          clientId: client-id
+          clientSecret: {secretKeyRef: {name: slack-app, key: client-secret}}
+          signingSecret: signing-secret
+    asserts:
+      - failedTemplate:
+          errorPattern: 'integrations.slack.clientSecret: set a string, or only valueFrom'
+
+  - it: rejects a web push key valueFrom with two sources
+    set:
+      webPush:
+        enabled: true
+        privateKey:
+          valueFrom:
+            secretKeyRef: {name: push-keys, key: vapid}
+            configMapKeyRef: {name: push-keys, key: vapid}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'webPush.privateKey: set a string, or only valueFrom'
+
   - it: fails when the Slack App has no client secret
     set:
       integrations:

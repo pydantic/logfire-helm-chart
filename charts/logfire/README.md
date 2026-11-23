@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.4](https://img.shields.io/badge/Version-0.15.4-informational?style=flat-square) ![AppVersion: 9f15587a](https://img.shields.io/badge/AppVersion-9f15587a-informational?style=flat-square)
+![Version: 0.15.5-rc.2](https://img.shields.io/badge/Version-0.15.5--rc.2-informational?style=flat-square) ![AppVersion: 9f15587a](https://img.shields.io/badge/AppVersion-9f15587a-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -531,11 +531,56 @@ integrations:
     signingSecret: <signing secret>
 ```
 
+`clientSecret` and `signingSecret` also accept a `valueFrom` that reads your own Secret, as shown in [External secrets and automatic reloads](#external-secrets-and-automatic-reloads).
+
 ### External secrets and automatic reloads
 
 For Argo CD deployments, use the chart's existing-Secret options with an external secret controller.
 Updating a Secret does not restart pods that read it through environment variables, so also run a reload controller such as [Reloader](https://github.com/stakater/Reloader).
 The chart does not install one.
+
+Credentials outside those Secrets accept a Kubernetes `valueFrom` in place of a plain value:
+`smtp.username`, `smtp.password`, `ai.openAi.apiKey`, `ai.azureOpenAi.apiKey`, `integrations.slack.clientSecret`, `integrations.slack.signingSecret`, `webPush.privateKey`, `objectStore.sseCKeyB64`, and each entry of `objectStore.env`.
+For example:
+
+```yaml
+integrations:
+  slack:
+    clientId: <client id>
+    clientSecret:
+      valueFrom:
+        secretKeyRef:
+          name: slack-app
+          key: client-secret
+    signingSecret:
+      valueFrom:
+        secretKeyRef:
+          name: slack-app
+          key: signing-secret
+```
+
+Dex reads `$VAR` references in `logfire-dex.config` from `logfire-dex.env`, which also accepts `valueFrom`.
+The collector works the same way for `otel_collector.extraExporters`, `extraProcessors`, and `extraPipelines`, which the chart writes into a ConfigMap as given.
+Write `${env:VAR}` there and set `VAR` in `logfire-otel-collector.env`:
+
+```yaml
+otel_collector:
+  extraExporters:
+    otlp_http/vendor:
+      endpoint: https://otlp.example.com
+      headers:
+        api-key: ${env:VENDOR_API_KEY}
+logfire-otel-collector:
+  env:
+    VENDOR_API_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: vendor-credentials
+          key: api-key
+```
+
+The chart does not hash a Secret that a `valueFrom` reads, so a workload restarts after a change to that Secret only through the reload controller.
+Put its annotation on that workload, for example `logfire-backend.annotations`.
 
 Add the reload controller's workload annotations to the Secret values.
 The chart copies them only to workloads that consume that Secret, and omits its own Helm checksum annotations there:
@@ -869,8 +914,8 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
 | integrations.pagerduty.appId | string | `""` | ID of a PagerDuty App with Events Integration enabled. Sets `INTEGRATION_PAGERDUTY_APP_ID` on `logfire-backend`. |
 | integrations.slack.clientId | string | `""` | Client ID of your own Slack App. Setting it turns on Slack App channels. |
-| integrations.slack.clientSecret | string | `""` | Client secret of your Slack App. With `existingSecret`, put it in that Secret under the `logfire-slack-client-secret` key instead. |
-| integrations.slack.signingSecret | string | `""` | Signing secret of your Slack App. With `existingSecret`, put it in that Secret under the `logfire-slack-signing-secret` key instead. |
+| integrations.slack.clientSecret | string | `""` | Client secret of your Slack App. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the `logfire-slack-client-secret` key. |
+| integrations.slack.signingSecret | string | `""` | Signing secret of your Slack App. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the `logfire-slack-signing-secret` key. |
 | keepAliveTimeout | string | `"120s"` | Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of the ingress or tunnel in front of the release; if HAProxy closes an idle connection first, the client sees a 502/520 when it reuses it. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
@@ -955,7 +1000,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | otel_collector.debug.enabled | bool | `false` | Emit per-request summaries to collector logs. Enable for troubleshooting; disabled by default to avoid logging every incoming telemetry request. |
 | otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
 | otel_collector.exporter.sending_queue | object | `{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}}` | Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP ingestion, so senders can retry refused data. Queue limits measure serialized bytes. The queue capacity still comes from the sizing preset or sendingQueueBytes unless queue_size is explicitly overridden here. Each signal has its own queue and consumers. |
-| otel_collector.extraExporters | object | `{}` | Additional collector exporters. Chart-owned component names are reserved. |
+| otel_collector.extraExporters | object | `{}` | Additional collector exporters. Chart-owned component names are reserved. The chart writes them into the collector ConfigMap as given, so reference credentials as `${env:VAR}` and set `VAR` in `logfire-otel-collector.env` with a `valueFrom`. See "External secrets and automatic reloads" in the README. |
 | otel_collector.extraPipelines | object | `{}` | Additional collector pipelines. The chart's existing telemetry pipelines stay unchanged. |
 | otel_collector.extraProcessors | object | `{}` | Additional collector processors. These only run in pipelines that reference them. |
 | otel_collector.prometheus.delta_to_cumulative | bool | `true` | Convert delta metrics to cumulative for Prometheus with the alpha `delta_to_cumulative` processor. Runs only when `otel_collector.prometheus.enabled` is true. The OTLP pipeline keeps delta metrics unchanged. Each stream must reach the same collector replica. Cumulative state resets when that replica is replaced. Set false to pass metrics through unchanged. |
@@ -992,7 +1037,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | releaseVersion | string | `"v2026-11-20.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
-| rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
+| rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. The chart stores them in the Secret `logfire-rustfs`, and the workloads read them from there unless `objectStore.env` sets `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY`. |
 | rustfs.bucket | string | `"logfire"` | Bucket that RustFS creates at startup when `objectStore.uri` is not an `s3://` URI. With an `s3://` `objectStore.uri`, the bucket in the URI is used. |
 | rustfs.image.pullPolicy | string | `""` | RustFS image pull policy. Defaults to `image.pullPolicy` when unset. |
 | rustfs.image.repository | string | `"rustfs/rustfs"` | RustFS image repository |
@@ -1030,7 +1075,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | usageRedis.prefix | string | `""` | Key prefix for usage keys. |
 | variablesApiKey | string | `""` | Client-safe API key used by the frontend to evaluate external managed variables through OFREP. The key is written to the public runtime configuration, so it must only have the `project:read_external_variables` scope. |
 | webPush.enabled | bool | `false` | Let users turn on browser push notifications for alerts. Needs the deployment to be served over HTTPS, since browsers register a service worker only on a secure origin. While this is false the settings panel reports push as unavailable. |
-| webPush.privateKey | string | `""` | VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one and keep it across upgrades. Replacing it unregisters every device that had push on, which each browser recovers from by subscribing again on its next visit. |
+| webPush.privateKey | string | `""` | VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one and keep it across upgrades. Can also be a map with valueFrom (e.g., secretKeyRef) that reads your own Secret. Replacing it unregisters every device that had push on, which each browser recovers from by subscribing again on its next visit. |
 | webPush.subject | string | `""` | Contact the push service operator can reach you on, a `mailto:` or `https:` URL (RFC 8292). Defaults to `mailto:` and `adminEmail`. |
 
 ----------------------------------------------

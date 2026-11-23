@@ -91,7 +91,16 @@ tests:
           path: spec.template.spec.containers[0].env
           content:
             name: AWS_SECRET_ACCESS_KEY
-            value: logfire-rustfs
+            valueFrom:
+              secretKeyRef:
+                name: logfire-rustfs
+                key: secretKey
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - exists:
+          path: spec.template.metadata.annotations["checksum/rustfs-credentials"]
         template: templates/logfire-worker.yaml
         documentSelector:
           path: kind

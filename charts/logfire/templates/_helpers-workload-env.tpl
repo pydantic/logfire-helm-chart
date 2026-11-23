@@ -50,8 +50,16 @@ before the chart managed them, and a duplicate env name can fail an upgrade.
 {{- $secrets := dict "ENCRYPTION_KEY" "logfire-encryption-key" -}}
 {{- with dig "slack" "clientId" "" $integrations -}}
   {{- $entries = append $entries (dict "name" "INTEGRATION_SLACK_CLIENT_ID" "value" .) -}}
-  {{- $_ := set $secrets "INTEGRATION_SLACK_CLIENT_SECRET" "logfire-slack-client-secret" -}}
-  {{- $_ := set $secrets "INTEGRATION_SLACK_SIGNING_SECRET" "logfire-slack-signing-secret" -}}
+  {{- range $name, $field := dict "INTEGRATION_SLACK_CLIENT_SECRET" "clientSecret"
+      "INTEGRATION_SLACK_SIGNING_SECRET" "signingSecret" -}}
+    {{- $ref := include "logfire.credentialValueFrom" (dict "value" (get $integrations.slack $field)
+        "path" (printf "integrations.slack.%s" $field)) -}}
+    {{- if $ref -}}
+      {{- $entries = append $entries (dict "name" $name "valueFrom" (fromJson $ref)) -}}
+    {{- else -}}
+      {{- $_ := set $secrets $name (printf "logfire-slack-%s" (kebabcase $field)) -}}
+    {{- end -}}
+  {{- end -}}
 {{- end -}}
 {{- if eq .serviceName "logfire-backend" -}}
   {{- with dig "pagerduty" "appId" "" $integrations -}}
@@ -100,8 +108,11 @@ Rolls the workloads that hold the Slack App credentials when they change.
     (list "logfire-slack-client-secret" "logfire-slack-signing-secret")) -}}
 {{- else -}}
 {{- $slack := .Values.integrations.slack -}}
-{{- printf "checksum/logfire-slack-app: %s" (printf "%s\x00%s\x00%s" $slack.clientId
-    $slack.clientSecret $slack.signingSecret | sha256sum) -}}
+{{- $parts := list $slack.clientId -}}
+{{- range list $slack.clientSecret $slack.signingSecret -}}
+  {{- $parts = append $parts (ternary (toJson .) . (kindIs "map" .)) -}}
+{{- end -}}
+{{- printf "checksum/logfire-slack-app: %s" (join "\x00" $parts | sha256sum) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
