@@ -275,13 +275,18 @@ fewer lanes and smaller batches (the resource ladder). The scheduler deletes a j
 reaches the maximum attempts, so the workers and the scheduler must use the same maximum.
 
 The service `env` overrides these defaults. A name that it sets is left out here, so the pod
-spec has no duplicate entry. Args: Values, serviceName, ladder (true for the workers).
+spec has no duplicate entry. A map entry set to null removes the name from `env`, so the
+default applies. Args: Values, serviceName, ladder (true for the workers).
 */}}
 {{- define "logfire.ffMaintenanceRetryEnv" -}}
 {{- $env := get (get .Values .serviceName | default dict) "env" | default list -}}
 {{- $names := list -}}
 {{- if kindIs "map" $env -}}
-  {{- $names = keys $env -}}
+  {{- range $name, $value := $env -}}
+    {{- if not (kindIs "invalid" $value) -}}
+      {{- $names = append $names $name -}}
+    {{- end -}}
+  {{- end -}}
 {{- else -}}
   {{- range $env }}{{ $names = append $names .name }}{{ end -}}
 {{- end -}}

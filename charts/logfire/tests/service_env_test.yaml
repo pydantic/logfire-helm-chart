@@ -113,6 +113,8 @@ tests:
     set:
       logfire-ff-compaction-worker.env:
         FF_MAINTENANCE_RESOURCE_LADDER: "false"
+        # A null entry removes the name from `env`, so the default must still apply.
+        FF_MAINTENANCE_JOB_MAX_ATTEMPTS: null
     asserts:
       - contains:
           path: spec.template.spec.containers[0].env
@@ -124,3 +126,8 @@ tests:
           content:
             name: FF_MAINTENANCE_RESOURCE_LADDER
             value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_MAINTENANCE_JOB_MAX_ATTEMPTS
+            value: "5"
