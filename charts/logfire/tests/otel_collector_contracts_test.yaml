@@ -241,7 +241,7 @@ tests:
           value: ConfigMap
       - matchRegex:
           path: data["otel-collector-config.yaml"]
-          pattern: 'Authorization: \$\{env:LOGFIRE_EXPORTER_HEADER_AUTHORIZATION\}'
+          pattern: 'Authorization: \$\{env:LOGFIRE_EXPORTER_HEADER_AUTHORIZATION_ca5839e3\}'
         documentSelector:
           path: kind
           value: ConfigMap
@@ -252,13 +252,9 @@ tests:
           path: kind
           value: ConfigMap
       - equal:
-          path: data.LOGFIRE_EXPORTER_HEADER_AUTHORIZATION
-          value: QmVhcmVyIHNlbnRpbmVsLTAxMjM0NTY3ODk=
-        documentSelector:
-          path: metadata.name
-          value: logfire-otel-collector-exporter-headers
-      - notExists:
-          path: data.LOGFIRE_EXPORTER_HEADER_X_OWN
+          path: data
+          value:
+            LOGFIRE_EXPORTER_HEADER_AUTHORIZATION_ca5839e3: QmVhcmVyIHNlbnRpbmVsLTAxMjM0NTY3ODk=
         documentSelector:
           path: metadata.name
           value: logfire-otel-collector-exporter-headers
@@ -275,8 +271,22 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content:
-            name: LOGFIRE_EXPORTER_HEADER_AUTHORIZATION
+            name: LOGFIRE_EXPORTER_HEADER_AUTHORIZATION_ca5839e3
             valueFrom:
               secretKeyRef:
                 name: logfire-otel-collector-exporter-headers
-                key: LOGFIRE_EXPORTER_HEADER_AUTHORIZATION
+                key: LOGFIRE_EXPORTER_HEADER_AUTHORIZATION_ca5839e3
+
+  - it: passes a list of exporter headers through unchanged
+    set:
+      otel_collector.exporter.headers:
+        - name: Authorization
+          value: Bearer sentinel-0123456789
+    template: templates/logfire-otel-collector-cfg.yaml
+    documentSelector:
+      path: kind
+      value: ConfigMap
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'value: Bearer sentinel-0123456789'

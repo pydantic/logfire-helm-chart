@@ -112,7 +112,14 @@ data:
           {{- ($exporter.tls | default (dict "insecure" true)) | toYaml | nindent 10 }}
         {{- if $exporter.headers }}
         headers:
-          {{- $headers.config | toYaml | nindent 10 }}
+          {{- $config := $exporter.headers }}
+          {{- if $headers.moved }}
+          {{- $config = dict }}
+          {{- range $name, $value := $exporter.headers }}
+          {{- $_ := set $config $name (hasKey $headers.moved $name | ternary (printf "${env:%s}" (get $headers.moved $name)) $value) }}
+          {{- end }}
+          {{- end }}
+          {{- $config | toYaml | nindent 10 }}
         {{- else }}
         headers:
           Authorization: "Bearer ${LOGFIRE_META_WRITE_TOKEN}"

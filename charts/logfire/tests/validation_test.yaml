@@ -16,14 +16,13 @@ set:
   dev:
     deployPostgres: true
 tests:
-  - it: rejects exporter headers that map to the same environment variable
+  - it: rejects a collector env entry that the chart sets for an exporter header
     set:
-      otel_collector.exporter.headers:
-        X-Tenant: a
-        X_Tenant: b
+      otel_collector.exporter.headers.X-Tenant: acme
+      logfire-otel-collector.env.LOGFIRE_EXPORTER_HEADER_X_TENANT_8ca2ee3d: other
     asserts:
       - failedTemplate:
-          errorPattern: 'both map to the environment variable LOGFIRE_EXPORTER_HEADER_X_TENANT'
+          errorPattern: 'Remove it from logfire-otel-collector.env'
 
   - it: rejects extra exporters that replace the backend exporter
     set:

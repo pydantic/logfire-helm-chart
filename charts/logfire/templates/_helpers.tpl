@@ -385,37 +385,42 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
+Collector exporter headers that move to the Secret logfire-otel-collector-exporter-headers, so the
+ConfigMap holds no credential. The config reads each one from an environment variable named after
+the header, with a hash of the exact name so that distinct names never share a variable. A value
+stays in the config as written when it is not a non-empty string, contains `$` (the collector
+expands it there), or is an integer the collector cannot read from an environment variable. A list
+of headers passes through unchanged. Returns {"moved": header to variable, "secret": variable to
+value}.
+*/}}
+{{- define "logfire.otelCollectorExporterHeaders" -}}
+{{- $moved := dict -}}
+{{- $secret := dict -}}
+{{- $headers := dig "exporter" "headers" dict (.Values.otel_collector | default dict) -}}
+{{- if kindIs "map" $headers -}}
+  {{- $userEnv := list -}}
+  {{- range include "logfire.serviceEnv" (dict "Values" .Values "serviceName" "logfire-otel-collector") | fromYamlArray -}}
+    {{- $userEnv = append $userEnv .name -}}
+  {{- end -}}
+  {{- range $name, $value := $headers -}}
+    {{- if and (kindIs "string" $value) $value (not (contains "$" $value)) (not (regexMatch "^[-+]?[0-9]{19,}$" $value)) -}}
+      {{- $env := printf "LOGFIRE_EXPORTER_HEADER_%s_%s" (regexReplaceAll "[^A-Z0-9]" (upper $name) "_" | trunc 64) (sha256sum $name | trunc 8) -}}
+      {{- if has $env $userEnv -}}
+        {{- fail (printf "logfire-otel-collector.env sets %s, which the chart sets for otel_collector.exporter.headers %q. Remove it from logfire-otel-collector.env." $env $name) -}}
+      {{- end -}}
+      {{- $_ := set $moved $name $env -}}
+      {{- $_ := set $secret $env $value -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- dict "moved" $moved "secret" $secret | toJson -}}
+{{- end }}
+
+{{/*
 Hash rendered configuration without the chart-version label. The label is
 resource metadata and must not restart workloads during a version-only chart
 promotion.
 */}}
-{{/*
-Collector exporter headers. A plain string value moves to the Secret
-logfire-otel-collector-exporter-headers, and the config reads it as ${env:...}, so the ConfigMap
-holds no credential. Any other value stays in the config as written, including one with a `$`,
-which the collector expands there. Returns {"config": headers for the config, "secret": env name
-to value}.
-*/}}
-{{- define "logfire.otelCollectorExporterHeaders" -}}
-{{- $config := dict -}}
-{{- $secret := dict -}}
-{{- $owners := dict -}}
-{{- range $name, $value := dig "exporter" "headers" dict (.Values.otel_collector | default dict) | default dict -}}
-  {{- if and (kindIs "string" $value) $value (not (contains "$" $value)) -}}
-    {{- $env := printf "LOGFIRE_EXPORTER_HEADER_%s" (regexReplaceAll "[^A-Z0-9]" (upper $name) "_") -}}
-    {{- with get $owners $env -}}
-      {{- fail (printf "otel_collector.exporter.headers %q and %q both map to the environment variable %s. Rename one of them." . $name $env) -}}
-    {{- end -}}
-    {{- $_ := set $owners $env $name -}}
-    {{- $_ := set $secret $env $value -}}
-    {{- $_ := set $config $name (printf "${env:%s}" $env) -}}
-  {{- else -}}
-    {{- $_ := set $config $name $value -}}
-  {{- end -}}
-{{- end -}}
-{{- dict "config" $config "secret" $secret | toJson -}}
-{{- end }}
-
 {{- define "logfire.configChecksum" -}}
 {{- regexReplaceAll
     `(?m)(^metadata:\n(?:^[ \t]+[^\n]*\n)*?^[ \t]+labels:\n)[ \t]+helm[.]sh/chart:[^\n]*\n` . `${1}`
