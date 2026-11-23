@@ -532,11 +532,61 @@ integrations:
     signingSecret: <signing secret>
 ```
 
+`clientSecret` and `signingSecret` also accept a `valueFrom` that reads your own Secret, as shown in [External secrets and automatic reloads](#external-secrets-and-automatic-reloads).
+
 ### External secrets and automatic reloads
 
 For Argo CD deployments, use the chart's existing-Secret options with an external secret controller.
 Updating a Secret does not restart pods that read it through environment variables, so also run a reload controller such as [Reloader](https://github.com/stakater/Reloader).
 The chart does not install one.
+
+Credentials outside those Secrets accept a Kubernetes `valueFrom` in place of a plain value:
+`smtp.username`, `smtp.password`, `ai.openAi.apiKey`, `ai.azureOpenAi.apiKey`, `integrations.slack.clientSecret`, `integrations.slack.signingSecret`, `webPush.privateKey`, `objectStore.sseCKeyB64`, each entry of `objectStore.env`, and each value of `otel_collector.exporter.headers` (see the end of this section).
+For example:
+
+```yaml
+integrations:
+  slack:
+    clientId: <client id>
+    clientSecret:
+      valueFrom:
+        secretKeyRef:
+          name: slack-app
+          key: client-secret
+    signingSecret:
+      valueFrom:
+        secretKeyRef:
+          name: slack-app
+          key: signing-secret
+```
+
+Dex reads `$VAR` references in `logfire-dex.config` from `logfire-dex.env`, which also accepts `valueFrom`.
+The collector works the same way for `otel_collector.extraExporters`, `extraProcessors`, and `extraPipelines`, which the chart writes into a ConfigMap as given.
+Write `${env:VAR}` there and set `VAR` in `logfire-otel-collector.env`:
+
+```yaml
+otel_collector:
+  extraExporters:
+    otlp_http/vendor:
+      endpoint: https://otlp.example.com
+      headers:
+        api-key: ${env:VENDOR_API_KEY}
+  extraPipelines:
+    traces/vendor:
+      receivers: [otlp]
+      exporters: [otlp_http/vendor]
+logfire-otel-collector:
+  env:
+    VENDOR_API_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: vendor-credentials
+          key: api-key
+```
+
+The chart does not hash a Secret that a `valueFrom` reads, so a workload restarts after a change to that Secret only through the reload controller.
+Put its annotation on every workload that reads the Secret.
+The Slack and web push credentials are read by `logfire-backend`, `logfire-worker`, and `logfire-task-runner`, so set `annotations` on all three.
 
 Add the reload controller's workload annotations to the Secret values.
 The chart copies them only to workloads that consume that Secret, and omits its own Helm checksum annotations there:
@@ -550,6 +600,23 @@ postgresSecret:
 ```
 
 `existingSecret`, `adminSecret`, and `existingGatewaySecret` accept the same `annotations`.
+
+To keep a collector exporter header out of the values, give it a `valueFrom` that reads your own Secret.
+The chart then passes the value to the collector as an environment variable:
+
+```yaml
+otel_collector:
+  exporter:
+    headers:
+      Authorization:
+        valueFrom:
+          secretKeyRef:
+            name: logfire-exporter-headers
+            key: authorization
+logfire-otel-collector:
+  annotations:
+    reloader.stakater.com/auto: "true"
+```
 
 ### Connection poolers
 

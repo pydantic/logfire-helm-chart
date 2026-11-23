@@ -225,3 +225,135 @@ tests:
           value: Recreate
       - notExists:
           path: spec.strategy.rollingUpdate
+
+  - it: moves plain exporter header values from the config to the headers Secret
+    set:
+      otel_collector.exporter.headers:
+        Authorization: Bearer sentinel-0123456789
+        X-Own: ${env:MY_TOKEN}
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: sentinel
+        documentSelector:
+          path: kind
+          value: ConfigMap
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'Authorization: \$\{env:LOGFIRE_EXPORTER_HEADER_AUTHORIZATION_ca5839e3\}'
+        documentSelector:
+          path: kind
+          value: ConfigMap
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'X-Own: \$\{env:MY_TOKEN\}'
+        documentSelector:
+          path: kind
+          value: ConfigMap
+      - equal:
+          path: data
+          value:
+            LOGFIRE_EXPORTER_HEADER_AUTHORIZATION_ca5839e3: QmVhcmVyIHNlbnRpbmVsLTAxMjM0NTY3ODk=
+        documentSelector:
+          path: metadata.name
+          value: logfire-otel-collector-exporter-headers
+
+  - it: reads each moved header from the Secret key the config names
+    set:
+      otel_collector.exporter.headers:
+        Authorization: Bearer sentinel-0123456789
+    template: templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOGFIRE_EXPORTER_HEADER_AUTHORIZATION_ca5839e3
+            valueFrom:
+              secretKeyRef:
+                name: logfire-otel-collector-exporter-headers
+                key: LOGFIRE_EXPORTER_HEADER_AUTHORIZATION_ca5839e3
+
+  - it: passes a list of exporter headers through unchanged
+    set:
+      otel_collector.exporter.headers:
+        - name: Authorization
+          value: Bearer sentinel-0123456789
+    template: templates/logfire-otel-collector-cfg.yaml
+    documentSelector:
+      path: kind
+      value: ConfigMap
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'value: Bearer sentinel-0123456789'
+
+  - it: reads a valueFrom header from the user's Secret without a chart Secret
+    set:
+      otel_collector.exporter.headers:
+        Authorization:
+          valueFrom:
+            secretKeyRef:
+              name: my-headers
+              key: authorization
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'Authorization: \$\{env:LOGFIRE_EXPORTER_HEADER_AUTHORIZATION_ca5839e3\}'
+        template: templates/logfire-otel-collector-cfg.yaml
+      - hasDocuments:
+          count: 1
+        template: templates/logfire-otel-collector-cfg.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOGFIRE_EXPORTER_HEADER_AUTHORIZATION_ca5839e3
+            valueFrom:
+              secretKeyRef:
+                name: my-headers
+                key: authorization
+        template: templates/logfire-otel-collector.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: keeps integers too large for int64 in the config and moves small ones
+    set:
+      otel_collector.exporter.headers:
+        X-Hex: "0xdeadbeefdeadbeef"
+        X-Under: "9_223_372_036_854_775_808"
+        X-Small: "123"
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'X-Hex: "?0xdeadbeefdeadbeef'
+        documentSelector:
+          path: kind
+          value: ConfigMap
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'X-Under: "?9_223_372_036_854_775_808'
+        documentSelector:
+          path: kind
+          value: ConfigMap
+      - equal:
+          path: data
+          value:
+            LOGFIRE_EXPORTER_HEADER_X_SMALL_912a152d: MTIz
+        documentSelector:
+          path: metadata.name
+          value: logfire-otel-collector-exporter-headers
+
+  - it: creates no headers Secret for a list of headers
+    set:
+      otel_collector.exporter.headers:
+        - name: Authorization
+          value: Bearer sentinel-0123456789
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - hasDocuments:
+          count: 1
