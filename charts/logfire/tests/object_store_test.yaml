@@ -91,11 +91,72 @@ tests:
           path: spec.template.spec.containers[0].env
           content:
             name: AWS_SECRET_ACCESS_KEY
-            value: logfire-rustfs
+            valueFrom:
+              secretKeyRef:
+                name: logfire-rustfs
+                key: secretKey
         template: templates/logfire-worker.yaml
         documentSelector:
           path: kind
           value: Deployment
+      - exists:
+          path: spec.template.metadata.annotations["checksum/rustfs-credentials"]
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: rolls the Python object-store workloads when the RustFS credentials change
+    set:
+      objectStore:
+        uri: ""
+      dev:
+        deployRustfs: true
+      rustfs.auth:
+        accessKey: access
+        secretKey: secret
+    templates:
+      - templates/logfire-backend.yaml
+      - templates/logfire-worker.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+      matchMany: true
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["checksum/rustfs-credentials"]
+          # sha256 of "access:secret"
+          value: f9b25748c55503bd15677deb8ced774e24fb0086eed688570ff50d070001ce85
+
+  - it: adds no RustFS checksum when objectStore.env sets both credentials
+    set:
+      objectStore:
+        uri: ""
+        env:
+          AWS_ACCESS_KEY_ID: own-id
+          AWS_SECRET_ACCESS_KEY:
+            valueFrom:
+              secretKeyRef: {name: own, key: secret}
+      dev:
+        deployRustfs: true
+    templates:
+      - templates/logfire-backend.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notExists:
+          path: spec.template.metadata.annotations["checksum/rustfs-credentials"]
+
+  - it: adds no RustFS checksum without development RustFS
+    templates:
+      - templates/logfire-backend.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notExists:
+          path: spec.template.metadata.annotations["checksum/rustfs-credentials"]
 
   - it: mounts credentials and passes the Azure settings
     set:
