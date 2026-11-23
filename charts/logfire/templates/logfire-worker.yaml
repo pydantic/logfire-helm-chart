@@ -29,7 +29,7 @@ spec:
         {{- with (include "logfire.rustfsChecksumAnnotation" . | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
-        {{- with (include "logfire.inlineCredentialsChecksumAnnotation" (dict "ctx" . "prefixes" (list "smtp." "ai." "objectStore.")) | trim) }}
+        {{- with (include "logfire.inlineCredentialsChecksumAnnotation" (dict "ctx" . "prefixes" (list "smtp." "ai." "objectStore.env.")) | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}

@@ -1612,7 +1612,7 @@ objectStore:
   # alias the Python S3 client accepts, and Azure clients read
   # `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or
   # `AZURE_STORAGE_CONNECTION_STRING`. The chart stores a plain value whose
-  # name contains SECRET, PASSWORD, TOKEN, KEY, CREDENTIAL, or SAS in the Secret
+  # name contains SECRET, PASSWORD, TOKEN, KEY, CREDENTIAL, SAS, or CONNECTION in the Secret
   # `logfire-inline-credentials`, unless the value contains `$(`. Any entry
   # also accepts a map with valueFrom.
   env: {}

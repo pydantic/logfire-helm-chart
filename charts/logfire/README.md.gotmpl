@@ -542,7 +542,7 @@ The chart does not install one.
 
 Credentials outside those Secrets accept a Kubernetes `valueFrom` in place of a plain value:
 `smtp.username`, `smtp.password`, `ai.openAi.apiKey`, `ai.azureOpenAi.apiKey`, `integrations.slack.clientSecret`, `integrations.slack.signingSecret`, `webPush.privateKey`, `objectStore.sseCKeyB64`, each entry of `objectStore.env`, and each value of `otel_collector.exporter.headers` (see the end of this section).
-A plain value still works and stays out of the pod specs: the chart stores `smtp.password`, the AI API keys, `objectStore.sseCKeyB64`, and each `objectStore.env` entry whose name contains `SECRET`, `PASSWORD`, `TOKEN`, `KEY`, `CREDENTIAL`, or `SAS` in the Secret `logfire-inline-credentials`, and the workloads read them from it.
+A plain value still works and stays out of the pod specs: the chart stores `smtp.password`, the AI API keys, `objectStore.sseCKeyB64`, and each `objectStore.env` entry whose name contains `SECRET`, `PASSWORD`, `TOKEN`, `KEY`, `CREDENTIAL`, `SAS`, or `CONNECTION` in the Secret `logfire-inline-credentials`, and the workloads read them from it.
 An `objectStore.env` value that contains `$(` stays a plain env value, so Kubernetes can expand it.
 For example:
 

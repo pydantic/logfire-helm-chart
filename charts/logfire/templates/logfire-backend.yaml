@@ -163,7 +163,7 @@ spec:
         {{- with (include "logfire.rustfsChecksumAnnotation" . | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
-        {{- with (include "logfire.inlineCredentialsChecksumAnnotation" (dict "ctx" . "prefixes" (list "ai." "objectStore.")) | trim) }}
+        {{- with (include "logfire.inlineCredentialsChecksumAnnotation" (dict "ctx" . "prefixes" (list "ai." "objectStore.env.")) | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
         {{- if or (not .Values.adminSecret.enabled) (empty .Values.adminSecret.annotations) }}

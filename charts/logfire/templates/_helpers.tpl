@@ -550,35 +550,55 @@ map fails, so a reference never ends up stored as the credential itself. Call wi
 Credentials given as plain values, which the chart stores in the Secret logfire-inline-credentials
 so that no pod spec holds them, as JSON from Secret key (the value path) to value. Of
 `objectStore.env`, only entries whose name looks like a credential move; endpoints, regions and
-account names stay visible in the pod spec. A credential set
-with valueFrom stays a reference to the user's Secret. An empty one stays as it is, and so does one
-that contains `$(`, because Kubernetes expands such a reference only in a literal env value.
+account names stay visible in the pod spec. A credential set with valueFrom stays a reference to
+the user's Secret. An empty one stays as it is, and so does one that contains `$(`, because
+Kubernetes expands such a reference only in a literal env value. Kubernetes also turns `$$` into
+`$` in a literal value, so the stored value does the same.
+
+Templated `objectStore.env` values render with one fixed template name, so every workload and the
+Secret agree on which keys the Secret holds.
 */}}
 {{- define "logfire.inlineCredentials" -}}
 {{- $out := dict -}}
 {{- $ai := .Values.ai | default dict -}}
 {{- $objectStore := .Values.objectStore | default dict -}}
-{{- $candidates := dict
+{{- $candidates := dict -}}
+{{- range $key, $value := dict
     "smtp.password" (get (.Values.smtp | default dict) "password")
     "ai.openAi.apiKey" (get (get $ai "openAi" | default dict) "apiKey")
     "ai.azureOpenAi.apiKey" (get (get $ai "azureOpenAi" | default dict) "apiKey")
     "objectStore.sseCKeyB64" (get $objectStore "sseCKeyB64") -}}
-{{- range $name, $value := get $objectStore "env" | default dict -}}
-  {{- if regexMatch "(?i)(SECRET|PASSWORD|TOKEN|KEY|CREDENTIAL|SAS)" $name -}}
-    {{- if kindIs "string" $value -}}
-      {{- $value = tpl $value $ -}}
-    {{- end -}}
-    {{- $_ := set $candidates (printf "objectStore.env.%s" $name) $value -}}
+  {{- /* The chart renders these env entries only for a value that is set. */ -}}
+  {{- if $value -}}
+    {{- $_ := set $candidates $key $value -}}
   {{- end -}}
 {{- end -}}
+{{- $env := get $objectStore "env" -}}
+{{- if kindIs "map" $env -}}
+{{- $tplContext := dict "Values" .Values "Release" .Release "Chart" .Chart "Capabilities" .Capabilities
+    "Files" .Files "Template" (dict "Name" (printf "%s/secrets.yaml" .Template.BasePath)
+    "BasePath" .Template.BasePath) -}}
+{{- range $name, $value := $env -}}
+  {{- if regexMatch "(?i)(SECRET|PASSWORD|TOKEN|KEY|CREDENTIAL|SAS|CONNECTION)" $name -}}
+    {{- $key := printf "objectStore.env.%s" $name -}}
+    {{- if not (regexMatch "^[-._a-zA-Z0-9]+$" $key) -}}
+      {{- fail (printf "objectStore.env.%s: the chart stores this credential in a Secret, and %q is not a valid Secret key. Rename it or set it with valueFrom." $name $key) -}}
+    {{- end -}}
+    {{- if kindIs "string" $value -}}
+      {{- $value = tpl $value $tplContext -}}
+    {{- end -}}
+    {{- $_ := set $candidates $key $value -}}
+  {{- end -}}
+{{- end -}}
+{{- end -}}
 {{- range $key, $value := $candidates -}}
-  {{- if and (kindIs "map" $value) (hasKey $value "value") (not (hasKey $value "valueFrom")) -}}
+  {{- if and (kindIs "map" $value) (hasKey $value "value") (not (get $value "valueFrom")) -}}
     {{- $value = $value.value -}}
   {{- end -}}
   {{- if not (or (kindIs "map" $value) (kindIs "invalid" $value)) -}}
     {{- $string := $value | toString -}}
     {{- if and $string (not (contains "$(" $string)) -}}
-      {{- $_ := set $out $key $string -}}
+      {{- $_ := set $out $key (replace "$$" "$" $string) -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
