@@ -360,7 +360,7 @@ smtp:
   port: 25
   # -- SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). Leave both username and password unset for a relay that does not use authentication; set both or neither.
   username:
-  # -- SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
+  # -- SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). The chart stores a plain string in the Secret `logfire-inline-credentials`.
   password:
   # -- Use implicit TLS from the first byte, for SMTPS ports such as 465. If it is false, Logfire connects in plaintext and upgrades with STARTTLS whenever the server offers it, which is what a port 25 or 587 relay expects.
   use_tls: false
@@ -457,7 +457,7 @@ ai:
   llmJudgeModel:
 
   openAi:
-    # -- OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
+    # -- OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). The chart stores a plain string in the Secret `logfire-inline-credentials`.
     apiKey:
     # -- OpenAI base URL for custom endpoints (e.g., Azure OpenAI proxy, local models).
     baseUrl:
@@ -475,7 +475,7 @@ ai:
   azureOpenAi:
     # -- Azure OpenAI endpoint
     endpoint:
-    # -- Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
+    # -- Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). The chart stores a plain string in the Secret `logfire-inline-credentials`.
     apiKey:
     # -- Azure OpenAI API version
     apiVersion:
@@ -1607,6 +1607,8 @@ objectStore:
   # a bucket that already contains FusionFire data will break all reads of the
   # pre-existing objects.
   # losing the key means losing the data — AWS does not store it.
+  # The chart stores a plain value in the Secret `logfire-inline-credentials`;
+  # a map with valueFrom reads your own Secret.
   sseCKeyB64:
   # -- Additional environment variables for the object store connection.
   # String values support Helm templating. When the in-cluster RustFS store is
@@ -1615,7 +1617,10 @@ objectStore:
   # backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint
   # alias the Python S3 client accepts, and Azure clients read
   # `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or
-  # `AZURE_STORAGE_CONNECTION_STRING`.
+  # `AZURE_STORAGE_CONNECTION_STRING`. The chart stores a plain value whose
+  # name contains SECRET, PASSWORD, TOKEN, KEY, CREDENTIAL, SAS, or CONNECTION in the Secret
+  # `logfire-inline-credentials`, unless the value contains `$(`. Any entry
+  # also accepts a map with valueFrom.
   env: {}
   # -- Volume mounts for object store credentials, on FusionFire, the backend and the
   # worker. The chart reserves the mount paths `/tmp`, `/scratch`, `/fusionfire/ingest-data`,

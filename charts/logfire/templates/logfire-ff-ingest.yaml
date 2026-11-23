@@ -69,6 +69,9 @@ spec:
         {{- with (include "logfire.rustfsChecksumAnnotation" . | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- with (include "logfire.inlineCredentialsChecksumAnnotation" (dict "ctx" . "prefixes" (list "objectStore.")) | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName "podSecurityContext" $podSecurityContext) | nindent 6 }}
@@ -88,11 +91,7 @@ spec:
               containerPort: 8012
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
           lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "15"
+            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 15) | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: logfire-ff-base-config

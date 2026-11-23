@@ -56,7 +56,10 @@ tests:
           path: spec.template.spec.containers[0].env
           content:
             name: AWS_ACCESS_KEY_ID
-            value: logfire-rustfs
+            valueFrom:
+              secretKeyRef:
+                name: logfire-inline-credentials
+                key: objectStore.env.AWS_ACCESS_KEY_ID
         template: templates/logfire-worker.yaml
         documentSelector:
           path: kind

@@ -13,6 +13,7 @@ This README is the reference for each chart version: the install flow, the requi
 The [self-hosted docs](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/overview/) explain how to plan an install, and give procedures such as bucket and database migrations.
 
 The chart needs Kubernetes 1.23 or later and Helm 3 or Helm 4. CI tests it with Helm 4.2.0.
+On Kubernetes 1.30 or later, the shutdown delay hooks use the native `sleep` action. On older clusters, they run `sleep` from the container image.
 Gateway API routing also needs the Gateway API v1 CRDs in the cluster.
 
 Choose one path:
@@ -541,6 +542,8 @@ The chart does not install one.
 
 Credentials outside those Secrets accept a Kubernetes `valueFrom` in place of a plain value:
 `smtp.username`, `smtp.password`, `ai.openAi.apiKey`, `ai.azureOpenAi.apiKey`, `integrations.slack.clientSecret`, `integrations.slack.signingSecret`, `webPush.privateKey`, `objectStore.sseCKeyB64`, each entry of `objectStore.env`, and each value of `otel_collector.exporter.headers` (see the end of this section).
+A plain value still works and stays out of the pod specs: the chart stores `smtp.password`, the AI API keys, `objectStore.sseCKeyB64`, and each `objectStore.env` entry whose name contains `SECRET`, `PASSWORD`, `TOKEN`, `KEY`, `CREDENTIAL`, `SAS`, or `CONNECTION` in the Secret `logfire-inline-credentials`, and the workloads read them from it.
+An `objectStore.env` value that contains `$(` stays a plain env value, so Kubernetes can expand it.
 For example:
 
 ```yaml
@@ -833,13 +836,13 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | adminSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | adminSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
 | affinity | object | `{}` | Node/Pod affinity applied to all workloads |
-| ai.azureOpenAi.apiKey | string | `nil` | Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
+| ai.azureOpenAi.apiKey | string | `nil` | Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). The chart stores a plain string in the Secret `logfire-inline-credentials`. |
 | ai.azureOpenAi.apiVersion | string | `nil` | Azure OpenAI API version |
 | ai.azureOpenAi.endpoint | string | `nil` | Azure OpenAI endpoint |
 | ai.chatModel | string | `nil` | AI provider+model string for chat-oriented workloads. Falls back to `ai.model` in the application when unset. |
 | ai.llmJudgeModel | string | `nil` | AI provider+model string for LLM-as-a-judge evaluation workloads. Falls back to `ai.model` in the application when unset. |
 | ai.model | string | `nil` | AI provider+model string. Prefix the model with the provider (e.g., `azure:gpt-4o`). Use `openai-chat:<model>` to use the Chat Completions API for OpenAI-compatible endpoints. See https://ai.pydantic.dev/models/ for more information. |
-| ai.openAi.apiKey | string | `nil` | OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
+| ai.openAi.apiKey | string | `nil` | OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). The chart stores a plain string in the Secret `logfire-inline-credentials`. |
 | ai.openAi.baseUrl | string | `nil` | OpenAI base URL for custom endpoints (e.g., Azure OpenAI proxy, local models). |
 | ai.reasoningModel | string | `nil` | AI provider+model string for reasoning-oriented worker workloads such as workflows. Falls back to `ai.model` in the chart when unset. |
 | ai.vertexAi.anthropicBaseUrl | string | `nil` | Anthropic Vertex partner-models API base URL. |
@@ -1011,9 +1014,9 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | migrations.postDeploy.ttlSecondsAfterFinished | int | `604800` | Seconds that Kubernetes keeps a finished post-deploy migration Job. Set it to `null` to keep finished Jobs. With Argo CD self-heal, Argo CD creates the Job again after Kubernetes deletes it. The new Job finds nothing to apply and exits. |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
 | objectStore | object | `{"env":{},"sessionReplayUri":null,"sseCKeyB64":null,"uri":null,"visualTestsUri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
-| objectStore.env | object | `{}` | Additional environment variables for the object store connection. String values support Helm templating. When the in-cluster RustFS store is enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. The backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint alias the Python S3 client accepts, and Azure clients read `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or `AZURE_STORAGE_CONNECTION_STRING`. |
+| objectStore.env | object | `{}` | Additional environment variables for the object store connection. String values support Helm templating. When the in-cluster RustFS store is enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. The backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint alias the Python S3 client accepts, and Azure clients read `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or `AZURE_STORAGE_CONNECTION_STRING`. The chart stores a plain value whose name contains SECRET, PASSWORD, TOKEN, KEY, CREDENTIAL, SAS, or CONNECTION in the Secret `logfire-inline-credentials`, unless the value contains `$(`. Any entry also accepts a map with valueFrom. |
 | objectStore.sessionReplayUri | string | `nil` | Optional override for the session-replay blob store, e.g. `s3://logfire-replays`. Defaults to `<uri>/session-replays`. The bucket or container must exist, and it must be reachable with the same endpoint and credentials as `uri`: a different account or provider needs its own `env` and credential volumes, which the per-service `env` lists under `logfire-backend` and `logfire-worker` can carry. |
-| objectStore.sseCKeyB64 | string | `nil` | Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C). Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy requests. Only used when the object store is S3, and only for FusionFire: the session-replay and visual-test objects do not use SSE-C.  IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on a bucket that already contains FusionFire data will break all reads of the pre-existing objects. losing the key means losing the data — AWS does not store it. |
+| objectStore.sseCKeyB64 | string | `nil` | Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C). Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy requests. Only used when the object store is S3, and only for FusionFire: the session-replay and visual-test objects do not use SSE-C.  IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on a bucket that already contains FusionFire data will break all reads of the pre-existing objects. losing the key means losing the data — AWS does not store it. The chart stores a plain value in the Secret `logfire-inline-credentials`; a map with valueFrom reads your own Secret. |
 | objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`). Supports Helm templating, e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release. When `dev.deployRustfs` is enabled and this is empty, it defaults to `s3://<rustfs.bucket>`.  The backend and the worker keep session replay and visual-test blobs under the `session-replays/` and `visual-tests/` prefixes of the same bucket, and receive the `env` entries and `volumeMounts` below, so one object store serves FusionFire and both Python services. |
 | objectStore.visualTestsUri | string | `nil` | Optional override for the visual-test blob store, e.g. `az://logfirefiles/visual-tests`. Defaults to `<uri>/visual-tests`, with the same requirements as `sessionReplayUri`. |
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials, on FusionFire, the backend and the worker. The chart reserves the mount paths `/tmp`, `/scratch`, `/fusionfire/ingest-data`, and `/var/lib/logfire` for its own volumes, adds `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled, and `/etc/logfire/smtp-ca` while the SMTP CA bundle is configured. |
@@ -1084,7 +1087,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | smtp.fromAddress | string | `nil` | Sender address of every email Logfire sends (`From` and SMTP envelope sender), such as `logfire@example.com`. Required when `smtp.host` is set. Use an address on a domain that your SMTP server may send for. Logfire does not send email as `pydantic.dev` from a self-hosted install. |
 | smtp.fromName | string | `nil` | Sender display name of every email Logfire sends. If it is not set, the name is `Pydantic Logfire`. |
 | smtp.host | string | `nil` | SMTP server hostname |
-| smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
+| smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). The chart stores a plain string in the Secret `logfire-inline-credentials`. |
 | smtp.port | int | `25` | SMTP server port |
 | smtp.use_tls | bool | `false` | Use implicit TLS from the first byte, for SMTPS ports such as 465. If it is false, Logfire connects in plaintext and upgrades with STARTTLS whenever the server offers it, which is what a port 25 or 587 relay expects. |
 | smtp.username | string | `nil` | SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). Leave both username and password unset for a relay that does not use authentication; set both or neither. |
