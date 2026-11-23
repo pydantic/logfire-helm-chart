@@ -44,7 +44,7 @@ spec:
           {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
 {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
-            {{- include "logfire.ffCommandWithTempDirCleanup" . | nindent 12 }}
+            - fusionfire
           args:
             - maintenance-worker
             - --host=0.0.0.0
