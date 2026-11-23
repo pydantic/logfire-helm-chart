@@ -546,6 +546,80 @@ map fails, so a reference never ends up stored as the credential itself. Call wi
 {{- end -}}
 {{- end -}}
 
+{{/*
+Credentials given as plain values, which the chart stores in the Secret logfire-inline-credentials
+so that no pod spec holds them, as JSON from Secret key (the value path) to value. Of
+`objectStore.env`, only entries whose name looks like a credential move; endpoints, regions and
+account names stay visible in the pod spec. A credential set
+with valueFrom stays a reference to the user's Secret. An empty one stays as it is, and so does one
+that contains `$(`, because Kubernetes expands such a reference only in a literal env value.
+*/}}
+{{- define "logfire.inlineCredentials" -}}
+{{- $out := dict -}}
+{{- $ai := .Values.ai | default dict -}}
+{{- $objectStore := .Values.objectStore | default dict -}}
+{{- $candidates := dict
+    "smtp.password" (get (.Values.smtp | default dict) "password")
+    "ai.openAi.apiKey" (get (get $ai "openAi" | default dict) "apiKey")
+    "ai.azureOpenAi.apiKey" (get (get $ai "azureOpenAi" | default dict) "apiKey")
+    "objectStore.sseCKeyB64" (get $objectStore "sseCKeyB64") -}}
+{{- range $name, $value := get $objectStore "env" | default dict -}}
+  {{- if regexMatch "(?i)(SECRET|PASSWORD|TOKEN|KEY|CREDENTIAL|SAS)" $name -}}
+    {{- if kindIs "string" $value -}}
+      {{- $value = tpl $value $ -}}
+    {{- end -}}
+    {{- $_ := set $candidates (printf "objectStore.env.%s" $name) $value -}}
+  {{- end -}}
+{{- end -}}
+{{- range $key, $value := $candidates -}}
+  {{- if and (kindIs "map" $value) (hasKey $value "value") (not (hasKey $value "valueFrom")) -}}
+    {{- $value = $value.value -}}
+  {{- end -}}
+  {{- if not (or (kindIs "map" $value) (kindIs "invalid" $value)) -}}
+    {{- $string := $value | toString -}}
+    {{- if and $string (not (contains "$(" $string)) -}}
+      {{- $_ := set $out $key $string -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- toJson $out -}}
+{{- end -}}
+
+{{/*
+The body of the env entry for a credential: a reference to logfire-inline-credentials when the
+chart stores the value there, otherwise what logfire.envValue renders. Call with
+(dict "ctx" $ "key" "smtp.password" "value" $value), plus any logfire.envValue options.
+*/}}
+{{- define "logfire.credentialEnvValue" -}}
+{{- if hasKey (include "logfire.inlineCredentials" .ctx | fromJson) .key -}}
+valueFrom:
+  secretKeyRef:
+    name: logfire-inline-credentials
+    key: {{ .key }}
+{{- else -}}
+{{- include "logfire.envValue" (omit . "ctx" "key") -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Rolls a workload when an inline credential it reads changes. `prefixes` names the value paths the
+workload reads, such as (list "smtp." "objectStore."). Emits nothing when it reads none.
+*/}}
+{{- define "logfire.inlineCredentialsChecksumAnnotation" -}}
+{{- $credentials := include "logfire.inlineCredentials" .ctx | fromJson -}}
+{{- $parts := list -}}
+{{- range $key := keys $credentials | sortAlpha -}}
+  {{- range $prefix := $.prefixes -}}
+    {{- if hasPrefix $prefix $key -}}
+      {{- $parts = append $parts (printf "%s=%s" $key (get $credentials $key)) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- with $parts -}}
+checksum/logfire-inline-credentials: {{ join "\x00" . | sha256sum }}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.envValue" -}}
 {{- $value := .value -}}
 {{- $quote := .quote | default false -}}
@@ -634,7 +708,7 @@ Render shared AI provider environment variables for workloads that construct AI 
 {{- $azureOpenAi := get $ai "azureOpenAi" | default dict -}}
 {{- with (get $openAi "apiKey") }}
 - name: OPENAI_API_KEY
-{{ include "logfire.envValue" (dict "value" .) | indent 2 }}
+{{ include "logfire.credentialEnvValue" (dict "ctx" $ "key" "ai.openAi.apiKey" "value" .) | indent 2 }}
 {{- end }}
 {{- with (get $openAi "baseUrl") }}
 - name: OPENAI_BASE_URL
@@ -666,7 +740,7 @@ Render shared AI provider environment variables for workloads that construct AI 
 {{- end }}
 {{- with (get $azureOpenAi "apiKey") }}
 - name: AZURE_OPENAI_API_KEY
-{{ include "logfire.envValue" (dict "value" .) | indent 2 }}
+{{ include "logfire.credentialEnvValue" (dict "ctx" $ "key" "ai.azureOpenAi.apiKey" "value" .) | indent 2 }}
 {{- end }}
 {{- with (get $azureOpenAi "apiVersion") }}
 - name: OPENAI_API_VERSION
@@ -785,7 +859,8 @@ URI its bucket is authoritative, so RustFS creates the bucket the workloads actu
   value: {{ include "logfire.objectStoreUri" . | quote }}
 {{- with .Values.objectStore.sseCKeyB64 }}
 - name: FF_S3_SSE_C_KEY_B64
-{{ include "logfire.envValue" (dict "value" . "quote" true) | indent 2 }}
+{{ include "logfire.credentialEnvValue" (dict "ctx" $ "key" "objectStore.sseCKeyB64" "value" .
+    "quote" true) | indent 2 }}
 {{- end }}
 {{- include "logfire.objectStoreProviderEnv" . }}
 {{- end -}}
@@ -822,8 +897,8 @@ client reads it as the alias of `AWS_ENDPOINT_URL` (see `logfire_services/object
 {{- $value = tpl $value $ }}
 {{- end }}
 - name: {{ $key }}
-{{ include "logfire.envValue" (dict "value" $value "quote" (not (kindIs "map" $value))
-    "allowValueKey" true) | indent 2 }}
+{{ include "logfire.credentialEnvValue" (dict "ctx" $ "key" (printf "objectStore.env.%s" $key)
+    "value" $value "quote" (not (kindIs "map" $value)) "allowValueKey" true) | indent 2 }}
 {{- end }}
 {{- end -}}
 
