@@ -547,6 +547,21 @@ map fails, so a reference never ends up stored as the credential itself. Call wi
 {{- end -}}
 
 {{/*
+Render a templated objectStore.env value with the chart context and one fixed template name, so
+the result is the same in every workload and in the Secret logfire-inline-credentials.
+Call with (dict "ctx" $ "value" $string).
+*/}}
+{{- define "logfire.objectStoreEnvTpl" -}}
+{{- $context := dict -}}
+{{- range $field, $object := .ctx -}}
+  {{- $_ := set $context $field $object -}}
+{{- end -}}
+{{- $_ := set $context "Template" (dict "Name" (printf "%s/secrets.yaml" .ctx.Template.BasePath)
+    "BasePath" .ctx.Template.BasePath) -}}
+{{- tpl .value $context -}}
+{{- end -}}
+
+{{/*
 Credentials given as plain values, which the chart stores in the Secret logfire-inline-credentials
 so that no pod spec holds them, as JSON from Secret key (the value path) to value. Of
 `objectStore.env`, only entries whose name looks like a credential move; endpoints, regions and
@@ -555,8 +570,8 @@ the user's Secret. An empty one stays as it is, and so does one that contains `$
 Kubernetes expands such a reference only in a literal env value. Kubernetes also turns `$$` into
 `$` in a literal value, so the stored value does the same.
 
-Templated `objectStore.env` values render with one fixed template name, so every workload and the
-Secret agree on which keys the Secret holds.
+Templated `objectStore.env` values render through logfire.objectStoreEnvTpl, so every workload
+and the Secret agree on which keys the Secret holds.
 */}}
 {{- define "logfire.inlineCredentials" -}}
 {{- $out := dict -}}
@@ -574,16 +589,10 @@ Secret agree on which keys the Secret holds.
 {{- end -}}
 {{- $env := get $objectStore "env" -}}
 {{- if kindIs "map" $env -}}
-{{- $tplContext := dict -}}
-{{- range $field, $object := $ -}}
-  {{- $_ := set $tplContext $field $object -}}
-{{- end -}}
-{{- $_ := set $tplContext "Template" (dict "Name" (printf "%s/secrets.yaml" .Template.BasePath)
-    "BasePath" .Template.BasePath) -}}
 {{- range $name, $value := $env -}}
   {{- if regexMatch "(?i)(SECRET|PASSWORD|TOKEN|KEY|CREDENTIAL|SAS|CONNECTION)" $name -}}
     {{- if kindIs "string" $value -}}
-      {{- $value = tpl $value $tplContext -}}
+      {{- $value = include "logfire.objectStoreEnvTpl" (dict "ctx" $ "value" $value) -}}
     {{- end -}}
     {{- $_ := set $candidates (printf "objectStore.env.%s" $name) $value -}}
   {{- end -}}
@@ -915,7 +924,7 @@ client reads it as the alias of `AWS_ENDPOINT_URL` (see `logfire_services/object
 {{- end }}
 {{- range $key, $value := $objectStoreEnv }}
 {{- if kindIs "string" $value }}
-{{- $value = tpl $value $ }}
+{{- $value = include "logfire.objectStoreEnvTpl" (dict "ctx" $ "value" $value) }}
 {{- end }}
 - name: {{ $key }}
 {{ include "logfire.credentialEnvValue" (dict "ctx" $ "key" (printf "objectStore.env.%s" $key)
