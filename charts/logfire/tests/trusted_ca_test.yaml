@@ -53,7 +53,7 @@ tests:
       # The system bundle comes first, so public endpoints stay trusted under SSL_CERT_FILE.
       - matchRegex:
           path: spec.template.spec.initContainers[0].command[2]
-          pattern: 'paths = \["/etc/ssl/certs/ca-certificates\.crt", \*sorted\(glob\.glob\("/etc/logfire/trusted-ca-sources/\*\.crt"\)\)\][\s\S]*open\("/etc/logfire/trusted-ca/ca-bundle\.crt", "w"\)'
+          pattern: 'paths = \["/etc/ssl/certs/ca-certificates\.crt", \*sorted\(glob\.glob\("/etc/logfire/trusted-ca-sources/\*\.crt"\)\)\][\s\S]*open\("/etc/logfire/trusted-ca/ca-bundle\.crt", "wb"\)'
       - contains:
           path: spec.template.spec.initContainers[0].volumeMounts
           content:

@@ -1704,10 +1704,10 @@ initContainers:
       - |
         import glob
         paths = [{{ with $baseFile }}{{ . | quote }}, {{ end }}*sorted(glob.glob("/etc/logfire/trusted-ca-sources/*.crt"))]
-        with open("/etc/logfire/trusted-ca/ca-bundle.crt", "w") as bundle:
+        with open("/etc/logfire/trusted-ca/ca-bundle.crt", "wb") as bundle:
             for path in paths:
-                with open(path) as source:
-                    bundle.write(source.read() + "\n")
+                with open(path, "rb") as source:
+                    bundle.write(source.read() + b"\n")
     {{- include "logfire.resources" (dict "Values" $ctx.Values "serviceName" $serviceName)
         | nindent 4 }}
     {{- include "logfire.securityContext" $containerSecurityContext | nindent 4 }}
