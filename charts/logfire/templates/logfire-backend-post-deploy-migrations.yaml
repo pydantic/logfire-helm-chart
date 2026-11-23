@@ -71,12 +71,18 @@ spec:
       template:
         {{- $podTemplate | nindent 8 }}
 {{- end }}
+{{- /*
+Kubernetes 1.26 enables `podFailurePolicy` and the `DisruptionTarget` condition by default. An
+older API server rejects or ignores the field, so the chart leaves it out there.
+*/}}
 {{- define "logfire.backendPostDeployMigrations.podFailurePolicy" -}}
+{{- if semverCompare ">=1.26-0" .Capabilities.KubeVersion.Version -}}
 podFailurePolicy:
   rules:
     - action: Ignore
       onPodConditions:
         - type: DisruptionTarget
+{{- end -}}
 {{- end -}}
 {{- define "logfire.backendPostDeployMigrations.podTemplate" -}}
 {{- $ctx := .ctx -}}

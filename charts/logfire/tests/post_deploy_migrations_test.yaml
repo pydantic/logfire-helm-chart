@@ -87,6 +87,9 @@ tests:
           value: CronJob
 
   - it: replaces an evicted pod without failing the Job, and keeps the autoscaler from evicting it
+    capabilities:
+      majorVersion: 1
+      minorVersion: 26
     asserts:
       - equal:
           path: spec.podFailurePolicy.rules
@@ -115,6 +118,28 @@ tests:
         documentSelector:
           path: kind
           value: CronJob
+
+  - it: leaves out the eviction rule on Kubernetes before 1.26 and keeps the autoscaler annotation
+    capabilities:
+      majorVersion: 1
+      minorVersion: 25
+    asserts:
+      - notExists:
+          path: spec.podFailurePolicy
+        documentSelector:
+          path: kind
+          value: Job
+      - notExists:
+          path: spec.jobTemplate.spec.podFailurePolicy
+        documentSelector:
+          path: kind
+          value: CronJob
+      - equal:
+          path: spec.template.metadata.annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"]
+          value: "false"
+        documentSelector:
+          path: kind
+          value: Job
 
   - it: retries daily, one run at a time
     documentSelector:
