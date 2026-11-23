@@ -1988,6 +1988,10 @@ otel_collector:
     endpoint: http://logfire-ff-ingest:8012
     tls:
       insecure: true
+    # -- Exporter headers. The chart moves plain string values to the Secret
+    # `logfire-otel-collector-exporter-headers`, and the config reads them from environment
+    # variables, so the collector ConfigMap holds no credential. A value that contains `$` stays
+    # in the config, where the collector expands it, as in `${env:MY_TOKEN}`.
     headers: {}
     # -- Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP
     # ingestion, so senders can retry refused data. Queue limits measure serialized bytes.

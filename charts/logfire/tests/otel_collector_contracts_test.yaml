@@ -225,3 +225,58 @@ tests:
           value: Recreate
       - notExists:
           path: spec.strategy.rollingUpdate
+
+  - it: moves plain exporter header values from the config to the headers Secret
+    set:
+      otel_collector.exporter.headers:
+        Authorization: Bearer sentinel-0123456789
+        X-Own: ${env:MY_TOKEN}
+    template: templates/logfire-otel-collector-cfg.yaml
+    asserts:
+      - notMatchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: sentinel
+        documentSelector:
+          path: kind
+          value: ConfigMap
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'Authorization: \$\{env:LOGFIRE_EXPORTER_HEADER_AUTHORIZATION\}'
+        documentSelector:
+          path: kind
+          value: ConfigMap
+      - matchRegex:
+          path: data["otel-collector-config.yaml"]
+          pattern: 'X-Own: \$\{env:MY_TOKEN\}'
+        documentSelector:
+          path: kind
+          value: ConfigMap
+      - equal:
+          path: data.LOGFIRE_EXPORTER_HEADER_AUTHORIZATION
+          value: QmVhcmVyIHNlbnRpbmVsLTAxMjM0NTY3ODk=
+        documentSelector:
+          path: metadata.name
+          value: logfire-otel-collector-exporter-headers
+      - notExists:
+          path: data.LOGFIRE_EXPORTER_HEADER_X_OWN
+        documentSelector:
+          path: metadata.name
+          value: logfire-otel-collector-exporter-headers
+
+  - it: reads each moved header from the Secret key the config names
+    set:
+      otel_collector.exporter.headers:
+        Authorization: Bearer sentinel-0123456789
+    template: templates/logfire-otel-collector.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: LOGFIRE_EXPORTER_HEADER_AUTHORIZATION
+            valueFrom:
+              secretKeyRef:
+                name: logfire-otel-collector-exporter-headers
+                key: LOGFIRE_EXPORTER_HEADER_AUTHORIZATION

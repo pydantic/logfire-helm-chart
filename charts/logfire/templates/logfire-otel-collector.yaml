@@ -216,6 +216,14 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-meta-write-token") }}
                   key: logfire-meta-write-token
+            {{- /* The config file's checksum covers this Secret, so a changed header value rolls the pods. */}}
+            {{- range $env, $_ := (include "logfire.otelCollectorExporterHeaders" . | fromJson).secret }}
+            - name: {{ $env }}
+              valueFrom:
+                secretKeyRef:
+                  name: logfire-otel-collector-exporter-headers
+                  key: {{ $env }}
+            {{- end }}
             {{- if and (not (get $envState "hasOtelResourceAttributes")) $collectorResourceAttributes }}
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: {{ include "logfire.renderOtelResourceAttributes" $collectorResourceAttributes | quote }}

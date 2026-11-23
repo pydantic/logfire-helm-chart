@@ -551,6 +551,25 @@ postgresSecret:
 
 `existingSecret`, `adminSecret`, and `existingGatewaySecret` accept the same `annotations`.
 
+To keep a collector exporter header out of the values, reference an environment variable from your own Secret.
+The chart keeps a value that contains `$` in the collector config, and the collector expands it there:
+
+```yaml
+otel_collector:
+  exporter:
+    headers:
+      Authorization: ${env:EXPORTER_AUTHORIZATION}
+logfire-otel-collector:
+  env:
+    EXPORTER_AUTHORIZATION:
+      valueFrom:
+        secretKeyRef:
+          name: logfire-exporter-headers
+          key: authorization
+  annotations:
+    reloader.stakater.com/auto: "true"
+```
+
 ### Connection poolers
 
 `postgresDsn` and `postgresFFDsn` can point at a connection pooler in transaction mode.

@@ -16,6 +16,15 @@ set:
   dev:
     deployPostgres: true
 tests:
+  - it: rejects exporter headers that map to the same environment variable
+    set:
+      otel_collector.exporter.headers:
+        X-Tenant: a
+        X_Tenant: b
+    asserts:
+      - failedTemplate:
+          errorPattern: 'both map to the environment variable LOGFIRE_EXPORTER_HEADER_X_TENANT'
+
   - it: rejects extra exporters that replace the backend exporter
     set:
       otel_collector.extraExporters:
