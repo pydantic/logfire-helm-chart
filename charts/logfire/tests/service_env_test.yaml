@@ -84,3 +84,50 @@ tests:
           content:
             name: TENANT_REMOVES
           any: true
+
+  # The chart sets the maintenance retry env by default. A service `env` entry with the same
+  # name replaces the default. With two entries of one name, Kubernetes warns and uses the last.
+  - it: lets the list form replace a maintenance retry default without a duplicate
+    template: templates/logfire-ff-maintenance-scheduler.yaml
+    set:
+      logfire-ff-maintenance-scheduler.env:
+        - name: FF_MAINTENANCE_JOB_MAX_ATTEMPTS
+          value: "7"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_MAINTENANCE_JOB_MAX_ATTEMPTS
+            value: "7"
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_MAINTENANCE_JOB_MAX_ATTEMPTS
+            value: "5"
+
+  - it: lets the map form replace a maintenance retry default without a duplicate
+    template: templates/logfire-ff-compaction-worker.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    set:
+      logfire-ff-compaction-worker.env:
+        FF_MAINTENANCE_RESOURCE_LADDER: "false"
+        # A null entry removes the name from `env`, so the default must still apply.
+        FF_MAINTENANCE_JOB_MAX_ATTEMPTS: null
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_MAINTENANCE_RESOURCE_LADDER
+            value: "false"
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_MAINTENANCE_RESOURCE_LADDER
+            value: "true"
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: FF_MAINTENANCE_JOB_MAX_ATTEMPTS
+            value: "5"

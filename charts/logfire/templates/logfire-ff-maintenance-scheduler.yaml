@@ -85,6 +85,9 @@ spec:
               value: "1s"
             - name: FF_MAINTENANCE_SCHEDULING_CONCURRENCY
               value: "1"
+            {{- with include "logfire.ffMaintenanceRetryEnv" (dict "Values" .Values "serviceName" $serviceName "ladder" false) | trim }}
+            {{- . | nindent 12 }}
+            {{- end }}
             - name: FF_DATAFUSION_MEMORY_LIMIT
               value: {{ (get $effectiveServiceValues "datafusionMemory" | default "auto" | quote) }}
             {{- include "logfire.ffTmpSpillEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
