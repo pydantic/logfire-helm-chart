@@ -163,6 +163,9 @@ spec:
         {{- with (include "logfire.rustfsChecksumAnnotation" . | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- with (include "logfire.inlineCredentialsChecksumAnnotation" (dict "ctx" . "prefixes" (list "ai." "objectStore.")) | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- if or (not .Values.adminSecret.enabled) (empty .Values.adminSecret.annotations) }}
         {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "external" .Values.adminSecret "secrets" (list "logfire-admin-password" "logfire-admin-totp-secret" "logfire-admin-totp-recovery-codes")) | nindent 8 }}
         {{- end }}
@@ -181,11 +184,7 @@ spec:
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command: ["python", "-m", "logfire_backend"]
           lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "5"
+            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 5) | nindent 12 }}
           ports:
             - containerPort: 8000
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}

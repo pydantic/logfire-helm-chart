@@ -38,6 +38,9 @@ spec:
         {{- with (include "logfire.rustfsChecksumAnnotation" . | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- with (include "logfire.inlineCredentialsChecksumAnnotation" (dict "ctx" . "prefixes" (list "objectStore.")) | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
@@ -49,7 +52,7 @@ spec:
           {{- include "logfire.securityContext" $containerSecurityContext | nindent 10 }}
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command:
-            {{- include "logfire.ffCommandWithTempDirCleanup" . | nindent 12 }}
+            - fusionfire
           args:
             - query-worker
             - --host=0.0.0.0

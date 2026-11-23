@@ -29,6 +29,9 @@ spec:
         {{- with (include "logfire.rustfsChecksumAnnotation" . | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- with (include "logfire.inlineCredentialsChecksumAnnotation" (dict "ctx" . "prefixes" (list "smtp." "ai." "objectStore.")) | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
         {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-encryption-key" "logfire-unsubscribe-secret" "logfire-jwt-secret")) | nindent 8 }}
         {{- with (include "logfire.slackAppChecksumAnnotation" . | trim) }}
@@ -152,7 +155,7 @@ spec:
             - name: SMTP_USERNAME
 {{ include "logfire.envValue" (dict "value" .Values.smtp.username) | indent 14 }}
             - name: SMTP_PASSWORD
-{{ include "logfire.envValue" (dict "value" .Values.smtp.password) | indent 14 }}
+{{ include "logfire.credentialEnvValue" (dict "ctx" . "key" "smtp.password" "value" .Values.smtp.password) | indent 14 }}
             - name: SMTP_USE_TLS
               value: {{ .Values.smtp.use_tls | quote }}
             {{ end }}
