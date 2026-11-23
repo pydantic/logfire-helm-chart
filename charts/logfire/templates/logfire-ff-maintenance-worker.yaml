@@ -33,6 +33,9 @@ spec:
         {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- with (include "logfire.rustfsChecksumAnnotation" . | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- include "logfire.inClusterTls.server.checksumAnnotation" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:

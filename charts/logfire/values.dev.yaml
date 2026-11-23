@@ -16,15 +16,10 @@ ingress:
   ingressClassName: ""
   annotations: {}
 
+# With dev.deployRustfs the chart points the workloads at RustFS and reads its credentials from
+# the logfire-rustfs Secret.
 objectStore:
   uri: s3://logfire
-  env:
-    # Defaults we configure for RustFS
-    # Do NOT use this in production!
-    AWS_ACCESS_KEY_ID: logfire-rustfs
-    AWS_SECRET_ACCESS_KEY: logfire-rustfs
-    AWS_ENDPOINT: http://logfire-rustfs:9000
-    AWS_ALLOW_HTTP: "true"
 
 dev:
   deployPostgres: true

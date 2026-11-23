@@ -26,6 +26,9 @@ spec:
         {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- with (include "logfire.rustfsChecksumAnnotation" . | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- if or (not .Values.existingSecret.enabled) (empty .Values.existingSecret.annotations) }}
         {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-encryption-key" "logfire-unsubscribe-secret" "logfire-jwt-secret")) | nindent 8 }}
         {{- with (include "logfire.slackAppChecksumAnnotation" . | trim) }}

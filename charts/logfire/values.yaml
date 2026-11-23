@@ -411,9 +411,11 @@ webPush:
   subject: ""
   # -- VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as
   # `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one
-  # and keep it across upgrades. Replacing it unregisters every device that had push on, which
-  # each browser recovers from by subscribing again on its next visit.
-  privateKey: ""
+  # and keep it across upgrades. Can also be a map with valueFrom (e.g., secretKeyRef) that reads
+  # your own Secret. Replacing it unregisters every device that had push on, which each browser
+  # recovers from by subscribing again on its next visit.
+  # @default -- `nil`
+  privateKey:
 
 
 # ==============================================================================
@@ -424,12 +426,16 @@ integrations:
   slack:
     # -- Client ID of your own Slack App. Setting it turns on Slack App channels.
     clientId: ""
-    # -- Client secret of your Slack App. With `existingSecret`, put it in that Secret under the
-    # `logfire-slack-client-secret` key instead.
-    clientSecret: ""
-    # -- Signing secret of your Slack App. With `existingSecret`, put it in that Secret under the
-    # `logfire-slack-signing-secret` key instead.
-    signingSecret: ""
+    # -- Client secret of your Slack App. Can be a plain string or a map with valueFrom (e.g.,
+    # secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the
+    # `logfire-slack-client-secret` key.
+    # @default -- `nil`
+    clientSecret:
+    # -- Signing secret of your Slack App. Can be a plain string or a map with valueFrom (e.g.,
+    # secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the
+    # `logfire-slack-signing-secret` key.
+    # @default -- `nil`
+    signingSecret:
   pagerduty:
     # -- ID of a PagerDuty App with Events Integration enabled. Sets
     # `INTEGRATION_PAGERDUTY_APP_ID` on `logfire-backend`.
@@ -1949,7 +1955,10 @@ otel_collector:
   serviceAccount:
     # -- Annotations for the collector's ServiceAccount, for example a Workload Identity binding.
     annotations: {}
-  # -- Additional collector exporters. Chart-owned component names are reserved.
+  # -- Additional collector exporters. Chart-owned component names are reserved. The chart writes
+  # them into the collector ConfigMap as given, so reference credentials as `${env:VAR}` and set
+  # `VAR` in `logfire-otel-collector.env` with a `valueFrom`. See "External secrets and automatic
+  # reloads" in the README.
   extraExporters: {}
   # -- Additional collector processors. These only run in pipelines that reference them.
   extraProcessors: {}
@@ -2063,7 +2072,10 @@ otel_collector:
 #  - logfire-jwt-secret
 #  - logfire-unsubscribe-secret
 #  - logfire-mcp-oauth-client-secret
-#  - logfire-web-push-vapid-key (only when webPush.enabled is true)
+#  - logfire-web-push-vapid-key (only when webPush.enabled is true and webPush.privateKey does
+#    not set valueFrom)
+#  - logfire-slack-client-secret and logfire-slack-signing-secret (only when
+#    integrations.slack.clientId is set, for each one that does not set valueFrom)
 existingSecret:
   # -- Use an existing Secret (recommended for Argo CD users).
   enabled: false
@@ -2202,7 +2214,7 @@ rustfs:
     tag: "1.0.0"
     # -- RustFS image pull policy. Defaults to `image.pullPolicy` when unset.
     pullPolicy: ""
-  # -- Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values.
+  # -- Root credentials. The chart stores them in the Secret `logfire-rustfs`, and the workloads read them from there unless `objectStore.env` sets `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY`.
   auth:
     accessKey: logfire-rustfs
     secretKey: logfire-rustfs

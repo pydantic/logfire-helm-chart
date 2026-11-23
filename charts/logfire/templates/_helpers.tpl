@@ -524,6 +524,28 @@ fall back to default.
 {{- end }}
 {{- end -}}
 
+{{/*
+The valueFrom of a credential set as {valueFrom: ...}, as JSON, or "" for a plain value. Any other
+map fails, so a reference never ends up stored as the credential itself. Call with
+(dict "value" $value "path" "integrations.slack.clientSecret").
+*/}}
+{{- define "logfire.credentialValueFrom" -}}
+{{- $value := .value -}}
+{{- if kindIs "map" $value -}}
+  {{- if or (ne (len $value) 1) (not (kindIs "map" $value.valueFrom))
+      (ne (len ($value.valueFrom | default dict)) 1) -}}
+    {{- fail (printf "%s: set a string, or only valueFrom with exactly one source such as secretKeyRef."
+        .path) -}}
+  {{- end -}}
+  {{- $source := $value.valueFrom.secretKeyRef | default $value.valueFrom.configMapKeyRef -}}
+  {{- if not (and (kindIs "map" $source) $source.name $source.key) -}}
+    {{- fail (printf "%s: valueFrom must be a secretKeyRef or configMapKeyRef with a name and a key."
+        .path) -}}
+  {{- end -}}
+  {{- $value.valueFrom | toJson -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "logfire.envValue" -}}
 {{- $value := .value -}}
 {{- $quote := .quote | default false -}}
@@ -777,15 +799,21 @@ client reads it as the alias of `AWS_ENDPOINT_URL` (see `logfire_services/object
 {{- define "logfire.objectStoreProviderEnv" -}}
 {{- $objectStoreEnv := .Values.objectStore.env | default dict -}}
 {{- if .Values.dev.deployRustfs }}
-{{- $auth := .Values.rustfs.auth }}
 {{- range list
     (dict "name" "AWS_ENDPOINT" "value" "http://logfire-rustfs:9000")
-    (dict "name" "AWS_ACCESS_KEY_ID" "value" $auth.accessKey)
-    (dict "name" "AWS_SECRET_ACCESS_KEY" "value" $auth.secretKey)
+    (dict "name" "AWS_ACCESS_KEY_ID" "key" "accessKey")
+    (dict "name" "AWS_SECRET_ACCESS_KEY" "key" "secretKey")
     (dict "name" "AWS_ALLOW_HTTP" "value" "true") }}
 {{- if not (hasKey $objectStoreEnv .name) }}
 - name: {{ .name }}
+{{- if .key }}
+  valueFrom:
+    secretKeyRef:
+      name: logfire-rustfs
+      key: {{ .key }}
+{{- else }}
   value: {{ .value | quote }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -797,6 +825,20 @@ client reads it as the alias of `AWS_ENDPOINT_URL` (see `logfire_services/object
 {{ include "logfire.envValue" (dict "value" $value "quote" (not (kindIs "map" $value))
     "allowValueKey" true) | indent 2 }}
 {{- end }}
+{{- end -}}
+
+{{/*
+Rolls a workload that reads the RustFS root credentials from the logfire-rustfs Secret when they
+change, together with RustFS itself. Emits nothing when `objectStore.env` sets both credentials,
+because the workloads then do not read the Secret.
+*/}}
+{{- define "logfire.rustfsChecksumAnnotation" -}}
+{{- $env := .Values.objectStore.env | default dict -}}
+{{- if and .Values.dev.deployRustfs (not (and (hasKey $env "AWS_ACCESS_KEY_ID")
+    (hasKey $env "AWS_SECRET_ACCESS_KEY"))) -}}
+checksum/rustfs-credentials: {{ printf "%s:%s" .Values.rustfs.auth.accessKey
+    .Values.rustfs.auth.secretKey | sha256sum }}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -1335,11 +1377,17 @@ where the backend reports push unavailable and the settings panel says so.
 - name: WEB_PUSH_VAPID_SUBJECT
   value: {{ .Values.webPush.subject | default (printf "mailto:%s" .Values.adminEmail) | quote }}
 - name: WEB_PUSH_VAPID_PRIVATE_KEY
+{{- with include "logfire.credentialValueFrom" (dict "value" .Values.webPush.privateKey
+    "path" "webPush.privateKey") }}
+  valueFrom:
+    {{- fromJson . | toYaml | nindent 4 }}
+{{- else }}
   valueFrom:
     secretKeyRef:
       name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret
           "secretName" "logfire-web-push-vapid-key") }}
       key: logfire-web-push-vapid-key
+{{- end }}
 {{- end -}}
 {{- end -}}
 
@@ -1354,11 +1402,14 @@ unchanged on the very upgrade that rotates the key, so a pod would pick the new 
 some later unrelated restart. The hash is taken over the base64 value the Secret stores, which is
 what the lookup path hashes once the new key is applied, so a subsequent no-op upgrade does not
 roll the workloads a second time. The generated and existingSecret cases keep reading the
-cluster, since that is where their key lives.
+cluster, since that is where their key lives. A key read through `valueFrom` lives in a Secret the
+chart does not manage, so a reload controller restarts the workloads, as for `existingSecret`.
 */}}
 {{- define "logfire.webPushChecksumAnnotation" -}}
 {{- if .Values.webPush.enabled -}}
-{{- if and .Values.webPush.privateKey (not .Values.existingSecret.enabled) -}}
+{{- if include "logfire.credentialValueFrom" (dict "value" .Values.webPush.privateKey
+    "path" "webPush.privateKey") -}}
+{{- else if and .Values.webPush.privateKey (not .Values.existingSecret.enabled) -}}
 {{- printf "checksum/logfire-web-push-vapid-key: %s" (.Values.webPush.privateKey | b64enc
     | sha256sum) -}}
 {{- else -}}
