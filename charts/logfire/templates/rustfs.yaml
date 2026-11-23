@@ -79,7 +79,7 @@ spec:
         {{- include "logfire.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: {{ $serviceName }}
       annotations:
-        {{- include "logfire.rustfsChecksumAnnotation" . | nindent 8 }}
+        checksum/rustfs-credentials: {{ printf "%s:%s" $accessKey $secretKey | sha256sum }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:

@@ -104,8 +104,17 @@ Rolls the workloads that hold the Slack App credentials when they change.
 {{- define "logfire.slackAppChecksumAnnotation" -}}
 {{- if include "logfire.slackApp.enabled" . -}}
 {{- if .Values.existingSecret.enabled -}}
-{{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets"
-    (list "logfire-slack-client-secret" "logfire-slack-signing-secret")) -}}
+{{- $slack := .Values.integrations.slack -}}
+{{- $keys := list -}}
+{{- range $field, $key := dict "clientSecret" "logfire-slack-client-secret" "signingSecret"
+    "logfire-slack-signing-secret" -}}
+  {{- if not (kindIs "map" (get $slack $field)) -}}
+    {{- $keys = append $keys $key -}}
+  {{- end -}}
+{{- end -}}
+{{- with $keys -}}
+{{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" $ "secrets" .) -}}
+{{- end -}}
 {{- else -}}
 {{- $slack := .Values.integrations.slack -}}
 {{- $parts := list (printf "%s" $slack.clientId) -}}

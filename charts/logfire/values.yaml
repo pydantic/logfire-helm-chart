@@ -2057,7 +2057,10 @@ otel_collector:
 #  - logfire-jwt-secret
 #  - logfire-unsubscribe-secret
 #  - logfire-mcp-oauth-client-secret
-#  - logfire-web-push-vapid-key (only when webPush.enabled is true)
+#  - logfire-web-push-vapid-key (only when webPush.enabled is true and webPush.privateKey does
+#    not set valueFrom)
+#  - logfire-slack-client-secret and logfire-slack-signing-secret (only when
+#    integrations.slack.clientId is set, for each one that does not set valueFrom)
 existingSecret:
   # -- Use an existing Secret (recommended for Argo CD users).
   enabled: false

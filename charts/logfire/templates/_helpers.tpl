@@ -486,6 +486,11 @@ map fails, so a reference never ends up stored as the credential itself. Call wi
     {{- fail (printf "%s: set a string, or only valueFrom with exactly one source such as secretKeyRef."
         .path) -}}
   {{- end -}}
+  {{- $source := $value.valueFrom.secretKeyRef | default $value.valueFrom.configMapKeyRef -}}
+  {{- if not (and (kindIs "map" $source) $source.name $source.key) -}}
+    {{- fail (printf "%s: valueFrom must be a secretKeyRef or configMapKeyRef with a name and a key."
+        .path) -}}
+  {{- end -}}
   {{- $value.valueFrom | toJson -}}
 {{- end -}}
 {{- end -}}
@@ -773,10 +778,13 @@ client reads it as the alias of `AWS_ENDPOINT_URL` (see `logfire_services/object
 
 {{/*
 Rolls a workload that reads the RustFS root credentials from the logfire-rustfs Secret when they
-change, together with RustFS itself.
+change, together with RustFS itself. Emits nothing when `objectStore.env` sets both credentials,
+because the workloads then do not read the Secret.
 */}}
 {{- define "logfire.rustfsChecksumAnnotation" -}}
-{{- if .Values.dev.deployRustfs -}}
+{{- $env := .Values.objectStore.env | default dict -}}
+{{- if and .Values.dev.deployRustfs (not (and (hasKey $env "AWS_ACCESS_KEY_ID")
+    (hasKey $env "AWS_SECRET_ACCESS_KEY"))) -}}
 checksum/rustfs-credentials: {{ printf "%s:%s" .Values.rustfs.auth.accessKey
     .Values.rustfs.auth.secretKey | sha256sum }}
 {{- end -}}

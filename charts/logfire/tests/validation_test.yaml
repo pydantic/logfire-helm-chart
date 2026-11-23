@@ -1190,6 +1190,30 @@ tests:
       - failedTemplate:
           errorPattern: 'webPush.privateKey: set a string, or only valueFrom'
 
+  - it: rejects a web push key valueFrom with an incomplete secretKeyRef
+    set:
+      webPush:
+        enabled: true
+        privateKey:
+          valueFrom:
+            secretKeyRef: {}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'webPush.privateKey: valueFrom must be a secretKeyRef or configMapKeyRef with a name and a key'
+
+  - it: rejects a Slack App credential valueFrom with an unknown source
+    set:
+      integrations:
+        slack:
+          clientId: client-id
+          clientSecret:
+            valueFrom:
+              secretKeyReff: {name: slack-app, key: client-secret}
+          signingSecret: signing-secret
+    asserts:
+      - failedTemplate:
+          errorPattern: 'integrations.slack.clientSecret: valueFrom must be a secretKeyRef or configMapKeyRef'
+
   - it: fails when the Slack App has no client secret
     set:
       integrations:

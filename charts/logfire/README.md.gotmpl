@@ -571,6 +571,10 @@ otel_collector:
       endpoint: https://otlp.example.com
       headers:
         api-key: ${env:VENDOR_API_KEY}
+  extraPipelines:
+    traces/vendor:
+      receivers: [otlp]
+      exporters: [otlp_http/vendor]
 logfire-otel-collector:
   env:
     VENDOR_API_KEY:

@@ -570,6 +570,10 @@ otel_collector:
       endpoint: https://otlp.example.com
       headers:
         api-key: ${env:VENDOR_API_KEY}
+  extraPipelines:
+    traces/vendor:
+      receivers: [otlp]
+      exporters: [otlp_http/vendor]
 logfire-otel-collector:
   env:
     VENDOR_API_KEY:
@@ -855,7 +859,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | existingGatewaySecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingGatewaySecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret  - logfire-mcp-oauth-client-secret  - logfire-web-push-vapid-key (only when webPush.enabled is true) |
+| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret  - logfire-mcp-oauth-client-secret  - logfire-web-push-vapid-key (only when webPush.enabled is true and webPush.privateKey does    not set valueFrom)  - logfire-slack-client-secret and logfire-slack-signing-secret (only when    integrations.slack.clientId is set, for each one that does not set valueFrom) |
 | existingSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
