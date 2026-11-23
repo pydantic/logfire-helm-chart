@@ -77,11 +77,7 @@ spec:
           startupProbe:
             {{- include "logfire.ffStartupProbe" (dict "port" 8011) | nindent 12 }}
           lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "5"
+            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 5) | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: logfire-ff-base-config
