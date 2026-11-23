@@ -13,6 +13,11 @@ records each result in `migrations.post_deploy_runs`.
 Neither Job retries a failed pod at once (`backoffLimit: 0`), because a crash would repeat an
 expensive scan. The deadline is on the Job, so a replacement pod gets no new budget.
 
+An eviction is not a crash. The pod asks the cluster autoscaler not to remove its node while it
+runs, because an interrupted index build starts again from the beginning. A drain, a preemption or
+another autoscaler can still evict the pod. The `DisruptionTarget` rule then replaces the pod
+without a failure. The platform marks the interrupted run as failed and runs the migration again.
+
 The image is the image of `logfire-backend-migrations`, so both jobs apply the same migration list.
 */}}
 {{- $serviceName := "logfire-backend-post-deploy-migrations" }}
@@ -32,6 +37,7 @@ metadata:
     "argocd.argoproj.io/sync-options": Prune=false
 spec:
   backoffLimit: 0
+  {{- include "logfire.backendPostDeployMigrations.podFailurePolicy" . | nindent 2 }}
   activeDeadlineSeconds: {{ dig "activeDeadlineSeconds" 21600 $settings }}
   {{- with (dig "ttlSecondsAfterFinished" 604800 $settings) }}
   ttlSecondsAfterFinished: {{ . }}
@@ -60,10 +66,18 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
+      {{- include "logfire.backendPostDeployMigrations.podFailurePolicy" $ | nindent 6 }}
       activeDeadlineSeconds: {{ dig "activeDeadlineSeconds" 21600 $settings }}
       template:
         {{- $podTemplate | nindent 8 }}
 {{- end }}
+{{- define "logfire.backendPostDeployMigrations.podFailurePolicy" -}}
+podFailurePolicy:
+  rules:
+    - action: Ignore
+      onPodConditions:
+        - type: DisruptionTarget
+{{- end -}}
 {{- define "logfire.backendPostDeployMigrations.podTemplate" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := .serviceName -}}
@@ -72,6 +86,8 @@ metadata:
     {{- include "logfire.selectorLabels" $ctx | nindent 4 }}
     {{- include "logfire.podLabels" (dict "Values" $ctx.Values "serviceName" $serviceName) | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
+  annotations:
+    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
 spec:
   serviceAccountName: {{ include "logfire.serviceAccountName" $ctx }}
   {{- with $ctx.Values.imagePullSecrets }}

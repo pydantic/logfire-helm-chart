@@ -86,6 +86,36 @@ tests:
           path: kind
           value: CronJob
 
+  - it: replaces an evicted pod without failing the Job, and keeps the autoscaler from evicting it
+    asserts:
+      - equal:
+          path: spec.podFailurePolicy.rules
+          value: &ignoreDisruption
+            - action: Ignore
+              onPodConditions:
+                - type: DisruptionTarget
+        documentSelector:
+          path: kind
+          value: Job
+      - equal:
+          path: spec.template.metadata.annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"]
+          value: "false"
+        documentSelector:
+          path: kind
+          value: Job
+      - equal:
+          path: spec.jobTemplate.spec.podFailurePolicy.rules
+          value: *ignoreDisruption
+        documentSelector:
+          path: kind
+          value: CronJob
+      - equal:
+          path: spec.jobTemplate.spec.template.metadata.annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"]
+          value: "false"
+        documentSelector:
+          path: kind
+          value: CronJob
+
   - it: retries daily, one run at a time
     documentSelector:
       path: kind
