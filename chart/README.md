@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.3](https://img.shields.io/badge/Version-0.15.3-informational?style=flat-square) ![AppVersion: 6dc21200](https://img.shields.io/badge/AppVersion-6dc21200-informational?style=flat-square)
+![Version: 0.15.4](https://img.shields.io/badge/Version-0.15.4-informational?style=flat-square) ![AppVersion: 9f15587a](https://img.shields.io/badge/AppVersion-9f15587a-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -214,6 +214,33 @@ Connect each DSN directly to PostgreSQL, or through a connection pooler in trans
 The migration jobs, `logfire-ff-maintenance-scheduler`, and Dex then need a session-mode pool or a direct connection.
 [Connection counts](#connection-counts) lists the default pool size and the variable for each workload.
 
+#### Post-deploy migrations
+
+The `logfire-backend-migrations` hook applies the schema changes of a release, and the upgrade waits for it.
+A release can mark a slow migration `post_deploy`, such as a concurrent index on a large table.
+The hook skips it, and the `logfire-backend-post-deploy-migrations` Job runs it with the new version.
+The upgrade, including `helm upgrade --wait`, does not wait for that Job.
+`helm upgrade --wait-for-jobs` waits for it, up to `migrations.postDeploy.activeDeadlineSeconds`.
+The application works without a `post_deploy` migration, so the upgrade is complete before the Job finishes.
+
+The Job exits with success when a migration fails, so that a failure does not fail the upgrade.
+The `logfire-backend-post-deploy-migrations-retry` CronJob runs the same Job every day at 03:17, in the time zone of the Kubernetes controller manager, which is usually UTC.
+It retries a failed migration without an upgrade. The next upgrade also runs it again.
+Each run connects to the `crud` database even when nothing is pending, so a connection problem shows in the Job logs before a migration needs it.
+
+To see each result, query the `crud` database:
+
+```sql
+SELECT name, status, started_at, finished_at, error
+FROM migrations.post_deploy_runs
+ORDER BY started_at DESC;
+```
+
+The Job logs `Post-deploy migration <name> failed` when a migration fails.
+An upgrade that changes the image creates a new Job.
+The Job of the previous upgrade keeps its build running. The new Job then exits, and the next daily retry runs what is left.
+`migrations.postDeploy` sets the deadline, how long Kubernetes keeps a finished Job, and the retry schedule.
+
 ### Object storage
 
 Logfire stores telemetry data in object storage. Supported URI schemes are `s3://`, `gs://`, and `az://`.
@@ -367,8 +394,8 @@ Each preset gives the query API these resources:
 
 | Preset | CPU request | Memory request | Scratch | Replicas |
 | --- | ---: | ---: | ---: | ---: |
-| `tiny` | 1 | 2 GiB | 1 GiB | 1–6 |
-| `small` | 2 | 4 GiB | 2 GiB | 1–8 |
+| `tiny` | 1 | 4 GiB | 1 GiB | 1–6 |
+| `small` | 2 | 8 GiB | 2 GiB | 1–8 |
 | `standard` | 4 | 8 GiB | 6 GiB | 3–8 |
 | `large` | 4 | 8 GiB | 6 GiB | 3–16 |
 
@@ -394,8 +421,22 @@ The flat resource shorthand sets both requests and limits.
 #### Resize bcache storage
 
 bcache uses one PersistentVolumeClaim per pod.
-StatefulSet volume claim templates are immutable, so changing `logfire-ff-bcache.disk.storage` after installation fails `helm upgrade`.
-Expand the existing `bcache-data-*` PVCs if the storage class allows it, or run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade.
+A StatefulSet cannot change its volume claim templates.
+So when `sizingPreset` changes, an installed bcache keeps its claim size, and bcache uses 80% of that size.
+
+To grow the disk, follow the procedure that Kubernetes providers document for StatefulSet volumes, such as [GKE volume expansion](https://cloud.google.com/kubernetes-engine/docs/how-to/volume-expansion).
+The bcache pods keep running and keep their cached data.
+
+1. Check that the storage class of the `bcache-data-*` claims sets `allowVolumeExpansion: true`.
+1. Grow each existing claim, for example `kubectl patch pvc bcache-data-logfire-ff-bcache-0 -p '{"spec":{"resources":{"requests":{"storage":"64Gi"}}}}'`.
+1. Run `kubectl delete statefulset logfire-ff-bcache --cascade=orphan`. This removes only the StatefulSet object. The pods and their claims keep running.
+1. Set `logfire-ff-bcache.disk.storage` to the new size and upgrade. The new StatefulSet adopts the running pods. It then rolls them, so that bcache uses the larger disk.
+
+A claim cannot shrink, so keep the installed size rather than move to a smaller disk.
+An upgrade that sets a size different from the installed claims fails and points to these steps.
+
+The chart reads the installed StatefulSet with `lookup`.
+`helm template` and other renders without cluster access cannot read it, so they render the preset size.
 
 ## Advanced configuration
 
@@ -522,7 +563,7 @@ postgresSessionDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/crud
 postgresFFSessionDsn: postgresql://USER:PASSWORD@postgres.example.com:5432/ff
 ```
 
-`logfire-backend-migrations` uses `postgresSessionDsn`.
+`logfire-backend-migrations` and `logfire-backend-post-deploy-migrations` use `postgresSessionDsn`.
 `logfire-ff-migrations` and the maintenance scheduler use `postgresFFSessionDsn`.
 Each one is optional and applies only to its own database.
 With `postgresSecret`, add the same keys to the Secret, and set `postgresSecret.sessionDsn: true` and `postgresSecret.ffSessionDsn: true` for the keys that it has.
@@ -845,7 +886,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | logfire-dex.podLabels | object | `{}` | Pod labels |
 | logfire-dex.service.annotations | object | `{}` | Service annotations |
 | logfire-ff-bcache | object | `{"disk":{},"pdb":{},"replicas":3,"topology":{"zone":"","zoneAware":false},"updateStrategy":{}}` | Replicas, resources and disk for bcache, the shared read cache that Fusionfire readers use |
-| logfire-ff-bcache.disk | object | `{}` | Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it. A StatefulSet cannot change its volumeClaimTemplates, so a later change to storage fails `helm upgrade`. To resize, expand the existing `bcache-data-*` PVCs if the storage class allows it, or delete the StatefulSet with `kubectl delete statefulset logfire-ff-bcache --cascade=orphan` and upgrade. Unset `disk.storage` takes the sizing preset's size, or 32Gi without a preset. |
+| logfire-ff-bcache.disk | object | `{}` | Persistent disk tier of each bcache pod. storage accepts Kubernetes quantities (e.g. 32Gi, 10G) of at least 1Mi. bcache uses 80% of it. Unset `disk.storage` takes the sizing preset's size, or 32Gi without a preset. An installed bcache keeps its claim size when `sizingPreset` changes, because a StatefulSet cannot change its volumeClaimTemplates. To grow the disk, follow "Resize bcache storage" in the README. It keeps the pods and the cached data. |
 | logfire-ff-bcache.replicas | int | `3` | Number of bcache replicas when autoscaling is not configured. |
 | logfire-ff-bcache.topology | object | `{"zone":"","zoneAware":false}` | Topology routing for the readers that use this cache. Zone routing is off by default. |
 | logfire-ff-bcache.topology.zone | string | `""` | Static topology zone, for tests and for single-zone clusters whose nodes carry no zone label. Every pod gets this zone, so it must match the zone the pods run in. It does not serve a multi-zone cluster that refuses node-read RBAC: leave `zoneAware` off there and take global routing instead. Takes precedence over `zoneAware`, and then no cluster role is created. |
@@ -893,8 +934,12 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | maildev | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"maildev/maildev","tag":"3.0.0"},"podSecurityContext":{},"securityContext":{}}` | MailDev configuration (only used when `dev.deployMaildev` is true) |
 | maildev.podSecurityContext | object | `{}` | Pod SecurityContext for the MailDev pod. Defaults to the chart-wide `podSecurityContext` when unset. |
 | maildev.securityContext | object | `{}` | Container SecurityContext for the MailDev container. Merged over the chart-wide `securityContext` and the image defaults: uid and gid 1000, all capabilities dropped, no privilege escalation, the `RuntimeDefault` seccomp profile, and a read-only image root with a writable `/tmp` emptyDir. Set a field here to override a default. |
-| migrations | object | `{"activeDeadlineSeconds":3600}` | CRUD database migration Job settings. |
+| migrations | object | `{"activeDeadlineSeconds":3600,"postDeploy":{"activeDeadlineSeconds":21600,"retrySchedule":"17 3 * * *","ttlSecondsAfterFinished":604800}}` | CRUD database migration Job settings. |
 | migrations.activeDeadlineSeconds | int | `3600` | Maximum time the backend migration Job may run, in seconds. The deadline covers all retries. Raise it for large databases where a concurrent index build takes several minutes. |
+| migrations.postDeploy | object | `{"activeDeadlineSeconds":21600,"retrySchedule":"17 3 * * *","ttlSecondsAfterFinished":604800}` | Settings of the `logfire-backend-post-deploy-migrations` Job. It runs the slow migrations that a release marks `post_deploy`, such as a concurrent index on a large table, with the new version. An upgrade does not wait for it. A failed migration runs again on the next upgrade or the daily retry. The `migrations.post_deploy_runs` table records each result. |
+| migrations.postDeploy.activeDeadlineSeconds | int | `21600` | Maximum time the post-deploy migration Job may run, in seconds. |
+| migrations.postDeploy.retrySchedule | string | `"17 3 * * *"` | Cron schedule of the `logfire-backend-post-deploy-migrations-retry` CronJob, which retries pending `post_deploy` migrations without an upgrade. Set it to `""` to not create the CronJob. A failed migration then runs again only on the next upgrade. |
+| migrations.postDeploy.ttlSecondsAfterFinished | int | `604800` | Seconds that Kubernetes keeps a finished post-deploy migration Job. Set it to `null` to keep finished Jobs. With Argo CD self-heal, Argo CD creates the Job again after Kubernetes deletes it. The new Job finds nothing to apply and exits. |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
 | objectStore | object | `{"env":{},"sessionReplayUri":null,"sseCKeyB64":null,"uri":null,"visualTestsUri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
 | objectStore.env | object | `{}` | Additional environment variables for the object store connection. String values support Helm templating. When the in-cluster RustFS store is enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. The backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint alias the Python S3 client accepts, and Azure clients read `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or `AZURE_STORAGE_CONNECTION_STRING`. |
@@ -944,7 +989,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | redisSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | redisSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
 | redisSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| releaseVersion | string | `"v2026-11-11.03"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
+| releaseVersion | string | `"v2026-11-20.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
 | rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
