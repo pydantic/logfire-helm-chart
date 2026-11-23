@@ -614,17 +614,6 @@ Create dex config secret name
 {{- end }}
 {{- end -}}
 
-{{/*
-Pod annotations of the pre-upgrade migration hooks. The cluster autoscaler does not remove the
-node of a running migration, so a scale-down does not cost the upgrade a retry. A key in
-`hooksAnnotations` overrides the default.
-*/}}
-{{- define "logfire.migrationHookPodAnnotations" -}}
-{{- range $key, $value := merge (dict) (.Values.hooksAnnotations | default dict) (dict "cluster-autoscaler.kubernetes.io/safe-to-evict" "false") }}
-{{ $key }}: {{ $value | quote }}
-{{- end }}
-{{- end -}}
-
 {{- define "logfire.postgresSecretName" -}}
 {{- if .Values.postgresSecret.enabled }}
 {{- .Values.postgresSecret.name }}

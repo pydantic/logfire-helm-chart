@@ -10,13 +10,9 @@ renders it. If that Job still holds the post-deploy lock, the new Job exits, and
 CronJob below runs what is left. `ttlSecondsAfterFinished` removes finished Jobs. The platform
 records each result in `migrations.post_deploy_runs`.
 
-Neither Job retries a failed pod at once (`backoffLimit: 0`), because a crash would repeat an
-expensive scan. The deadline is on the Job, so a replacement pod gets no new budget.
-
-An eviction is not a crash. The pod asks the cluster autoscaler not to remove its node while it
-runs, because an interrupted index build starts again from the beginning. A drain, a preemption or
-another autoscaler can still evict the pod. The `DisruptionTarget` rule then replaces the pod
-without a failure. The platform marks the interrupted run as failed and runs the migration again.
+Each Job replaces a failed pod at most twice (`backoffLimit: 2`). So a node scale-down or another
+eviction does not fail the Job. A crash repeats at most twice. The deadline is on the Job, so a
+replacement pod gets no new budget.
 
 The image is the image of `logfire-backend-migrations`, so both jobs apply the same migration list.
 */}}
@@ -36,8 +32,7 @@ metadata:
     "helm.sh/resource-policy": keep
     "argocd.argoproj.io/sync-options": Prune=false
 spec:
-  backoffLimit: 0
-  {{- include "logfire.backendPostDeployMigrations.podFailurePolicy" . | nindent 2 }}
+  backoffLimit: 2
   activeDeadlineSeconds: {{ dig "activeDeadlineSeconds" 21600 $settings }}
   {{- with (dig "ttlSecondsAfterFinished" 604800 $settings) }}
   ttlSecondsAfterFinished: {{ . }}
@@ -65,25 +60,11 @@ spec:
   failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
-      backoffLimit: 0
-      {{- include "logfire.backendPostDeployMigrations.podFailurePolicy" $ | nindent 6 }}
+      backoffLimit: 2
       activeDeadlineSeconds: {{ dig "activeDeadlineSeconds" 21600 $settings }}
       template:
         {{- $podTemplate | nindent 8 }}
 {{- end }}
-{{- /*
-Kubernetes 1.26 enables `podFailurePolicy` and the `DisruptionTarget` condition by default. An
-older API server rejects or ignores the field, so the chart leaves it out there.
-*/}}
-{{- define "logfire.backendPostDeployMigrations.podFailurePolicy" -}}
-{{- if semverCompare ">=1.26-0" .Capabilities.KubeVersion.Version -}}
-podFailurePolicy:
-  rules:
-    - action: Ignore
-      onPodConditions:
-        - type: DisruptionTarget
-{{- end -}}
-{{- end -}}
 {{- define "logfire.backendPostDeployMigrations.podTemplate" -}}
 {{- $ctx := .ctx -}}
 {{- $serviceName := .serviceName -}}
@@ -92,8 +73,6 @@ metadata:
     {{- include "logfire.selectorLabels" $ctx | nindent 4 }}
     {{- include "logfire.podLabels" (dict "Values" $ctx.Values "serviceName" $serviceName) | nindent 4 }}
     app.kubernetes.io/component: {{ $serviceName }}
-  annotations:
-    cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
 spec:
   serviceAccountName: {{ include "logfire.serviceAccountName" $ctx }}
   {{- with $ctx.Values.imagePullSecrets }}

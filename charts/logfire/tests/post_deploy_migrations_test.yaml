@@ -54,11 +54,11 @@ tests:
           path: metadata.annotations["argocd.argoproj.io/sync-options"]
           value: Prune=false
 
-  - it: retries no failed pod at once and bounds each Job as a whole
+  - it: replaces a failed or evicted pod at most twice and bounds each Job as a whole
     asserts:
       - equal:
           path: spec.backoffLimit
-          value: 0
+          value: 2
         documentSelector:
           path: kind
           value: Job
@@ -75,7 +75,7 @@ tests:
           value: Job
       - equal:
           path: spec.jobTemplate.spec.backoffLimit
-          value: 0
+          value: 2
         documentSelector:
           path: kind
           value: CronJob
@@ -85,61 +85,6 @@ tests:
         documentSelector:
           path: kind
           value: CronJob
-
-  - it: replaces an evicted pod without failing the Job, and keeps the autoscaler from evicting it
-    capabilities:
-      majorVersion: 1
-      minorVersion: 26
-    asserts:
-      - equal:
-          path: spec.podFailurePolicy.rules
-          value: &ignoreDisruption
-            - action: Ignore
-              onPodConditions:
-                - type: DisruptionTarget
-        documentSelector:
-          path: kind
-          value: Job
-      - equal:
-          path: spec.template.metadata.annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"]
-          value: "false"
-        documentSelector:
-          path: kind
-          value: Job
-      - equal:
-          path: spec.jobTemplate.spec.podFailurePolicy.rules
-          value: *ignoreDisruption
-        documentSelector:
-          path: kind
-          value: CronJob
-      - equal:
-          path: spec.jobTemplate.spec.template.metadata.annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"]
-          value: "false"
-        documentSelector:
-          path: kind
-          value: CronJob
-
-  - it: leaves out the eviction rule on Kubernetes before 1.26 and keeps the autoscaler annotation
-    capabilities:
-      majorVersion: 1
-      minorVersion: 25
-    asserts:
-      - notExists:
-          path: spec.podFailurePolicy
-        documentSelector:
-          path: kind
-          value: Job
-      - notExists:
-          path: spec.jobTemplate.spec.podFailurePolicy
-        documentSelector:
-          path: kind
-          value: CronJob
-      - equal:
-          path: spec.template.metadata.annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"]
-          value: "false"
-        documentSelector:
-          path: kind
-          value: Job
 
   - it: retries daily, one run at a time
     documentSelector:
