@@ -541,7 +541,7 @@ Updating a Secret does not restart pods that read it through environment variabl
 The chart does not install one.
 
 Credentials outside those Secrets accept a Kubernetes `valueFrom` in place of a plain value:
-`smtp.username`, `smtp.password`, `ai.openAi.apiKey`, `ai.azureOpenAi.apiKey`, `integrations.slack.clientSecret`, `integrations.slack.signingSecret`, `webPush.privateKey`, `objectStore.sseCKeyB64`, and each entry of `objectStore.env`.
+`smtp.username`, `smtp.password`, `ai.openAi.apiKey`, `ai.azureOpenAi.apiKey`, `integrations.slack.clientSecret`, `integrations.slack.signingSecret`, `webPush.privateKey`, `objectStore.sseCKeyB64`, each entry of `objectStore.env`, and each value of `otel_collector.exporter.headers` (see the end of this section).
 For example:
 
 ```yaml
@@ -600,6 +600,23 @@ postgresSecret:
 ```
 
 `existingSecret`, `adminSecret`, and `existingGatewaySecret` accept the same `annotations`.
+
+To keep a collector exporter header out of the values, give it a `valueFrom` that reads your own Secret.
+The chart then passes the value to the collector as an environment variable:
+
+```yaml
+otel_collector:
+  exporter:
+    headers:
+      Authorization:
+        valueFrom:
+          secretKeyRef:
+            name: logfire-exporter-headers
+            key: authorization
+logfire-otel-collector:
+  annotations:
+    reloader.stakater.com/auto: "true"
+```
 
 ### Connection poolers
 
