@@ -106,6 +106,34 @@ tests:
           path: kind
           value: Deployment
 
+  - it: rolls every object-store workload when the RustFS credentials change
+    set:
+      objectStore:
+        uri: ""
+      dev:
+        deployRustfs: true
+    templates:
+      - templates/logfire-backend.yaml
+      - templates/logfire-ff-ingest.yaml
+      - templates/logfire-ff-query-api.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+      skipEmptyTemplates: true
+    asserts:
+      - exists:
+          path: spec.template.metadata.annotations["checksum/rustfs-credentials"]
+
+  - it: adds no RustFS checksum without development RustFS
+    templates:
+      - templates/logfire-backend.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - notExists:
+          path: spec.template.metadata.annotations["checksum/rustfs-credentials"]
+
   - it: mounts credentials and passes the Azure settings
     set:
       objectStore:

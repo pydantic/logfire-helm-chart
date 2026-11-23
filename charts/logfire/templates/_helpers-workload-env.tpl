@@ -108,9 +108,9 @@ Rolls the workloads that hold the Slack App credentials when they change.
     (list "logfire-slack-client-secret" "logfire-slack-signing-secret")) -}}
 {{- else -}}
 {{- $slack := .Values.integrations.slack -}}
-{{- $parts := list $slack.clientId -}}
+{{- $parts := list (printf "%s" $slack.clientId) -}}
 {{- range list $slack.clientSecret $slack.signingSecret -}}
-  {{- $parts = append $parts (ternary (toJson .) . (kindIs "map" .)) -}}
+  {{- $parts = append $parts (ternary (toJson .) (printf "%s" .) (kindIs "map" .)) -}}
 {{- end -}}
 {{- printf "checksum/logfire-slack-app: %s" (join "\x00" $parts | sha256sum) -}}
 {{- end -}}

@@ -580,7 +580,8 @@ logfire-otel-collector:
 ```
 
 The chart does not hash a Secret that a `valueFrom` reads, so a workload restarts after a change to that Secret only through the reload controller.
-Put its annotation on that workload, for example `logfire-backend.annotations`.
+Put its annotation on every workload that reads the Secret.
+The Slack and web push credentials are read by `logfire-backend`, `logfire-worker`, and `logfire-task-runner`, so set `annotations` on all three.
 
 Add the reload controller's workload annotations to the Secret values.
 The chart copies them only to workloads that consume that Secret, and omits its own Helm checksum annotations there:
@@ -914,8 +915,8 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
 | integrations.pagerduty.appId | string | `""` | ID of a PagerDuty App with Events Integration enabled. Sets `INTEGRATION_PAGERDUTY_APP_ID` on `logfire-backend`. |
 | integrations.slack.clientId | string | `""` | Client ID of your own Slack App. Setting it turns on Slack App channels. |
-| integrations.slack.clientSecret | string | `""` | Client secret of your Slack App. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the `logfire-slack-client-secret` key. |
-| integrations.slack.signingSecret | string | `""` | Signing secret of your Slack App. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the `logfire-slack-signing-secret` key. |
+| integrations.slack.clientSecret | string | `nil` | Client secret of your Slack App. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the `logfire-slack-client-secret` key. |
+| integrations.slack.signingSecret | string | `nil` | Signing secret of your Slack App. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the `logfire-slack-signing-secret` key. |
 | keepAliveTimeout | string | `"120s"` | Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of the ingress or tunnel in front of the release; if HAProxy closes an idle connection first, the client sees a 502/520 when it reuses it. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
@@ -1075,7 +1076,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | usageRedis.prefix | string | `""` | Key prefix for usage keys. |
 | variablesApiKey | string | `""` | Client-safe API key used by the frontend to evaluate external managed variables through OFREP. The key is written to the public runtime configuration, so it must only have the `project:read_external_variables` scope. |
 | webPush.enabled | bool | `false` | Let users turn on browser push notifications for alerts. Needs the deployment to be served over HTTPS, since browsers register a service worker only on a secure origin. While this is false the settings panel reports push as unavailable. |
-| webPush.privateKey | string | `""` | VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one and keep it across upgrades. Can also be a map with valueFrom (e.g., secretKeyRef) that reads your own Secret. Replacing it unregisters every device that had push on, which each browser recovers from by subscribing again on its next visit. |
+| webPush.privateKey | string | `nil` | VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one and keep it across upgrades. Can also be a map with valueFrom (e.g., secretKeyRef) that reads your own Secret. Replacing it unregisters every device that had push on, which each browser recovers from by subscribing again on its next visit. |
 | webPush.subject | string | `""` | Contact the push service operator can reach you on, a `mailto:` or `https:` URL (RFC 8292). Defaults to `mailto:` and `adminEmail`. |
 
 ----------------------------------------------

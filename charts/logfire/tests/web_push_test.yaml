@@ -247,3 +247,28 @@ tests:
         documentSelector:
           path: kind
           value: Deployment
+
+  - it: a key set with valueFrom wins over existingSecret
+    set:
+      existingSecret:
+        enabled: true
+        name: my-shared-secret
+      webPush:
+        enabled: true
+        privateKey:
+          valueFrom:
+            secretKeyRef: {name: push-keys, key: vapid}
+    templates:
+      - templates/logfire-task-runner.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEB_PUSH_VAPID_PRIVATE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: push-keys
+                key: vapid

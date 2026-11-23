@@ -581,7 +581,8 @@ logfire-otel-collector:
 ```
 
 The chart does not hash a Secret that a `valueFrom` reads, so a workload restarts after a change to that Secret only through the reload controller.
-Put its annotation on that workload, for example `logfire-backend.annotations`.
+Put its annotation on every workload that reads the Secret.
+The Slack and web push credentials are read by `logfire-backend`, `logfire-worker`, and `logfire-task-runner`, so set `annotations` on all three.
 
 Add the reload controller's workload annotations to the Secret values.
 The chart copies them only to workloads that consume that Secret, and omits its own Helm checksum annotations there:

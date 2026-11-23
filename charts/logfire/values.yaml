@@ -414,7 +414,8 @@ webPush:
   # and keep it across upgrades. Can also be a map with valueFrom (e.g., secretKeyRef) that reads
   # your own Secret. Replacing it unregisters every device that had push on, which each browser
   # recovers from by subscribing again on its next visit.
-  privateKey: ""
+  # @default -- `nil`
+  privateKey:
 
 
 # ==============================================================================
@@ -428,11 +429,13 @@ integrations:
     # -- Client secret of your Slack App. Can be a plain string or a map with valueFrom (e.g.,
     # secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the
     # `logfire-slack-client-secret` key.
-    clientSecret: ""
+    # @default -- `nil`
+    clientSecret:
     # -- Signing secret of your Slack App. Can be a plain string or a map with valueFrom (e.g.,
     # secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the
     # `logfire-slack-signing-secret` key.
-    signingSecret: ""
+    # @default -- `nil`
+    signingSecret:
   pagerduty:
     # -- ID of a PagerDuty App with Events Integration enabled. Sets
     # `INTEGRATION_PAGERDUTY_APP_ID` on `logfire-backend`.
