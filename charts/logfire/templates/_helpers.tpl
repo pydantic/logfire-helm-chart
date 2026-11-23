@@ -562,9 +562,8 @@ Secret agree on which keys the Secret holds.
 {{- $out := dict -}}
 {{- $ai := .Values.ai | default dict -}}
 {{- $objectStore := .Values.objectStore | default dict -}}
-{{- $candidates := dict -}}
+{{- $candidates := dict "smtp.password" (get (.Values.smtp | default dict) "password") -}}
 {{- range $key, $value := dict
-    "smtp.password" (get (.Values.smtp | default dict) "password")
     "ai.openAi.apiKey" (get (get $ai "openAi" | default dict) "apiKey")
     "ai.azureOpenAi.apiKey" (get (get $ai "azureOpenAi" | default dict) "apiKey")
     "objectStore.sseCKeyB64" (get $objectStore "sseCKeyB64") -}}
@@ -575,19 +574,18 @@ Secret agree on which keys the Secret holds.
 {{- end -}}
 {{- $env := get $objectStore "env" -}}
 {{- if kindIs "map" $env -}}
-{{- $tplContext := dict "Values" .Values "Release" .Release "Chart" .Chart "Capabilities" .Capabilities
-    "Files" .Files "Template" (dict "Name" (printf "%s/secrets.yaml" .Template.BasePath)
+{{- $tplContext := dict -}}
+{{- range $field, $object := $ -}}
+  {{- $_ := set $tplContext $field $object -}}
+{{- end -}}
+{{- $_ := set $tplContext "Template" (dict "Name" (printf "%s/secrets.yaml" .Template.BasePath)
     "BasePath" .Template.BasePath) -}}
 {{- range $name, $value := $env -}}
   {{- if regexMatch "(?i)(SECRET|PASSWORD|TOKEN|KEY|CREDENTIAL|SAS|CONNECTION)" $name -}}
-    {{- $key := printf "objectStore.env.%s" $name -}}
-    {{- if not (regexMatch "^[-._a-zA-Z0-9]+$" $key) -}}
-      {{- fail (printf "objectStore.env.%s: the chart stores this credential in a Secret, and %q is not a valid Secret key. Rename it or set it with valueFrom." $name $key) -}}
-    {{- end -}}
     {{- if kindIs "string" $value -}}
       {{- $value = tpl $value $tplContext -}}
     {{- end -}}
-    {{- $_ := set $candidates $key $value -}}
+    {{- $_ := set $candidates (printf "objectStore.env.%s" $name) $value -}}
   {{- end -}}
 {{- end -}}
 {{- end -}}
@@ -598,6 +596,9 @@ Secret agree on which keys the Secret holds.
   {{- if not (or (kindIs "map" $value) (kindIs "invalid" $value)) -}}
     {{- $string := $value | toString -}}
     {{- if and $string (not (contains "$(" $string)) -}}
+      {{- if not (and (regexMatch "^[-._a-zA-Z0-9]+$" $key) (le (len $key) 253)) -}}
+        {{- fail (printf "%s: the chart stores this credential in a Secret, and %q is not a valid Secret key. Rename it or set it with valueFrom." $key $key) -}}
+      {{- end -}}
       {{- $_ := set $out $key (replace "$$" "$" $string) -}}
     {{- end -}}
   {{- end -}}
