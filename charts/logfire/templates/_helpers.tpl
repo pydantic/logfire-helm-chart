@@ -1351,7 +1351,7 @@ contract tests keep the image `USER` and these numbers in step.
 {{- if eq $serviceName "logfire-frontend-service" -}}
   {{- $id = 33 -}}
 {{- else if not (has $serviceName (list
-    "logfire-backend" "logfire-backend-auth" "logfire-backend-migrations"
+    "logfire-backend" "logfire-backend-auth" "logfire-source-maps" "logfire-backend-migrations"
     "logfire-backend-post-deploy-migrations" "logfire-worker" "logfire-task-runner"
     "logfire-alert-runner" "logfire-remote-mcp" "logfire-ai-gateway" "logfire-ff-ingest"
     "logfire-ff-ingest-processor" "logfire-ff-query-api" "logfire-ff-query-worker"
@@ -1603,7 +1603,7 @@ The other in-cluster TLS clients are unaffected. They trust `LOGFIRE_CA_PATH` ex
 {{- $sources := list -}}
 {{- $trusted := $ctx.Values.trustedCaBundle | default dict -}}
 {{- if and (has .serviceName (list
-    "logfire-backend" "logfire-backend-auth" "logfire-worker" "logfire-task-runner"
+    "logfire-backend" "logfire-backend-auth" "logfire-source-maps" "logfire-worker" "logfire-task-runner"
     "logfire-alert-runner" "logfire-remote-mcp" "logfire-ai-gateway" "logfire-ff-ingest"
     "logfire-ff-ingest-processor" "logfire-ff-query-api" "logfire-ff-query-worker"
     "logfire-ff-crud-api" "logfire-ff-maintenance-scheduler" "logfire-ff-maintenance-worker"
@@ -1879,7 +1879,7 @@ The post-deploy migrations Job name hashes this output, so keep its whitespace s
 {{- end -}}
 {{- $trustedCa := include "logfire.trustedCa.enabled" (dict "ctx" $ctx "serviceName" $serviceName) -}}
 {{- $devInit := and $ctx.Values.dev.deployPostgres (not (has "check-db-ready" $userNames))
-    (has $serviceName (list "logfire-backend" "logfire-backend-auth" "logfire-worker"
+    (has $serviceName (list "logfire-backend" "logfire-backend-auth" "logfire-source-maps" "logfire-worker"
         "logfire-task-runner" "logfire-alert-runner" "logfire-dex" "logfire-backend-migrations"
         "logfire-backend-post-deploy-migrations" "logfire-ff-migrations" "logfire-ff-crud-api"
         "logfire-ff-maintenance-scheduler" "logfire-ff-maintenance-worker"
@@ -1983,6 +1983,17 @@ initContainers:
 {{- with $userInit }}
 {{ toYaml . | nindent 2 }}
 {{- end }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+The source-maps object store. When the source-maps service is enabled, the backend stores
+uploads there, the worker deletes from it, and Fusionfire ingest reads from it. So it lives
+under the shared object store, not on one pod's disk. Empty when the service is disabled.
+*/}}
+{{- define "logfire.sourceMapsObjectStoreUri" -}}
+{{- if dig "enabled" false (index .Values "logfire-source-maps" | default dict) -}}
+{{- printf "%s/_source_maps" (include "logfire.objectStoreUri" .) -}}
 {{- end -}}
 {{- end -}}
 
