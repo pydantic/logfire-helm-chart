@@ -42,6 +42,14 @@ tests:
       - failedTemplate:
           errorPattern: 'exactly one source'
 
+  - it: rejects a valueFrom exporter header with an incomplete secretKeyRef
+    set:
+      otel_collector.exporter.headers.Authorization.valueFrom:
+        secretKeyRef: {name: my-headers}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'valueFrom must be a secretKeyRef or configMapKeyRef with a name and a key'
+
   - it: rejects exporter headers that map to the same environment variable
     set:
       otel_collector.exporter.headers:

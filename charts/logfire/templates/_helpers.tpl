@@ -413,6 +413,12 @@ or ConfigMap, so its value is never in the chart values. Returns {"moved": heade
     {{- if and $reference (or (ne (len $value) 1) (not (kindIs "map" $value.valueFrom)) (ne (len $value.valueFrom) 1)) -}}
       {{- fail (printf "otel_collector.exporter.headers %q: set only valueFrom, with exactly one source such as secretKeyRef." $name) -}}
     {{- end -}}
+    {{- if $reference -}}
+      {{- $source := $value.valueFrom.secretKeyRef | default $value.valueFrom.configMapKeyRef -}}
+      {{- if not (and (kindIs "map" $source) $source.name $source.key) -}}
+        {{- fail (printf "otel_collector.exporter.headers %q: valueFrom must be a secretKeyRef or configMapKeyRef with a name and a key." $name) -}}
+      {{- end -}}
+    {{- end -}}
     {{- if or $literal $reference -}}
       {{- $env := printf "LOGFIRE_EXPORTER_HEADER_%s_%s" (regexReplaceAll "[^A-Z0-9]" (upper $name) "_" | trunc 64) (sha256sum $name | trunc 8) -}}
       {{- if has $env $userEnv -}}
