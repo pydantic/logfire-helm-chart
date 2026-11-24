@@ -42,4 +42,51 @@ spec:
       hosts:
         {{- toYaml $hosts | nindent 8 }}
   {{- end }}
+{{- $grpcRoutes := include "logfire.grpc.routes" . | fromJsonArray }}
+{{- if $grpcRoutes }}
+{{- /*
+ingress-nginx selects the backend protocol per Ingress, so gRPC routes get an Ingress
+of their own. It keeps the main annotations, so host-level access controls still apply.
+*/}}
+{{- $grpcAnnotations := deepCopy (.Values.ingress.annotations | default dict) -}}
+{{- if or (eq $ingressClassName "") (contains "nginx" $ingressClassName) -}}
+  {{- $_ := set $grpcAnnotations "nginx.ingress.kubernetes.io/backend-protocol" (ternary "GRPCS" "GRPC" (include "logfire.inClusterTls.enabled" . | eq "true")) -}}
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  {{- if $grpcAnnotations }}
+  annotations:
+    {{- toYaml $grpcAnnotations | nindent 4 }}
+  {{- end }}
+  name: logfire-ingress-grpc
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.ingress.ingressClassName }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  rules:
+    {{- range $hosts }}
+    - host: {{ . }}
+      http:
+        paths:
+          {{- range $grpcRoutes }}
+          - path: {{ .path }}
+            pathType: Exact
+            backend:
+              service:
+                name: logfire-service
+                port:
+                  number: {{ include "logfire.grpc.port" $ }}
+          {{- end }}
+    {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    - secretName: {{ .Values.ingress.secretName }}
+      hosts:
+        {{- toYaml $hosts | nindent 8 }}
+  {{- end }}
+{{- end }}
 {{- end }}

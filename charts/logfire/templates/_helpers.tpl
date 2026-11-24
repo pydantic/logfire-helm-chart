@@ -1351,7 +1351,8 @@ contract tests keep the image `USER` and these numbers in step.
 {{- if eq $serviceName "logfire-frontend-service" -}}
   {{- $id = 33 -}}
 {{- else if not (has $serviceName (list
-    "logfire-backend" "logfire-backend-auth" "logfire-backend-migrations"
+    "monty-admission" "monty-controller" "monty-reconciler" "monty-relay" "monty-broker"
+    "logfire-monty-migrations" "logfire-backend" "logfire-backend-auth" "logfire-backend-migrations"
     "logfire-backend-post-deploy-migrations" "logfire-worker" "logfire-task-runner"
     "logfire-alert-runner" "logfire-remote-mcp" "logfire-ai-gateway" "logfire-ff-ingest"
     "logfire-ff-ingest-processor" "logfire-ff-query-api" "logfire-ff-query-worker"
@@ -1603,7 +1604,8 @@ The other in-cluster TLS clients are unaffected. They trust `LOGFIRE_CA_PATH` ex
 {{- $sources := list -}}
 {{- $trusted := $ctx.Values.trustedCaBundle | default dict -}}
 {{- if and (has .serviceName (list
-    "logfire-backend" "logfire-backend-auth" "logfire-worker" "logfire-task-runner"
+    "monty-admission" "monty-controller" "monty-reconciler" "monty-relay" "monty-broker"
+    "logfire-monty-migrations" "logfire-backend" "logfire-backend-auth" "logfire-worker" "logfire-task-runner"
     "logfire-alert-runner" "logfire-remote-mcp" "logfire-ai-gateway" "logfire-ff-ingest"
     "logfire-ff-ingest-processor" "logfire-ff-query-api" "logfire-ff-query-worker"
     "logfire-ff-crud-api" "logfire-ff-maintenance-scheduler" "logfire-ff-maintenance-worker"
@@ -1881,7 +1883,7 @@ The post-deploy migrations Job name hashes this output, so keep its whitespace s
 {{- $devInit := and $ctx.Values.dev.deployPostgres (not (has "check-db-ready" $userNames))
     (has $serviceName (list "logfire-backend" "logfire-backend-auth" "logfire-worker"
         "logfire-task-runner" "logfire-alert-runner" "logfire-dex" "logfire-backend-migrations"
-        "logfire-backend-post-deploy-migrations" "logfire-ff-migrations" "logfire-ff-crud-api"
+        "logfire-monty-migrations" "logfire-backend-post-deploy-migrations" "logfire-ff-migrations" "logfire-ff-crud-api"
         "logfire-ff-maintenance-scheduler" "logfire-ff-maintenance-worker"
         "logfire-ff-compaction-worker" "logfire-ff-query-api" "logfire-ff-query-worker"
         "logfire-ff-ingest" "logfire-ff-ingest-processor" "logfire-ai-gateway"
@@ -1894,7 +1896,9 @@ initContainers:
 {{- $containerSecurityContext := include "logfire.containerSecurityContext"
     (dict "ctx" $ctx "serviceName" $serviceName) | fromJson }}
 {{- $gateway := eq $serviceName "logfire-ai-gateway" }}
-{{- $inClusterCa := and $gateway (include "logfire.inClusterTls.enabled" $ctx | eq "true") }}
+{{- $monty := or (hasPrefix "monty-" $serviceName) (eq $serviceName "logfire-monty-migrations") }}
+{{- $inClusterCa := and (or $gateway (and $monty (ne $serviceName "logfire-monty-migrations")))
+    (include "logfire.inClusterTls.enabled" $ctx | eq "true") }}
 {{- $baseFile := "/etc/ssl/certs/ca-certificates.crt" }}
 {{- if $gateway }}
   {{- $baseFile = ternary "/etc/logfire/incluster-ca/ca.crt" "" $inClusterCa }}
@@ -1910,7 +1914,7 @@ initContainers:
       - -c
       - |
         import glob
-        paths = [{{ with $baseFile }}{{ . | quote }}, {{ end }}*sorted(glob.glob("/etc/logfire/trusted-ca-sources/*.crt"))]
+        paths = [{{ with $baseFile }}{{ . | quote }}, {{ end }}{{ if and $monty $inClusterCa }}"/etc/logfire/incluster-ca/ca.crt", {{ end }}*sorted(glob.glob("/etc/logfire/trusted-ca-sources/*.crt"))]
         with open("/etc/logfire/trusted-ca/ca-bundle.crt", "wb") as bundle:
             for path in paths:
                 with open(path, "rb") as source:

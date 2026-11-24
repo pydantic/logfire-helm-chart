@@ -20,6 +20,9 @@ spec:
   template:
     metadata:
       annotations:
+        {{- if (.Values.agentSandboxes | default dict).enabled }}
+        checksum/monty-stores: {{ include "logfire.agentSandboxes.storesChecksum" . }}
+        {{- end }}
         {{- if or (not .Values.postgresSecret.enabled) (empty .Values.postgresSecret.annotations) }}
         {{- include "logfire.postgresSecretChecksumAnnotation" (dict "ctx" .) | nindent 8 }}
         {{- end }}
@@ -77,6 +80,9 @@ spec:
             - name: MATERIALIZE_DASHBOARDS
               value: "false"
             {{- include "logfire.pythonServiceEnv" (dict "ctx" . "serviceName" $serviceName) | nindent 12 }}
+            {{- if (.Values.agentSandboxes | default dict).enabled }}
+            {{- include "logfire.agentSandboxes.storesEnv" (dict "root" . "service" $serviceName) | nindent 12 }}
+            {{- end }}
             - name: CRUD_PG_DSN
               valueFrom:
                 secretKeyRef:

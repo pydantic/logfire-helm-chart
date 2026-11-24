@@ -116,6 +116,30 @@ stringData:
       use_backend logfire-backend if path_backend
 
       default_backend logfire-frontend
+    {{- $grpcRoutes := include "logfire.grpc.routes" . | fromJsonArray }}
+    {{- if $grpcRoutes }}
+
+    # gRPC has no HTTP/1.1 form, so this listener serves HTTP/2 only.
+    frontend grpc-in
+      {{- if (include "logfire.inClusterTls.enabled" . | eq "true") }}
+      bind :{{ include "logfire.grpc.port" . }} ssl crt /usr/local/etc/haproxy/tls/tls.crt alpn h2
+      {{- else }}
+      bind :{{ include "logfire.grpc.port" . }} proto h2
+      {{- end }}
+      log stdout local0 info
+      option httplog
+      {{- range $grpcRoutes }}
+      use_backend {{ .backend }} if { path {{ .path }} }
+      {{- end }}
+    {{- end }}
+
+    {{- if (.Values.agentSandboxes | default dict).enabled }}
+    backend monty-relay
+      balance leastconn
+      timeout tunnel 1h
+      http-request set-header Host {{ include "logfire.serviceHost" (dict "ctx" . "serviceName" "monty-relay") }}
+      server relay monty-relay.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:8000 proto h2 check resolvers kubernetes
+    {{- end }}
 
     backend logfire-ingest
       # Create hash from authorization header, path, and query params

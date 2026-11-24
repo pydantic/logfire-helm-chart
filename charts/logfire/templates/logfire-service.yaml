@@ -18,6 +18,12 @@ spec:
     port: 8080
     targetPort: 8080
   {{- include "logfire.inClusterTls.https.servicePort" (dict "ctx" . "targetPort" .Values.inClusterTls.httpsPort) | nindent 2 }}
+  {{- if (include "logfire.grpc.routes" . | fromJsonArray) }}
+  - name: grpc
+    appProtocol: {{ include "logfire.grpc.appProtocol" . }}
+    port: {{ include "logfire.grpc.port" . }}
+    targetPort: grpc
+  {{- end }}
   type: ClusterIP
 ---
 apiVersion: apps/v1
@@ -85,6 +91,10 @@ spec:
             {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 5) | nindent 12 }}
           ports:
             - containerPort: 8080
+            {{- if (include "logfire.grpc.routes" . | fromJsonArray) }}
+            - name: grpc
+              containerPort: {{ include "logfire.grpc.port" . }}
+            {{- end }}
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
             - containerPort: 8181 # Stats port
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}

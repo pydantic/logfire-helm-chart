@@ -1,0 +1,75 @@
+{{- if (.Values.agentSandboxes | default dict).enabled }}
+{{- $name := "logfire-monty-migrations" -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "logfire.migrationJobName" (dict "ctx" . "name" $name) }}
+  labels:
+    {{- include "logfire.labels" . | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}
+  annotations:
+    {{- if not .Values.dev.deployPostgres }}
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "1"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    {{- end }}
+    {{- include "logfire.hooksAnnotations" . | nindent 4 }}
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: {{ dig "activeDeadlineSeconds" 3600 (.Values.migrations | default dict) }}
+  template:
+    metadata:
+      annotations:
+        {{- include "logfire.hooksAnnotations" . | nindent 8 }}
+      labels:
+        {{- include "logfire.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: {{ $name }}
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      {{- include "logfire.initContainers" (dict "ctx" . "serviceName" $name) | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: {{ $name }}
+          image: {{ printf "%s%s:%s" .Values.image.repository (include "logfire.pythonImage" (dict "Values" .Values "key" "backendImage")) (include "logfire.serviceTag" (dict "Values" .Values "Chart" .Chart "serviceName" "logfire-backend")) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [python, -m, logfire_db.migrations.monty]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          env:
+            {{- include "logfire.trustedCa.env" (dict "ctx" . "serviceName" $name) | nindent 12 }}
+            {{- include "logfire.agentSandboxes.postgresCaEnv" (dict "ctx" . "serviceName" $name) | nindent 12 }}
+            - name: ON_PREM
+              value: "true"
+            - name: LOGFIRE_SEND_TO_LOGFIRE
+              value: "false"
+            - name: LOGFIRE_SERVICE_NAME
+              value: {{ $name }}
+            - name: MONTY_RESTRICT_RUNTIME_ROLES
+              value: {{ dig "restrictRuntimeRoles" true .Values.agentSandboxes.stores | quote }}
+            - name: MONTY_PG_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.agentSandboxes.stores.postgresSecret.name }}
+                  key: {{ .Values.agentSandboxes.stores.postgresSecret.migrationKey }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+            {{- include "logfire.trustedCa.volumeMount" (dict "ctx" . "serviceName" $name) | nindent 12 }}
+      volumes:
+        {{- include "logfire.trustedCa.volumes" (dict "ctx" . "serviceName" $name) | nindent 8 }}
+        - name: tmp
+          emptyDir: {sizeLimit: 1Gi}
+{{- end }}

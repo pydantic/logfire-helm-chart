@@ -4,6 +4,8 @@ order, so the first failing check names the error.
 */}}
 {{- define "logfire.validateConfig" -}}
 {{- $values := .Values -}}
+{{- include "logfire.agentSandboxes.validate" . -}}
+{{- include "logfire.validate.grpc" . -}}
 
 {{- with $values.sizingPreset -}}
   {{- $presets := $values.sizingPresets | default dict -}}
