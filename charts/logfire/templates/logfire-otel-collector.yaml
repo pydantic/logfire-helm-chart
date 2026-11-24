@@ -80,7 +80,7 @@ spec:
       port: 4318
       targetPort: 4318
       name: otlp-http
-    {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
+    {{- if include "isPrometheusExporterEnabled" . | eq "true" }}
     - protocol: TCP
       port: {{ .Values.otel_collector.prometheus.port }}
       targetPort: {{ .Values.otel_collector.prometheus.port }}
@@ -171,7 +171,7 @@ spec:
               name: self-metrics
             - containerPort: 13133
               name: health
-            {{- if include "isPrometheusExporterEnabled" . | trim | eq "true" }}
+            {{- if include "isPrometheusExporterEnabled" . | eq "true" }}
             - containerPort: {{ .Values.otel_collector.prometheus.port }}
             {{- end }}
           {{- $otelSecurityContext := include "logfire.thirdPartyContainerSecurityContext" (dict "ctx" . "identity" "otel_collector" "serviceName" "logfire-otel-collector" "readOnlyRootFilesystem" true) | fromJson }}
@@ -216,6 +216,20 @@ spec:
                 secretKeyRef:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-meta-write-token") }}
                   key: logfire-meta-write-token
+            {{- /* The config file's checksum covers this Secret, so a changed header value rolls the pods. */}}
+            {{- $exporterHeaders := include "logfire.otelCollectorExporterHeaders" . | fromJson }}
+            {{- range $env, $_ := $exporterHeaders.secret }}
+            - name: {{ $env }}
+              valueFrom:
+                secretKeyRef:
+                  name: logfire-otel-collector-exporter-headers
+                  key: {{ $env }}
+            {{- end }}
+            {{- range $env, $source := $exporterHeaders.valueFrom }}
+            - name: {{ $env }}
+              valueFrom:
+                {{- toYaml $source | nindent 16 }}
+            {{- end }}
             {{- if and (not (get $envState "hasOtelResourceAttributes")) $collectorResourceAttributes }}
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: {{ include "logfire.renderOtelResourceAttributes" $collectorResourceAttributes | quote }}
@@ -232,5 +246,4 @@ spec:
           emptyDir:
             sizeLimit: {{ $queueStorage.sizeLimit }}
         {{- end }}
-{{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
-{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
+{{- template "logfire.autoscaler" (dict "root" $ "serviceName" $serviceName) }}

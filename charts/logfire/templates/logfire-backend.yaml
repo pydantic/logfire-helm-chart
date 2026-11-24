@@ -38,6 +38,63 @@
     "scopes" $apiKey.scopes
   ) }}
 {{- end }}
+{{- /* `logfire-backend.env` takes precedence over the `auth` settings, without a duplicate name. */}}
+{{- $taken := list }}
+{{- range include "logfire.serviceEnv" (dict "Values" .Values "serviceName" $serviceName) | fromYamlArray }}
+  {{- $taken = append $taken .name }}
+{{- end }}
+{{- $auth := .Values.auth | default dict }}
+{{- $authEnv := list }}
+{{- range $name, $value := dict
+    "DEX_PASSWORD_LOGIN_ENABLED" (include "logfire.passwordLoginEnabled" .)
+    "PASSKEYS_ENABLED" (dig "passkeys" true $auth | toString)
+    "PASSWORDLESS_EMAIL_SIGNUP_ENABLED" (dig "passwordlessEmailSignup" false $auth | toString)
+    "SESSION_MAX_LIFETIME" (dig "sessionMaxLifetime" "" $auth | default "" | toString) }}
+  {{- if and (or $value (ne $name "SESSION_MAX_LIFETIME")) (not (has $name $taken)) }}
+    {{- $authEnv = append $authEnv (dict "name" $name "value" $value) }}
+  {{- end }}
+{{- end }}
+{{- $groupMappings := list }}
+{{- range $idx, $group := .Values.groupOrganizationMapping | default list }}
+  {{- if not $group.group_id }}
+    {{- fail (printf "groupOrganizationMapping[%d]: 'group_id' is required" $idx) }}
+  {{- end }}
+  {{- if not $group.organization_roles }}
+    {{- fail (printf "groupOrganizationMapping[%d]: 'organization_roles' is required for group_id '%s'" $idx $group.group_id) }}
+  {{- end }}
+  {{- if not (kindIs "slice" $group.organization_roles) }}
+    {{- fail (printf "groupOrganizationMapping[%d]: 'organization_roles' must be a list for group_id '%s'" $idx $group.group_id) }}
+  {{- end }}
+  {{- $orgRoles := list }}
+  {{- range $orgIdx, $org := $group.organization_roles }}
+    {{- $at := printf "groupOrganizationMapping[%d].organization_roles[%d]" $idx $orgIdx }}
+    {{- if not $org.organization_name }}
+      {{- fail (printf "%s: 'organization_name' is required" $at) }}
+    {{- end }}
+    {{- if not $org.role }}
+      {{- fail (printf "%s: 'role' is required for organization '%s'" $at $org.organization_name) }}
+    {{- end }}
+    {{- if and $org.project_roles (not (kindIs "slice" $org.project_roles)) }}
+      {{- fail (printf "%s: 'project_roles' must be a list for organization '%s'" $at $org.organization_name) }}
+    {{- end }}
+    {{- $projectRoles := list }}
+    {{- range $projIdx, $proj := $org.project_roles | default list }}
+      {{- if not $proj.project_name }}
+        {{- fail (printf "%s.project_roles[%d]: 'project_name' is required" $at $projIdx) }}
+      {{- end }}
+      {{- if not $proj.role }}
+        {{- fail (printf "%s.project_roles[%d]: 'role' is required for project '%s'" $at $projIdx $proj.project_name) }}
+      {{- end }}
+      {{- $projectRoles = append $projectRoles (dict "project_name" $proj.project_name "role" $proj.role) }}
+    {{- end }}
+    {{- $orgRole := dict "organization_name" $org.organization_name "role" $org.role }}
+    {{- if $projectRoles }}
+      {{- $_ := set $orgRole "project_roles" $projectRoles }}
+    {{- end }}
+    {{- $orgRoles = append $orgRoles $orgRole }}
+  {{- end }}
+  {{- $groupMappings = append $groupMappings (dict "group_id" $group.group_id "organization_roles" $orgRoles) }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -110,8 +167,14 @@ spec:
         {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- with (include "logfire.rustfsChecksumAnnotation" . | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
+        {{- with (include "logfire.inlineCredentialsChecksumAnnotation" (dict "ctx" . "prefixes" (list "ai." "objectStore.")) | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- if or (not .Values.adminSecret.enabled) (empty .Values.adminSecret.annotations) }}
-        {{- include "logfire.adminSecretChecksumAnnotations" (dict "ctx" .) | nindent 8 }}
+        {{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "external" .Values.adminSecret "secrets" (list "logfire-admin-password" "logfire-admin-totp-secret" "logfire-admin-totp-recovery-codes")) | nindent 8 }}
         {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
       labels:
@@ -128,11 +191,7 @@ spec:
           {{- include "logfire.resources" (dict "Values" .Values "serviceName" $serviceName) | nindent 10 }}
           command: ["python", "-m", "logfire_backend"]
           lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "5"
+            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 5) | nindent 12 }}
           ports:
             - containerPort: 8000
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
@@ -205,7 +264,7 @@ spec:
             {{- . | nindent 12 }}
             {{- end }}
             - name: DEX_CLIENT_ID
-              value: {{ include "logfire.dexClientId" . }}
+              value: logfire-backend
             - name: DEX_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -263,8 +322,8 @@ spec:
               value: '[{"name": "local", "frontend_host": "{{ include "logfire.url" . }}", "api_host": "{{ include "logfire.url" . }}", "auth_host": "{{ include "logfire.url" . }}"}]'
             - name: EMAILS_ENABLED
               value: {{ include "logfire.emailsEnabled" . | quote }}
-            {{- with (include "logfire.authEnv" . | trim) }}
-            {{- . | nindent 12 }}
+            {{- with $authEnv }}
+            {{- toYaml . | nindent 12 }}
             {{- end }}
             - name: FRONTEND_HOST
               value: {{ include "logfire.url" . | quote }}
@@ -326,7 +385,10 @@ spec:
                   name: {{ include "logfire.externalSecretName" (dict "external" .Values.existingSecret "secretName" "logfire-mcp-oauth-client-secret") }}
                   key: logfire-mcp-oauth-client-secret
             {{- end }}
-            {{- include "logfire.groupOrganizationMapping" . | nindent 12 }}
+            {{- with $groupMappings }}
+            - name: GROUP_ORGANIZATION_MAPPING
+              value: {{ toJson . | quote }}
+            {{- end }}
             - name: BOOTSTRAPPED_ORGANIZATIONS
               # This will make it possible to log-in sans-credentials by visiting a URL like:
               # http://localhost:8080/logfire-meta/logfire-meta#token=U8TO1taNdD7YwgBMcfeQVU7RB6Hgtrwd
@@ -351,5 +413,4 @@ spec:
         {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" .) | nindent 8 }}
         {{- include "logfire.trustedCa.volumes" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
-{{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
-{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
+{{- template "logfire.autoscaler" (dict "root" $ "serviceName" $serviceName) }}

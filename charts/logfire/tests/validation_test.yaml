@@ -16,6 +16,67 @@ set:
   dev:
     deployPostgres: true
 tests:
+  - it: rejects a valueFrom exporter header with other keys
+    set:
+      otel_collector.exporter.headers.Authorization:
+        value: Bearer x
+        valueFrom:
+          secretKeyRef: {name: my-headers, key: authorization}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'set only valueFrom'
+
+  - it: rejects a valueFrom exporter header that is not a single source
+    set:
+      otel_collector.exporter.headers.Authorization.valueFrom:
+        secretKeyRef: {name: old, key: auth}
+        configMapKeyRef: {name: new, key: auth}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'exactly one source'
+
+  - it: rejects a valueFrom exporter header that is not a map
+    set:
+      otel_collector.exporter.headers.Authorization.valueFrom: plain
+    asserts:
+      - failedTemplate:
+          errorPattern: 'exactly one source'
+
+  - it: rejects a valueFrom exporter header with an incomplete secretKeyRef
+    set:
+      otel_collector.exporter.headers.Authorization.valueFrom:
+        secretKeyRef: {name: my-headers}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'valueFrom must be a secretKeyRef or configMapKeyRef with a name and a key'
+
+  - it: rejects exporter headers that map to the same environment variable
+    set:
+      otel_collector.exporter.headers:
+        "X-Meta.---__----_Key": demo-one
+        "X-Meta.-_-..-_.._Key": demo-two
+    asserts:
+      - failedTemplate:
+          errorPattern: 'same environment variable as another header'
+
+  - it: rejects a collector env list entry that the chart sets for an exporter header
+    set:
+      otel_collector.exporter.headers.X-Tenant: acme
+      logfire-otel-collector.env:
+        - name: LOGFIRE_EXPORTER_HEADER_X_TENANT_8ca2ee3d
+          value: other
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Remove it from logfire-otel-collector.env'
+
+  - it: rejects a collector env entry that the chart sets for an exporter header
+    set:
+      otel_collector.exporter.headers.X-Tenant: acme
+      logfire-otel-collector.env.LOGFIRE_EXPORTER_HEADER_X_TENANT_8ca2ee3d: other
+    asserts:
+      - failedTemplate:
+          errorPattern: 'Remove it from logfire-otel-collector.env'
+
   - it: rejects extra exporters that replace the backend exporter
     set:
       otel_collector.extraExporters:
@@ -1166,6 +1227,53 @@ tests:
       - matchRegex:
           path: data["otel-collector-config.yaml"]
           pattern: 'limit_percentage: 75'
+
+  - it: rejects a Slack App credential map without valueFrom
+    set:
+      integrations:
+        slack:
+          clientId: client-id
+          clientSecret: {secretKeyRef: {name: slack-app, key: client-secret}}
+          signingSecret: signing-secret
+    asserts:
+      - failedTemplate:
+          errorPattern: 'integrations.slack.clientSecret: set a string, or only valueFrom'
+
+  - it: rejects a web push key valueFrom with two sources
+    set:
+      webPush:
+        enabled: true
+        privateKey:
+          valueFrom:
+            secretKeyRef: {name: push-keys, key: vapid}
+            configMapKeyRef: {name: push-keys, key: vapid}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'webPush.privateKey: set a string, or only valueFrom'
+
+  - it: rejects a web push key valueFrom with an incomplete secretKeyRef
+    set:
+      webPush:
+        enabled: true
+        privateKey:
+          valueFrom:
+            secretKeyRef: {}
+    asserts:
+      - failedTemplate:
+          errorPattern: 'webPush.privateKey: valueFrom must be a secretKeyRef or configMapKeyRef with a name and a key'
+
+  - it: rejects a Slack App credential valueFrom with an unknown source
+    set:
+      integrations:
+        slack:
+          clientId: client-id
+          clientSecret:
+            valueFrom:
+              secretKeyReff: {name: slack-app, key: client-secret}
+          signingSecret: signing-secret
+    asserts:
+      - failedTemplate:
+          errorPattern: 'integrations.slack.clientSecret: valueFrom must be a secretKeyRef or configMapKeyRef'
 
   - it: fails when the Slack App has no client secret
     set:

@@ -7,9 +7,11 @@ Identity, telemetry and in-cluster CA settings that every Python workload needs.
 - name: LOGFIRE_SERVICE_NAME
   value: {{ .serviceName }}
 - name: LOGFIRE_SERVICE_VERSION
-  value: {{ include "logfire.serviceVersion" (dict "root" $ctx "serviceName" .serviceName) | quote }}
+  value: {{ include "logfire.serviceVersion" (dict "root" $ctx "serviceName" .serviceName)
+      | quote }}
 - name: OTEL_RESOURCE_ATTRIBUTES
-  value: {{ include "logfire.otelResourceAttributes" (dict "root" $ctx "serviceName" .serviceName "codeWorkDir" "/app") | quote }}
+  value: {{ include "logfire.otelResourceAttributes" (dict "root" $ctx "serviceName" .serviceName
+      "codeWorkDir" "/app") | quote }}
 - name: COLLECTOR_OTLP_GRPC_HOST
   value: http://logfire-otel-collector:4317
 - name: ON_PREM
@@ -28,13 +30,10 @@ services that these workloads call follow the same decision.
 */}}
 {{- define "logfire.otelSamplerEnv" -}}
 {{- $ratio := .Values.otelTraceSampleRatio -}}
-{{- if kindIs "invalid" $ratio -}}
-  {{- $ratio = 0.05 -}}
-{{- end -}}
 - name: OTEL_TRACES_SAMPLER
   value: parentbased_traceidratio
 - name: OTEL_TRACES_SAMPLER_ARG
-  value: {{ $ratio | quote }}
+  value: {{ kindIs "invalid" $ratio | ternary 0.05 $ratio | quote }}
 {{- end -}}
 
 {{/*
@@ -51,8 +50,16 @@ before the chart managed them, and a duplicate env name can fail an upgrade.
 {{- $secrets := dict "ENCRYPTION_KEY" "logfire-encryption-key" -}}
 {{- with dig "slack" "clientId" "" $integrations -}}
   {{- $entries = append $entries (dict "name" "INTEGRATION_SLACK_CLIENT_ID" "value" .) -}}
-  {{- $_ := set $secrets "INTEGRATION_SLACK_CLIENT_SECRET" "logfire-slack-client-secret" -}}
-  {{- $_ := set $secrets "INTEGRATION_SLACK_SIGNING_SECRET" "logfire-slack-signing-secret" -}}
+  {{- range $name, $field := dict "INTEGRATION_SLACK_CLIENT_SECRET" "clientSecret"
+      "INTEGRATION_SLACK_SIGNING_SECRET" "signingSecret" -}}
+    {{- $ref := include "logfire.credentialValueFrom" (dict "value" (get $integrations.slack $field)
+        "path" (printf "integrations.slack.%s" $field)) -}}
+    {{- if $ref -}}
+      {{- $entries = append $entries (dict "name" $name "valueFrom" (fromJson $ref)) -}}
+    {{- else -}}
+      {{- $_ := set $secrets $name (printf "logfire-slack-%s" (kebabcase $field)) -}}
+    {{- end -}}
+  {{- end -}}
 {{- end -}}
 {{- if eq .serviceName "logfire-backend" -}}
   {{- with dig "pagerduty" "appId" "" $integrations -}}
@@ -60,8 +67,10 @@ before the chart managed them, and a duplicate env name can fail an upgrade.
   {{- end -}}
 {{- end -}}
 {{- range $name, $key := $secrets -}}
-  {{- $secretName := include "logfire.externalSecretName" (dict "external" $ctx.Values.existingSecret "secretName" $key) | trim -}}
-  {{- $entries = append $entries (dict "name" $name "valueFrom" (dict "secretKeyRef" (dict "name" $secretName "key" $key))) -}}
+  {{- $secretName := include "logfire.externalSecretName"
+      (dict "external" $ctx.Values.existingSecret "secretName" $key) | trim -}}
+  {{- $entries = append $entries (dict "name" $name "valueFrom"
+      (dict "secretKeyRef" (dict "name" $secretName "key" $key))) -}}
 {{- end -}}
 {{- $own := get (get $ctx.Values .serviceName | default dict) "env" -}}
 {{- $ownNames := list -}}
@@ -84,7 +93,9 @@ before the chart managed them, and a duplicate env name can fail an upgrade.
 {{- end -}}
 
 {{- define "logfire.slackApp.enabled" -}}
-{{- if dig "slack" "clientId" "" (.Values.integrations | default dict) -}}true{{- end -}}
+{{- if dig "slack" "clientId" "" (.Values.integrations | default dict) -}}
+true
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -93,10 +104,24 @@ Rolls the workloads that hold the Slack App credentials when they change.
 {{- define "logfire.slackAppChecksumAnnotation" -}}
 {{- if include "logfire.slackApp.enabled" . -}}
 {{- if .Values.existingSecret.enabled -}}
-{{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" . "secrets" (list "logfire-slack-client-secret" "logfire-slack-signing-secret")) -}}
+{{- $slack := .Values.integrations.slack -}}
+{{- $keys := list -}}
+{{- range $field, $key := dict "clientSecret" "logfire-slack-client-secret" "signingSecret"
+    "logfire-slack-signing-secret" -}}
+  {{- if not (kindIs "map" (get $slack $field)) -}}
+    {{- $keys = append $keys $key -}}
+  {{- end -}}
+{{- end -}}
+{{- with $keys -}}
+{{- include "logfire.logfireSecretChecksumAnnotations" (dict "ctx" $ "secrets" .) -}}
+{{- end -}}
 {{- else -}}
 {{- $slack := .Values.integrations.slack -}}
-{{- printf "checksum/logfire-slack-app: %s" (printf "%s\x00%s\x00%s" $slack.clientId $slack.clientSecret $slack.signingSecret | sha256sum) -}}
+{{- $parts := list (printf "%s" $slack.clientId) -}}
+{{- range list $slack.clientSecret $slack.signingSecret -}}
+  {{- $parts = append $parts (ternary (toJson .) (printf "%s" .) (kindIs "map" .)) -}}
+{{- end -}}
+{{- printf "checksum/logfire-slack-app: %s" (join "\x00" $parts | sha256sum) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

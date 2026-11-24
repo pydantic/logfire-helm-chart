@@ -88,11 +88,7 @@ spec:
             {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/usr/local/etc/haproxy/tls") | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/usr/local/etc/haproxy/ca") | nindent 12 }}
           lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "5"
+            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 5) | nindent 12 }}
           ports:
             - containerPort: 8080
             {{- if (include "logfire.grpc.routes" . | fromJsonArray) }}
@@ -137,5 +133,4 @@ spec:
               - key: haproxy.cfg
                 path: haproxy.cfg
 
-{{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
-{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
+{{- template "logfire.autoscaler" (dict "root" $ "serviceName" $serviceName) }}

@@ -58,6 +58,12 @@ spec:
         {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- with (include "logfire.rustfsChecksumAnnotation" . | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
+        {{- with (include "logfire.inlineCredentialsChecksumAnnotation" (dict "ctx" . "prefixes" (list "objectStore.")) | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName "podSecurityContext" $podSecurityContext) | nindent 6 }}
@@ -77,11 +83,7 @@ spec:
               containerPort: 8012
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
           lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "15"
+            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 15) | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: logfire-ff-base-config
@@ -133,5 +135,4 @@ spec:
         {{- include "logfire.trustedCa.volumes" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.objectStoreVolumes" . | nindent 8 }}
-{{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
-{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
+{{- template "logfire.autoscaler" (dict "root" $ "serviceName" $serviceName) }}

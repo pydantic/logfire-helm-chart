@@ -78,11 +78,7 @@ spec:
             {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "volumeName" "logfire-frontend-tls" "mountPath" "/etc/nginx/tls") | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "volumeName" "logfire-frontend-ca" "mountPath" "/etc/nginx/ca") | nindent 12 }}
           lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "5"
+            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 5) | nindent 12 }}
           ports:
             - name: http
               containerPort: 8080
@@ -120,7 +116,7 @@ spec:
               value: {{ $serviceName }}
             {{- if (index .Values "logfire-ai-gateway" "enabled") }}
             - name: PUBLIC_GATEWAY_HOST
-              value: {{ include "logfire.publicGatewayHost" . | trim | quote }}
+              value: {{ (urlParse (include "logfire.gatewayOauthResourceUrl" . | trim)).host | quote }}
             {{- end }}
             {{ if eq (.Values.ingress.tls | default false) false }}
             - name: E2E
@@ -140,5 +136,4 @@ spec:
           emptyDir: {}
         {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName "volumeName" "logfire-frontend-tls") | nindent 8 }}
         {{- include "logfire.inClusterTls.caBundle.volume" (dict "ctx" . "volumeName" "logfire-frontend-ca") | nindent 8 }}
-{{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
-{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
+{{- template "logfire.autoscaler" (dict "root" $ "serviceName" $serviceName) }}

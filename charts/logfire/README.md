@@ -13,6 +13,7 @@ This README is the reference for each chart version: the install flow, the requi
 The [self-hosted docs](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/overview/) explain how to plan an install, and give procedures such as bucket and database migrations.
 
 The chart needs Kubernetes 1.23 or later and Helm 3 or Helm 4. CI tests it with Helm 4.2.0.
+On Kubernetes 1.30 or later, the shutdown delay hooks use the native `sleep` action. On older clusters, they run `sleep` from the container image.
 Gateway API routing also needs the Gateway API v1 CRDs in the cluster.
 
 Choose one path:
@@ -531,11 +532,63 @@ integrations:
     signingSecret: <signing secret>
 ```
 
+`clientSecret` and `signingSecret` also accept a `valueFrom` that reads your own Secret, as shown in [External secrets and automatic reloads](#external-secrets-and-automatic-reloads).
+
 ### External secrets and automatic reloads
 
 For Argo CD deployments, use the chart's existing-Secret options with an external secret controller.
 Updating a Secret does not restart pods that read it through environment variables, so also run a reload controller such as [Reloader](https://github.com/stakater/Reloader).
 The chart does not install one.
+
+Credentials outside those Secrets accept a Kubernetes `valueFrom` in place of a plain value:
+`smtp.username`, `smtp.password`, `ai.openAi.apiKey`, `ai.azureOpenAi.apiKey`, `integrations.slack.clientSecret`, `integrations.slack.signingSecret`, `webPush.privateKey`, `objectStore.sseCKeyB64`, each entry of `objectStore.env`, and each value of `otel_collector.exporter.headers` (see the end of this section).
+A plain value still works and stays out of the pod specs: the chart stores `smtp.password`, the AI API keys, `objectStore.sseCKeyB64`, and each `objectStore.env` entry whose name contains `SECRET`, `PASSWORD`, `TOKEN`, `KEY`, `CREDENTIAL`, `SAS`, or `CONNECTION` in the Secret `logfire-inline-credentials`, and the workloads read them from it.
+An `objectStore.env` value that contains `$(` stays a plain env value, so Kubernetes can expand it.
+For example:
+
+```yaml
+integrations:
+  slack:
+    clientId: <client id>
+    clientSecret:
+      valueFrom:
+        secretKeyRef:
+          name: slack-app
+          key: client-secret
+    signingSecret:
+      valueFrom:
+        secretKeyRef:
+          name: slack-app
+          key: signing-secret
+```
+
+Dex reads `$VAR` references in `logfire-dex.config` from `logfire-dex.env`, which also accepts `valueFrom`.
+The collector works the same way for `otel_collector.extraExporters`, `extraProcessors`, and `extraPipelines`, which the chart writes into a ConfigMap as given.
+Write `${env:VAR}` there and set `VAR` in `logfire-otel-collector.env`:
+
+```yaml
+otel_collector:
+  extraExporters:
+    otlp_http/vendor:
+      endpoint: https://otlp.example.com
+      headers:
+        api-key: ${env:VENDOR_API_KEY}
+  extraPipelines:
+    traces/vendor:
+      receivers: [otlp]
+      exporters: [otlp_http/vendor]
+logfire-otel-collector:
+  env:
+    VENDOR_API_KEY:
+      valueFrom:
+        secretKeyRef:
+          name: vendor-credentials
+          key: api-key
+```
+
+The chart does not hash a Secret that a `valueFrom` reads, so a workload restarts after a change to that Secret only through the reload controller.
+Put its annotation on every workload that reads the Secret.
+The Slack and web push credentials are read by `logfire-backend`, `logfire-worker`, and `logfire-task-runner`, so set `annotations` on all three.
 
 Add the reload controller's workload annotations to the Secret values.
 The chart copies them only to workloads that consume that Secret, and omits its own Helm checksum annotations there:
@@ -549,6 +602,23 @@ postgresSecret:
 ```
 
 `existingSecret`, `adminSecret`, and `existingGatewaySecret` accept the same `annotations`.
+
+To keep a collector exporter header out of the values, give it a `valueFrom` that reads your own Secret.
+The chart then passes the value to the collector as an environment variable:
+
+```yaml
+otel_collector:
+  exporter:
+    headers:
+      Authorization:
+        valueFrom:
+          secretKeyRef:
+            name: logfire-exporter-headers
+            key: authorization
+logfire-otel-collector:
+  annotations:
+    reloader.stakater.com/auto: "true"
+```
 
 ### Connection poolers
 
@@ -791,13 +861,13 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | agentSandboxes.workers.extraEgress | list | `[]` | Additional worker egress rules for administrator-approved destinations. |
 | agentSandboxes.workers.runtimeClassName | string | `""` | Installed RuntimeClass for untrusted code, such as gvisor or kata. |
 | agentSandboxes.workers.updateStrategy | string | `"Recreate"` | Recreate replaces unclaimed spares only. Claimed workers need an explicit drain. |
-| ai.azureOpenAi.apiKey | string | `nil` | Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
+| ai.azureOpenAi.apiKey | string | `nil` | Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). The chart stores a plain string in the Secret `logfire-inline-credentials`. |
 | ai.azureOpenAi.apiVersion | string | `nil` | Azure OpenAI API version |
 | ai.azureOpenAi.endpoint | string | `nil` | Azure OpenAI endpoint |
 | ai.chatModel | string | `nil` | AI provider+model string for chat-oriented workloads. Falls back to `ai.model` in the application when unset. |
 | ai.llmJudgeModel | string | `nil` | AI provider+model string for LLM-as-a-judge evaluation workloads. Falls back to `ai.model` in the application when unset. |
 | ai.model | string | `nil` | AI provider+model string. Prefix the model with the provider (e.g., `azure:gpt-4o`). Use `openai-chat:<model>` to use the Chat Completions API for OpenAI-compatible endpoints. See https://ai.pydantic.dev/models/ for more information. |
-| ai.openAi.apiKey | string | `nil` | OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
+| ai.openAi.apiKey | string | `nil` | OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). The chart stores a plain string in the Secret `logfire-inline-credentials`. |
 | ai.openAi.baseUrl | string | `nil` | OpenAI base URL for custom endpoints (e.g., Azure OpenAI proxy, local models). |
 | ai.reasoningModel | string | `nil` | AI provider+model string for reasoning-oriented worker workloads such as workflows. Falls back to `ai.model` in the chart when unset. |
 | ai.vertexAi.anthropicBaseUrl | string | `nil` | Anthropic Vertex partner-models API base URL. |
@@ -834,7 +904,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | existingGatewaySecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingGatewaySecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingGatewaySecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret  - logfire-mcp-oauth-client-secret  - logfire-web-push-vapid-key (only when webPush.enabled is true) |
+| existingSecret | object | `{"annotations":{},"enabled":false,"name":""}` | Existing Secret with the following keys:  - logfire-dex-client-secret  - logfire-encryption-key  - logfire-meta-write-token  - logfire-meta-frontend-token  - logfire-jwt-secret  - logfire-unsubscribe-secret  - logfire-mcp-oauth-client-secret  - logfire-web-push-vapid-key (only when webPush.enabled is true and webPush.privateKey does    not set valueFrom)  - logfire-slack-client-secret and logfire-slack-signing-secret (only when    integrations.slack.clientId is set, for each one that does not set valueFrom) |
 | existingSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | existingSecret.enabled | bool | `false` | Use an existing Secret (recommended for Argo CD users). |
 | existingSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
@@ -894,8 +964,8 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
 | integrations.pagerduty.appId | string | `""` | ID of a PagerDuty App with Events Integration enabled. Sets `INTEGRATION_PAGERDUTY_APP_ID` on `logfire-backend`. |
 | integrations.slack.clientId | string | `""` | Client ID of your own Slack App. Setting it turns on Slack App channels. |
-| integrations.slack.clientSecret | string | `""` | Client secret of your Slack App. With `existingSecret`, put it in that Secret under the `logfire-slack-client-secret` key instead. |
-| integrations.slack.signingSecret | string | `""` | Signing secret of your Slack App. With `existingSecret`, put it in that Secret under the `logfire-slack-signing-secret` key instead. |
+| integrations.slack.clientSecret | string | `nil` | Client secret of your Slack App. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the `logfire-slack-client-secret` key. |
+| integrations.slack.signingSecret | string | `nil` | Signing secret of your Slack App. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the `logfire-slack-signing-secret` key. |
 | keepAliveTimeout | string | `"120s"` | Idle keep-alive timeout for the HAProxy entry point. Keep it above the idle timeout of the ingress or tunnel in front of the release; if HAProxy closes an idle connection first, the client sees a 502/520 when it reuses it. |
 | logfire-ai-gateway | object | disabled | Autoscaling & resources for the `logfire-ai-gateway` pod |
 | logfire-ai-gateway.enabled | bool | `false` | Enable the AI gateway service |
@@ -967,9 +1037,9 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | migrations.postDeploy.ttlSecondsAfterFinished | int | `604800` | Seconds that Kubernetes keeps a finished post-deploy migration Job. Set it to `null` to keep finished Jobs. With Argo CD self-heal, Argo CD creates the Job again after Kubernetes deletes it. The new Job finds nothing to apply and exits. |
 | nodeSelector | object | `{}` | Node selector applied to all workloads |
 | objectStore | object | `{"env":{},"sessionReplayUri":null,"sseCKeyB64":null,"uri":null,"visualTestsUri":null,"volumeMounts":[],"volumes":[]}` | Object storage details |
-| objectStore.env | object | `{}` | Additional environment variables for the object store connection. String values support Helm templating. When the in-cluster RustFS store is enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. The backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint alias the Python S3 client accepts, and Azure clients read `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or `AZURE_STORAGE_CONNECTION_STRING`. |
+| objectStore.env | object | `{}` | Additional environment variables for the object store connection. String values support Helm templating. When the in-cluster RustFS store is enabled, missing `AWS_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_ALLOW_HTTP` values are filled in from the in-cluster store. The backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint alias the Python S3 client accepts, and Azure clients read `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or `AZURE_STORAGE_CONNECTION_STRING`. The chart stores a plain value whose name contains SECRET, PASSWORD, TOKEN, KEY, CREDENTIAL, SAS, or CONNECTION in the Secret `logfire-inline-credentials`, unless the value contains `$(`. Any entry also accepts a map with valueFrom. |
 | objectStore.sessionReplayUri | string | `nil` | Optional override for the session-replay blob store, e.g. `s3://logfire-replays`. Defaults to `<uri>/session-replays`. The bucket or container must exist, and it must be reachable with the same endpoint and credentials as `uri`: a different account or provider needs its own `env` and credential volumes, which the per-service `env` lists under `logfire-backend` and `logfire-worker` can carry. |
-| objectStore.sseCKeyB64 | string | `nil` | Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C). Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy requests. Only used when the object store is S3, and only for FusionFire: the session-replay and visual-test objects do not use SSE-C.  IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on a bucket that already contains FusionFire data will break all reads of the pre-existing objects. losing the key means losing the data — AWS does not store it. |
+| objectStore.sseCKeyB64 | string | `nil` | Opt-in S3 Server-Side Encryption with Customer-provided Keys (SSE-C). Base64-encoded 256-bit key applied to all S3 PUT/GET/HEAD/multipart/copy requests. Only used when the object store is S3, and only for FusionFire: the session-replay and visual-test objects do not use SSE-C.  IMPORTANT: this MUST be set from day one on an empty bucket. Enabling it on a bucket that already contains FusionFire data will break all reads of the pre-existing objects. losing the key means losing the data — AWS does not store it. The chart stores a plain value in the Secret `logfire-inline-credentials`; a map with valueFrom reads your own Secret. |
 | objectStore.uri | string | `nil` | URI for object storage (e.g., `s3://bucket`). Supports Helm templating, e.g. `s3://logfire-{{ .Release.Name }}` to derive a bucket per release. When `dev.deployRustfs` is enabled and this is empty, it defaults to `s3://<rustfs.bucket>`.  The backend and the worker keep session replay and visual-test blobs under the `session-replays/` and `visual-tests/` prefixes of the same bucket, and receive the `env` entries and `volumeMounts` below, so one object store serves FusionFire and both Python services. |
 | objectStore.visualTestsUri | string | `nil` | Optional override for the visual-test blob store, e.g. `az://logfirefiles/visual-tests`. Defaults to `<uri>/visual-tests`, with the same requirements as `sessionReplayUri`. |
 | objectStore.volumeMounts | list | `[]` | Volume mounts for object store credentials, on FusionFire, the backend and the worker. The chart reserves the mount paths `/tmp`, `/scratch`, `/fusionfire/ingest-data`, and `/var/lib/logfire` for its own volumes, adds `/etc/tls` and `/etc/logfire/incluster-ca` when in-cluster TLS is enabled, and `/etc/logfire/smtp-ca` while the SMTP CA bundle is configured. |
@@ -979,8 +1049,9 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | otel_collector | object | `{"debug":{"enabled":false},"exporter":{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}},"extraExporters":{},"extraPipelines":{},"extraProcessors":{},"image":{"pullPolicy":"IfNotPresent","repository":"ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib","tag":"0.163.1@sha256:1175b03003053962012f5a231f5567f66a3e8fdb960c7835c0e48f7aa1555806"},"prometheus":{"add_metric_suffixes":false,"delta_to_cumulative":true,"enable_open_metrics":true,"enabled":false,"endpoint":"0.0.0.0","max_stale":"5m","max_streams":10000,"metric_expiration":"180m","port":9090,"resource_to_telemetry_conversion":{"enabled":true},"send_timestamp":true,"translation_strategy":""},"queueStorage":{"enabled":true,"ephemeralStorageLimit":"5Gi","ephemeralStorageRequest":"512Mi","fsync":false,"maxSizeBytes":536870912,"sizeLimit":"4Gi"},"selfMetrics":{"enabled":true},"selfMetricsPort":8888,"sendingQueueBytes":67108864,"serviceAccount":{"annotations":{}}}` | otel-collector configuration |
 | otel_collector.debug.enabled | bool | `false` | Emit per-request summaries to collector logs. Enable for troubleshooting; disabled by default to avoid logging every incoming telemetry request. |
 | otel_collector.exporter | object | `{"endpoint":"http://logfire-ff-ingest:8012","headers":{},"sending_queue":{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}},"tls":{"insecure":true}}` | exporter configuration for the otlp_http exporter Override these to send telemetry data to a different OTLP-compatible destination. |
+| otel_collector.exporter.headers | object | `{}` | Exporter headers. The chart moves each string value to the Secret `logfire-otel-collector-exporter-headers`, and the config reads it from an environment variable. These stay in the collector ConfigMap as written: a list of headers, values that are not strings, values that contain `$`, and integers too large for int64. Quote numeric credentials. To keep a value out of the chart values, give the header a Kubernetes `valueFrom`, for example `Authorization: {valueFrom: {secretKeyRef: {name: my-secret, key: authorization}}}`. |
 | otel_collector.exporter.sending_queue | object | `{"batch":{"flush_timeout":"1s","max_size":4194304,"min_size":1048576,"sizer":"bytes"}}` | Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP ingestion, so senders can retry refused data. Queue limits measure serialized bytes. The queue capacity still comes from the sizing preset or sendingQueueBytes unless queue_size is explicitly overridden here. Each signal has its own queue and consumers. |
-| otel_collector.extraExporters | object | `{}` | Additional collector exporters. Chart-owned component names are reserved. |
+| otel_collector.extraExporters | object | `{}` | Additional collector exporters. Chart-owned component names are reserved. The chart writes them into the collector ConfigMap as given, so reference credentials as `${env:VAR}` and set `VAR` in `logfire-otel-collector.env` with a `valueFrom`. See "External secrets and automatic reloads" in the README. |
 | otel_collector.extraPipelines | object | `{}` | Additional collector pipelines. The chart's existing telemetry pipelines stay unchanged. |
 | otel_collector.extraProcessors | object | `{}` | Additional collector processors. These only run in pipelines that reference them. |
 | otel_collector.prometheus.delta_to_cumulative | bool | `true` | Convert delta metrics to cumulative for Prometheus with the alpha `delta_to_cumulative` processor. Runs only when `otel_collector.prometheus.enabled` is true. The OTLP pipeline keeps delta metrics unchanged. Each stream must reach the same collector replica. Cumulative state resets when that replica is replaced. Set false to pass metrics through unchanged. |
@@ -1014,10 +1085,10 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | redisSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | redisSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
 | redisSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| releaseVersion | string | `"v2026-11-19.02"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
+| releaseVersion | string | `"v2026-11-24.02"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
-| rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values. |
+| rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. The chart stores them in the Secret `logfire-rustfs`, and the workloads read them from there unless `objectStore.env` sets `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY`. |
 | rustfs.bucket | string | `"logfire"` | Bucket that RustFS creates at startup when `objectStore.uri` is not an `s3://` URI. With an `s3://` `objectStore.uri`, the bucket in the URI is used. |
 | rustfs.image.pullPolicy | string | `""` | RustFS image pull policy. Defaults to `image.pullPolicy` when unset. |
 | rustfs.image.repository | string | `"rustfs/rustfs"` | RustFS image repository |
@@ -1039,7 +1110,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | smtp.fromAddress | string | `nil` | Sender address of every email Logfire sends (`From` and SMTP envelope sender), such as `logfire@example.com`. Required when `smtp.host` is set. Use an address on a domain that your SMTP server may send for. Logfire does not send email as `pydantic.dev` from a self-hosted install. |
 | smtp.fromName | string | `nil` | Sender display name of every email Logfire sends. If it is not set, the name is `Pydantic Logfire`. |
 | smtp.host | string | `nil` | SMTP server hostname |
-| smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). |
+| smtp.password | string | `nil` | SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). The chart stores a plain string in the Secret `logfire-inline-credentials`. |
 | smtp.port | int | `25` | SMTP server port |
 | smtp.use_tls | bool | `false` | Use implicit TLS from the first byte, for SMTPS ports such as 465. If it is false, Logfire connects in plaintext and upgrades with STARTTLS whenever the server offers it, which is what a port 25 or 587 relay expects. |
 | smtp.username | string | `nil` | SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). Leave both username and password unset for a relay that does not use authentication; set both or neither. |
@@ -1055,7 +1126,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | usageRedis.prefix | string | `""` | Key prefix for usage keys. |
 | variablesApiKey | string | `""` | Client-safe API key used by the frontend to evaluate external managed variables through OFREP. The key is written to the public runtime configuration, so it must only have the `project:read_external_variables` scope. |
 | webPush.enabled | bool | `false` | Let users turn on browser push notifications for alerts. Needs the deployment to be served over HTTPS, since browsers register a service worker only on a secure origin. While this is false the settings panel reports push as unavailable. |
-| webPush.privateKey | string | `""` | VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one and keep it across upgrades. Replacing it unregisters every device that had push on, which each browser recovers from by subscribing again on its next visit. |
+| webPush.privateKey | string | `nil` | VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one and keep it across upgrades. Can also be a map with valueFrom (e.g., secretKeyRef) that reads your own Secret. Replacing it unregisters every device that had push on, which each browser recovers from by subscribing again on its next visit. |
 | webPush.subject | string | `""` | Contact the push service operator can reach you on, a `mailto:` or `https:` URL (RFC 8292). Defaults to `mailto:` and `adminEmail`. |
 
 ----------------------------------------------

@@ -210,3 +210,65 @@ tests:
                 key: logfire-web-push-vapid-key
         template: templates/logfire-backend.yaml
         documentIndex: 1
+
+  - it: a key set with valueFrom is read from the user's Secret and the chart creates none
+    set:
+      webPush:
+        enabled: true
+        privateKey:
+          valueFrom:
+            secretKeyRef: {name: push-keys, key: vapid}
+    templates:
+      - templates/secrets.yaml
+      - templates/logfire-worker.yaml
+    asserts:
+      - containsDocument:
+          kind: Secret
+          apiVersion: v1
+          name: logfire-web-push-vapid-key
+          any: true
+        not: true
+        template: templates/secrets.yaml
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEB_PUSH_VAPID_PRIVATE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: push-keys
+                key: vapid
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - notExists:
+          path: spec.template.metadata.annotations["checksum/logfire-web-push-vapid-key"]
+        template: templates/logfire-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+
+  - it: a key set with valueFrom wins over existingSecret
+    set:
+      existingSecret:
+        enabled: true
+        name: my-shared-secret
+      webPush:
+        enabled: true
+        privateKey:
+          valueFrom:
+            secretKeyRef: {name: push-keys, key: vapid}
+    templates:
+      - templates/logfire-task-runner.yaml
+    documentSelector:
+      path: kind
+      value: Deployment
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEB_PUSH_VAPID_PRIVATE_KEY
+            valueFrom:
+              secretKeyRef:
+                name: push-keys
+                key: vapid

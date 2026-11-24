@@ -38,7 +38,7 @@ variablesApiKey: ""
 frontendApplicationToken: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: "v2026-11-19.02"
+releaseVersion: "v2026-11-24.02"
 
 # -- CRUD database migration Job settings.
 migrations:
@@ -360,7 +360,7 @@ smtp:
   port: 25
   # -- SMTP username. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). Leave both username and password unset for a relay that does not use authentication; set both or neither.
   username:
-  # -- SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
+  # -- SMTP password. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). The chart stores a plain string in the Secret `logfire-inline-credentials`.
   password:
   # -- Use implicit TLS from the first byte, for SMTPS ports such as 465. If it is false, Logfire connects in plaintext and upgrades with STARTTLS whenever the server offers it, which is what a port 25 or 587 relay expects.
   use_tls: false
@@ -411,9 +411,11 @@ webPush:
   subject: ""
   # -- VAPID private key: 32 bytes of P-256 private scalar, unpadded base64url, as
   # `npx web-push generate-vapid-keys` prints it. Leave empty to have the chart generate one
-  # and keep it across upgrades. Replacing it unregisters every device that had push on, which
-  # each browser recovers from by subscribing again on its next visit.
-  privateKey: ""
+  # and keep it across upgrades. Can also be a map with valueFrom (e.g., secretKeyRef) that reads
+  # your own Secret. Replacing it unregisters every device that had push on, which each browser
+  # recovers from by subscribing again on its next visit.
+  # @default -- `nil`
+  privateKey:
 
 
 # ==============================================================================
@@ -424,12 +426,16 @@ integrations:
   slack:
     # -- Client ID of your own Slack App. Setting it turns on Slack App channels.
     clientId: ""
-    # -- Client secret of your Slack App. With `existingSecret`, put it in that Secret under the
-    # `logfire-slack-client-secret` key instead.
-    clientSecret: ""
-    # -- Signing secret of your Slack App. With `existingSecret`, put it in that Secret under the
-    # `logfire-slack-signing-secret` key instead.
-    signingSecret: ""
+    # -- Client secret of your Slack App. Can be a plain string or a map with valueFrom (e.g.,
+    # secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the
+    # `logfire-slack-client-secret` key.
+    # @default -- `nil`
+    clientSecret:
+    # -- Signing secret of your Slack App. Can be a plain string or a map with valueFrom (e.g.,
+    # secretKeyRef). With `existingSecret`, you can instead put it in that Secret under the
+    # `logfire-slack-signing-secret` key.
+    # @default -- `nil`
+    signingSecret:
   pagerduty:
     # -- ID of a PagerDuty App with Events Integration enabled. Sets
     # `INTEGRATION_PAGERDUTY_APP_ID` on `logfire-backend`.
@@ -451,7 +457,7 @@ ai:
   llmJudgeModel:
 
   openAi:
-    # -- OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
+    # -- OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). The chart stores a plain string in the Secret `logfire-inline-credentials`.
     apiKey:
     # -- OpenAI base URL for custom endpoints (e.g., Azure OpenAI proxy, local models).
     baseUrl:
@@ -469,7 +475,7 @@ ai:
   azureOpenAi:
     # -- Azure OpenAI endpoint
     endpoint:
-    # -- Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef).
+    # -- Azure OpenAI API key. Can be a plain string or a map with valueFrom (e.g., secretKeyRef). The chart stores a plain string in the Secret `logfire-inline-credentials`.
     apiKey:
     # -- Azure OpenAI API version
     apiVersion:
@@ -1595,6 +1601,8 @@ objectStore:
   # a bucket that already contains FusionFire data will break all reads of the
   # pre-existing objects.
   # losing the key means losing the data — AWS does not store it.
+  # The chart stores a plain value in the Secret `logfire-inline-credentials`;
+  # a map with valueFrom reads your own Secret.
   sseCKeyB64:
   # -- Additional environment variables for the object store connection.
   # String values support Helm templating. When the in-cluster RustFS store is
@@ -1603,7 +1611,10 @@ objectStore:
   # backend and the worker read the same names: `AWS_ENDPOINT` is the endpoint
   # alias the Python S3 client accepts, and Azure clients read
   # `AZURE_STORAGE_ACCOUNT_NAME` and `AZURE_STORAGE_ACCOUNT_KEY`, or
-  # `AZURE_STORAGE_CONNECTION_STRING`.
+  # `AZURE_STORAGE_CONNECTION_STRING`. The chart stores a plain value whose
+  # name contains SECRET, PASSWORD, TOKEN, KEY, CREDENTIAL, SAS, or CONNECTION in the Secret
+  # `logfire-inline-credentials`, unless the value contains `$(`. Any entry
+  # also accepts a map with valueFrom.
   env: {}
   # -- Volume mounts for object store credentials, on FusionFire, the backend and the
   # worker. The chart reserves the mount paths `/tmp`, `/scratch`, `/fusionfire/ingest-data`,
@@ -1941,7 +1952,10 @@ otel_collector:
   serviceAccount:
     # -- Annotations for the collector's ServiceAccount, for example a Workload Identity binding.
     annotations: {}
-  # -- Additional collector exporters. Chart-owned component names are reserved.
+  # -- Additional collector exporters. Chart-owned component names are reserved. The chart writes
+  # them into the collector ConfigMap as given, so reference credentials as `${env:VAR}` and set
+  # `VAR` in `logfire-otel-collector.env` with a `valueFrom`. See "External secrets and automatic
+  # reloads" in the README.
   extraExporters: {}
   # -- Additional collector processors. These only run in pipelines that reference them.
   extraProcessors: {}
@@ -1988,6 +2002,13 @@ otel_collector:
     endpoint: http://logfire-ff-ingest:8012
     tls:
       insecure: true
+    # -- Exporter headers. The chart moves each string value to the Secret
+    # `logfire-otel-collector-exporter-headers`, and the config reads it from an environment
+    # variable. These stay in the collector ConfigMap as written: a list of headers, values that
+    # are not strings, values that contain `$`, and integers too large for int64. Quote numeric
+    # credentials. To keep a value out of the chart values, give the header a Kubernetes
+    # `valueFrom`, for example
+    # `Authorization: {valueFrom: {secretKeyRef: {name: my-secret, key: authorization}}}`.
     headers: {}
     # -- Exporter queue overrides. Batching here keeps queue rejection synchronous with OTLP
     # ingestion, so senders can retry refused data. Queue limits measure serialized bytes.
@@ -2048,7 +2069,10 @@ otel_collector:
 #  - logfire-jwt-secret
 #  - logfire-unsubscribe-secret
 #  - logfire-mcp-oauth-client-secret
-#  - logfire-web-push-vapid-key (only when webPush.enabled is true)
+#  - logfire-web-push-vapid-key (only when webPush.enabled is true and webPush.privateKey does
+#    not set valueFrom)
+#  - logfire-slack-client-secret and logfire-slack-signing-secret (only when
+#    integrations.slack.clientId is set, for each one that does not set valueFrom)
 existingSecret:
   # -- Use an existing Secret (recommended for Argo CD users).
   enabled: false
@@ -2187,7 +2211,7 @@ rustfs:
     tag: "1.0.0"
     # -- RustFS image pull policy. Defaults to `image.pullPolicy` when unset.
     pullPolicy: ""
-  # -- Root credentials. Set `objectStore.env.AWS_ACCESS_KEY_ID` and `objectStore.env.AWS_SECRET_ACCESS_KEY` to the same values.
+  # -- Root credentials. The chart stores them in the Secret `logfire-rustfs`, and the workloads read them from there unless `objectStore.env` sets `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY`.
   auth:
     accessKey: logfire-rustfs
     secretKey: logfire-rustfs

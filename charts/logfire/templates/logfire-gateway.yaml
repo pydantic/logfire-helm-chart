@@ -3,7 +3,10 @@
 {{- $hosts := $result.hosts -}}
 {{- $hasHosts := gt (len $hosts) 0 -}}
 {{- $tls := include "logfire.effective_tls" . | eq "true" -}}
-{{- $tlsSecret := include "logfire.effective_tls_secret" . -}}
+{{- $tlsSecret := .Values.ingress.secretName | default "logfire-frontend-cert" -}}
+{{- if .Values.gateway.tlsSecretName -}}
+{{- $tlsSecret = .Values.gateway.tlsSecretName -}}
+{{- end -}}
 {{- $gatewayName := .Values.gateway.name | default "logfire-gateway" -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway

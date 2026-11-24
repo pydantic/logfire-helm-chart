@@ -3,7 +3,10 @@
 {{- $podSecurityContext := include "logfire.fusionfirePodSecurityContext" (dict "ctx" . "serviceName" $serviceName) | fromJson -}}
 {{- $serviceValues := get .Values $serviceName | default dict -}}
 {{- $effectiveServiceValues := include "logfire.effectiveServiceValues" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
-{{- $directFileSettings := include "logfire.ffIngestDirectFileSettings" (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $effectiveResources := include "logfire.effectiveResources"
+    (dict "Values" .Values "serviceName" $serviceName) | fromJson -}}
+{{- $cpuMilli := include "logfire.cpuMilli" $effectiveResources.cpuRequest | int -}}
+{{- $memoryMi := include "logfire.memoryToMi" $effectiveResources.memoryRequest | int -}}
 {{- $ioThreads := get $effectiveServiceValues "ioThreads" | default "auto" -}}
 {{- $datafusionThreads := get $effectiveServiceValues "datafusionThreads" | default "auto" -}}
 
@@ -63,6 +66,12 @@ spec:
         {{- with (include "logfire.redisSecretChecksumAnnotation" (dict "ctx" .) | trim) }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- with (include "logfire.rustfsChecksumAnnotation" . | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
+        {{- with (include "logfire.inlineCredentialsChecksumAnnotation" (dict "ctx" . "prefixes" (list "objectStore.")) | trim) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- include "logfire.podAnnotations" (dict "Values" .Values "serviceName" $serviceName) | nindent 8 }}
     spec:
       {{- include "logfire.standardPodSpecFields" (dict "ctx" . "serviceName" $serviceName "podSecurityContext" $podSecurityContext) | nindent 6 }}
@@ -82,11 +91,7 @@ spec:
               containerPort: 8012
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
           lifecycle:
-            preStop:
-              exec:
-                command:
-                  - "sleep"
-                  - "15"
+            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 15) | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: logfire-ff-base-config
@@ -102,11 +107,14 @@ spec:
             - name: FF_INGEST_DOWNSTREAM_URL
               value: "{{ include "logfire.scheme" . }}://logfire-ff-ingest-processor:{{ include "logfire.port" (dict "port" 8012 "root" .) }}"
             - name: FF_INGEST_DIRECT_FILE_BUFFER_MAX_BYTES
-              value: {{ get $directFileSettings "bufferMaxBytes" | quote }}
+              value: {{ get $effectiveServiceValues "directFileBufferMaxBytes"
+                | default (printf "%dMB" (min 8 (max 1 (div $memoryMi 256)))) | quote }}
             - name: FF_INGEST_DIRECT_FILE_IDLE_BUFFER_TIME
               value: "5s"
             - name: FF_DIRECT_FILE_INGEST_SUBMIT_CONCURRENCY
-              value: {{ get $directFileSettings "submitConcurrency" | quote }}
+              value: {{ get $effectiveServiceValues "directFileSubmitConcurrency"
+                | default (min 128 (max 4 (div (add $cpuMilli 31) 32)) (max 4 (div $memoryMi 64)))
+                | quote }}
             {{- include "logfire.ffResourceEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
             - name: FF_IO_THREADS
               value: {{ $ioThreads | quote }}
@@ -136,7 +144,7 @@ spec:
             {{- include "logfire.ffStartupProbe" (dict "port" 8012) | nindent 12 }}
           volumeMounts:
             {{- include "logfire.tmpVolumeMounts" . | nindent 12 }}
-            - name: {{ include "logfire.ingestVolumeName" . }}
+            - name: ingest-data
               mountPath: "/fusionfire/ingest-data"
             {{- include "logfire.objectStoreVolumeMounts" . | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/etc/logfire/incluster-ca") | nindent 12 }}
@@ -149,7 +157,14 @@ spec:
         {{- include "logfire.inClusterTls.server.volume" (dict "ctx" . "serviceName" $serviceName) | nindent 8 }}
         {{- include "logfire.objectStoreVolumes" . | nindent 8 }}
   volumeClaimTemplates:
-      {{- include "logfire.ingestVolume" (dict "root" . "ingestVolume" (get $effectiveServiceValues "volumeClaimTemplates" | default dict)) | nindent 4 }}
+      {{- $ingestVolume := get $effectiveServiceValues "volumeClaimTemplates" | default dict }}
+    - metadata:
+        name: ingest-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        {{- include "logfire.storageClassName" (dict "root" . "values" $ingestVolume) | nindent 8 }}
+        resources:
+          requests:
+            storage: {{ $ingestVolume.storage }}
 
-{{- template "logfire.autoscaler" (dict "Values" .Values "serviceName" $serviceName) }}
-{{- template "logfire.pdb" (dict "root" $ "serviceName" $serviceName) }}
+{{- template "logfire.autoscaler" (dict "root" $ "serviceName" $serviceName) }}
