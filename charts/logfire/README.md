@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.5-rc.5](https://img.shields.io/badge/Version-0.15.5--rc.5-informational?style=flat-square) ![AppVersion: 9f15587a](https://img.shields.io/badge/AppVersion-9f15587a-informational?style=flat-square)
+![Version: 0.15.5-rc.6](https://img.shields.io/badge/Version-0.15.5--rc.6-informational?style=flat-square) ![AppVersion: ca414cd6](https://img.shields.io/badge/AppVersion-ca414cd6-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -1060,7 +1060,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | redisSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | redisSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
 | redisSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| releaseVersion | string | `"v2026-11-20.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
+| releaseVersion | string | `"v2026-11-24.03"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
 | rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. The chart stores them in the Secret `logfire-rustfs`, and the workloads read them from there unless `objectStore.env` sets `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY`. |
