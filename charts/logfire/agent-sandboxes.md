@@ -25,9 +25,6 @@ not a substitute for this integration.
 - The Monty images come from the same platform release as the rest of the chart,
   under `image.repository`. The selected registry must contain all four Monty images.
   Verify their availability before enabling Agent Sandboxes.
-  The older `6dc21200` admission image does not support HTTP-only operation.
-  The chart rejects that image when `inClusterTls.enabled` is false.
-  Select compatible matching images through `image.tag` for HTTP-only operation.
 - Supply the canonical Postgres database and Redis through the chart's existing settings.
   Supply the independent Monty stores as described below.
   The broker uses the object-store provider environment and credential

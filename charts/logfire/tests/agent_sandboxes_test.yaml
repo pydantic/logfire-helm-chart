@@ -866,14 +866,6 @@ tests:
       - failedTemplate:
           errorPattern: gRPC routes require Exact or PathPrefix gateway.matches
 
-  - it: refuses the known incompatible admission image without in-cluster TLS
-    set:
-      image.tag: 6dc21200
-      inClusterTls.enabled: false
-    asserts:
-      - failedTemplate:
-          errorPattern: requires a compatible admission image for HTTP
-
   - it: couples the TLS gRPC listener to the in-cluster certificate and an HTTP/2 TLS backend
     set:
       ingress.enabled: true
