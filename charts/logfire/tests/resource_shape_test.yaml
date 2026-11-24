@@ -322,7 +322,7 @@ tests:
             sleep:
               seconds: 5
 
-  - it: preStop runs sleep from the image before Kubernetes 1.30
+  - it: containers have no preStop hook before Kubernetes 1.30
     capabilities:
       majorVersion: "1"
       minorVersion: "29"
@@ -332,8 +332,5 @@ tests:
       path: kind
       value: Deployment
     asserts:
-      - equal:
-          path: spec.template.spec.containers[0].lifecycle.preStop
-          value:
-            exec:
-              command: ["sleep", "5"]
+      - notExists:
+          path: spec.template.spec.containers[0].lifecycle
