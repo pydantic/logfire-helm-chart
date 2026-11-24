@@ -3,7 +3,7 @@
 {{- end -}}
 {{- /* A Monty image from the chart's platform release, like every other platform image. */}}
 {{- define "logfire.agentSandboxes.image" -}}
-{{- printf "%s%s:%s" .root.Values.image.repository .name (include "logfire.serviceTag" (dict "Values" .root.Values "Chart" .root.Chart "serviceName" .name)) -}}
+{{- printf "%s%s:%s" (dig "imageRepository" "us-docker.pkg.dev/pydantic-public-registries/agent-sandboxes/" .root.Values.agentSandboxes) .name (include "logfire.serviceTag" (dict "Values" .root.Values "Chart" .root.Chart "serviceName" .name)) -}}
 {{- end -}}
 {{- define "logfire.agentSandboxes.secret" -}}
 {{- default (printf "%s-agent-sandboxes" .Release.Name) .Values.agentSandboxes.existingSecret -}}

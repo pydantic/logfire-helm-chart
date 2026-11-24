@@ -23,8 +23,8 @@ not a substitute for this integration.
   They cannot reach the database, Redis or snapshot storage.
 - Select the internal transport described below. The public ingress TLS setting is independent.
 - The Monty images come from the same platform release as the rest of the chart,
-  under `image.repository`. The selected registry must contain all four Monty images.
-  Verify their availability before enabling Agent Sandboxes.
+  under `agentSandboxes.imageRepository`. A mirror must contain all four Monty images
+  with the chart's platform image tag.
 - Supply the canonical Postgres database and Redis through the chart's existing settings.
   Supply the independent Monty stores as described below.
   The broker uses the object-store provider environment and credential

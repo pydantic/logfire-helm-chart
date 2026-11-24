@@ -36,7 +36,7 @@ tests:
     asserts:
       - equal:
           path: spec.template.spec.containers[0].image
-          value: us-docker.pkg.dev/pydantic-public-registries/logfire/logfire-monty-admission:test-release
+          value: us-docker.pkg.dev/pydantic-public-registries/agent-sandboxes/logfire-monty-admission:test-release
       - equal:
           path: spec.template.spec.containers[0].command
           value: [/usr/local/bin/logfire-monty-admission]

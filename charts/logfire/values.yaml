@@ -3457,7 +3457,9 @@ agentSandboxes:
   # -- Read worker resource metrics for pressure sensing. Requires a metrics.k8s.io provider.
   # Enables the controller's namespaced PodMetrics RBAC. Session capacity limits remain active when disabled.
   pressureEnabled: false
-  # -- Repository names under image.repository. Each uses the chart's platform image tag.
+  # -- Registry prefix for the Monty images, with a trailing slash. Override it to use a mirror.
+  imageRepository: us-docker.pkg.dev/pydantic-public-registries/agent-sandboxes/
+  # -- Repository names under imageRepository. Each uses the chart's platform image tag.
   images:
     control: logfire-monty-control-prod
     admission: logfire-monty-admission
