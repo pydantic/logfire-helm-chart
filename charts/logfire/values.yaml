@@ -26,7 +26,7 @@ clusterDomain: cluster.local
 # -- Starter admin email address
 adminEmail: hello@example.dev
 
-# -- (bool) Override Allow Organization Creation. Leave unset to use the setting in Platform Admin. Requires a backend image that supports `ALLOW_ORGANIZATION_CREATION`.
+# -- (bool) Override Allow Organization Creation. Leave unset to use the setting in Platform Admin.
 allowOrganizationCreation: null
 
 # -- Client-safe API key used by the frontend to evaluate external managed variables through OFREP.
