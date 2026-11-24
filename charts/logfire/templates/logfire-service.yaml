@@ -81,8 +81,7 @@ spec:
               readOnly: true
             {{- include "logfire.inClusterTls.server.volumeMount" (dict "ctx" . "mountPath" "/usr/local/etc/haproxy/tls") | nindent 12 }}
             {{- include "logfire.inClusterTls.caBundle.volumeMount" (dict "ctx" . "mountPath" "/usr/local/etc/haproxy/ca") | nindent 12 }}
-          lifecycle:
-            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 5) | nindent 12 }}
+          {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 5) | nindent 10 }}
           ports:
             - containerPort: 8080
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}

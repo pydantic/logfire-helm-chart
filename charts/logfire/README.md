@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.5-rc.5](https://img.shields.io/badge/Version-0.15.5--rc.5-informational?style=flat-square) ![AppVersion: 9f15587a](https://img.shields.io/badge/AppVersion-9f15587a-informational?style=flat-square)
+![Version: 0.15.5-rc.6](https://img.shields.io/badge/Version-0.15.5--rc.6-informational?style=flat-square) ![AppVersion: 9f15587a](https://img.shields.io/badge/AppVersion-9f15587a-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -13,7 +13,7 @@ This README is the reference for each chart version: the install flow, the requi
 The [self-hosted docs](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/overview/) explain how to plan an install, and give procedures such as bucket and database migrations.
 
 The chart needs Kubernetes 1.23 or later and Helm 3 or Helm 4. CI tests it with Helm 4.2.0.
-On Kubernetes 1.30 or later, the shutdown delay hooks use the native `sleep` action. On older clusters, they run `sleep` from the container image.
+On Kubernetes 1.30 or later, the shutdown delay hooks use the native `sleep` action. Older clusters get no shutdown delay hook, so a rollout can briefly send requests to a pod that is stopping.
 Gateway API routing also needs the Gateway API v1 CRDs in the cluster.
 
 Choose one path:
