@@ -1989,10 +1989,11 @@ initContainers:
 {{/*
 The container lifecycle with a preStop hook that delays shutdown, so endpoint removal reaches the
 load balancers before the process stops. It uses the native `sleep` action, so the image needs no
-`sleep` binary. Kubernetes enables that action by default from 1.30. Older clusters get no hook,
+`sleep` binary. Kubernetes enables that action by default from 1.30. On older clusters, an image
+that ships `container-probe` runs `container-probe sleep` in its place. Other images get no hook,
 and the container stops as soon as Kubernetes sends SIGTERM.
 
-Pass (dict "ctx" $ "seconds" N).
+Pass (dict "ctx" $ "seconds" N), and add "probe" true for an image that ships `container-probe`.
 */}}
 {{- define "logfire.preStopSleep" -}}
 {{- if semverCompare ">=1.30-0" .ctx.Capabilities.KubeVersion.Version -}}
@@ -2000,5 +2001,10 @@ lifecycle:
   preStop:
     sleep:
       seconds: {{ .seconds }}
+{{- else if .probe -}}
+lifecycle:
+  preStop:
+    exec:
+      command: ["container-probe", "sleep", {{ .seconds | quote }}]
 {{- end }}
 {{- end -}}

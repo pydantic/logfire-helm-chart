@@ -82,7 +82,7 @@ spec:
             - name: http
               containerPort: 8012
             {{- include "logfire.inClusterTls.https.containerPort" (dict "ctx" .) | nindent 12 }}
-          {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 15) | nindent 10 }}
+          {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 15 "probe" true) | nindent 10 }}
           envFrom:
             - configMapRef:
                 name: logfire-ff-base-config
