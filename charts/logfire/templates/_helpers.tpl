@@ -334,9 +334,44 @@ cannot return a top-level array.
 {{- end -}}
 {{- end -}}
 
+{{/*
+Ingest-only hostnames (`intake.hostnames`), wrapped as {"hosts": [...]} like
+`logfire.effective_hostnames`. They receive telemetry and serve no UI, so they are not part of the
+frontend hostnames: no Dex redirect URI, CORS origin or nginx server_name.
+*/}}
+{{- define "logfire.intake_hostnames" -}}
+{{- dict "hosts" ((.Values.intake | default dict).hostnames | default list) | toJson -}}
+{{- end -}}
+
+{{/* The paths an ingest-only hostname serves: the ones `logfire-service` sends to the ingest backend
+(`path_ingest` in logfire-service-config.yaml), the intake OAuth metadata, the SDK's token check and
+the health check. */}}
+{{- define "logfire.intake_paths" -}}
+{{- dict "paths" (list "/v1/traces" "/v1/metrics" "/v1/logs" "/v1/firehose/logs" "/v1development/profiles" "/.well-known/oauth-protected-resource/v1" "/v1/info" "/health") | toJson -}}
+{{- end -}}
+
+{{/* Where SDKs and browsers send telemetry: the first ingest-only hostname, else the Logfire URL. */}}
+{{- define "logfire.intake_base_url" -}}
+{{- with (include "logfire.intake_hostnames" . | fromJson).hosts -}}
+{{ include "logfire.effective_tls" $ | eq "true" | ternary "https" "http" }}://{{ first . }}
+{{- else -}}
+{{ include "logfire.url" . | trim }}
+{{- end -}}
+{{- end -}}
+
+{{/* Frontend and ingest-only URLs, for the browser's `connect-src`. */}}
+{{- define "logfire.csp_connect_urls" -}}
+{{- $scheme := include "logfire.effective_tls" . | eq "true" | ternary "https" "http" -}}
+{{- $urls := list (include "logfire.all_urls" .) -}}
+{{- range (include "logfire.intake_hostnames" . | fromJson).hosts -}}
+  {{- $urls = append $urls (printf "%s://%s" $scheme .) -}}
+{{- end -}}
+{{- join " " $urls -}}
+{{- end -}}
+
 {{/* Public OTLP intake resource URL (RFC 8707 audience). */}}
 {{- define "logfire.intakeOauthResourceUrl" -}}
-{{- .Values.intakeOauth.resourceUrl | default (printf "%s/v1" (include "logfire.url" . | trim)) -}}
+{{- .Values.intakeOauth.resourceUrl | default (printf "%s/v1" (include "logfire.intake_base_url" . | trim)) -}}
 {{- end -}}
 
 {{/* Public AI gateway resource URL (RFC 8707 audience). */}}

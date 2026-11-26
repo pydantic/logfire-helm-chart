@@ -53,6 +53,10 @@ The release checks cover:
 | Metric storage | An ingested counter is queried through its value struct |
 | Frontend contracts | The image serves its build identity, worker and frame policies, and setup Markdown |
 
+`test_haproxy_edge.py` needs no cluster. It renders the chart with `helm template`, runs the pinned HAProxy
+image with `docker` in front of a stub upstream, and sends requests with chosen `Host`, `X-Forwarded-Host`,
+`Origin` and `Location` headers. It needs `helm` and `docker` on the `PATH`.
+
 Kind uses RustFS for the existing telemetry object store. The suite does not test live
 cloud IAM. Scheduled-query storage remains a follow-up while Reports is experimental.
 The metric fixture uses a numeric JSON int: the pinned platform decoder drops string-valued

@@ -55,3 +55,11 @@ async def test_frontend_shell_serves_the_spa(client: httpx.AsyncClient) -> None:
     response = await client.get("/")
     assert response.is_success, response.text
     assert "text/html" in response.headers.get("content-type", ""), response.headers
+
+
+@pytest.mark.parametrize("path", ["/.well-known/passkey-endpoints", "/.well-known/oauth-client/logfire-cli"])
+async def test_backend_well_known_documents_are_routed_to_the_backend(client: httpx.AsyncClient, path: str) -> None:
+    """Without a route the frontend answers with its HTML shell and status 200."""
+    response = await client.get(path)
+    assert response.status_code == 200, response.text
+    assert "json" in response.headers.get("content-type", ""), response.headers

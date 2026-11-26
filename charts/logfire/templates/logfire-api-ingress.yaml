@@ -1,5 +1,7 @@
 {{- if .Values.ingress.enabled -}}
-{{- $hosts := .Values.ingress.hostnames -}}
+{{- $intakeHosts := (include "logfire.intake_hostnames" . | fromJson).hosts -}}
+{{- $hosts := concat (.Values.ingress.hostnames | default list) $intakeHosts -}}
+{{- $intakePaths := (include "logfire.intake_paths" . | fromJson).paths -}}
 {{- $backendPort := 8080 -}}
 {{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
   {{- $backendPort = .Values.inClusterTls.httpsPort -}}
@@ -25,16 +27,20 @@ spec:
   {{- end }}
   rules:
     {{- range $hosts }}
-    - host: {{ . }}
+    {{- /* An ingest-only hostname serves only the intake paths. */}}
+    {{- $intake := has . $intakeHosts }}
+    - host: {{ if $intake }}{{ quote . }}{{ else }}{{ . }}{{ end }}
       http:
         paths:
-          - path: /
-            pathType: Prefix
+          {{- range ternary $intakePaths (list "/") $intake }}
+          - path: {{ . }}
+            pathType: {{ ternary "Exact" "Prefix" $intake }}
             backend:
               service:
                 name: logfire-service
                 port:
                   number: {{ $backendPort }}
+          {{- end }}
     {{- end }}
   {{- if .Values.ingress.tls }}
   tls:

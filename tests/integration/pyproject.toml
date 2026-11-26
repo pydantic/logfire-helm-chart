@@ -10,6 +10,7 @@ dependencies = [
     "logfire>=5.1.1",
     "opentelemetry-proto>=1.44",
     "pytest>=8.3",
+    "pyyaml>=6",
 ]
 
 [tool.pytest.ini_options]

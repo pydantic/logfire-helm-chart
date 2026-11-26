@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.5-rc.5](https://img.shields.io/badge/Version-0.15.5--rc.5-informational?style=flat-square) ![AppVersion: 9f15587a](https://img.shields.io/badge/AppVersion-9f15587a-informational?style=flat-square)
+![Version: 0.15.5-rc.7](https://img.shields.io/badge/Version-0.15.5--rc.7-informational?style=flat-square) ![AppVersion: 9f15587a](https://img.shields.io/badge/AppVersion-9f15587a-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -175,6 +175,66 @@ ingress:
   hostnames:
     - logfire.example.com
 ```
+
+Every listed hostname is also a CORS origin for the API. `logfire-service` grants CORS to an origin that equals `<scheme>://<hostname>`, with `https` when TLS is on, and adds `Vary: Origin` to its responses.
+Its answer to a preflight request also allows credentials, as the backend's responses do, and lists the methods `GET`, `HEAD`, `POST`, `PUT`, `PATCH` and `DELETE`, because a browser reads `*` literally when a request has credentials. It also lists the request headers that clients send cross-origin: `Authorization`, `Content-Type`, `X-Logfire-Context`, `If-None-Match`, `Content-Encoding` and `X-PostHog-Session-Id`. A UI on a listed alias can then send requests with cookies and an `Authorization` header to the first hostname. With `haproxy.corsOriginMatch: prefix` the answer allows the same headers, no credentials, and `*` for the methods.
+An origin with another port, such as `https://logfire.example.com:8443`, or with a suffix is not granted.
+If people open the UI on an origin that the hostnames do not list, set `haproxy.corsOriginMatch: prefix`.
+That grants any origin that starts with a listed public URL, including `https://logfire.example.com.evil.example`, so use it only until the hostnames list every origin.
+
+When a service answers with a redirect to its own in-cluster name, such as the trailing-slash redirect of the API, `logfire-service` rewrites the `Location` header to the path alone, so the browser stays on the public hostname. It leaves redirects to any other host unchanged, such as the redirect to your identity provider.
+
+To receive telemetry on a hostname that is not a UI hostname, list it in `intake.hostnames` and keep it out of `gateway.hostnames` and `ingress.hostnames`:
+
+```yaml
+gateway:
+  hostnames:
+    - logfire.example.com
+intake:
+  hostnames:
+    - ingest.example.com
+```
+
+The chart gives the ingest-only hostnames their own HTTPRoute, or their own Ingress rules, that route only the OTLP paths, the intake OAuth metadata (`/.well-known/oauth-protected-resource/v1`), `/v1/info` and `/health` to `logfire-service`. Every other path, including `/`, `/ui-api`, `/auth-api` and `/mcp`, answers `404` there. The hostnames are also listed in the browser's `connect-src`.
+Every entry serves OTLP and the SDK's token check (`/v1/info`), and never the UI. The first entry is the default intake OAuth resource (`https://ingest.example.com/v1`) and where the browser sends its own telemetry, so people's browsers must be able to reach it.
+Strict OAuth clients work only on that host. Set `intakeOauth.resourceUrl` to choose a different resource. A client that requests another intake host as its own OAuth resource gets `invalid_target`.
+When you move a hostname that is not the first frontend hostname, intake OAuth tokens that were issued before the move keep working, because their audience is the frontend host, which the intake accepts. A token whose audience is the old resource URL is accepted only while `intakeOauth.resourceUrl` keeps that URL.
+Moving the first frontend hostname changes the primary hostname and with it the OAuth issuer, so every OAuth token fails. OAuth, MCP and CLI clients must authorize again, and an identity provider needs the new callback URL.
+An ingest-only hostname does not become a sign-in redirect URI or a CORS origin.
+The certificate that serves your Ingress or Gateway must cover it.
+Each entry is a bare lowercase DNS name, because it becomes an Ingress rule host and a Gateway hostname. The chart rejects a value that is not a string, a port, an uppercase letter, an IP address, a wildcard, a scheme and a path, a name of more than 253 characters, and a label of more than 63.
+With `intake.hostnames` empty, the chart renders what it rendered before.
+
+`logfire-service` passes the services the public host in `X-Forwarded-Host`.
+It keeps a value that arrives with the request and sets the header to `Host` only when it is missing, so a client can name any host.
+That default suits a proxy in front that rewrites `Host` and passes the public host in `X-Forwarded-Host`.
+Set `haproxy.overwriteForwardedHost: true` when every request reaches `logfire-service` with its public `Host` unchanged, so that no client can choose what the services read.
+
+#### Host validation
+
+By default the UI sends its API calls to the first hostname, and `logfire-service` serves the UI on any host that reaches it.
+`hostValidation` makes each listed hostname a complete, same-origin UI and refuses the UI on every other host.
+
+1. Set `hostValidation.mode: report`. Nothing changes for users. `logfire-service` logs each UI request that `enforce` would reject, with the `Host` and the `X-Forwarded-Host` it received:
+
+   ```sh
+   kubectl logs -l app.kubernetes.io/component=logfire-service -c logfire-service --tail=-1 | grep host_check=would_reject
+   ```
+
+2. List every host that people use in `gateway.hostnames` or `ingress.hostnames`. Add `hostValidation.additionalHosts` for a name that is not a public hostname, such as `localhost:8080` for a port-forward. Sign-in with an identity provider does not work on an additional host. The match is literal, so a wildcard entry such as `*.tenants.example.com` still routes in the Gateway but never matches a host. A request for `acme.tenants.example.com` gets `421`, so list each host by name.
+3. Set `hostValidation.mode: enforce`. The UI now calls the host it was opened on, and `logfire-service` answers `421 Misdirected Request` for the UI on any other host.
+
+The UI is the static frontend, `/ui-api` and `/auth-api`. Everything else answers on any host, as it does without `hostValidation`: OTLP, the public API, `/mcp`, `/proxy`, `/integrations` and the `/.well-known` documents that the backends serve. Any other path under `/.well-known` reaches the frontend, so it needs a listed host.
+A path with a `.` or `..` segment or a `%00`, and a `/ui-api/` path in another case or in percent-encoded form, is also checked as the UI, because other layers resolve it to a UI path.
+A CORS preflight for a path that is checked gets the same answer as the request.
+
+A request passes when its `Host` is listed or internal, and, if it has an `X-Forwarded-Host`, every entry of that header is listed. Several `X-Forwarded-Host` lines count as one list, and a request with more than 8 lines is refused. One line can hold any number of entries.
+Internal means the service name that other pods use, with or without a trailing dot, an IP address that a load balancer health check uses, or no host. A browser that opens the service by IP address therefore also gets the UI.
+A client can write `X-Forwarded-Host`, so a listed value does not make an unlisted `Host` pass. A proxy that rewrites `Host` to an internal name and keeps the public host in `X-Forwarded-Host` passes.
+Matching ignores case and compares the whole value, so a host with a port is listed with its port.
+`haproxy.overwriteForwardedHost` replaces `X-Forwarded-Host` with `Host`, so with it on only `Host` is checked.
+
+Emails, OAuth issuer URLs and passkeys still use the first hostname. Sign-in through an identity provider works on a listed hostname for users who can reach the first hostname, because the identity provider's callback and the OAuth issuer use it. It does not work on an `additionalHosts` entry.
 
 Logfire Live View needs WebSockets, so every proxy in front of `logfire-service` must keep the WebSocket upgrade and the `Sec-WebSocket-Protocol` header.
 A successful handshake returns `101 Switching Protocols`.
@@ -906,15 +966,20 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | gateway.matches | list | `[]` | Path matches for the HTTPRoute rules. Defaults to a single prefix match on "/" if not specified. |
 | gateway.name | string | `""` | Name of the Gateway. Used for both created Gateway and HTTPRoute parentRef. If not set, defaults to "logfire-gateway". |
 | gateway.namespace | string | `""` | Namespace of an existing Gateway (only used when create is false). Leave empty to use the same namespace as the HTTPRoute. |
-| gateway.sectionName | string | `""` | Section name within the Gateway to attach the HTTPRoute to (optional). Use this when the Gateway has multiple listeners. |
+| gateway.sectionName | string | `""` | Section name within the Gateway to attach the HTTPRoute to (optional). Use this when the Gateway has multiple listeners. When the chart creates the Gateway, it names the listener of each hostname `<name>`, `<name>-1`, `<name>-2`, ..., and the HTTPRoute attaches to each of them. With `create: false`, the HTTPRoute attaches to the one listener you name. |
 | gateway.timeouts | object | `{}` | Timeout settings for the HTTPRoute backend. |
 | gateway.tls | string | nil (uses ingress.tls) | Enable TLS/HTTPS for the Gateway listener. If not set, falls back to ingress.tls for backward compatibility. Also overrides the app's public URL scheme/CORS behavior (http vs https URLs) whenever set. |
 | gateway.tlsSecretName | string | nil (uses ingress.secretName) | TLS Secret name for the Gateway listener certificate. If not set, falls back to ingress.secretName for backward compatibility. |
 | groupOrganizationMapping | list | `[]` | Grant Logfire organization and project roles to members of identity-provider groups when they sign in |
-| haproxy | object | `{"image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.4"},"podSecurityContext":{},"securityContext":{}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
+| haproxy | object | `{"corsOriginMatch":"exact","image":{"pullPolicy":"IfNotPresent","repository":"haproxy","tag":"3.4"},"overwriteForwardedHost":false,"podSecurityContext":{},"securityContext":{}}` | HAProxy image configuration (used by the service and feature-flag proxies) |
+| haproxy.corsOriginMatch | string | `"exact"` | How `logfire-service` matches the request `Origin` against the public URLs when it grants CORS. `exact` compares the whole origin, so only the listed scheme, host and port are granted. `prefix` also grants any origin that starts with a public URL, such as `https://<host>.evil.example` and `https://<host>:8443`. Use `prefix` only to keep an origin that the public URLs do not list, for example a UI that people open on a non-default port. |
+| haproxy.overwriteForwardedHost | bool | `false` | Set `X-Forwarded-Host` to the `Host` that `logfire-service` received and discard a value that arrived with the request. By default it keeps an incoming value, so a client, or a proxy in front that rewrites `Host`, decides what the services read as the public host. Turn this on when every request reaches `logfire-service` with its public `Host` unchanged. Leave it off behind a proxy that rewrites `Host` and passes the public host in `X-Forwarded-Host`. |
 | haproxy.podSecurityContext | object | `{}` | Pod SecurityContext for the HAProxy pod. Defaults to the chart-wide `podSecurityContext`. |
 | haproxy.securityContext | object | `{}` | Container SecurityContext for the HAProxy proxies. The chart default pins the numeric identity the image already uses, so the kubelet can verify `runAsNonRoot`, applies the portable controls (no privilege escalation, all capabilities dropped, `RuntimeDefault` seccomp), and makes the image root read-only. The chart-wide `securityContext` merges over that default and this value merges over both; set a field to `null` to clear it. HAProxy writes no file outside its mounts, so it needs no scratch volume. |
 | hooksAnnotations | string | `nil` | Custom annotations for migration Jobs (uncomment as needed, e.g., with Argo CD hooks) |
+| hostValidation | object | `{"additionalHosts":[],"mode":"off"}` | Host validation. Decides whether the UI answers on a host that this install does not list, and whether the UI calls the host it was opened on. The listed hosts are `gateway.hostnames` (or `ingress.hostnames`) and `additionalHosts`. A host is matched literally, so a wildcard entry such as `*.tenants.example.com` never matches a request. A request is misdirected when its `Host` is neither listed nor internal (the service name, an IP address or no host, which health checks and in-cluster callers use), or when it carries an `X-Forwarded-Host` that is not listed. Every entry of `X-Forwarded-Host` has to be listed, and several `X-Forwarded-Host` lines count as one list. The UI is the static frontend, `/ui-api` and `/auth-api`. Everything else answers on any host, as it does without this setting: `/mcp`, `/api`, `/v1`, `/v2/query`, `/proxy`, `/integrations` and the `/.well-known` documents that the backends serve. Any other path under `/.well-known` reaches the frontend, so it is checked. A path with a `.` or `..` segment or a `%00` is checked too. |
+| hostValidation.additionalHosts | list | `[]` | Extra `Host` values that may open the UI, with the port if it has one, such as `localhost:8080` for a port-forward. They are not a Dex redirect URI, so sign-in with an identity provider does not work on them, and the MCP server does not accept them. |
+| hostValidation.mode | string | `"off"` | `off` changes nothing. `report` logs each UI request that `enforce` would reject and rejects none: search the `logfire-service` logs for `host_check=would_reject`. `enforce` answers `421 Misdirected Request` for those requests and makes the UI call the host it was opened on (`apiHost` is `window.location.host`), so each listed host is a complete UI. Report first, and enforce when the hosts people use are all listed. Sign-in with an identity provider, emails, OAuth issuer URLs and passkeys still use the first hostname. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | imagePullSecrets | list | `[]` | Image pull secrets used by all pods |
 | inClusterTls | object | `{"caBundle":{"existingConfigMap":{"key":"ca.crt","name":""},"existingSecret":{"key":"ca.crt","name":""}},"certs":{"certManager":{"issuerRef":{"group":"cert-manager.io","kind":"Issuer","name":""}},"mode":"existingSecrets"},"enabled":false,"httpsPort":8443,"secretNamePrefix":"","waitImage":{"pullPolicy":"","repository":"curlimages/curl","tag":"8.12.1"}}` | Enable full in-cluster HTTPS with certificate verification. This is independent from `ingress.tls` / `gateway.tls`.  NOTE: Implementation is incremental; see the README's "In-cluster HTTPS" section for usage notes. |
@@ -935,7 +1000,9 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | ingress.ingressClassName | string | `"nginx"` | IngressClass to use (e.g., nginx) |
 | ingress.secretName | string | `"logfire-frontend-cert"` | TLS Secret name if you want to do a custom one |
 | ingress.tls | bool | `false` | Enable TLS/HTTPS. Required for correct CORS behavior. |
-| intakeOauth | object | `{"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When `resourceUrl` is empty, the chart derives the self-hosted resource URL from the primary Logfire URL:   resourceUrl = <logfire.url>/v1 |
+| intake | object | `{"hostnames":[]}` | Ingest-only hostnames: hosts that receive telemetry and are not for the UI, such as an `ingest.example.com` that SDKs and browsers send OTLP to while people open the UI on another host. The chart gives them their own HTTPRoute (or Ingress rules) that serves only the OTLP paths, the intake OAuth metadata, `/v1/info` and `/health`, so the UI, `/auth-api`, `/mcp` and the rest answer `404` there. They are allowed in the browser's `connect-src`. They are not a Dex redirect URI, a CORS origin or an nginx `server_name`. Do not repeat a `gateway.hostnames` or `ingress.hostnames` entry here. Moving the first frontend hostname here changes the primary hostname and the OAuth issuer, so OAuth clients must authorize again. TLS for these hosts needs a certificate that covers them. |
+| intake.hostnames | list | `[]` | Ordered list of ingest-only hostnames. Each is a bare lowercase DNS name of at most 253 characters, with at most 63 in a label, and without a scheme, a port, a wildcard or a path. Every entry serves OTLP and the SDK's token check, and never the UI. The first entry is the default intake OAuth resource (`https://<first>/v1`, unless `intakeOauth.resourceUrl` is set) and where the browser sends its own telemetry (`rumExport.baseUrl`), so browsers must be able to reach it. Strict OAuth clients work only on that host. Requesting another intake host as its own OAuth resource returns `invalid_target`. Empty means the chart uses the first frontend hostname. |
+| intakeOauth | object | `{"resourceUrl":""}` | OTLP intake OAuth metadata configuration. When `resourceUrl` is empty, the chart derives the self-hosted resource URL from the first `intake.hostnames` entry, or else from the primary Logfire URL:   resourceUrl = <first intake hostname or logfire.url>/v1 |
 | intakeOauth.resourceUrl | string | `""` | Public OTLP intake resource URL (RFC 8707 audience). |
 | integrations.pagerduty.appId | string | `""` | ID of a PagerDuty App with Events Integration enabled. Sets `INTEGRATION_PAGERDUTY_APP_ID` on `logfire-backend`. |
 | integrations.slack.clientId | string | `""` | Client ID of your own Slack App. Setting it turns on Slack App channels. |
