@@ -56,10 +56,25 @@ is reserved. The in-cluster TLS and trusted CA volumes are reserved only while e
       "At least one hostname is required for Logfire. Set gateway.hostnames or ingress.hostnames so the chart can generate public URLs and CORS settings." -}}
 {{- end -}}
 
+{{- if not (has ((($values.haproxy | default dict).corsOriginMatch) | default "exact") (list "exact" "prefix")) -}}
+  {{- fail "haproxy.corsOriginMatch must be exact or prefix." -}}
+{{- end -}}
+
 {{- if and $values.gateway.enabled $values.gateway.create (not $values.gateway.gatewayClassName) -}}
   {{- fail
       "gateway.gatewayClassName is required when gateway.create is true. Specify the GatewayClass name (e.g., 'istio', 'cilium', 'nginx', 'envoy-gateway')." -}}
 {{- end -}}
+{{- $hostValidation := $values.hostValidation | default dict -}}
+{{- if not (has ($hostValidation.mode | default "off") (list "off" "report" "enforce")) -}}
+  {{- fail "hostValidation.mode must be off, report or enforce." -}}
+{{- end -}}
+{{- range $index, $host := $hostValidation.additionalHosts | default list -}}
+  {{- if not (regexMatch "^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:[0-9]+)?$" (toString $host)) -}}
+    {{- fail
+        (printf "hostValidation.additionalHosts[%d] %q is not a hostname. List a bare hostname, with its port if it has one, such as localhost:8080." $index $host) -}}
+  {{- end -}}
+{{- end -}}
+
 {{- if and $values.gateway.enabled (not $values.gateway.create) (not $values.gateway.name) -}}
   {{- fail
       "gateway.name is required when gateway.enabled is true and gateway.create is false. Provide the name of the existing Gateway resource to attach the HTTPRoute to." -}}
@@ -67,6 +82,43 @@ is reserved. The in-cluster TLS and trusted CA volumes are reserved only while e
 {{- if and $values.ingress.enabled $values.gateway.enabled -}}
   {{- fail
       "Both ingress.enabled and gateway.enabled are true. Enable only one of Ingress or Gateway API to avoid routing conflicts. Set ingress.enabled=false to use Gateway API, or gateway.enabled=false to use Ingress." -}}
+{{- end -}}
+
+{{- $frontendHosts := list -}}
+{{- range (include "logfire.effective_hostnames" . | fromJson).hosts -}}
+  {{- $frontendHosts = append $frontendHosts (lower (toString .)) -}}
+{{- end -}}
+{{- $intakeHosts := list -}}
+{{- range $index, $host := (include "logfire.intake_hostnames" . | fromJson).hosts -}}
+  {{- /* The entry becomes an Ingress rule host, an HTTPRoute hostname and a Gateway listener hostname.
+  Kubernetes accepts only a lowercase RFC 1123 name there, at most 253 characters, so a port, an
+  uppercase letter, an IP address or a longer name would pass the render and fail at apply. A label
+  of more than 63 characters is not a DNS name that resolves, although Kubernetes accepts it. A
+  number would render as a number in the Ingress, so only a string is a hostname. */ -}}
+  {{- if not (kindIs "string" $host) -}}
+    {{- fail
+        (printf "intake.hostnames[%d] must be a string, such as ingest.example.com." $index) -}}
+  {{- end -}}
+  {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*$" (toString $host)) -}}
+    {{- fail
+        (printf "intake.hostnames[%d] %q is not a valid hostname. List a bare hostname in lowercase, such as ingest.example.com, without a scheme, a port or a path, with at most 63 characters in a label." $index $host) -}}
+  {{- end -}}
+  {{- if gt (len (toString $host)) 253 -}}
+    {{- fail
+        (printf "intake.hostnames[%d] %q is not a valid hostname. A hostname has at most 253 characters." $index $host) -}}
+  {{- end -}}
+  {{- if regexMatch "^[0-9]+(\\.[0-9]+){3}$" (toString $host) -}}
+    {{- fail
+        (printf "intake.hostnames[%d] %q is an IP address. An Ingress or Gateway hostname must be a DNS name." $index $host) -}}
+  {{- end -}}
+  {{- if has (lower (toString $host)) $frontendHosts -}}
+    {{- fail
+        (printf "intake.hostnames[%d] %q is also a frontend hostname. An ingest-only hostname serves no UI, so remove it from gateway.hostnames or ingress.hostnames, or from intake.hostnames." $index $host) -}}
+  {{- end -}}
+  {{- if has (lower (toString $host)) $intakeHosts -}}
+    {{- fail (printf "intake.hostnames[%d] %q is listed twice." $index $host) -}}
+  {{- end -}}
+  {{- $intakeHosts = append $intakeHosts (lower (toString $host)) -}}
 {{- end -}}
 
 {{- if not $values.dev.deployPostgres -}}

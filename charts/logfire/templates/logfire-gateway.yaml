@@ -1,6 +1,6 @@
 {{- if and .Values.gateway.enabled .Values.gateway.create -}}
 {{- $result := include "logfire.effective_hostnames" . | fromJson -}}
-{{- $hosts := $result.hosts -}}
+{{- $hosts := concat $result.hosts (include "logfire.intake_hostnames" . | fromJson).hosts -}}
 {{- $hasHosts := gt (len $hosts) 0 -}}
 {{- $tls := include "logfire.effective_tls" . | eq "true" -}}
 {{- $tlsSecret := .Values.ingress.secretName | default "logfire-frontend-cert" -}}

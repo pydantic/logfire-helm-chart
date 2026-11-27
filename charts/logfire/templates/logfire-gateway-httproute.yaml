@@ -1,56 +1,83 @@
 {{- if .Values.gateway.enabled -}}
-{{- $result := include "logfire.effective_hostnames" . | fromJson -}}
-{{- $hosts := $result.hosts -}}
-{{- $hasHosts := gt (len $hosts) 0 -}}
+{{- $hosts := (include "logfire.effective_hostnames" . | fromJson).hosts -}}
+{{- $intakeHosts := (include "logfire.intake_hostnames" . | fromJson).hosts -}}
 {{- $gatewayName := .Values.gateway.name | default "logfire-gateway" -}}
+{{- $backendPort := 8080 -}}
+{{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
+{{- $backendPort = .Values.inClusterTls.httpsPort -}}
+{{- end -}}
+{{- $routes := list (dict "name" "logfire-httproute" "hosts" $hosts "first" 0) -}}
+{{- if $intakeHosts -}}
+  {{- $routes = append $routes (dict "name" "logfire-intake-httproute" "hosts" $intakeHosts "first" (len $hosts) "intake" true) -}}
+{{- end -}}
+{{- range $route := $routes -}}
+{{- /* The chart names the listeners it creates `<name>`, `<name>-1`, `<name>-2`, one per hostname, the
+frontend hostnames first. A sectionName attaches a route to the listeners of its own hostnames, or the
+second hostname onward gets no route. A Gateway that the chart does not create keeps the single listener
+the user named. */ -}}
+{{- $sections := list ($.Values.gateway.sectionName | default "") -}}
+{{- if and $.Values.gateway.create $.Values.gateway.sectionName -}}
+  {{- $sections = list -}}
+  {{- range $idx := untilStep (int $route.first) (int (add $route.first (len $route.hosts))) 1 -}}
+    {{- $sections = append $sections (ternary $.Values.gateway.sectionName (printf "%s-%d" $.Values.gateway.sectionName $idx) (eq $idx 0)) -}}
+  {{- end -}}
+{{- end }}
+{{- if gt $route.first 0 }}
+---
+{{- end }}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: logfire-httproute
+  name: {{ $route.name }}
   labels:
-    {{- include "logfire.labels" . | nindent 4 }}
-    {{- with .Values.gateway.labels }}
+    {{- include "logfire.labels" $ | nindent 4 }}
+    {{- with $.Values.gateway.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
-  {{- with .Values.gateway.annotations }}
+  {{- with $.Values.gateway.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
   parentRefs:
+    {{- range $sections }}
     - name: {{ $gatewayName }}
-      {{- if and (not .Values.gateway.create) .Values.gateway.namespace }}
-      namespace: {{ .Values.gateway.namespace }}
+      {{- if and (not $.Values.gateway.create) $.Values.gateway.namespace }}
+      namespace: {{ $.Values.gateway.namespace }}
       {{- end }}
-      {{- with .Values.gateway.sectionName }}
+      {{- if . }}
       sectionName: {{ . }}
       {{- end }}
-  {{- $backendPort := 8080 -}}
-  {{- if (include "logfire.inClusterTls.enabled" . | eq "true") -}}
-  {{- $backendPort = .Values.inClusterTls.httpsPort -}}
-  {{- end -}}
-  {{- if $hasHosts }}
+    {{- end }}
+  {{- if $route.hosts }}
   hostnames:
-    {{- toYaml $hosts | nindent 4 }}
+    {{- toYaml $route.hosts | nindent 4 }}
   {{- end }}
   rules:
     - matches:
-        {{- if .Values.gateway.matches }}
-        {{- toYaml .Values.gateway.matches | nindent 8 }}
+        {{- if $route.intake }}
+        {{- range (include "logfire.intake_paths" $ | fromJson).paths }}
+        - path:
+            type: Exact
+            value: {{ . }}
+        {{- end }}
+        {{- else if $.Values.gateway.matches }}
+        {{- toYaml $.Values.gateway.matches | nindent 8 }}
         {{- else }}
         - path:
             type: PathPrefix
             value: /
         {{- end }}
-      {{- with .Values.gateway.filters }}
+      {{- with $.Values.gateway.filters }}
       filters:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       backendRefs:
         - name: logfire-service
           port: {{ $backendPort }}
-      {{- with .Values.gateway.timeouts }}
+      {{- with $.Values.gateway.timeouts }}
       timeouts:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- end }}
 {{- end }}

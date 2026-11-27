@@ -837,3 +837,103 @@ tests:
         documentSelector:
           path: metadata.name
           value: logfire-ff-ingest-config
+
+  # The browser may call the host it was opened on only while HAProxy refuses the UI on hosts the
+  # install does not list. Same-origin calls without that refusal let any host that reaches the
+  # service serve a working UI.
+  - it: calls the first hostname while HAProxy does not refuse the UI on other hosts
+    set:
+      hostValidation:
+        mode: report
+    templates:
+      - templates/logfire-service-config.yaml
+      - templates/logfire-frontend-service-config.yaml
+    asserts:
+      - notMatchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "status 421"
+        template: templates/logfire-service-config.yaml
+      - matchRegex:
+          path: data["config.1.js"]
+          pattern: "apiHost: 'logfire\\.example\\.com',"
+        template: templates/logfire-frontend-service-config.yaml
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-service-config
+
+  - it: calls the host it was opened on while HAProxy refuses the UI on other hosts
+    set:
+      hostValidation:
+        mode: enforce
+    templates:
+      - templates/logfire-service-config.yaml
+      - templates/logfire-frontend-service-config.yaml
+    asserts:
+      - matchRegex:
+          path: stringData["haproxy.cfg"]
+          pattern: "status 421"
+        template: templates/logfire-service-config.yaml
+      - matchRegex:
+          path: data["config.1.js"]
+          pattern: "apiHost: window\\.location\\.host,"
+        template: templates/logfire-frontend-service-config.yaml
+        documentSelector:
+          path: metadata.name
+          value: logfire-frontend-service-config
+
+  # An ingest-only hostname gets its own route that serves only the intake paths, and the route of the
+  # UI no longer lists it. The chart names a listener per hostname `<name>`, `<name>-1`, ..., and the
+  # intake route must attach to the listener of its own hostname.
+  - it: serves an ingest-only hostname from its own HTTPRoute that attaches to its own listener
+    set:
+      ingress:
+        enabled: false
+      gateway:
+        enabled: true
+        create: true
+        gatewayClassName: istio
+        sectionName: https
+        tls: true
+        hostnames:
+          - app.example.com
+      intake:
+        hostnames:
+          - ingest.example.com
+    templates:
+      - templates/logfire-gateway-httproute.yaml
+      - templates/logfire-gateway.yaml
+    asserts:
+      - equal:
+          path: spec.hostnames
+          value:
+            - app.example.com
+        documentSelector:
+          path: metadata.name
+          value: logfire-httproute
+        template: templates/logfire-gateway-httproute.yaml
+      - equal:
+          path: spec.hostnames
+          value:
+            - ingest.example.com
+        documentSelector:
+          path: metadata.name
+          value: logfire-intake-httproute
+        template: templates/logfire-gateway-httproute.yaml
+      - equal:
+          path: spec.parentRefs[0].sectionName
+          value: https-1
+        documentSelector:
+          path: metadata.name
+          value: logfire-intake-httproute
+        template: templates/logfire-gateway-httproute.yaml
+      - equal:
+          path: spec.rules[0].matches[0].path.type
+          value: Exact
+        documentSelector:
+          path: metadata.name
+          value: logfire-intake-httproute
+        template: templates/logfire-gateway-httproute.yaml
+      - equal:
+          path: spec.listeners[1].name
+          value: https-1
+        template: templates/logfire-gateway.yaml

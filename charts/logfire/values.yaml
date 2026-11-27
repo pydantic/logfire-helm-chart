@@ -137,6 +137,31 @@ ingress:
   annotations: {}
 
 
+# -- Host validation. Decides whether the UI answers on a host that this install does not list, and
+# whether the UI calls the host it was opened on.
+# The listed hosts are `gateway.hostnames` (or `ingress.hostnames`) and `additionalHosts`. A host is
+# matched literally, so a wildcard entry such as `*.tenants.example.com` never matches a request.
+# A request is misdirected when its `Host` is neither listed nor internal (the service name, an IP
+# address or no host, which health checks and in-cluster callers use), or when it carries an
+# `X-Forwarded-Host` that is not listed. Every entry of `X-Forwarded-Host` has to be listed, and
+# several `X-Forwarded-Host` lines count as one list.
+# The UI is the static frontend, `/ui-api` and `/auth-api`. Everything else answers on any host,
+# as it does without this setting: `/mcp`, `/api`, `/v1`, `/v2/query`, `/proxy`, `/integrations` and
+# the `/.well-known` documents that the backends serve. Any other path under `/.well-known` reaches
+# the frontend, so it is checked. A path with a `.` or `..` segment or a `%00` is checked too.
+hostValidation:
+  # -- `off` changes nothing. `report` logs each UI request that `enforce` would reject and rejects
+  # none: search the `logfire-service` logs for `host_check=would_reject`. `enforce` answers
+  # `421 Misdirected Request` for those requests and makes the UI call the host it was opened on
+  # (`apiHost` is `window.location.host`), so each listed host is a complete UI. Report first, and
+  # enforce when the hosts people use are all listed. Sign-in with an identity provider, emails,
+  # OAuth issuer URLs and passkeys still use the first hostname.
+  mode: "off"
+  # -- Extra `Host` values that may open the UI, with the port if it has one, such as `localhost:8080`
+  # for a port-forward. They are not a Dex redirect URI, so sign-in with an identity provider does
+  # not work on them, and the MCP server does not accept them.
+  additionalHosts: []
+
 # ==============================================================================
 # Gateway API
 # ==============================================================================
@@ -196,7 +221,9 @@ gateway:
   #         - name: logfire-tls-cert
 
   # -- Section name within the Gateway to attach the HTTPRoute to (optional).
-  # Use this when the Gateway has multiple listeners.
+  # Use this when the Gateway has multiple listeners. When the chart creates the Gateway, it names
+  # the listener of each hostname `<name>`, `<name>-1`, `<name>-2`, ..., and the HTTPRoute attaches
+  # to each of them. With `create: false`, the HTTPRoute attaches to the one listener you name.
   sectionName: ""
 
   # -- Gateway addresses (optional, only used when create is true).
@@ -883,10 +910,29 @@ aiGatewayOauth:
   # -- OAuth authorization server issuer URL used by the AI gateway.
   issuer: ""
 
+# -- Ingest-only hostnames: hosts that receive telemetry and are not for the UI, such as an
+# `ingest.example.com` that SDKs and browsers send OTLP to while people open the UI on another host.
+# The chart gives them their own HTTPRoute (or Ingress rules) that serves only the OTLP paths, the
+# intake OAuth metadata, `/v1/info` and `/health`, so the UI, `/auth-api`, `/mcp` and the rest answer
+# `404` there. They are allowed in the browser's `connect-src`. They are not a Dex redirect URI, a CORS
+# origin or an nginx `server_name`. Do not repeat a `gateway.hostnames` or `ingress.hostnames` entry
+# here. Moving the first frontend hostname here changes the primary hostname and the OAuth issuer, so
+# OAuth clients must authorize again. TLS for these hosts needs a certificate that covers them.
+intake:
+  # -- Ordered list of ingest-only hostnames. Each is a bare lowercase DNS name of at most 253
+  # characters, with at most 63 in a label, and without a scheme, a port, a wildcard or a path.
+  # Every entry serves OTLP and the SDK's token check, and never the UI. The first entry is the
+  # default intake OAuth resource (`https://<first>/v1`, unless `intakeOauth.resourceUrl` is set) and
+  # where the browser sends its own telemetry (`rumExport.baseUrl`), so browsers must be able to
+  # reach it. Strict OAuth clients work only on that host. Requesting another intake host as its own
+  # OAuth resource returns `invalid_target`. Empty means the chart uses the first frontend hostname.
+  hostnames: []
+  #   - ingest.example.com
+
 # -- OTLP intake OAuth metadata configuration.
 # When `resourceUrl` is empty, the chart derives the self-hosted resource URL
-# from the primary Logfire URL:
-#   resourceUrl = <logfire.url>/v1
+# from the first `intake.hostnames` entry, or else from the primary Logfire URL:
+#   resourceUrl = <first intake hostname or logfire.url>/v1
 intakeOauth:
   # -- Public OTLP intake resource URL (RFC 8707 audience).
   resourceUrl: ""
@@ -1762,6 +1808,12 @@ haproxy:
     repository: haproxy
     tag: "3.4"
     pullPolicy: IfNotPresent
+  # -- How `logfire-service` matches the request `Origin` against the public URLs when it grants CORS.
+  # `exact` compares the whole origin, so only the listed scheme, host and port are granted.
+  # `prefix` also grants any origin that starts with a public URL, such as `https://<host>.evil.example`
+  # and `https://<host>:8443`. Use `prefix` only to keep an origin that the public URLs do not list,
+  # for example a UI that people open on a non-default port.
+  corsOriginMatch: exact
   # -- Container SecurityContext for the HAProxy proxies. The chart default pins the numeric
   # identity the image already uses, so the kubelet can verify `runAsNonRoot`, applies the
   # portable controls (no privilege escalation, all capabilities dropped, `RuntimeDefault`
@@ -1771,6 +1823,12 @@ haproxy:
   securityContext: {}
   # -- Pod SecurityContext for the HAProxy pod. Defaults to the chart-wide `podSecurityContext`.
   podSecurityContext: {}
+  # -- Set `X-Forwarded-Host` to the `Host` that `logfire-service` received and discard a value that
+  # arrived with the request. By default it keeps an incoming value, so a client, or a proxy in front
+  # that rewrites `Host`, decides what the services read as the public host. Turn this on when every
+  # request reaches `logfire-service` with its public `Host` unchanged. Leave it off behind a proxy
+  # that rewrites `Host` and passes the public host in `X-Forwarded-Host`.
+  overwriteForwardedHost: false
 
 
 # ==============================================================================

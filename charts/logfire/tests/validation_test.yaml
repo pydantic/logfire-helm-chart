@@ -1283,3 +1283,78 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "integrations.slack.clientSecret and integrations.slack.signingSecret are required"
+
+  - it: rejects an unknown haproxy.corsOriginMatch
+    set:
+      haproxy:
+        corsOriginMatch: contains
+    asserts:
+      - failedTemplate:
+          errorPattern: "haproxy.corsOriginMatch must be exact or prefix"
+
+  - it: rejects an unknown hostValidation.mode
+    set:
+      hostValidation:
+        mode: on
+    asserts:
+      - failedTemplate:
+          errorPattern: "hostValidation.mode must be off, report or enforce"
+
+  - it: rejects a hostValidation.additionalHosts entry that is not a hostname
+    set:
+      hostValidation:
+        mode: report
+        additionalHosts:
+          - https://localhost:8080
+    asserts:
+      - failedTemplate:
+          errorPattern: "hostValidation.additionalHosts\\[0\\] .* is not a hostname"
+
+  - it: rejects an intake.hostnames entry with a port
+    set:
+      intake:
+        hostnames:
+          - ingest.example.com:4318
+    asserts:
+      - failedTemplate:
+          errorPattern: "intake.hostnames\\[0\\] .* is not a valid hostname"
+
+  - it: rejects an intake.hostnames entry with an uppercase letter
+    set:
+      intake:
+        hostnames:
+          - Ingest.example.com
+    asserts:
+      - failedTemplate:
+          errorPattern: "is not a valid hostname"
+
+  - it: rejects an intake.hostnames entry that is also a frontend hostname
+    set:
+      ingress:
+        hostnames:
+          - app.example.com
+      intake:
+        hostnames:
+          - app.example.com
+    asserts:
+      - failedTemplate:
+          errorPattern: "is also a frontend hostname"
+
+  - it: rejects an intake.hostnames entry that is listed twice
+    set:
+      intake:
+        hostnames:
+          - ingest.example.com
+          - ingest.example.com
+    asserts:
+      - failedTemplate:
+          errorPattern: "is listed twice"
+
+  - it: rejects an intake.hostnames entry that is not a string
+    set:
+      intake:
+        hostnames:
+          - 123
+    asserts:
+      - failedTemplate:
+          errorPattern: "intake.hostnames\\[0\\] must be a string"
