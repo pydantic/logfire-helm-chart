@@ -82,8 +82,7 @@ spec:
             {{- include "logfire.ffReadinessProbe" (dict "port" 8011) | nindent 12 }}
           startupProbe:
             {{- include "logfire.ffStartupProbe" (dict "port" 8011) | nindent 12 }}
-          lifecycle:
-            {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 5) | nindent 12 }}
+          {{- include "logfire.preStopSleep" (dict "ctx" $ "seconds" 5 "probe" true) | nindent 10 }}
           envFrom:
             - configMapRef:
                 name: logfire-ff-base-config
@@ -93,6 +92,7 @@ spec:
                 name: logfire-ff-write-config
           env:
             {{- include "logfire.ffRedisEnv" . | nindent 12 }}
+            {{- include "logfire.ffShutdownEnv" (dict "preStopSeconds" 5) | nindent 12 }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:

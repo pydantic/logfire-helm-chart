@@ -26,6 +26,9 @@ clusterDomain: cluster.local
 # -- Starter admin email address
 adminEmail: hello@example.dev
 
+# -- (bool) Override Allow Organization Creation. Leave unset to use the setting in Platform Admin.
+allowOrganizationCreation: null
+
 # -- Client-safe API key used by the frontend to evaluate external managed variables through OFREP.
 # The key is written to the public runtime configuration, so it must only have the
 # `project:read_external_variables` scope.
@@ -38,7 +41,7 @@ variablesApiKey: ""
 frontendApplicationToken: ""
 
 # -- Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version.
-releaseVersion: "v2026-11-20.01"
+releaseVersion: "v2026-11-27.03"
 
 # -- CRUD database migration Job settings.
 migrations:

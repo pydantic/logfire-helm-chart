@@ -29,15 +29,16 @@
   {{- end -}}
 {{- end -}}
 {{- $diskMi := int (include "logfire.storageQuantityToMi" $diskStorage) -}}
-{{- $readinessDelaySeconds := 10 -}}
-{{- $shutdownTimeoutSeconds := 25 -}}
-{{- $tierDrainTimeoutSeconds := 5 -}}
 {{/*
-The pod needs its three shutdown phases plus an exit margin before SIGKILL arrives. A shorter
-grace period cuts the tier drain short and leaves the disk tier unclean, so derive it from the
-timeouts below instead of holding a second copy of the numbers.
+bcache takes its shutdown phases from `SHUTDOWN_GRACE_SECONDS` and `SHUTDOWN_LAME_DUCK_SECONDS`:
+the lame duck, a drain, a 2 second cut, and an exit of a tenth of the grace. The drain closes the
+connections and then flushes the disk tier. A 45 second grace leaves 24 seconds for the
+connections after the 5 second tier drain. A shorter grace cuts the tier drain short and leaves
+the disk tier unclean, so the pod gets the same grace as the process.
 */}}
-{{- $grace := add (add (add $readinessDelaySeconds $shutdownTimeoutSeconds) $tierDrainTimeoutSeconds) 5 -}}
+{{- $lameDuckSeconds := 10 -}}
+{{- $tierDrainTimeoutSeconds := 5 -}}
+{{- $grace := 45 -}}
 {{- $defaultUpdateStrategy := dict "type" "RollingUpdate" "rollingUpdate" (dict "maxUnavailable" "25%") -}}
 {{- $selector := dict "matchLabels" (dict "app.kubernetes.io/component" $serviceName) -}}
 {{- $defaultTopologySpreadConstraints := list
@@ -150,10 +151,10 @@ spec:
             # bcache byte sizes take `MB` for MiB. Leave a fifth of the volume free.
             - name: FF_BCACHE_DISK_CAPACITY
               value: {{ printf "%dMB" (max 1 (div (mul $diskMi 4) 5)) | quote }}
-            - name: FF_BCACHE_READINESS_DELAY
-              value: {{ printf "%ds" $readinessDelaySeconds | quote }}
-            - name: FF_BCACHE_SHUTDOWN_TIMEOUT
-              value: {{ printf "%ds" $shutdownTimeoutSeconds | quote }}
+            - name: SHUTDOWN_GRACE_SECONDS
+              value: {{ $grace | quote }}
+            - name: SHUTDOWN_LAME_DUCK_SECONDS
+              value: {{ $lameDuckSeconds | quote }}
             - name: FF_BCACHE_TIER_DRAIN_TIMEOUT
               value: {{ printf "%ds" $tierDrainTimeoutSeconds | quote }}
             {{- if $tls }}

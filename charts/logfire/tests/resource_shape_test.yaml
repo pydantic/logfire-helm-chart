@@ -322,7 +322,7 @@ tests:
             sleep:
               seconds: 5
 
-  - it: preStop runs sleep from the image before Kubernetes 1.30
+  - it: containers have no preStop hook before Kubernetes 1.30
     capabilities:
       majorVersion: "1"
       minorVersion: "29"
@@ -332,8 +332,22 @@ tests:
       path: kind
       value: Deployment
     asserts:
+      - notExists:
+          path: spec.template.spec.containers[0].lifecycle
+
+  # The hook runs a file from the fusionfire image, so the image must keep shipping it.
+  - it: fusionfire preStop runs container-probe sleep before Kubernetes 1.30
+    capabilities:
+      majorVersion: "1"
+      minorVersion: "29"
+    templates:
+      - templates/logfire-ff-ingest.yaml
+    documentSelector:
+      path: kind
+      value: StatefulSet
+    asserts:
       - equal:
           path: spec.template.spec.containers[0].lifecycle.preStop
           value:
             exec:
-              command: ["sleep", "5"]
+              command: ["container-probe", "sleep", "15"]

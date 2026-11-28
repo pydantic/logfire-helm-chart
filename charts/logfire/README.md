@@ -1,6 +1,6 @@
 # logfire
 
-![Version: 0.15.5-rc.5](https://img.shields.io/badge/Version-0.15.5--rc.5-informational?style=flat-square) ![AppVersion: 9f15587a](https://img.shields.io/badge/AppVersion-9f15587a-informational?style=flat-square)
+![Version: 0.15.5-rc.6](https://img.shields.io/badge/Version-0.15.5--rc.6-informational?style=flat-square) ![AppVersion: ccb9c5cf](https://img.shields.io/badge/AppVersion-ccb9c5cf-informational?style=flat-square)
 
 Helm chart for self-hosted Pydantic Logfire
 
@@ -13,7 +13,7 @@ This README is the reference for each chart version: the install flow, the requi
 The [self-hosted docs](https://pydantic.dev/docs/logfire/deploy/self-hosted-deployment/overview/) explain how to plan an install, and give procedures such as bucket and database migrations.
 
 The chart needs Kubernetes 1.23 or later and Helm 3 or Helm 4. CI tests it with Helm 4.2.0.
-On Kubernetes 1.30 or later, the shutdown delay hooks use the native `sleep` action. On older clusters, they run `sleep` from the container image.
+On Kubernetes 1.30 or later, the shutdown delay hooks use the native `sleep` action. On older clusters, the Fusionfire ingest, ingest processor, query API and CRUD API pods run `container-probe sleep` from their image instead. The other services get no shutdown delay hook there, so a rollout can briefly send requests to one of their pods that is stopping.
 Gateway API routing also needs the Gateway API v1 CRDs in the cluster.
 
 Choose one path:
@@ -441,6 +441,12 @@ The chart reads the installed StatefulSet with `lookup`.
 
 ## Advanced configuration
 
+### Organization creation
+
+Set `allowOrganizationCreation: false` to turn off **Allow Organization Creation** for the instance.
+An explicit value takes precedence over the setting in Platform Admin.
+Omit the value or set it to `null` to use the saved setting again.
+
 ### Organization group mappings
 
 Use `groupOrganizationMapping` to grant Logfire organization and project roles to members of identity-provider groups.
@@ -852,6 +858,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | aiGatewayOauth | object | `{"issuer":"","resourceUrl":""}` | AI gateway OAuth metadata configuration. If left empty, the chart derives self-hosted defaults from the primary Logfire URL:   resourceUrl = <logfire.url>/proxy   issuer      = <logfire.url> |
 | aiGatewayOauth.issuer | string | `""` | OAuth authorization server issuer URL used by the AI gateway. |
 | aiGatewayOauth.resourceUrl | string | `""` | Public AI gateway resource URL (RFC 8707 audience). |
+| allowOrganizationCreation | bool | `nil` | Override Allow Organization Creation. Leave unset to use the setting in Platform Admin. |
 | auth.passkeys | bool | `true` | Let users sign in with a passkey, such as a fingerprint, face unlock, or security key. Existing passkeys stay listed and removable when this is false. |
 | auth.passwordLogin | bool | `true` | Let users sign in with an email address and a password. Set to false when users sign in only through a Dex connector, and configure at least one connector, because Dex does not start without one. `logfire-dex.config.enablePasswordDB: false` also turns password sign-in off. |
 | auth.passwordlessEmailSignup | bool | `false` | Let a person with a verified email address that has no account create one without a password. It needs email delivery through `smtp.*` or `dev.deployMaildev`. |
@@ -1060,7 +1067,7 @@ Production installs use external PostgreSQL, and a separately installed cert-man
 | redisSecret.annotations | object | `{}` | Optional workload annotations for external Secret reload controllers.    Rendered on workloads that consume this existing Secret; not applied to Secret metadata.    Per-workload `annotations` override duplicate keys. |
 | redisSecret.enabled | bool | `false` | Set to true to use an existing Secret (recommended for Argo CD users). |
 | redisSecret.name | string | `""` | Name of the Kubernetes Secret resource. |
-| releaseVersion | string | `"v2026-11-20.01"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
+| releaseVersion | string | `"v2026-11-27.03"` | Platform release tag reported to API clients in the `Logfire-Version` response header, for example `v2026-09-15.01`. Set this when releasing a chart built from a platform release so clients can tell which release an instance runs. When empty, workloads report their image identity, which clients treat as an unknown version. |
 | revisionHistoryLimit | int | `2` | Number of deployment revisions to keep. See: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#clean-up-policy) May be set to 0 when using a GitOps workflow. |
 | rustfs | object | `{"auth":{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"},"bucket":"logfire","image":{"pullPolicy":"","repository":"rustfs/rustfs","tag":"1.0.0"},"persistence":{"enabled":true,"existingClaim":"","size":"32Gi","storageClassName":""},"podSecurityContext":{},"resources":{"limits":{"memory":"1Gi"},"requests":{"cpu":"100m","memory":"256Mi"}},"securityContext":{}}` | RustFS configuration (only used when `dev.deployRustfs` is true) |
 | rustfs.auth | object | `{"accessKey":"logfire-rustfs","secretKey":"logfire-rustfs"}` | Root credentials. The chart stores them in the Secret `logfire-rustfs`, and the workloads read them from there unless `objectStore.env` sets `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY`. |
