@@ -636,9 +636,9 @@ tests:
     templates:
       - templates/logfire-ff-bcache.yaml
     asserts:
-      # `/health` answers 503 for the whole shutdown, so the pod must outlive the
-      # readiness delay, shutdown timeout and tier drain plus an exit margin.
-      # SIGKILL mid-drain leaves the disk tier unclean.
+      # `/health` answers 503 for the whole shutdown. The process derives its
+      # phases from the same grace as the pod, so SIGKILL does not arrive in the
+      # middle of the tier drain and leave the disk tier unclean.
       - equal:
           path: spec.template.spec.terminationGracePeriodSeconds
           value: 45
@@ -648,16 +648,16 @@ tests:
       - contains:
           path: spec.template.spec.containers[0].env
           content:
-            name: FF_BCACHE_READINESS_DELAY
-            value: "10s"
+            name: SHUTDOWN_GRACE_SECONDS
+            value: "45"
         documentSelector:
           path: kind
           value: StatefulSet
       - contains:
           path: spec.template.spec.containers[0].env
           content:
-            name: FF_BCACHE_SHUTDOWN_TIMEOUT
-            value: "25s"
+            name: SHUTDOWN_LAME_DUCK_SECONDS
+            value: "10"
         documentSelector:
           path: kind
           value: StatefulSet
@@ -666,6 +666,41 @@ tests:
           content:
             name: FF_BCACHE_TIER_DRAIN_TIMEOUT
             value: "5s"
+        documentSelector:
+          path: kind
+          value: StatefulSet
+
+  - it: gives each Fusionfire role the grace that its preStop sleep leaves
+    templates:
+      - templates/logfire-ff-ingest.yaml
+      - templates/logfire-ff-maintenance-worker.yaml
+    asserts:
+      # The pod has the default grace of 30 seconds, and the preStop sleep runs
+      # first. A process budget past that grace ends in SIGKILL mid-drain.
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SHUTDOWN_GRACE_SECONDS
+            value: "15"
+        template: templates/logfire-ff-ingest.yaml
+        documentSelector:
+          path: kind
+          value: StatefulSet
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SHUTDOWN_GRACE_SECONDS
+            value: "30"
+        template: templates/logfire-ff-maintenance-worker.yaml
+        documentSelector:
+          path: kind
+          value: Deployment
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SHUTDOWN_LAME_DUCK_SECONDS
+            value: "0"
+        template: templates/logfire-ff-ingest.yaml
         documentSelector:
           path: kind
           value: StatefulSet

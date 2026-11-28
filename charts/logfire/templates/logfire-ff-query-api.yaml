@@ -117,6 +117,7 @@ spec:
                 name: logfire-ff-query-config
           env:
             {{- include "logfire.ffRedisEnv" . | nindent 12 }}
+            {{- include "logfire.ffShutdownEnv" (dict "preStopSeconds" 5) | nindent 12 }}
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
             {{- include "logfire.ffQueryExecutionEnv" (dict "Values" .Values "serviceName" $serviceName "role" $queryExecutionRole) | nindent 12 }}
             - name: FF_TLS_CLIENT_SNI_HOSTNAME

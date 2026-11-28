@@ -76,6 +76,7 @@ spec:
                 name: logfire-ff-maintenance-config
           env:
             {{- include "logfire.ffRedisEnv" . | nindent 12 }}
+            {{- include "logfire.ffShutdownEnv" dict | nindent 12 }}
             {{- include "logfire.ffResourceEnv" (dict "Values" .Values "serviceName" $serviceName) | nindent 12 }}
             - name: FF_IO_THREADS
               value: {{ $ioThreads | quote }}

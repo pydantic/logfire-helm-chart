@@ -173,6 +173,20 @@ without rendering Kubernetes resources.
 {{- end -}}
 
 {{/*
+The shutdown budget of a Fusionfire role. The pod has the default grace period of 30 seconds.
+The preStop sleep uses the first part of it, so the process gets the rest. Fusionfire stops its
+tasks at SIGTERM, so it takes no lame duck.
+
+Pass (dict "preStopSeconds" N). Omit `preStopSeconds` for a role without a preStop hook.
+*/}}
+{{- define "logfire.ffShutdownEnv" -}}
+- name: SHUTDOWN_GRACE_SECONDS
+  value: {{ sub 30 (.preStopSeconds | default 0) | quote }}
+- name: SHUTDOWN_LAME_DUCK_SECONDS
+  value: "0"
+{{- end -}}
+
+{{/*
 Render the FusionFire query environment for an intake, worker, or combined role.
 
 `FF_MAX_COST_PER_WORKER` is the same for the combined query-api deployment and the optional

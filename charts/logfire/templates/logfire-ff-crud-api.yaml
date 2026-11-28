@@ -92,6 +92,7 @@ spec:
                 name: logfire-ff-write-config
           env:
             {{- include "logfire.ffRedisEnv" . | nindent 12 }}
+            {{- include "logfire.ffShutdownEnv" (dict "preStopSeconds" 5) | nindent 12 }}
             - name: PG_DSN
               valueFrom:
                 secretKeyRef:

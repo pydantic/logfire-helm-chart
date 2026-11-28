@@ -98,6 +98,7 @@ spec:
                 name: logfire-ff-ingest-config
           env:
             {{- include "logfire.ffRedisEnv" . | nindent 12 }}
+            {{- include "logfire.ffShutdownEnv" (dict "preStopSeconds" 15) | nindent 12 }}
             {{- include "logfire.ffRedisTailEnv" . | nindent 12 }}
             {{- include "logfire.otelSamplerEnv" . | nindent 12 }}
             {{- include "logfire.otlpExporterEnv" (dict "root" . "serviceName" $serviceName "codeWorkDir" "/app") | nindent 12 }}
